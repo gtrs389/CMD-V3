@@ -12,6 +12,13 @@ export interface PublicSubmission {
   name: string;
   phone: string;
   photo: string | null;
+  /** Campos padrao. Nulo quando a pessoa nao informou. */
+  gender: string | null;
+  cpf: string | null;
+  voterId: string | null;
+  state: string | null;
+  city: string | null;
+  district: string | null;
   responses: FieldResponse[];
   consentAt: string | null;
 }

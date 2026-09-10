@@ -11,10 +11,20 @@ import {
 import type { Member } from '@/lib/types';
 
 describe('configuração padrão', () => {
-  it('cria os três campos nativos na ordem correta', () => {
+  it('cria os campos nativos na ordem correta', () => {
     const config = createDefaultFormConfig();
-    expect(config.fields.map((field) => field.systemKey)).toEqual(['photo', 'name', 'phone']);
-    expect(config.fields.map((field) => field.order)).toEqual([0, 1, 2]);
+    expect(config.fields.map((field) => field.systemKey)).toEqual([
+      'photo',
+      'name',
+      'phone',
+      'gender',
+      'cpf',
+      'voter_id',
+      'state',
+      'city',
+      'district',
+    ]);
+    expect(config.fields.map((field) => field.order)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
   it('protege os campos nativos contra exclusão', () => {
@@ -60,6 +70,12 @@ describe('contagem de respostas', () => {
     name: 'Ana',
     phone: '11987654321',
     photo: null,
+    gender: null,
+    cpf: null,
+    voterId: null,
+    state: null,
+    city: null,
+    district: null,
     consentAt: null,
     source: 'invite' as const,
     createdAt: '2024-01-01T00:00:00.000Z',

@@ -9,6 +9,7 @@ import {
   canDisableField,
   createOption,
   isLockedRequired,
+  hasFixedOptions,
   isSystemField,
 } from '@/lib/domain/form-config';
 import { requiresOptions } from '@/lib/validation/field.schema';
@@ -56,7 +57,9 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
   const [errors, setErrors] = useState<DraftErrors>({});
 
   const system = isSystemField(draft);
-  const needsOptions = requiresOptions(draft.type);
+  // Genero e Estado tem lista fixa do sistema: o ADMIN nao edita as opcoes.
+  const fixedOptions = hasFixedOptions(draft);
+  const needsOptions = requiresOptions(draft.type) && !fixedOptions;
 
   const typeOptions = useMemo(
     () => FIELD_TYPES.map((type) => ({ value: type, label: FIELD_TYPE_LABELS[type] })),
@@ -105,7 +108,9 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
       .filter((option) => option.label.length > 0);
 
     if (requiresOptions(draft.type)) {
-      if (cleanedOptions.length < 2) next.options = 'Cadastre pelo menos duas opções.';
+      if (!fixedOptions && cleanedOptions.length < 2) {
+        next.options = 'Cadastre pelo menos duas opções.';
+      }
       const seen = new Set(cleanedOptions.map((option) => option.label.toLowerCase()));
       if (seen.size !== cleanedOptions.length) next.options = 'Há opções repetidas.';
     }
@@ -194,6 +199,12 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
             onChange={(event) => patch({ helpText: event.target.value })}
           />
         </Field>
+
+        {fixedOptions ? (
+          <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
+            As opções deste campo são definidas pelo sistema e não podem ser alteradas.
+          </p>
+        ) : null}
 
         {needsOptions ? (
           <div>

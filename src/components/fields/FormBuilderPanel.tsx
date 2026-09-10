@@ -8,6 +8,7 @@ import {
   canAddField,
   countResponses,
   createField,
+  canDuplicateField,
   duplicateField,
   moveField,
   reindex,
@@ -88,6 +89,7 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
   }
 
   function handleDuplicate(field: CustomField) {
+    if (!canDuplicateField(field)) return;
     if (!canAddField(fields)) {
       toast.error(`Limite de ${appConfig.limits.maxFieldsPerForm} campos atingido.`);
       return;

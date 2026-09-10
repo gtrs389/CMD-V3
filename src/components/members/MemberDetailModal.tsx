@@ -6,6 +6,7 @@ import type { Client, Member } from '@/lib/types';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
+import { formatCpf, formatVoterId, genderLabel } from '@/lib/utils/documents';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +19,39 @@ interface MemberDetailModalProps {
   member: Member | null;
   onClose: () => void;
   onEdit: (member: Member) => void;
+}
+
+/** Campos padrao com coluna propria, sempre na mesma ordem. */
+function StandardFields({ member }: { member: Member }) {
+  const linhas: Array<[string, string | null]> = [
+    ['Gênero', genderLabel(member.gender)],
+    ['CPF', member.cpf ? formatCpf(member.cpf) : null],
+    ['Título de eleitor', member.voterId ? formatVoterId(member.voterId) : null],
+    ['Estado (UF)', member.state],
+    ['Município / Cidade', member.city],
+    ['Bairro', member.district],
+  ];
+
+  const preenchidas = linhas.filter(([, valor]) => Boolean(valor));
+
+  return (
+    <section>
+      <h4 className="text-sm font-semibold text-ink-900">Dados padrão</h4>
+
+      {preenchidas.length === 0 ? (
+        <p className="mt-2 text-sm text-ink-500">Nenhum dado padrão informado.</p>
+      ) : (
+        <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+          {preenchidas.map(([rotulo, valor]) => (
+            <div key={rotulo} className="min-w-0">
+              <dt className="text-xs text-ink-500">{rotulo}</dt>
+              <dd className="font-medium break-words text-ink-900">{valor}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
 }
 
 /** Ficha completa do integrante, incluindo as respostas personalizadas. */
@@ -95,6 +129,8 @@ export function MemberDetailModal({
             </dd>
           </div>
         </dl>
+
+        <StandardFields member={member} />
 
         <div>
           <h4 className="text-sm font-semibold text-ink-900">Respostas do formulário</h4>

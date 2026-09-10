@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import type { ClientFormConfig, CustomField, FieldResponse, FieldValue, Member } from '@/lib/types';
 import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
+import {
+  isValidCpf,
+  isValidVoterId,
+  normalizeCpf,
+  normalizePlace,
+  normalizeState,
+  normalizeVoterId,
+} from '@/lib/utils/documents';
 
 /**
  * Constroi validacao tipada a partir da configuracao de campos do cliente.
@@ -30,8 +38,48 @@ function requiredMessage(field: CustomField): string {
   return field.type === 'photo' ? 'Envie uma imagem.' : `Preencha "${field.label}".`;
 }
 
+/**
+ * Validacao propria dos campos padrao que tem regra brasileira.
+ * Vazio continua valendo quando o campo e opcional.
+ */
+function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
+  const required = field.required;
+
+  const texto = (checar: (valor: string) => string | null) =>
+    z.string().superRefine((value, ctx) => {
+      const trimmed = (value ?? '').trim();
+      if (!trimmed) {
+        if (required) ctx.addIssue({ code: 'custom', message: requiredMessage(field) });
+        return;
+      }
+      const erro = checar(trimmed);
+      if (erro) ctx.addIssue({ code: 'custom', message: erro });
+    }) as z.ZodType<DynamicValue>;
+
+  switch (field.systemKey) {
+    case 'cpf':
+      return texto((valor) => (isValidCpf(valor) ? null : 'CPF inválido. Confira os números.'));
+    case 'voter_id':
+      return texto((valor) =>
+        isValidVoterId(valor) ? null : 'Título de eleitor inválido. Confira os números.',
+      );
+    case 'state':
+      return texto((valor) => (normalizeState(valor) ? null : 'Selecione um estado.'));
+    case 'city':
+    case 'district':
+      return texto((valor) =>
+        valor.length < 2 ? 'Use pelo menos 2 caracteres.' : valor.length > 120 ? 'Use no máximo 120 caracteres.' : null,
+      );
+    default:
+      return null;
+  }
+}
+
 function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
   const required = field.required;
+
+  const proprio = systemValidator(field);
+  if (proprio) return proprio;
 
   switch (field.type) {
     case 'photo':
@@ -192,6 +240,18 @@ export function valuesFromMember(config: ClientFormConfig, member: Member): Dyna
       values[field.id] = member.phone;
     } else if (field.systemKey === 'photo') {
       values[field.id] = member.photo;
+    } else if (field.systemKey === 'gender') {
+      values[field.id] = member.gender ?? '';
+    } else if (field.systemKey === 'cpf') {
+      values[field.id] = member.cpf ?? '';
+    } else if (field.systemKey === 'voter_id') {
+      values[field.id] = member.voterId ?? '';
+    } else if (field.systemKey === 'state') {
+      values[field.id] = member.state ?? '';
+    } else if (field.systemKey === 'city') {
+      values[field.id] = member.city ?? '';
+    } else if (field.systemKey === 'district') {
+      values[field.id] = member.district ?? '';
     } else if (byId.has(field.id)) {
       values[field.id] = toDynamic(field, byId.get(field.id) ?? null);
     }
@@ -231,6 +291,12 @@ export interface SubmissionPayload {
   name: string;
   phone: string;
   photo: string | null;
+  gender: string | null;
+  cpf: string | null;
+  voterId: string | null;
+  state: string | null;
+  city: string | null;
+  district: string | null;
   responses: FieldResponse[];
   consentAt: string | null;
 }
@@ -247,9 +313,18 @@ export function toSubmission(
     name: '',
     phone: '',
     photo: null,
+    gender: null,
+    cpf: null,
+    voterId: null,
+    state: null,
+    city: null,
+    district: null,
     responses: [],
     consentAt: null,
   };
+
+  /** Texto do formulario, ja normalizado. Vazio vira nulo. */
+  const texto = (value: DynamicValue): string => (typeof value === 'string' ? value.trim() : '');
 
   for (const field of visibleFields(config)) {
     const value = values[field.id];
@@ -266,7 +341,32 @@ export function toSubmission(
       payload.photo = typeof value === 'string' && value ? value : null;
       continue;
     }
+    if (field.systemKey === 'gender') {
+      payload.gender = texto(value) || null;
+      continue;
+    }
+    if (field.systemKey === 'cpf') {
+      payload.cpf = normalizeCpf(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'voter_id') {
+      payload.voterId = normalizeVoterId(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'state') {
+      payload.state = normalizeState(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'city') {
+      payload.city = normalizePlace(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'district') {
+      payload.district = normalizePlace(texto(value)) || null;
+      continue;
+    }
 
+    // Campo personalizado: vira resposta. Campo padrao nunca chega aqui.
     payload.responses.push({ fieldId: field.id, value: toStored(field, value) });
   }
 

@@ -17,6 +17,16 @@ export interface Member extends Timestamped {
   /** Telefone normalizado, apenas digitos. */
   phone: string;
   photo: StoredImage | null;
+  /** Codigo do genero autodeclarado. Nulo quando nao informado. */
+  gender: string | null;
+  /** Somente digitos. Unico dentro do mesmo cliente. */
+  cpf: string | null;
+  /** Doze digitos. Unico dentro do mesmo cliente. */
+  voterId: string | null;
+  /** Sigla da UF em maiusculas. */
+  state: string | null;
+  city: string | null;
+  district: string | null;
   responses: FieldResponse[];
   /** Preenchido quando o formulario exigiu consentimento. */
   consentAt: IsoDate | null;
@@ -29,6 +39,13 @@ export interface MemberInput {
   name: string;
   phone: string;
   photo: StoredImage | null;
+  /** Campos padrao opcionais: ausentes contam como nao informados. */
+  gender?: string | null;
+  cpf?: string | null;
+  voterId?: string | null;
+  state?: string | null;
+  city?: string | null;
+  district?: string | null;
   responses: FieldResponse[];
   consentAt: IsoDate | null;
   source: Member['source'];

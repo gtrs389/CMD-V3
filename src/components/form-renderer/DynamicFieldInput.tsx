@@ -3,6 +3,7 @@
 import type { CustomField } from '@/lib/types';
 import type { DynamicValue } from '@/lib/validation/dynamic-form';
 import { maskPhone } from '@/lib/utils/phone';
+import { GENDER_OPTIONS, UF_OPTIONS, maskCpf, maskVoterId } from '@/lib/utils/documents';
 import { cn } from '@/lib/utils/cn';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Field, describedBy } from '@/components/ui/Field';
@@ -121,6 +122,19 @@ export function DynamicFieldInput({
   }
 
   if (field.type === 'select') {
+    // Genero e UF tem lista fixa do sistema; os demais usam as opcoes do ADMIN.
+    const options =
+      field.systemKey === 'gender'
+        ? GENDER_OPTIONS
+        : field.systemKey === 'state'
+          ? UF_OPTIONS
+          : field.options;
+
+    const vazio =
+      field.systemKey === 'state'
+        ? 'Selecione o estado'
+        : field.placeholder || 'Selecione uma opção';
+
     return (
       <Field id={id} label={field.label} help={help} error={error} required={field.required}>
         <Select
@@ -131,8 +145,8 @@ export function DynamicFieldInput({
           aria-describedby={described}
           onChange={(event) => onChange(event.target.value)}
         >
-          <option value="">{field.placeholder || 'Selecione uma opção'}</option>
-          {field.options.map((option) => (
+          <option value="">{vazio}</option>
+          {options.map((option) => (
             <option key={option.id} value={option.id}>
               {option.label || 'Opção sem título'}
             </option>
@@ -166,6 +180,22 @@ export function DynamicFieldInput({
     placeholder: field.placeholder,
     'aria-describedby': described,
   };
+
+  if (field.systemKey === 'cpf' || field.systemKey === 'voter_id') {
+    const mask = field.systemKey === 'cpf' ? maskCpf : maskVoterId;
+    return (
+      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+        <Input
+          {...common}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={mask(typeof value === 'string' ? value : '')}
+          onChange={(event) => onChange(mask(event.target.value))}
+        />
+      </Field>
+    );
+  }
 
   if (field.type === 'phone') {
     return (

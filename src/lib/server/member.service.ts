@@ -2,6 +2,13 @@ import 'server-only';
 import type { Member, MemberInput } from '@/lib/types';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
+  isGenderValue,
+  normalizeCpf,
+  normalizePlace,
+  normalizeState,
+  normalizeVoterId,
+} from '@/lib/utils/documents';
+import {
   TABLES,
   type FormFieldRow,
   type MemberResponseRow,
@@ -60,6 +67,31 @@ async function assembleOne(row: MemberRow): Promise<Member> {
     signedUrl(row.photo_path),
   ]);
   return toMember(row, responses.get(row.id) ?? [], photo);
+}
+
+/**
+ * Normaliza os campos padrao antes de gravar.
+ *
+ * Vazio vira nulo, para que o indice unico por cliente nao trate ausencia
+ * como valor repetido. Valor invalido tambem vira nulo: a validacao completa
+ * acontece no esquema Zod da rota.
+ */
+function standardColumns(
+  input: Partial<Pick<MemberInput, 'gender' | 'cpf' | 'voterId' | 'state' | 'city' | 'district'>>,
+): Record<string, string | null> {
+  const patch: Record<string, string | null> = {};
+
+  if (input.gender !== undefined) {
+    const value = (input.gender ?? '').trim();
+    patch.gender = value && isGenderValue(value) ? value : null;
+  }
+  if (input.cpf !== undefined) patch.cpf = normalizeCpf(input.cpf ?? '') || null;
+  if (input.voterId !== undefined) patch.voter_id = normalizeVoterId(input.voterId ?? '') || null;
+  if (input.state !== undefined) patch.state = normalizeState(input.state ?? '') || null;
+  if (input.city !== undefined) patch.city = normalizePlace(input.city ?? '') || null;
+  if (input.district !== undefined) patch.district = normalizePlace(input.district ?? '') || null;
+
+  return patch;
 }
 
 async function requireMemberRow(id: string): Promise<MemberRow> {
@@ -157,6 +189,7 @@ export async function createMember(input: MemberInput): Promise<Member> {
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
+    ...standardColumns(input),
     ...consent,
     source: input.source,
   });
@@ -174,6 +207,7 @@ export async function updateMember(
 
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.phone !== undefined) patch.phone = normalizePhone(input.phone);
+  Object.assign(patch, standardColumns(input));
 
   if (input.consentAt !== undefined) {
     // Registrar de novo o aceite regrava a evidencia com o aviso atual;

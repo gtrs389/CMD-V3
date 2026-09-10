@@ -87,6 +87,13 @@ export interface MemberRow {
   photo_path: string | null;
   photo_mime: string | null;
   photo_size: number | null;
+  /** Campos padrao com coluna propria (migration 003). Todos opcionais. */
+  gender: string | null;
+  cpf: string | null;
+  voter_id: string | null;
+  state: string | null;
+  city: string | null;
+  district: string | null;
   consent_at: string | null;
   /** Evidencia do aceite, montada no servidor. Nunca vem do navegador. */
   consent_privacy_hash: string | null;
