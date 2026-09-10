@@ -20,6 +20,13 @@ import { useToast } from '@/components/ui/Toast';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 
+/**
+ * Aviso curto sobre os sinais tecnicos registrados no envio.
+ * Aparece sempre, independente do aviso de privacidade do cliente.
+ */
+const DEVICE_NOTICE =
+  'Ao enviar, registramos dados tecnicos do aparelho e da conexao para seguranca e prevencao de fraude.';
+
 interface PublicFormViewProps {
   client: Client;
 }
@@ -174,6 +181,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
                 {privacy.title}
               </h2>
               <p className="mt-1.5 text-xs whitespace-pre-line text-ink-700">{privacy.text}</p>
+              <p className="mt-1.5 text-xs text-ink-700">{DEVICE_NOTICE}</p>
 
               {privacy.requireConsent ? (
                 <>
@@ -203,6 +211,8 @@ export function PublicFormView({ client }: PublicFormViewProps) {
           <p className="text-center text-xs text-ink-500">
             Seu preenchimento fica salvo neste aparelho ate o envio.
           </p>
+
+          <p className="text-center text-xs text-ink-500">{DEVICE_NOTICE}</p>
         </form>
 
         <p className="mt-6 text-center text-xs text-ink-400">{appConfig.shortName}</p>

@@ -1,4 +1,5 @@
 import type { FieldResponse } from '@/lib/types';
+import { collectDeviceSignals, type DeviceSignals } from '@/lib/utils/device';
 import { api } from './api';
 
 /**
@@ -16,8 +17,12 @@ export interface PublicSubmission {
 }
 
 export async function submitInvite(token: string, input: PublicSubmission): Promise<void> {
+  // Sinais tecnicos do aparelho, apenas para seguranca. Se o navegador nao
+  // expuser nada, o envio segue igual: `device` vai vazio.
+  const device: DeviceSignals = collectDeviceSignals();
+
   await api<{ ok: true }>(`/api/public/convite/${encodeURIComponent(token)}/membros`, {
     method: 'POST',
-    body: input,
+    body: { ...input, device },
   });
 }
