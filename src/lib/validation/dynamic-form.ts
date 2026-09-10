@@ -54,14 +54,14 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
     case 'multiselect':
       return z.array(z.string()).superRefine((value, ctx) => {
         if (required && value.length === 0) {
-          ctx.addIssue({ code: 'custom', message: 'Selecione pelo menos uma opcao.' });
+          ctx.addIssue({ code: 'custom', message: 'Selecione pelo menos uma opção.' });
         }
       }) as z.ZodType<DynamicValue>;
 
     case 'select':
       return z.string().superRefine((value, ctx) => {
         if (required && !value) {
-          ctx.addIssue({ code: 'custom', message: 'Selecione uma opcao.' });
+          ctx.addIssue({ code: 'custom', message: 'Selecione uma opção.' });
         }
       }) as z.ZodType<DynamicValue>;
 
@@ -73,7 +73,7 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           return;
         }
         if (!isValidPhone(trimmed)) {
-          ctx.addIssue({ code: 'custom', message: 'Telefone invalido. Use DDD + numero.' });
+          ctx.addIssue({ code: 'custom', message: 'Telefone inválido. Use DDD + número.' });
         }
       }) as z.ZodType<DynamicValue>;
 
@@ -85,7 +85,7 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           return;
         }
         if (!z.email().safeParse(trimmed).success) {
-          ctx.addIssue({ code: 'custom', message: 'E-mail invalido.' });
+          ctx.addIssue({ code: 'custom', message: 'E-mail inválido.' });
         }
       }) as z.ZodType<DynamicValue>;
 
@@ -97,7 +97,7 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           return;
         }
         if (!NUMBER_PATTERN.test(trimmed)) {
-          ctx.addIssue({ code: 'custom', message: 'Informe apenas numeros.' });
+          ctx.addIssue({ code: 'custom', message: 'Informe apenas números.' });
         }
       }) as z.ZodType<DynamicValue>;
 
@@ -109,7 +109,7 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           return;
         }
         if (!DATE_PATTERN.test(trimmed) || Number.isNaN(new Date(trimmed).getTime())) {
-          ctx.addIssue({ code: 'custom', message: 'Data invalida.' });
+          ctx.addIssue({ code: 'custom', message: 'Data inválida.' });
         }
       }) as z.ZodType<DynamicValue>;
 
@@ -122,7 +122,7 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           ctx.addIssue({ code: 'custom', message: requiredMessage(field) });
         }
         if (trimmed.length > 500) {
-          ctx.addIssue({ code: 'custom', message: 'Use no maximo 500 caracteres.' });
+          ctx.addIssue({ code: 'custom', message: 'Use no máximo 500 caracteres.' });
         }
       }) as z.ZodType<DynamicValue>;
   }
@@ -138,7 +138,7 @@ export function buildDynamicSchema(config: ClientFormConfig): z.ZodType<DynamicF
   if (config.privacy.enabled && config.privacy.requireConsent) {
     shape[CONSENT_KEY] = z.boolean().superRefine((value, ctx) => {
       if (value !== true) {
-        ctx.addIssue({ code: 'custom', message: 'E necessario aceitar para continuar.' });
+        ctx.addIssue({ code: 'custom', message: 'E necessário aceitar para continuar.' });
       }
     }) as z.ZodType<DynamicValue>;
   }
@@ -283,7 +283,7 @@ export function formatResponse(field: CustomField, value: FieldValue): string {
 
   switch (field.type) {
     case 'checkbox':
-      return value === true ? 'Sim' : 'Nao';
+      return value === true ? 'Sim' : 'Não';
     case 'multiselect': {
       if (!Array.isArray(value) || value.length === 0) return '--';
       const labels = value.map(

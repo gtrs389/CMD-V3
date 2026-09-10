@@ -53,7 +53,7 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
       await memberRepository.remove(removing.id);
       toast.success('Integrante excluido.');
     } catch {
-      toast.error('Nao foi possivel excluir o integrante.');
+      toast.error('Não foi possível excluir o integrante.');
     } finally {
       setRemoving(null);
     }
@@ -188,7 +188,7 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                     Cadastro
                   </th>
                   <th scope="col" className="w-[22%] px-4 py-3 text-right font-medium">
-                    Acoes
+                    Ações
                   </th>
                 </tr>
               </thead>
@@ -261,13 +261,13 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
       <ConfirmDialog
         open={removing !== null}
         title="Excluir integrante"
-        description={`"${removing?.name ?? ''}" sera removido da equipe de ${client.name}. Esta acao nao pode ser desfeita.`}
+        description={`"${removing?.name ?? ''}" será removido da equipe de ${client.name}. Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir integrante"
         onCancel={() => setRemoving(null)}
         onConfirm={handleRemove}
         details={
           <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
-            A foto e todas as respostas do formulario tambem serao apagadas.
+            A foto e todas as respostas do formulário também serão apagadas.
           </p>
         }
       />

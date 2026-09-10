@@ -45,7 +45,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
       toast.error(
         error instanceof Error && error.message
           ? error.message
-          : 'Nao foi possivel alterar o convite.',
+          : 'Não foi possível alterar o convite.',
       );
     }
   }
@@ -60,7 +60,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
       toast.error(
         error instanceof Error && error.message
           ? error.message
-          : 'Nao foi possivel gerar um novo link.',
+          : 'Não foi possível gerar um novo link.',
       );
     } finally {
       setWorking(false);
@@ -75,9 +75,9 @@ export function InvitePanel({ client }: InvitePanelProps) {
           <div className="min-w-0">
             <CardTitle>Link de convite</CardTitle>
             <CardDescription>
-              Envie este endereco para a equipe preencher o cadastro. O link contem apenas um
-              token aleatorio, sem nenhum dado pessoal. O banco guarda somente o hash do token,
-              por isso o endereco completo aparece apenas no momento em que e gerado.
+              Envie este endereço para a equipe preencher o cadastro. O link contém apenas um
+              token aleatório, sem nenhum dado pessoal. O banco guarda somente o hash do token,
+              por isso o endereço completo aparece apenas no momento em que é gerado.
             </CardDescription>
           </div>
         </CardHeader>
@@ -95,7 +95,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-4 text-sm font-medium text-ink-900 shadow-card transition-colors hover:bg-ink-50"
                 >
                   <ExternalLink aria-hidden="true" className="size-4" />
-                  Abrir previa em nova aba
+                  Abrir prévia em nova aba
                 </a>
               </div>
             </>
@@ -103,11 +103,11 @@ export function InvitePanel({ client }: InvitePanelProps) {
             <div className="rounded-control border border-line bg-ink-50 p-3">
               <p className="flex items-center gap-2 text-sm font-medium text-ink-900">
                 <Link2 aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
-                Link nao visivel
+                Link não visível
               </p>
               <p className="mt-1 text-xs text-ink-500">
-                O token fica guardado apenas como hash. Os links ja enviados continuam
-                funcionando. Para obter um endereco visivel de novo, gere um novo link abaixo.
+                O token fica guardado apenas como hash. Os links já enviados continuam
+                funcionando. Para obter um endereço visível de novo, gere um novo link abaixo.
               </p>
             </div>
           )}
@@ -118,7 +118,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
               <dd className="font-medium text-ink-900">{formatDateTime(client.invite.createdAt)}</dd>
             </div>
             <div className="min-w-0">
-              <dt className="text-xs text-ink-500">Ultima renovacao</dt>
+              <dt className="text-xs text-ink-500">Última renovação</dt>
               <dd className="font-medium text-ink-900">
                 {client.invite.rotatedAt ? formatDateTime(client.invite.rotatedAt) : 'Nunca'}
               </dd>
@@ -131,7 +131,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
         <CardHeader>
           <div className="min-w-0">
             <CardTitle>Controle do convite</CardTitle>
-            <CardDescription>Interrompa ou renove o acesso ao formulario publico.</CardDescription>
+            <CardDescription>Interrompa ou renove o acesso ao formulário público.</CardDescription>
           </div>
         </CardHeader>
 
@@ -140,8 +140,8 @@ export function InvitePanel({ client }: InvitePanelProps) {
             label="Convite ativo"
             description={
               client.invite.active
-                ? 'O formulario publico esta aceitando novos cadastros.'
-                : 'Quem acessar o link vera um aviso de convite indisponivel.'
+                ? 'O formulário público está aceitando novos cadastros.'
+                : 'Quem acessar o link verá um aviso de convite indisponível.'
             }
             checked={client.invite.active}
             onChange={toggleActive}
@@ -151,7 +151,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-ink-900">Gerar novo link</p>
               <p className="text-xs text-ink-500">
-                O endereco atual para de funcionar imediatamente.
+                O endereço atual para de funcionar imediatamente.
               </p>
             </div>
             <Button
@@ -170,7 +170,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
       <ConfirmDialog
         open={rotating}
         title="Gerar novo link de convite"
-        description="Um novo token sera criado para este cliente."
+        description="Um novo token será criado para este cliente."
         confirmLabel="Gerar novo link"
         tone="brand"
         onCancel={() => setRotating(false)}
@@ -179,11 +179,11 @@ export function InvitePanel({ client }: InvitePanelProps) {
           <ul className="space-y-2 rounded-control bg-warning-50 p-3 text-sm text-warning-600">
             <li className="flex gap-2">
               <ShieldOff aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <span>Qualquer link ja compartilhado deixara de funcionar.</span>
+              <span>Qualquer link já compartilhado deixará de funcionar.</span>
             </li>
             <li className="flex gap-2">
               <Link2 aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <span>Os integrantes ja cadastrados sao preservados.</span>
+              <span>Os integrantes já cadastrados são preservados.</span>
             </li>
           </ul>
         }

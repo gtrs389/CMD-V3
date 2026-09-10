@@ -24,7 +24,7 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
       <main className="flex min-h-dvh items-center justify-center bg-surface-muted px-4">
         <div className="flex flex-col items-center gap-3 text-ink-500">
           <Spinner className="size-6 text-brand-700" />
-          <p className="text-sm">Carregando formulario...</p>
+          <p className="text-sm">Carregando formulário...</p>
         </div>
       </main>
     );
@@ -41,7 +41,7 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
           >
             <WifiOff className="size-6" />
           </span>
-          <h1 className="text-lg font-semibold text-ink-900">Nao foi possivel carregar</h1>
+          <h1 className="text-lg font-semibold text-ink-900">Não foi possível carregar</h1>
           <p className="mt-2 text-sm text-balance text-ink-500">{error}</p>
           <Button variant="secondary" fullWidth className="mt-6" onClick={reload}>
             Tentar novamente
@@ -69,9 +69,9 @@ function InviteUnavailable() {
         >
           <Link2Off className="size-6" />
         </span>
-        <h1 className="text-lg font-semibold text-ink-900">Convite indisponivel</h1>
+        <h1 className="text-lg font-semibold text-ink-900">Convite indisponível</h1>
         <p className="mt-2 text-sm text-balance text-ink-500">
-          Este link nao esta ativo no momento. Peca um novo link ao responsavel pelo cadastro.
+          Este link não está ativo no momento. Peça um novo link ao responsável pelo cadastro.
         </p>
         <p className="mt-6 text-xs text-ink-400">{appConfig.shortName}</p>
       </div>

@@ -71,7 +71,7 @@ export function createLocalMemberRepository(
       const storage = storageFactory();
       const members = readMembers(storage);
       const current = members.find((member) => member.id === id);
-      if (!current) throw new NotFoundError('Integrante nao encontrado.');
+      if (!current) throw new NotFoundError('Integrante não encontrado.');
 
       const updated: Member = {
         ...current,
@@ -94,7 +94,7 @@ export function createLocalMemberRepository(
       const storage = storageFactory();
       const members = readMembers(storage);
       if (!members.some((member) => member.id === id)) {
-        throw new NotFoundError('Integrante nao encontrado.');
+        throw new NotFoundError('Integrante não encontrado.');
       }
       writeMembers(
         storage,

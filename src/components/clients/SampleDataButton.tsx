@@ -24,7 +24,7 @@ export function SampleDataButton() {
       toast.error(
         error instanceof NetworkError
           ? error.message
-          : 'Nao foi possivel carregar os dados de exemplo.',
+          : 'Não foi possível carregar os dados de exemplo.',
       );
     } finally {
       setLoading(false);

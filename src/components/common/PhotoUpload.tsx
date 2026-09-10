@@ -62,7 +62,7 @@ export function PhotoUpload({
       const message =
         error instanceof ImageError
           ? error.message
-          : 'Nao foi possivel processar a imagem. Tente outra foto.';
+          : 'Não foi possível processar a imagem. Tente outra foto.';
       setLocalError(message);
       onError?.(message);
     } finally {
@@ -82,7 +82,7 @@ export function PhotoUpload({
         )}
       >
         {value ? (
-          <img src={value} alt="Previa da foto" className="size-full object-cover" />
+          <img src={value} alt="Prévia da foto" className="size-full object-cover" />
         ) : (
           <span aria-hidden="true" className="text-lg font-semibold text-ink-400">
             {name ? initials(name) : <ImagePlus className="size-6" />}
@@ -120,7 +120,7 @@ export function PhotoUpload({
               onClick={() => cameraRef.current?.click()}
             >
               <Camera aria-hidden="true" className="size-4" />
-              Camera
+              Câmera
             </Button>
           ) : null}
 
@@ -143,7 +143,7 @@ export function PhotoUpload({
 
         {showFormatHint ? (
           <p className="mt-2 text-xs text-ink-500">
-            JPG, PNG ou WEBP. A imagem e reduzida automaticamente antes de ser salva.
+            JPG, PNG ou WEBP. A imagem é reduzida automaticamente antes de ser salva.
           </p>
         ) : null}
 

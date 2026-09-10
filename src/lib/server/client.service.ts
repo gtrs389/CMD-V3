@@ -94,7 +94,7 @@ async function requireClientRow(id: string): Promise<ClientRow> {
     select: CLIENT_COLUMNS,
     filters: { id: `eq.${id}` },
   });
-  if (!row) throw notFound('Cliente nao encontrado.');
+  if (!row) throw notFound('Cliente não encontrado.');
   return row;
 }
 

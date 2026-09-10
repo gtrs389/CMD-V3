@@ -10,6 +10,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { MemberDeviceSection } from './MemberDeviceSection';
 
 interface MemberDetailModalProps {
   open: boolean;
@@ -88,7 +89,7 @@ export function MemberDetailModal({
             </dd>
           </div>
           <div className="min-w-0">
-            <dt className="text-xs text-ink-500">Ultima atualizacao</dt>
+            <dt className="text-xs text-ink-500">Última atualização</dt>
             <dd className="font-medium break-words text-ink-900">
               {formatDateTime(member.updatedAt)}
             </dd>
@@ -96,11 +97,11 @@ export function MemberDetailModal({
         </dl>
 
         <div>
-          <h4 className="text-sm font-semibold text-ink-900">Respostas do formulario</h4>
+          <h4 className="text-sm font-semibold text-ink-900">Respostas do formulário</h4>
 
           {custom.length === 0 ? (
             <p className="mt-2 text-sm text-ink-500">
-              Este formulario ainda nao possui campos personalizados.
+              Este formulário ainda não possui campos personalizados.
             </p>
           ) : (
             <dl className="mt-2 divide-y divide-line">
@@ -128,6 +129,8 @@ export function MemberDetailModal({
             </dl>
           )}
         </div>
+
+        <MemberDeviceSection memberId={member.id} />
       </div>
     </Modal>
   );

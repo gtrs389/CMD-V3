@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 describe('repositorio de clientes', () => {
-  it('cria com formulario padrao e convite ativo', async () => {
+  it('cria com formulário padrão e convite ativo', async () => {
     const client = await clients.create(clientInput);
 
     expect(client.email).toBe('contato@exemplo.com');
@@ -31,7 +31,7 @@ describe('repositorio de clientes', () => {
     expect(client.form.fields).toHaveLength(3);
   });
 
-  it('nao coloca dado pessoal no token do convite', async () => {
+  it('não coloca dado pessoal no token do convite', async () => {
     const client = await clients.create(clientInput);
     const token = (client.invite.token ?? '').toLowerCase();
 
@@ -128,13 +128,13 @@ describe('repositorio de integrantes', () => {
     expect(await members.listByClient(client.id)).toHaveLength(0);
   });
 
-  it('rejeita atualizacao de integrante inexistente', async () => {
+  it('rejeita atualização de integrante inexistente', async () => {
     await expect(members.update('nao-existe', { name: 'X' })).rejects.toThrow();
   });
 });
 
 describe('isolamento entre clientes', () => {
-  it('lista apenas os integrantes do proprio cliente', async () => {
+  it('lista apenas os integrantes do próprio cliente', async () => {
     const primeiro = await clients.create(clientInput);
     const segundo = await clients.create({ ...clientInput, email: 'outro@exemplo.com' });
 

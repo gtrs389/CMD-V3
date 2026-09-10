@@ -29,13 +29,13 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new NetworkError('Falha de conexao. Verifique sua rede e tente novamente.');
+    throw new NetworkError('Falha de conexão. Verifique sua rede e tente novamente.');
   }
 
   const data = (await response.json().catch(() => null)) as (T & { message?: string }) | null;
 
   if (!response.ok) {
-    const message = data?.message ?? 'Nao foi possivel concluir a operacao.';
+    const message = data?.message ?? 'Não foi possível concluir a operação.';
     if (response.status === 404) throw new NotFoundError(message);
     throw new RepositoryError(message);
   }

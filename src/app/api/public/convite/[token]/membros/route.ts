@@ -24,7 +24,7 @@ export async function POST(
     const { token } = await ctx.params;
     const client = await getClientByInviteToken(token);
     if (!client || !client.invite.active) {
-      throw badRequest('Este link nao esta ativo no momento.');
+      throw badRequest('Este link não está ativo no momento.');
     }
 
     const input = await readJson(request, publicSubmissionSchema);
@@ -33,7 +33,7 @@ export async function POST(
     // recusado aqui, nao apenas na tela.
     const { privacy } = client.form;
     if (privacy.enabled && privacy.requireConsent && !input.consentAt) {
-      throw badRequest('E necessario aceitar o aviso de privacidade para enviar o cadastro.');
+      throw badRequest('E necessário aceitar o aviso de privacidade para enviar o cadastro.');
     }
 
     const { device, ...submission } = input;

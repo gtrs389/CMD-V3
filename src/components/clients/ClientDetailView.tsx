@@ -68,7 +68,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
     return (
       <EmptyState
         icon={<Building2 className="size-6" />}
-        title="Cliente nao encontrado"
+        title="Cliente não encontrado"
         description="O cliente pode ter sido excluido por outra pessoa."
         action={
           <Link
@@ -84,7 +84,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
   }
 
   const tabs: TabItem[] = [
-    { id: 'visao-geral', label: 'Visao geral', icon: <LayoutList className="size-4" /> },
+    { id: 'visao-geral', label: 'Visão geral', icon: <LayoutList className="size-4" /> },
     {
       id: 'equipe',
       label: 'Equipe',
@@ -95,7 +95,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
         </span>
       ),
     },
-    { id: 'formulario', label: 'Formulario', icon: <FileText className="size-4" /> },
+    { id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> },
     { id: 'convite', label: 'Link de convite', icon: <Link2 className="size-4" /> },
   ];
 
@@ -148,7 +148,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
       </Card>
 
       <Tabs
-        label="Secoes do cliente"
+        label="Seções do cliente"
         items={tabs}
         active={tab}
         onChange={(id) => setTab(id as TabId)}

@@ -41,7 +41,7 @@ export function LoginForm({ next, configured }: LoginFormProps) {
 
     const result = await login(values.email, values.password);
     if (!result.ok) {
-      setFormError(result.message ?? 'Nao foi possivel entrar.');
+      setFormError(result.message ?? 'Não foi possível entrar.');
       return;
     }
 
@@ -76,7 +76,7 @@ export function LoginForm({ next, configured }: LoginFormProps) {
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          placeholder="voce@exemplo.com"
+          placeholder="você@exemplo.com"
           invalid={Boolean(errors.email)}
           aria-describedby={describedBy('email', undefined, errors.email?.message)}
           {...register('email')}
@@ -122,7 +122,7 @@ export function LoginForm({ next, configured }: LoginFormProps) {
           <p className="font-semibold">Servidor sem banco de dados</p>
           <p className="mt-1">
             Defina SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente do servidor. Enquanto isso,
-            nenhum login e aceito.
+            nenhum login é aceito.
           </p>
         </div>
       ) : null}

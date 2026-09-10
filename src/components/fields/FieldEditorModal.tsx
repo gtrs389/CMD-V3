@@ -98,16 +98,16 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
     const next: DraftErrors = {};
     const label = draft.label.trim();
 
-    if (label.length < 2) next.label = 'Informe um titulo com pelo menos 2 caracteres.';
+    if (label.length < 2) next.label = 'Informe um título com pelo menos 2 caracteres.';
 
     const cleanedOptions = draft.options
       .map((option) => ({ ...option, label: option.label.trim() }))
       .filter((option) => option.label.length > 0);
 
     if (requiresOptions(draft.type)) {
-      if (cleanedOptions.length < 2) next.options = 'Cadastre pelo menos duas opcoes.';
+      if (cleanedOptions.length < 2) next.options = 'Cadastre pelo menos duas opções.';
       const seen = new Set(cleanedOptions.map((option) => option.label.toLowerCase()));
-      if (seen.size !== cleanedOptions.length) next.options = 'Ha opcoes repetidas.';
+      if (seen.size !== cleanedOptions.length) next.options = 'Há opções repetidas.';
     }
 
     setErrors(next);
@@ -127,7 +127,7 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
       open
       onClose={onClose}
       title={field.label ? 'Editar campo' : 'Novo campo'}
-      description="O identificador interno do campo nao muda ao renomear o titulo."
+      description="O identificador interno do campo não muda ao renomear o título."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -157,12 +157,12 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
           </Select>
         </Field>
 
-        <Field id="campo-titulo" label="Titulo" required error={errors.label}>
+        <Field id="campo-titulo" label="Título" required error={errors.label}>
           <Input
             id="campo-titulo"
             value={draft.label}
             invalid={Boolean(errors.label)}
-            placeholder="Ex.: Bairro de atuacao"
+            placeholder="Ex.: Bairro de atuação"
             onChange={(event) => patch({ label: event.target.value })}
           />
         </Field>
@@ -185,7 +185,7 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
         <Field
           id="campo-ajuda"
           label="Texto de ajuda"
-          help="Orientacao curta exibida abaixo do campo."
+          help="Orientação curta exibida abaixo do campo."
         >
           <Input
             id="campo-ajuda"
@@ -198,7 +198,7 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
         {needsOptions ? (
           <div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-ink-700">Opcoes</span>
+              <span className="text-sm font-medium text-ink-700">Opções</span>
               <Button
                 variant="secondary"
                 size="sm"
@@ -214,13 +214,13 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
               {draft.options.map((option, index) => (
                 <li key={option.id} className="flex items-center gap-2">
                   <Input
-                    aria-label={`Opcao ${index + 1}`}
+                    aria-label={`Opção ${index + 1}`}
                     value={option.label}
-                    placeholder={`Opcao ${index + 1}`}
+                    placeholder={`Opção ${index + 1}`}
                     onChange={(event) => updateOption(option.id, event.target.value)}
                   />
                   <IconButton
-                    label={`Remover opcao ${index + 1}`}
+                    label={`Remover opção ${index + 1}`}
                     icon={<Trash2 className="size-4" />}
                     variant="danger"
                     disabled={draft.options.length <= 1}
@@ -241,11 +241,11 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
         <div className="space-y-4 rounded-control bg-ink-50 p-4">
           <Switch
             id="campo-obrigatorio"
-            label="Preenchimento obrigatorio"
+            label="Preenchimento obrigatório"
             description={
               isLockedRequired(draft)
-                ? 'O nome identifica o integrante e permanece obrigatorio.'
-                : 'A pessoa nao consegue enviar sem preencher.'
+                ? 'O nome identifica o integrante e permanece obrigatório.'
+                : 'A pessoa não consegue enviar sem preencher.'
             }
             checked={draft.required}
             disabled={isLockedRequired(draft)}
@@ -257,7 +257,7 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
             label="Campo ativo"
             description={
               canDisableField(draft)
-                ? 'Campos desativados nao aparecem no formulario publico.'
+                ? 'Campos desativados não aparecem no formulário público.'
                 : 'Campo nativo essencial: permanece sempre ativo.'
             }
             checked={draft.enabled}

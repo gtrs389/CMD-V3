@@ -11,7 +11,7 @@ export const LOGIN_PATH = '/login';
 export const DEFAULT_AUTHENTICATED_PATH = '/dashboard';
 
 /** Mensagem unica de credencial invalida: nunca revela se o e-mail existe. */
-export const GENERIC_LOGIN_ERROR = 'E-mail ou senha invalidos.';
+export const GENERIC_LOGIN_ERROR = 'E-mail ou senha inválidos.';
 
 /** Tentativas seguidas antes do bloqueio temporario. */
 export const MAX_LOGIN_ATTEMPTS = 5;

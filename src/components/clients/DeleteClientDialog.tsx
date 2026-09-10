@@ -40,7 +40,7 @@ export function DeleteClientDialog({
       toast.success(`Cliente "${client.name}" excluido.`);
       onDeleted?.();
     } catch {
-      toast.error('Nao foi possivel excluir o cliente.');
+      toast.error('Não foi possível excluir o cliente.');
     }
   }
 
@@ -48,7 +48,7 @@ export function DeleteClientDialog({
     <ConfirmDialog
       open={open}
       title="Excluir cliente"
-      description={`Esta acao remove definitivamente "${client.name}" e tudo o que esta vinculado a ele. Nao e possivel desfazer.`}
+      description={`Esta ação remove definitivamente "${client.name}" e tudo o que está vinculado a ele. Não é possível desfazer.`}
       confirmLabel="Excluir definitivamente"
       onCancel={onCancel}
       onConfirm={handleConfirm}

@@ -81,7 +81,7 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
       toast.error(
         error instanceof Error && error.message
           ? error.message
-          : 'Nao foi possivel salvar o integrante.',
+          : 'Não foi possível salvar o integrante.',
       );
     }
   }
@@ -94,14 +94,14 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
       description={
         member
           ? 'Atualize os dados cadastrados pela pessoa.'
-          : 'Cadastro manual, com os mesmos campos do formulario publico.'
+          : 'Cadastro manual, com os mesmos campos do formulário público.'
       }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>{member ? 'Salvar alteracoes' : 'Cadastrar'}</Button>
+          <Button onClick={handleSubmit}>{member ? 'Salvar alterações' : 'Cadastrar'}</Button>
         </>
       }
     >

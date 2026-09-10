@@ -5,7 +5,7 @@ export const loginSchema = z.object({
     .string()
     .trim()
     .min(1, 'Informe o e-mail.')
-    .pipe(z.email('E-mail invalido.')),
+    .pipe(z.email('E-mail inválido.')),
   password: z.string().min(1, 'Informe a senha.'),
 });
 

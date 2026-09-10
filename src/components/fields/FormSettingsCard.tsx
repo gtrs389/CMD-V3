@@ -68,9 +68,9 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
           consentLabel: values.privacyConsentLabel || appConfig.privacy.defaultConsentLabel,
         },
       });
-      toast.success('Ajustes do formulario salvos.');
+      toast.success('Ajustes do formulário salvos.');
     } catch {
-      toast.error('Nao foi possivel salvar os ajustes.');
+      toast.error('Não foi possível salvar os ajustes.');
     }
   }
 
@@ -79,15 +79,15 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
       <Card>
         <CardHeader>
           <div className="min-w-0">
-            <CardTitle>Textos do formulario</CardTitle>
-            <CardDescription>Aparecem na pagina publica de cadastro.</CardDescription>
+            <CardTitle>Textos do formulário</CardTitle>
+            <CardDescription>Aparecem na página pública de cadastro.</CardDescription>
           </div>
         </CardHeader>
         <CardBody className="space-y-4">
           <Field
             id="form-intro"
             label="Texto de abertura"
-            help="Opcional. Explique rapidamente o que a pessoa esta preenchendo."
+            help="Opcional. Explique rapidamente o que a pessoa está preenchendo."
             error={errors.introText?.message}
           >
             <Textarea
@@ -120,22 +120,22 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
           <div className="min-w-0">
             <CardTitle>Aviso de privacidade</CardTitle>
             <CardDescription>
-              Area configuravel. O texto padrao e apenas um marcador e deve ser revisado
-              pelo responsavel juridico antes do uso real.
+              Área configurável. O texto padrão é apenas um marcador e deve ser revisado
+              pelo responsável jurídico antes do uso real.
             </CardDescription>
           </div>
         </CardHeader>
         <CardBody className="space-y-4">
           <Switch
-            label="Exibir aviso no formulario"
-            description="Mostra o bloco de privacidade antes do botao de envio."
+            label="Exibir aviso no formulário"
+            description="Mostra o bloco de privacidade antes do botão de envio."
             checked={privacyEnabled}
             onChange={(checked) => setValue('privacyEnabled', checked, { shouldDirty: true })}
           />
 
           {privacyEnabled ? (
             <>
-              <Field id="privacidade-titulo" label="Titulo" error={errors.privacyTitle?.message}>
+              <Field id="privacidade-titulo" label="Título" error={errors.privacyTitle?.message}>
                 <Input
                   id="privacidade-titulo"
                   invalid={Boolean(errors.privacyTitle)}
@@ -146,7 +146,7 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
               <Field
                 id="privacidade-texto"
                 label="Texto do aviso"
-                help="Escreva o texto que sera exibido a pessoa."
+                help="Escreva o texto que será exibido a pessoa."
                 error={errors.privacyText?.message}
               >
                 <Textarea
@@ -159,7 +159,7 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
 
               <Switch
                 label="Exigir consentimento"
-                description="A pessoa precisa marcar a confirmacao para enviar o cadastro."
+                description="A pessoa precisa marcar a confirmação para enviar o cadastro."
                 checked={requireConsent}
                 onChange={(checked) =>
                   setValue('privacyRequireConsent', checked, { shouldDirty: true })
@@ -169,7 +169,7 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
               {requireConsent ? (
                 <Field
                   id="privacidade-consentimento"
-                  label="Texto da confirmacao"
+                  label="Texto da confirmação"
                   error={errors.privacyConsentLabel?.message}
                 >
                   <Input
@@ -190,7 +190,7 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
           onClick={() => reset(toValues(client))}
           disabled={!isDirty || isSubmitting}
         >
-          Descartar alteracoes
+          Descartar alterações
         </Button>
         <Button type="submit" loading={isSubmitting}>
           Salvar ajustes

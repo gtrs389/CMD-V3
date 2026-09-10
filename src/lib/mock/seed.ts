@@ -27,16 +27,16 @@ interface SeedClient {
 
 const SEED: SeedClient[] = [
   {
-    name: 'Coordenacao Regional Norte',
-    email: 'coordenacao.norte@exemplo.com',
-    notes: 'Equipe responsavel pela articulacao nos bairros do setor norte.',
+    name: 'Coordenação Regional Norte',
+    email: 'coordenação.norte@exemplo.com',
+    notes: 'Equipe responsável pela articulação nos bairros do setor norte.',
     members: [
       {
         name: 'Ana Beatriz Moraes',
         phone: '11987650001',
         regiao: 'Zona Norte',
-        disponibilidade: ['Manha', 'Tarde'],
-        observacao: 'Tem veiculo proprio.',
+        disponibilidade: ['Manhã', 'Tarde'],
+        observacao: 'Tem veículo próprio.',
       },
       {
         name: 'Carlos Eduardo Lima',
@@ -49,14 +49,14 @@ const SEED: SeedClient[] = [
         name: 'Juliana Prado',
         phone: '21987650003',
         regiao: 'Zona Norte',
-        disponibilidade: ['Manha'],
+        disponibilidade: ['Manhã'],
         observacao: 'Prefere contato por mensagem.',
       },
     ],
   },
   {
-    name: 'Nucleo Zona Sul',
-    email: 'nucleo.sul@exemplo.com',
+    name: 'Núcleo Zona Sul',
+    email: 'núcleo.sul@exemplo.com',
     notes: '',
     members: [
       {
@@ -71,16 +71,16 @@ const SEED: SeedClient[] = [
 ];
 
 const EXTRA_LABELS = {
-  regiao: 'Regiao de atuacao',
+  regiao: 'Região de atuação',
   disponibilidade: 'Disponibilidade',
-  observacao: 'Observacoes',
+  observacao: 'Observações',
 } as const;
 
 function buildExtraFields(order: number): CustomField[] {
   const regiao: CustomField = {
     ...createField('select'),
     label: EXTRA_LABELS.regiao,
-    helpText: 'Onde a pessoa atua com mais frequencia.',
+    helpText: 'Onde a pessoa atua com mais frequência.',
     required: true,
     order,
     options: [createOption('Centro'), createOption('Zona Norte'), createOption('Zona Sul')],
@@ -89,15 +89,15 @@ function buildExtraFields(order: number): CustomField[] {
   const disponibilidade: CustomField = {
     ...createField('multiselect'),
     label: EXTRA_LABELS.disponibilidade,
-    helpText: 'Pode marcar mais de um periodo.',
+    helpText: 'Pode marcar mais de um período.',
     order: order + 1,
-    options: [createOption('Manha'), createOption('Tarde'), createOption('Noite')],
+    options: [createOption('Manhã'), createOption('Tarde'), createOption('Noite')],
   };
 
   const observacao: CustomField = {
     ...createField('textarea'),
     label: EXTRA_LABELS.observacao,
-    placeholder: 'Algo que a coordenacao precisa saber',
+    placeholder: 'Algo que a coordenação precisa saber',
     order: order + 2,
     options: [],
   };

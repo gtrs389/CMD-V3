@@ -26,7 +26,7 @@ export function FormPreview({ client }: FormPreviewProps) {
     <div className="space-y-3">
       <p className="flex items-center gap-2 text-xs text-ink-500">
         <Smartphone aria-hidden="true" className="size-4" />
-        Previa interativa. Nada e salvo aqui.
+        Prévia interativa. Nada é salvo aqui.
       </p>
 
       <div className="mx-auto w-full max-w-md rounded-card border border-line bg-surface-muted p-3 sm:p-4">
@@ -76,7 +76,7 @@ export function FormPreview({ client }: FormPreviewProps) {
             </Button>
 
             <p className="text-center text-xs text-ink-500">
-              Toque em enviar para testar as validacoes.
+              Toque em enviar para testar as validações.
             </p>
           </div>
         </div>

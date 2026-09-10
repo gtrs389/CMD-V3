@@ -25,7 +25,7 @@ export function ClientOverviewPanel({ client, members }: ClientOverviewPanelProp
       icon: <Users className="size-5" />,
       label: 'Integrantes',
       value: String(members.length),
-      hint: lastMember ? `Ultimo: ${formatRelative(lastMember.createdAt)}` : 'Nenhum cadastro ainda',
+      hint: lastMember ? `Último: ${formatRelative(lastMember.createdAt)}` : 'Nenhum cadastro ainda',
     },
     {
       icon: <ListChecks className="size-5" />,
@@ -101,7 +101,7 @@ export function ClientOverviewPanel({ client, members }: ClientOverviewPanelProp
               </div>
               {client.notes ? (
                 <div className="grid gap-1 py-2.5 sm:grid-cols-3">
-                  <dt className="text-ink-500">Observacoes</dt>
+                  <dt className="text-ink-500">Observações</dt>
                   <dd className="break-words whitespace-pre-line text-ink-900 sm:col-span-2">
                     {client.notes}
                   </dd>
@@ -113,7 +113,7 @@ export function ClientOverviewPanel({ client, members }: ClientOverviewPanelProp
 
         <Card>
           <CardHeader>
-            <CardTitle>Formulario</CardTitle>
+            <CardTitle>Formulário</CardTitle>
             <Badge tone={client.invite.active ? 'success' : 'neutral'}>
               {client.invite.active ? 'Recebendo cadastros' : 'Convite desativado'}
             </Badge>
@@ -128,7 +128,7 @@ export function ClientOverviewPanel({ client, members }: ClientOverviewPanelProp
             </p>
             <p className="text-ink-500">
               {client.form.privacy.enabled
-                ? 'Aviso de privacidade habilitado no formulario publico.'
+                ? 'Aviso de privacidade habilitado no formulário público.'
                 : 'Aviso de privacidade desativado.'}
             </p>
           </CardBody>

@@ -43,24 +43,24 @@ export function isDataUrl(value: string): boolean {
 /** Valida e decodifica a data URL enviada pelo navegador. */
 export function decodeDataUrl(value: string): DecodedImage {
   const match = /^data:([a-z]+\/[a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(value);
-  if (!match) throw new MediaError('Imagem invalida.');
+  if (!match) throw new MediaError('Imagem inválida.');
 
   const mime = match[1].toLowerCase();
   if (!(ACCEPTED_MIME as readonly string[]).includes(mime)) {
-    throw new MediaError('Formato nao suportado. Envie uma imagem JPG, PNG ou WEBP.');
+    throw new MediaError('Formato não suportado. Envie uma imagem JPG, PNG ou WEBP.');
   }
 
   let bytes: Uint8Array;
   try {
     bytes = Uint8Array.from(Buffer.from(match[2], 'base64'));
   } catch {
-    throw new MediaError('Imagem invalida.');
+    throw new MediaError('Imagem inválida.');
   }
 
   if (bytes.byteLength === 0) throw new MediaError('Imagem vazia.');
   if (bytes.byteLength > appConfig.limits.maxStoredImageBytes) {
     const maxMb = Math.round(appConfig.limits.maxStoredImageBytes / (1024 * 1024));
-    throw new MediaError(`Imagem muito grande. O limite e de ${maxMb} MB.`);
+    throw new MediaError(`Imagem muito grande. O limite é de ${maxMb} MB.`);
   }
 
   return { bytes, mime, size: bytes.byteLength };
@@ -96,7 +96,7 @@ export async function uploadImage(prefix: string, dataUrl: string): Promise<Stor
   }).catch(() => null);
 
   if (!response || !response.ok) {
-    throw new MediaError('Nao foi possivel salvar a imagem. Tente novamente.');
+    throw new MediaError('Não foi possível salvar a imagem. Tente novamente.');
   }
 
   return { path, mime: image.mime, size: image.size };
@@ -114,7 +114,7 @@ export async function deleteImage(path: string | null): Promise<void> {
   }).catch(() => null);
 
   if (!response || !response.ok) {
-    console.warn('[storage] Nao foi possivel remover o arquivo:', path);
+    console.warn('[storage] Não foi possível remover o arquivo:', path);
   }
 }
 

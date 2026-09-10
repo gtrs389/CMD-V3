@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     await purgeExpiredSessions();
   } catch (error) {
     // O cookie e removido de qualquer forma: sair nunca pode falhar.
-    console.error('[auth] Falha ao revogar a sessao:', error);
+    console.error('[auth] Falha ao revogar a sessão:', error);
   }
 
   const response = jsonOk({ ok: true });

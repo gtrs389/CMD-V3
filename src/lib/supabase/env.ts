@@ -61,25 +61,25 @@ export function supabaseEnv(): SupabaseEnv {
 
   if (!url || !secretKey) {
     throw new SupabaseConfigError(
-      'Supabase nao configurado. Defina SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente do servidor.',
+      'Supabase não configurado. Defina SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente do servidor.',
     );
   }
 
   if (!/^https:\/\/[^\s]+$/i.test(url)) {
-    throw new SupabaseConfigError('SUPABASE_URL invalida. Use o endereco https do projeto.');
+    throw new SupabaseConfigError('SUPABASE_URL inválida. Use o endereço https do projeto.');
   }
 
   // Uma chave publicavel nao consegue fazer o trabalho administrativo e, pior,
   // falharia silenciosamente por RLS. Recusar aqui evita o diagnostico errado.
   if (secretKey.startsWith('sb_publishable_') || secretKey.startsWith('sbp_')) {
     throw new SupabaseConfigError(
-      'A chave configurada e publicavel. Use a chave secreta do projeto (sb_secret_...).',
+      'A chave configurada é publicável. Use a chave secreta do projeto (sb_secret_...).',
     );
   }
 
   if (!isNewSecretKey(secretKey) && !isLegacyJwtKey(secretKey)) {
     throw new SupabaseConfigError(
-      'Formato de chave nao reconhecido. Use a chave secreta do projeto (sb_secret_...).',
+      'Formato de chave não reconhecido. Use a chave secreta do projeto (sb_secret_...).',
     );
   }
 

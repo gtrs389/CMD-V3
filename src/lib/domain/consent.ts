@@ -21,11 +21,11 @@ export const MAX_CONSENT_SNAPSHOT = 8000;
 /** Texto exatamente como foi apresentado a pessoa, em formato estavel. */
 export function canonicalPrivacyText(row: PrivacySource): string {
   const parts = [
-    `titulo: ${row.privacy_title}`,
+    `título: ${row.privacy_title}`,
     `aviso: ${row.privacy_text}`,
     `consentimento: ${row.privacy_consent_label}`,
-    `exige_aceite: ${row.privacy_require_consent ? 'sim' : 'nao'}`,
-    `versao: ${row.form_updated_at}`,
+    `exige_aceite: ${row.privacy_require_consent ? 'sim' : 'não'}`,
+    `versão: ${row.form_updated_at}`,
   ];
   return parts.join('\n').slice(0, MAX_CONSENT_SNAPSHOT);
 }

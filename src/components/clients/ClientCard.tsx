@@ -44,7 +44,7 @@ export function ClientCard({ client, onEdit, onDelete }: ClientCardProps) {
           actions={[
             {
               id: 'abrir',
-              label: 'Abrir pagina do cliente',
+              label: 'Abrir página do cliente',
               icon: <ExternalLink className="size-4" />,
               onSelect: () => router.push(`/clientes/${client.id}`),
             },
@@ -71,7 +71,7 @@ export function ClientCard({ client, onEdit, onDelete }: ClientCardProps) {
           <dd className="truncate font-medium text-ink-700">{formatRelative(client.createdAt)}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-ink-500">Ultimo cadastro</dt>
+          <dt className="text-ink-500">Último cadastro</dt>
           <dd className="truncate font-medium text-ink-700">
             {client.lastMemberAt ? formatRelative(client.lastMemberAt) : 'Nenhum'}
           </dd>

@@ -26,7 +26,7 @@ export function SidebarContent({ onNavigate }: SidebarProps) {
         <Logo />
       </div>
 
-      <nav aria-label="Navegacao principal" className="min-h-0 flex-1 overflow-y-auto p-3">
+      <nav aria-label="Navegação principal" className="min-h-0 flex-1 overflow-y-auto p-3">
         <ul className="space-y-1">
           {items.map((item) => {
             const active = isActive(pathname, item.href);

@@ -12,9 +12,9 @@ export default function NotFound() {
         >
           <FileQuestion className="size-6" />
         </span>
-        <h1 className="text-lg font-semibold text-ink-900">Pagina nao encontrada</h1>
+        <h1 className="text-lg font-semibold text-ink-900">Página não encontrada</h1>
         <p className="mt-2 text-sm text-ink-500">
-          O endereco acessado nao existe ou foi alterado.
+          O endereço acessado não existe ou foi alterado.
         </p>
         <Link
           href="/"

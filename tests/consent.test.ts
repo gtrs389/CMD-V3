@@ -20,17 +20,17 @@ const base = {
 };
 
 describe('texto canonico do consentimento', () => {
-  it('inclui titulo, aviso, rotulo, exigencia e versao', () => {
+  it('inclui título, aviso, rótulo, exigencia e versão', () => {
     const snapshot = canonicalPrivacyText(base);
 
-    expect(snapshot).toContain('titulo: Aviso de privacidade');
+    expect(snapshot).toContain('título: Aviso de privacidade');
     expect(snapshot).toContain('aviso: Coletamos nome e telefone para organizar a equipe.');
     expect(snapshot).toContain('consentimento: Li e concordo.');
     expect(snapshot).toContain('exige_aceite: sim');
-    expect(snapshot).toContain('versao: 2026-01-02T03:04:05.000Z');
+    expect(snapshot).toContain('versão: 2026-01-02T03:04:05.000Z');
   });
 
-  it('nao muda quando o conteudo e o mesmo', () => {
+  it('não muda quando o conteudo e o mesmo', () => {
     expect(canonicalPrivacyText(base)).toBe(canonicalPrivacyText({ ...base }));
   });
 
@@ -38,7 +38,7 @@ describe('texto canonico do consentimento', () => {
     const original = canonicalPrivacyText(base);
 
     expect(canonicalPrivacyText({ ...base, privacy_text: 'Outro texto.' })).not.toBe(original);
-    expect(canonicalPrivacyText({ ...base, privacy_title: 'Outro titulo' })).not.toBe(original);
+    expect(canonicalPrivacyText({ ...base, privacy_title: 'Outro título' })).not.toBe(original);
     expect(canonicalPrivacyText({ ...base, privacy_require_consent: false })).not.toBe(original);
     expect(canonicalPrivacyText({ ...base, form_updated_at: '2026-06-01T00:00:00.000Z' })).not.toBe(
       original,
@@ -53,7 +53,7 @@ describe('texto canonico do consentimento', () => {
 });
 
 describe('hash do consentimento', () => {
-  it('e o SHA-256 hexadecimal do proprio snapshot', () => {
+  it('e o SHA-256 hexadecimal do próprio snapshot', () => {
     const snapshot = canonicalPrivacyText(base);
     const esperado = createHash('sha256').update(snapshot, 'utf8').digest('hex');
 
