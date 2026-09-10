@@ -84,7 +84,7 @@ Execute os SQLs de `supabase/` antes do primeiro login. Veja
 | `npm run typecheck` | Gera os tipos de rota e roda `tsc --noEmit` |
 | `npm test` | Testes da camada de regras (Vitest) |
 | `npm run verificar` | Lint + tipos + testes + build, em sequência |
-| `npm run gerar-hash -- "email" "senha"` | Gera o hash scrypt e imprime o `INSERT` do ADMIN |
+| `npm run gerar-hash` | Pergunta e-mail e senha (oculta) e imprime o `INSERT` do ADMIN |
 
 ---
 
@@ -120,11 +120,17 @@ Proteções:
 ### Primeiro administrador
 
 ```bash
-npm run gerar-hash -- "seu-email@dominio.com" "sua-senha-forte"
+npm run gerar-hash
 ```
 
-O comando imprime o `INSERT` pronto para colar no SQL Editor do Supabase. A
-senha em texto puro não vai para o banco, para o repositório nem para o
+O comando pergunta o e-mail, o nome exibido e a senha. A senha é digitada de
+forma oculta e confirmada em seguida. Ao final ele imprime o `INSERT` pronto
+para colar no SQL Editor do Supabase.
+
+A senha não é aceita por argumento e o comando exige um terminal interativo:
+uma senha na linha de comando ficaria no histórico do terminal e visível na
+lista de processos. Ela também não aparece na tela, não é gravada em disco e não
+entra em log algum, nem vai para o banco, para o repositório ou para o
 navegador.
 
 ### Perfis

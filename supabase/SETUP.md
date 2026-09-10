@@ -25,24 +25,31 @@ apagar nada. Ele nao contem `DROP` nem qualquer comando destrutivo.
 
 ## 2. Gerar o hash da senha do ADMIN
 
-Na sua maquina, dentro do projeto:
+Na sua maquina, dentro do projeto, em um terminal interativo:
 
 ```bash
 npm install
-npm run gerar-hash -- "seu-email@dominio.com" "sua-senha-forte"
-```
-
-Sem argumentos, o comando pergunta e-mail e senha no terminal:
-
-```bash
 npm run gerar-hash
 ```
 
-Ele imprime um bloco `insert into public.cmd_users ...` ja com o hash `scrypt`.
-Copie esse bloco inteiro e execute no **SQL Editor**.
+O comando pergunta, nesta ordem:
+
+1. **E-mail do administrador**
+2. **Nome exibido** (opcional, o padrao e "Administrador")
+3. **Senha**, com digitacao oculta
+4. **Confirmacao da senha**, tambem oculta
+
+Ao final ele imprime um bloco `insert into public.cmd_users ...` ja com o hash
+`scrypt`. Copie esse bloco inteiro e execute no **SQL Editor**.
 
 Regras:
 
+- **Nao passe a senha por argumento.** O comando recusa qualquer argumento: uma
+  senha na linha de comando fica no historico do terminal e visivel na lista de
+  processos da maquina.
+- O comando exige um terminal interativo. Sem TTY (pipe, redirecionamento ou
+  automacao) ele para, porque nao teria como ocultar a digitacao.
+- A senha nao aparece na tela, nao e gravada em disco e nao entra em nenhum log.
 - A senha em texto puro nunca vai para o banco, para o repositorio nem para o
   navegador.
 - O hash tem o formato `scrypt$<salt-hex>$<hash-hex>`, com salt aleatorio por

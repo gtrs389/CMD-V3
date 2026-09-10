@@ -6,13 +6,15 @@
 --
 -- ATENCAO
 --   Este arquivo e um modelo. NAO contem e NUNCA deve conter uma senha real.
---   Gere o hash na sua maquina com:
+--   Gere o hash na sua maquina, em um terminal interativo:
 --
---       npm run gerar-hash -- "seu-email@dominio.com" "sua-senha"
+--       npm run gerar-hash
 --
---   O comando imprime o INSERT pronto, ja com o hash. Cole a saida dele no
---   SQL Editor do Supabase. A senha em texto puro nunca vai para o banco,
---   para o repositorio nem para o navegador.
+--   O comando pergunta e-mail e senha (a senha nao aparece na tela, e e
+--   confirmada em seguida) e imprime o INSERT pronto, ja com o hash. Cole a
+--   saida dele no SQL Editor do Supabase. Nunca passe a senha por argumento:
+--   ela ficaria no historico do terminal e na lista de processos. A senha em
+--   texto puro nunca vai para o banco, para o repositorio nem para o navegador.
 -- ===========================================================================
 
 -- Substitua os dois valores abaixo antes de executar.
