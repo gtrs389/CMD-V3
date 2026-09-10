@@ -99,6 +99,12 @@ export function PublicFormView({ client }: PublicFormViewProps) {
         name: payload.name,
         phone: payload.phone,
         photo: payload.photo,
+        gender: payload.gender,
+        cpf: payload.cpf,
+        voterId: payload.voterId,
+        state: payload.state,
+        city: payload.city,
+        district: payload.district,
         responses: payload.responses,
         consentAt: payload.consentAt,
       });

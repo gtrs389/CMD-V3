@@ -133,6 +133,8 @@ export function FieldRow({
               id: 'duplicar',
               label: 'Duplicar campo',
               icon: <Copy className="size-4" />,
+              // Campo padrao tem coluna propria no banco: duplicar nao faz sentido.
+              disabled: system,
               onSelect: () => onDuplicate(field),
             },
             {

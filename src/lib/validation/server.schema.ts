@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
 import { FIELD_TYPES } from '@/lib/types';
+import { GENDER_VALUES, UF_OPTIONS, isValidCpf, isValidVoterId } from '@/lib/utils/documents';
 
 /**
  * Validacao de tudo que chega ao servidor.
@@ -76,8 +77,40 @@ const responsesSchema = z
   .array(z.object({ fieldId: z.string().min(1).max(64), value: fieldValueSchema }))
   .max(appConfig.limits.maxFieldsPerForm);
 
+const UF_CODES = UF_OPTIONS.map((option) => option.id) as [string, ...string[]];
+
+/** Vazio conta como nao informado, e nao como valor invalido. */
+const opcional = <T extends z.ZodType>(schema: T) =>
+  z
+    .union([schema, z.literal(''), z.null()])
+    .optional()
+    .transform((value) => (value === '' || value === undefined ? null : value));
+
+/** Campos padrao com regra brasileira. Todos opcionais. */
+const standardMemberFields = {
+  gender: opcional(z.enum(GENDER_VALUES)),
+  cpf: opcional(
+    z
+      .string()
+      .trim()
+      .max(20)
+      .refine((value) => isValidCpf(value), 'CPF inválido.'),
+  ),
+  voterId: opcional(
+    z
+      .string()
+      .trim()
+      .max(20)
+      .refine((value) => isValidVoterId(value), 'Título de eleitor inválido.'),
+  ),
+  state: opcional(z.string().trim().toUpperCase().pipe(z.enum(UF_CODES))),
+  city: opcional(z.string().trim().min(2, 'Município muito curto.').max(120)),
+  district: opcional(z.string().trim().min(2, 'Bairro muito curto.').max(120)),
+};
+
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */
 const memberBase = {
+  ...standardMemberFields,
   name: trimmed(120).min(2, 'Informe o nome completo.'),
   phone: trimmed(30).default(''),
   photo: photoValue.default(null),
@@ -92,6 +125,7 @@ export const memberCreateSchema = z.object({
 
 export const memberUpdateSchema = z
   .object({
+    ...standardMemberFields,
     name: trimmed(120).min(2, 'Informe o nome completo.'),
     phone: trimmed(30),
     photo: photoValue,

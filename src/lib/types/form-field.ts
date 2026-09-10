@@ -16,7 +16,17 @@ export const FIELD_TYPES = [
 export type FieldType = (typeof FIELD_TYPES)[number];
 
 /** Campos que existem em todo formulario e nao podem ser removidos. */
-export const SYSTEM_FIELD_KEYS = ['photo', 'name', 'phone'] as const;
+export const SYSTEM_FIELD_KEYS = [
+  'photo',
+  'name',
+  'phone',
+  'gender',
+  'cpf',
+  'voter_id',
+  'state',
+  'city',
+  'district',
+] as const;
 export type SystemFieldKey = (typeof SYSTEM_FIELD_KEYS)[number];
 
 export interface FieldOption {

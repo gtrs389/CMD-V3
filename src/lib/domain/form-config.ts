@@ -71,7 +71,65 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     helpText: 'Informe o DDD.',
     required: true,
   },
+  {
+    systemKey: 'gender',
+    type: 'select',
+    label: 'Gênero',
+    placeholder: '',
+    helpText: 'Opcional.',
+    required: false,
+  },
+  {
+    systemKey: 'cpf',
+    type: 'text',
+    label: 'CPF',
+    placeholder: '000.000.000-00',
+    helpText: 'Somente números serão salvos.',
+    required: false,
+  },
+  {
+    systemKey: 'voter_id',
+    type: 'text',
+    label: 'Título de eleitor',
+    placeholder: '0000 0000 0000',
+    helpText: 'Doze dígitos, sem o zero à frente.',
+    required: false,
+  },
+  {
+    systemKey: 'state',
+    type: 'select',
+    label: 'Estado (UF)',
+    placeholder: '',
+    helpText: '',
+    required: false,
+  },
+  {
+    systemKey: 'city',
+    type: 'text',
+    label: 'Município / Cidade',
+    placeholder: 'Nome da cidade',
+    helpText: '',
+    required: false,
+  },
+  {
+    systemKey: 'district',
+    type: 'text',
+    label: 'Bairro',
+    placeholder: 'Nome do bairro',
+    helpText: '',
+    required: false,
+  },
 ];
+
+/**
+ * Campos padrao cujas opcoes sao definidas pelo sistema, nao pelo ADMIN.
+ * O construtor nao edita a lista; ela vem de `@/lib/utils/documents`.
+ */
+export const FIXED_OPTION_KEYS: readonly SystemFieldKey[] = ['gender', 'state'];
+
+export function hasFixedOptions(field: CustomField): boolean {
+  return field.systemKey !== null && FIXED_OPTION_KEYS.includes(field.systemKey);
+}
 
 export function createSystemFields(): CustomField[] {
   return SYSTEM_FIELD_DEFAULTS.map((defaults, index) => ({
@@ -134,6 +192,11 @@ export function isLockedRequired(field: CustomField): boolean {
 }
 
 export function canDeleteField(field: CustomField): boolean {
+  return !isSystemField(field);
+}
+
+/** Campo padrao tem coluna propria no banco: nao pode ser duplicado. */
+export function canDuplicateField(field: CustomField): boolean {
   return !isSystemField(field);
 }
 
