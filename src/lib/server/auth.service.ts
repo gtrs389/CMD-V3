@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import type { Role, SessionUser } from '@/lib/types';
-import { verifyPassword } from '@/lib/auth/password';
+import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createToken, hashToken } from '@/lib/auth/tokens';
 import {
   GENERIC_LOGIN_ERROR,
@@ -11,7 +11,7 @@ import {
   SESSION_MAX_AGE,
 } from '@/lib/auth/constants';
 import { TABLES, type SessionRow, type UserRow } from '@/lib/supabase/tables';
-import { deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
+import { callFunction, deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
 
 /**
  * Autenticacao propria do CMD.
@@ -153,4 +153,50 @@ export async function purgeExpiredSessions(): Promise<void> {
 export async function currentUser(): Promise<SessionUser | null> {
   const store = await cookies();
   return resolveSession(store.get(SESSION_COOKIE)?.value);
+}
+
+export interface ChangePasswordOutcome {
+  ok: boolean;
+  /** Mensagem para a tela. Nunca revela detalhe interno. */
+  message: string | null;
+}
+
+/**
+ * Troca a senha do usuario da sessao.
+ *
+ * O identificador vem sempre da sessao autenticada, nunca do formulario.
+ * A gravacao e a revogacao das sessoes acontecem em uma transacao so, na
+ * funcao `cmd_change_password`. Nenhuma senha ou hash e registrado em log.
+ */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordOutcome> {
+  const row = await selectOne<Pick<UserRow, 'id' | 'password_hash' | 'is_active'>>(TABLES.users, {
+    select: 'id,password_hash,is_active',
+    filters: { id: `eq.${userId}` },
+  });
+
+  if (!row || !row.is_active) {
+    return { ok: false, message: 'Sessão expirada. Entre novamente.' };
+  }
+
+  const matches = await verifyPassword(currentPassword, row.password_hash);
+  if (!matches) {
+    return { ok: false, message: 'Senha atual incorreta.' };
+  }
+
+  // Confere tambem contra o hash guardado: senhas diferentes no formulario
+  // ainda podem ser a mesma senha na pratica.
+  if (await verifyPassword(newPassword, row.password_hash)) {
+    return { ok: false, message: 'A nova senha precisa ser diferente da atual.' };
+  }
+
+  await callFunction<number>('cmd_change_password', {
+    p_user_id: userId,
+    p_password_hash: await hashPassword(newPassword),
+  });
+
+  return { ok: true, message: null };
 }
