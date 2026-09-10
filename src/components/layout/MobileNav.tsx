@@ -48,7 +48,7 @@ export function MobileNav() {
           />
           <Logo withName={false} size="sm" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
-            Painel administrativo
+            Central de mobilização
           </span>
         </div>
       </header>
@@ -64,13 +64,13 @@ export function MobileNav() {
             role="dialog"
             aria-modal="true"
             aria-label="Menu de navegação"
-            className="safe-top relative h-full w-[min(18rem,85vw)] animate-slide-right border-r border-line bg-surface shadow-overlay"
+            className="safe-top relative h-full w-[min(16rem,85vw)] animate-slide-right bg-navy-900 shadow-overlay"
           >
             <IconButton
               label="Fechar menu"
               icon={<X className="size-5" />}
               onClick={close}
-              className="absolute top-3 right-2 z-10"
+              className="absolute top-3 right-2 z-10 text-white"
             />
             <SidebarContent onNavigate={close} />
           </div>

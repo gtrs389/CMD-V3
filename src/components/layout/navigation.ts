@@ -13,7 +13,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   {
     href: '/dashboard',
-    label: 'Painel',
+    label: 'Visão geral',
     icon: LayoutDashboard,
     permission: 'dashboard.view',
   },

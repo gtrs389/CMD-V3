@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
-import { Button } from '@/components/ui/Button';
+import { initials } from '@/lib/utils/text';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useSession } from './SessionProvider';
 
-/** Identificacao da sessao e saida do painel. */
+/** Identificacao da sessao e saida do painel, no rodape da barra lateral. */
 export function UserMenu() {
   const { user, signOut, restoring } = useSession();
   const [confirming, setConfirming] = useState(false);
@@ -16,28 +16,27 @@ export function UserMenu() {
 
   return (
     <>
-      <div className="rounded-control bg-ink-50 p-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
-          <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink-900">{user.name}</p>
-        </div>
-        <p className="mt-0.5 truncate text-xs text-ink-500">{user.email}</p>
-        {ROLE_LABELS[user.role] !== user.name ? (
-          <p className="mt-2 text-xs font-medium text-brand-700">{ROLE_LABELS[user.role]}</p>
-        ) : null}
-
-        <Button
-          variant="secondary"
-          size="sm"
-          fullWidth
-          className="mt-3"
-          loading={restoring}
-          onClick={() => setConfirming(true)}
+      <div className="flex items-center gap-2 px-1">
+        <span
+          aria-hidden="true"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-navy-600 text-[0.625rem] font-semibold text-white"
         >
-          <LogOut aria-hidden="true" className="size-4" />
-          Sair
-        </Button>
+          {initials(user.name)}
+        </span>
+        <p className="min-w-0 flex-1 truncate text-xs font-medium text-white" title={user.email}>
+          {ROLE_LABELS[user.role]}
+        </p>
       </div>
+
+      <button
+        type="button"
+        disabled={restoring}
+        onClick={() => setConfirming(true)}
+        className="mt-2 flex min-h-9 w-full items-center gap-2.5 rounded-control px-3 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700 hover:text-white disabled:opacity-60"
+      >
+        <LogOut aria-hidden="true" className="size-4 shrink-0" />
+        Sair
+      </button>
 
       <ConfirmDialog
         open={confirming}

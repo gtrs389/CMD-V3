@@ -8,12 +8,13 @@ import { Sidebar } from './Sidebar';
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh bg-surface-muted">
+    <div className="min-h-dvh bg-canvas">
       <Sidebar />
       <MobileNav />
 
-      <div className="lg:pl-64">
-        <main className="safe-x mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      {/* A barra flutuante ocupa 11.5rem a partir de 1rem da borda. */}
+      <div className="lg:pl-[13.5rem]">
+        <main className="safe-x mx-auto w-full max-w-[76rem] px-4 py-5 sm:px-6 lg:pr-4 lg:pl-0">
           {children}
         </main>
       </div>
