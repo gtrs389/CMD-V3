@@ -22,6 +22,14 @@ export async function POST(
     }
 
     const input = await readJson(request, publicSubmissionSchema);
+
+    // O aviso vigente vem do banco. Se ele exige aceite, o envio sem aceite e
+    // recusado aqui, nao apenas na tela.
+    const { privacy } = client.form;
+    if (privacy.enabled && privacy.requireConsent && !input.consentAt) {
+      throw badRequest('E necessario aceitar o aviso de privacidade para enviar o cadastro.');
+    }
+
     const member = await createMember({ ...input, clientId: client.id, source: 'invite' });
 
     // O navegador nao precisa de nada do cadastro de volta.

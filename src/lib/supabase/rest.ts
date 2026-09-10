@@ -1,5 +1,5 @@
 import 'server-only';
-import { supabaseEnv } from './env';
+import { supabaseAuthHeaders, supabaseEnv } from './env';
 
 /**
  * Cliente PostgREST minimo.
@@ -60,10 +60,7 @@ async function request<T>(
   url: string,
   init: RequestInit & { prefer?: string[] },
 ): Promise<T> {
-  const { secretKey } = supabaseEnv();
-  const headers = new Headers(init.headers);
-  headers.set('apikey', secretKey);
-  headers.set('Authorization', `Bearer ${secretKey}`);
+  const headers = supabaseAuthHeaders(init.headers);
   headers.set('Content-Type', 'application/json');
   if (init.prefer?.length) headers.set('Prefer', init.prefer.join(','));
 

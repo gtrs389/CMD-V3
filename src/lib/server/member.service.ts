@@ -19,8 +19,12 @@ import {
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { toMember } from './mappers';
 import { notFound } from './http';
+import { EMPTY_CONSENT, buildConsentEvidence } from './consent';
 
-/** Regras de integrante no servidor: respostas, fotos e isolamento por cliente. */
+/**
+ * Regras de integrante no servidor: respostas, fotos, consentimento e
+ * isolamento por cliente.
+ */
 
 async function loadResponses(memberIds: string[]): Promise<Map<string, MemberResponseRow[]>> {
   const grouped = new Map<string, MemberResponseRow[]>();
@@ -100,6 +104,9 @@ async function writeResponses(
   await insertRows<MemberResponseRow>(
     TABLES.memberResponses,
     valid.map((response) => ({
+      // O banco confere, pelas chaves compostas, que integrante e campo
+      // pertencem a este mesmo cliente.
+      client_id: clientId,
       member_id: memberId,
       field_id: response.fieldId,
       value: response.value as object,
@@ -134,6 +141,12 @@ export async function getMember(id: string): Promise<Member | null> {
 }
 
 export async function createMember(input: MemberInput): Promise<Member> {
+  // O navegador apenas sinaliza que aceitou. A data, o texto e o hash sao do
+  // servidor, a partir do aviso vigente em cmd_clients.
+  const consent = input.consentAt
+    ? await buildConsentEvidence(input.clientId)
+    : EMPTY_CONSENT;
+
   const photo =
     input.photo && isDataUrl(input.photo) ? await uploadImage('members', input.photo) : null;
 
@@ -144,7 +157,7 @@ export async function createMember(input: MemberInput): Promise<Member> {
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
-    consent_at: input.consentAt,
+    ...consent,
     source: input.source,
   });
 
@@ -161,7 +174,15 @@ export async function updateMember(
 
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.phone !== undefined) patch.phone = normalizePhone(input.phone);
-  if (input.consentAt !== undefined) patch.consent_at = input.consentAt;
+
+  if (input.consentAt !== undefined) {
+    // Registrar de novo o aceite regrava a evidencia com o aviso atual;
+    // retirar o aceite limpa a evidencia inteira.
+    Object.assign(
+      patch,
+      input.consentAt ? await buildConsentEvidence(current.client_id) : EMPTY_CONSENT,
+    );
+  }
 
   if (input.photo !== undefined) {
     if (input.photo === null) {

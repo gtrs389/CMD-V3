@@ -1,6 +1,6 @@
 import 'server-only';
 import { appConfig } from '@/config/app.config';
-import { supabaseEnv } from './env';
+import { supabaseAuthHeaders, supabaseEnv } from './env';
 
 /**
  * Storage privado do CMD.
@@ -67,11 +67,7 @@ export function decodeDataUrl(value: string): DecodedImage {
 }
 
 function authHeaders(): Headers {
-  const { secretKey } = supabaseEnv();
-  const headers = new Headers();
-  headers.set('apikey', secretKey);
-  headers.set('Authorization', `Bearer ${secretKey}`);
-  return headers;
+  return supabaseAuthHeaders();
 }
 
 export interface StoredMedia {

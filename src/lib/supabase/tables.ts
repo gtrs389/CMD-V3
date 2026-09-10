@@ -87,6 +87,10 @@ export interface MemberRow {
   photo_mime: string | null;
   photo_size: number | null;
   consent_at: string | null;
+  /** Evidencia do aceite, montada no servidor. Nunca vem do navegador. */
+  consent_privacy_hash: string | null;
+  consent_privacy_snapshot: string | null;
+  consent_privacy_version: string | null;
   source: 'invite' | 'admin';
   created_at: string;
   updated_at: string;
@@ -94,6 +98,11 @@ export interface MemberRow {
 
 export interface MemberResponseRow {
   id: string;
+  /**
+   * Redundante de proposito: as chaves estrangeiras compostas no banco usam
+   * esta coluna para garantir que integrante e campo sao do mesmo cliente.
+   */
+  client_id: string;
   member_id: string;
   field_id: string;
   value: FieldValue;

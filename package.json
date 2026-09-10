@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verificar": "npm run lint && npm run typecheck && npm run test && npm run build",
-    "gerar-hash": "node scripts/gerar-hash.mjs"
+    "gerar-hash": "node scripts/gerar-hash.mjs",
+    "configurar-storage": "node scripts/configurar-storage.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

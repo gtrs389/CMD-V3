@@ -39,24 +39,39 @@ variáveis na Vercel.
 | `cmd_clients` | Clientes e configuração do formulário público |
 | `cmd_form_fields` | Campos do formulário, com `system_key` nos campos nativos |
 | `cmd_members` | Integrantes cadastrados |
-| `cmd_member_responses` | Respostas por campo, referenciadas pelo ID estável |
+| `cmd_member_responses` | Respostas por campo. Chaves estrangeiras compostas impedem vínculo entre clientes diferentes |
 | `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
 
-Todas ficam com RLS habilitado e **sem nenhuma policy**, e o acesso de `anon` e
-`authenticated` é revogado. As fotos vão para o bucket privado `cmd-media`: as
-tabelas guardam somente o caminho e os metadados, e o navegador recebe URLs
-assinadas geradas no servidor.
+Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
+`anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
+o necessário. As fotos vão para o bucket privado `cmd-media`: as tabelas guardam
+somente o caminho e os metadados, e o navegador recebe URLs assinadas geradas no
+servidor.
+
+O bucket não é criado por SQL. Depois da migration, rode
+`npm run configurar-storage` (ou crie o bucket pelo painel, conforme o
+`SETUP.md`).
+
+Junto de cada integrante que consentiu fica a evidência do aceite: data do
+servidor, texto do aviso exatamente como estava valendo, hash SHA-256 desse
+texto e versão do formulário. O texto canônico é montado no servidor a partir
+de `cmd_clients`; nada disso vem do navegador.
 
 ### Variáveis de ambiente
 
 | Variável | Obrigatória | Para que serve |
 | --- | --- | --- |
 | `SUPABASE_URL` | sim | Endereço https do projeto Supabase |
-| `SUPABASE_SECRET_KEY` | sim | Chave secreta. Somente no servidor |
-| `SUPABASE_SERVICE_ROLE_KEY` | não | Reserva legada de `SUPABASE_SECRET_KEY` |
+| `SUPABASE_SECRET_KEY` | sim | Chave secreta (`sb_secret_...`). Somente no servidor |
+| `SUPABASE_SERVICE_ROLE_KEY` | não | Reserva legada, para projetos que ainda usam a chave `service_role` em formato JWT |
 
 Nenhuma usa o prefixo `NEXT_PUBLIC_`. Sem elas o sistema falha de forma segura:
 o login é recusado e a tela de entrada exibe o aviso de configuração ausente.
+Uma chave publicável é recusada na inicialização.
+
+Na Vercel, a chave do banco de produção vai **somente** no ambiente Production.
+Preview e Development usam projetos Supabase separados ou ficam sem
+configuração. O `SETUP.md` explica o motivo.
 
 ---
 
@@ -84,7 +99,8 @@ Execute os SQLs de `supabase/` antes do primeiro login. Veja
 | `npm run typecheck` | Gera os tipos de rota e roda `tsc --noEmit` |
 | `npm test` | Testes da camada de regras (Vitest) |
 | `npm run verificar` | Lint + tipos + testes + build, em sequência |
-| `npm run gerar-hash` | Pergunta e-mail e senha (oculta) e imprime o `INSERT` do ADMIN |
+| `npm run gerar-hash` | Pergunta e-mail e senha (oculta) e imprime o SQL do ADMIN |
+| `npm run configurar-storage` | Cria ou confere o bucket privado `cmd-media` pela API do Storage |
 
 ---
 
@@ -234,6 +250,8 @@ src/
 | `src/lib/server/guard.ts` | Confere sessão e permissão em toda rota administrativa |
 | `src/lib/supabase/rest.ts` | Único caminho até o banco, sempre no servidor |
 | `src/lib/supabase/storage.ts` | Upload, exclusão e URL assinada do bucket privado |
+| `src/lib/server/consent.ts` | Texto canônico e evidência do consentimento |
+| `scripts/configurar-storage.mjs` | Criação idempotente do bucket pela API oficial |
 | `src/lib/validation/server.schema.ts` | Zod de tudo que chega ao servidor |
 | `supabase/migrations/001_cmd_initial.sql` | Estrutura completa do banco |
 | `src/proxy.ts` | Redirecionamento das rotas administrativas |

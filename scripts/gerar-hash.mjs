@@ -17,6 +17,16 @@ import { stdin, stdout } from 'node:process';
 const KEYLEN = 64;
 const SALT_BYTES = 16;
 const MIN_PASSWORD = 8;
+const MAX_PASSWORD = 200;
+
+// Limites iguais aos checks de cmd_users na migration 001.
+const MIN_NAME = 2;
+const MAX_NAME = 120;
+const MIN_EMAIL = 6;
+const MAX_EMAIL = 254;
+
+// Mesmo formato aceito pelo check de cmd_users.email.
+const EMAIL_SHAPE = /^[^@\s]{1,64}@[^@\s]{1,189}\.[a-z]{2,24}$/;
 
 /** Teclas tratadas durante a leitura. */
 const KEY_ENTER = '\r';
@@ -34,9 +44,24 @@ function hashPassword(password) {
   return `scrypt$${salt}$${derived}`;
 }
 
-/** Escapa aspas simples para uso seguro dentro do literal SQL. */
+/**
+ * Literal de texto SQL.
+ *
+ * Aspas simples viram aspas duplicadas, que e o escape do proprio PostgreSQL.
+ * Caracteres de controle sao recusados antes de chegar aqui, entao nao ha o
+ * que escapar alem disso.
+ */
 function sqlText(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+/** Recusa caracteres de controle, que nao tem representacao segura no literal. */
+function hasControlChars(value) {
+  for (const char of value) {
+    const code = char.codePointAt(0);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
 }
 
 /**
@@ -139,12 +164,28 @@ try {
 
   const confirmation = await ask('Confirme a senha: ', { hidden: true });
 
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+  if (!EMAIL_SHAPE.test(email)) {
     fail('E-mail invalido.');
+  }
+
+  if (email.length < MIN_EMAIL || email.length > MAX_EMAIL) {
+    fail(`O e-mail precisa ter entre ${MIN_EMAIL} e ${MAX_EMAIL} caracteres.`);
+  }
+
+  if (name.length < MIN_NAME || name.length > MAX_NAME) {
+    fail(`O nome precisa ter entre ${MIN_NAME} e ${MAX_NAME} caracteres.`);
+  }
+
+  if (hasControlChars(name) || hasControlChars(email)) {
+    fail('Nome e e-mail nao podem conter caracteres de controle.');
   }
 
   if (password.length < MIN_PASSWORD) {
     fail(`A senha precisa ter pelo menos ${MIN_PASSWORD} caracteres.`);
+  }
+
+  if (password.length > MAX_PASSWORD) {
+    fail(`A senha precisa ter no maximo ${MAX_PASSWORD} caracteres.`);
   }
 
   if (password !== confirmation) {
@@ -156,15 +197,37 @@ try {
 
 const hash = hashPassword(password);
 
+/**
+ * O SQL roda inteiro em uma transacao: ou o ADMIN e gravado e as sessoes
+ * antigas dele sao revogadas, ou nada acontece. Trocar a senha sem derrubar as
+ * sessoes deixaria um cookie roubado valido ate expirar.
+ */
+const sql = `begin;
+
+-- Cria o ADMIN, ou atualiza a senha se o e-mail ja existir.
+with alvo as (
+  insert into public.cmd_users (name, email, password_hash, role, is_active)
+  values (${sqlText(name)}, ${sqlText(email)}, ${sqlText(hash)}, 'ADMIN', true)
+  on conflict (email) do update
+     set password_hash   = excluded.password_hash,
+         name            = excluded.name,
+         role            = excluded.role,
+         is_active       = true,
+         failed_attempts = 0,
+         locked_until    = null
+  returning id
+)
+-- Toda sessao aberta com a senha anterior para de valer agora.
+update public.cmd_sessions
+   set revoked_at = now()
+  from alvo
+ where public.cmd_sessions.user_id = alvo.id
+   and public.cmd_sessions.revoked_at is null;
+
+commit;`;
+
 console.log('\n--- Copie a partir daqui e cole no SQL Editor do Supabase ---\n');
-console.log('insert into public.cmd_users (name, email, password_hash, role, is_active)');
-console.log(`values (${sqlText(name)}, ${sqlText(email)}, ${sqlText(hash)}, 'ADMIN', true)`);
-console.log('on conflict (email) do update');
-console.log('   set password_hash   = excluded.password_hash,');
-console.log('       name            = excluded.name,');
-console.log('       role            = excluded.role,');
-console.log('       is_active       = true,');
-console.log('       failed_attempts = 0,');
-console.log('       locked_until    = null;');
+console.log(sql);
 console.log('\n--- Fim ---\n');
-console.log('A senha em texto puro nao foi exibida, gravada nem registrada em lugar nenhum.\n');
+console.log('A senha em texto puro nao foi exibida, gravada nem registrada em lugar nenhum.');
+console.log('Ao executar, as sessoes abertas deste ADMIN sao encerradas.\n');
