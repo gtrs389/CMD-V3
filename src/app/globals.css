@@ -1,0 +1,205 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   TOKENS DE IDENTIDADE VISUAL
+   Ponto unico de edicao para cores, raios, sombras e tipografia.
+   Nenhum componente deve usar cor literal fora daqui.
+   ========================================================================== */
+@theme {
+  /* Marca (neutra e institucional, sem referencia partidaria) */
+  --color-brand-50: #eef2f7;
+  --color-brand-100: #dbe3ee;
+  --color-brand-200: #bccbdf;
+  --color-brand-300: #93a9c9;
+  --color-brand-400: #6883ad;
+  --color-brand-500: #4a6592;
+  --color-brand-600: #395079;
+  --color-brand-700: #2e4062;
+  --color-brand-800: #253450;
+  --color-brand-900: #1c2740;
+
+  /* Neutros */
+  --color-ink-900: #101828;
+  --color-ink-700: #344054;
+  --color-ink-500: #667085;
+  --color-ink-400: #98a2b3;
+  --color-ink-200: #e4e7ec;
+  --color-ink-100: #f2f4f7;
+  --color-ink-50: #f8fafc;
+
+  /* Superficies */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f8fa;
+  --color-surface-sunken: #eef1f5;
+  --color-line: #e4e7ec;
+  --color-line-strong: #d0d5dd;
+
+  /* Semanticas */
+  --color-success-50: #ecfdf3;
+  --color-success-600: #067647;
+  --color-success-700: #05603a;
+  --color-danger-50: #fef3f2;
+  --color-danger-200: #fecdca;
+  --color-danger-600: #d92d20;
+  --color-danger-700: #b42318;
+  --color-warning-50: #fffaeb;
+  --color-warning-600: #b54708;
+  --color-info-50: #eff8ff;
+  --color-info-600: #175cd3;
+
+  /* Raios */
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+  --radius-pill: 9999px;
+
+  /* Sombras */
+  --shadow-card: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06);
+  --shadow-raised: 0 4px 8px -2px rgb(16 24 40 / 0.08), 0 2px 4px -2px rgb(16 24 40 / 0.04);
+  --shadow-overlay: 0 20px 24px -4px rgb(16 24 40 / 0.12), 0 8px 8px -4px rgb(16 24 40 / 0.04);
+
+  /* Tipografia */
+  --font-sans: var(--font-app-sans, ui-sans-serif), system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Movimento */
+  --animate-fade-up: fade-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Entrada de conteudo de pagina: anima apenas o deslocamento e mantem a
+     opacidade em 1. Assim o conteudo nunca fica invisivel se o navegador
+     congelar a animacao (aba em segundo plano, impressao, captura). */
+  --animate-rise: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 200ms ease-out both;
+  --animate-scale-in: scale-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-slide-up: slide-up 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-slide-right: slide-right 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-spin-slow: spin 900ms linear infinite;
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rise {
+  from { transform: translate3d(0, 10px, 0); }
+  to { transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes slide-up {
+  from { transform: translate3d(0, 100%, 0); }
+  to { transform: none; }
+}
+@keyframes slide-right {
+  from { transform: translate3d(-100%, 0, 0); }
+  to { transform: none; }
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+* {
+  min-width: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+}
+
+body {
+  background-color: var(--color-surface-muted);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Evita zoom automatico do iOS em campos de formulario */
+input,
+select,
+textarea {
+  font-size: max(16px, 1rem);
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 0.9375rem;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==========================================================================
+   UTILITARIOS
+   ========================================================================== */
+@utility safe-top { padding-top: env(safe-area-inset-top); }
+@utility safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+@utility safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Area de toque minima de 44px em controles compactos */
+@utility tap {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+/* Revelacao progressiva durante a rolagem (ver componente Reveal) */
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0);
+  transition:
+    opacity 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+[data-reveal="visible"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ==========================================================================
+   ACESSIBILIDADE: respeita a preferencia por menos movimento
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media print {
+  body { background: #fff; }
+}

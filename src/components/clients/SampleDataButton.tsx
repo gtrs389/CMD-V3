@@ -1,0 +1,40 @@
+'use client';
+
+import { useState } from 'react';
+import { Sparkles } from 'lucide-react';
+import { loadSampleData } from '@/lib/mock/seed';
+import { StorageFullError } from '@/lib/repositories/types';
+import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+
+/**
+ * Carrega dados de exemplo para demonstrar a operacao.
+ * Escreve pelos mesmos repositorios do restante do sistema.
+ */
+export function SampleDataButton() {
+  const toast = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    setLoading(true);
+    try {
+      const total = await loadSampleData();
+      toast.success(`Dados de exemplo carregados: 2 clientes e ${total} integrantes.`);
+    } catch (error) {
+      toast.error(
+        error instanceof StorageFullError
+          ? error.message
+          : 'Nao foi possivel carregar os dados de exemplo.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button variant="secondary" loading={loading} onClick={handleClick}>
+      {!loading ? <Sparkles aria-hidden="true" className="size-4" /> : null}
+      Carregar dados de exemplo
+    </Button>
+  );
+}

@@ -1,0 +1,57 @@
+'use client';
+
+import { Link2Off } from 'lucide-react';
+import { appConfig } from '@/config/app.config';
+import { useClientByToken } from '@/hooks/use-clients';
+import { Spinner } from '@/components/ui/Spinner';
+import { PublicFormView } from './PublicFormView';
+
+interface PublicInviteViewProps {
+  token: string;
+}
+
+/**
+ * Porta de entrada do convite.
+ * Convite inexistente ou desativado mostra o mesmo aviso neutro,
+ * sem revelar detalhes internos do sistema.
+ */
+export function PublicInviteView({ token }: PublicInviteViewProps) {
+  const { data: client, loading } = useClientByToken(token);
+
+  if (loading) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-surface-muted px-4">
+        <div className="flex flex-col items-center gap-3 text-ink-500">
+          <Spinner className="size-6 text-brand-700" />
+          <p className="text-sm">Carregando formulario...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!client || !client.invite.active) {
+    return <InviteUnavailable />;
+  }
+
+  return <PublicFormView client={client} />;
+}
+
+function InviteUnavailable() {
+  return (
+    <main className="safe-x flex min-h-dvh items-center justify-center bg-surface-muted px-4 py-12">
+      <div className="w-full max-w-md animate-rise rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
+        <span
+          aria-hidden="true"
+          className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-ink-100 text-ink-500"
+        >
+          <Link2Off className="size-6" />
+        </span>
+        <h1 className="text-lg font-semibold text-ink-900">Convite indisponivel</h1>
+        <p className="mt-2 text-sm text-balance text-ink-500">
+          Este link nao esta ativo no momento. Peca um novo link ao responsavel pelo cadastro.
+        </p>
+        <p className="mt-6 text-xs text-ink-400">{appConfig.name}</p>
+      </div>
+    </main>
+  );
+}

@@ -1,0 +1,45 @@
+import type { Metadata } from 'next';
+import { appConfig } from '@/config/app.config';
+import { isUsingFallbackCredentials } from '@/lib/auth/credentials';
+import { LoginForm } from '@/components/auth/LoginForm';
+import { Logo } from '@/components/layout/Logo';
+
+export const metadata: Metadata = {
+  title: 'Entrar',
+};
+
+export default async function LoginPage({
+  searchParams,
+}: PageProps<'/login'>) {
+  const params = await searchParams;
+  const raw = params?.proximo;
+  const candidate = Array.isArray(raw) ? raw[0] : raw;
+
+  // Aceita apenas caminhos internos: evita redirecionamento para outro site.
+  const next = candidate && /^\/(?!\/)/.test(candidate) ? candidate : undefined;
+
+  return (
+    <main className="safe-x flex min-h-dvh flex-col justify-center bg-surface-muted px-4 py-10 sm:px-6">
+      <div className="mx-auto w-full max-w-md">
+        <div className="mb-6 flex justify-center">
+          <Logo />
+        </div>
+
+        <div className="animate-rise rounded-card border border-line bg-surface p-5 shadow-card sm:p-7">
+          <h1 className="text-xl font-semibold tracking-tight text-ink-900">
+            Acesso administrativo
+          </h1>
+          <p className="mt-1 text-sm text-ink-500">
+            Entre com as credenciais de administrador para gerenciar clientes e equipes.
+          </p>
+
+          <LoginForm next={next} showDemoHint={isUsingFallbackCredentials()} />
+        </div>
+
+        <p className="mt-6 text-center text-xs text-balance text-ink-500">
+          {appConfig.name} — nesta etapa os dados ficam apenas neste navegador.
+        </p>
+      </div>
+    </main>
+  );
+}
