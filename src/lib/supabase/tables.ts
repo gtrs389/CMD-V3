@@ -16,6 +16,7 @@ export const TABLES = {
   members: 'cmd_members',
   memberResponses: 'cmd_member_responses',
   invites: 'cmd_invites',
+  memberDevices: 'cmd_member_devices',
 } as const;
 
 export interface UserRow {
@@ -115,4 +116,34 @@ export interface InviteRow {
   active: boolean;
   created_at: string;
   rotated_at: string | null;
+}
+
+/**
+ * Sinal tecnico do aparelho usado no cadastro publico (migration 002).
+ * Nao autoriza acesso: `status` nasce e permanece 'OBSERVED' nesta etapa.
+ */
+export interface MemberDeviceRow {
+  id: string;
+  client_id: string;
+  member_id: string;
+  /** SHA-256 do token do cookie. O token em si nunca e gravado. */
+  device_token_hash: string;
+  status: 'OBSERVED' | 'TRUSTED' | 'BLOCKED';
+  user_agent: string | null;
+  ch_ua: string | null;
+  ch_ua_mobile: string | null;
+  ch_ua_platform: string | null;
+  platform: string | null;
+  is_mobile: boolean | null;
+  language: string | null;
+  timezone: string | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  max_touch_points: number | null;
+  /** HMAC-SHA256 do IP publico. O endereco puro nunca e gravado. */
+  ip_hash: string | null;
+  geo_country: string | null;
+  geo_region: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
 }

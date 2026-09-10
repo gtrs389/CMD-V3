@@ -101,8 +101,32 @@ export const memberUpdateSchema = z
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
 
+/**
+ * Sinais tecnicos do aparelho enviados pela pagina publica.
+ *
+ * Tudo opcional: a ausencia de qualquer campo nunca impede o cadastro.
+ * O que vem de cabecalho (User-Agent, Client Hints, IP, geo) e lido no
+ * servidor e nao entra neste esquema.
+ */
+export const deviceSignalsSchema = z
+  .object({
+    platform: trimmed(64),
+    isMobile: z.boolean(),
+    language: trimmed(32),
+    timezone: trimmed(64),
+    screenWidth: z.number().int().min(1).max(100000),
+    screenHeight: z.number().int().min(1).max(100000),
+    maxTouchPoints: z.number().int().min(0).max(64),
+  })
+  .partial();
+
 /** Envio pelo link publico: o cliente vem do token, nunca do corpo. */
-export const publicSubmissionSchema = z.object(memberBase);
+export const publicSubmissionSchema = z.object({
+  ...memberBase,
+  device: deviceSignalsSchema.optional(),
+});
+
+export type DeviceSignalsInput = z.infer<typeof deviceSignalsSchema>;
 
 export type ClientCreateInput = z.infer<typeof clientCreateSchema>;
 export type FormUpdateInput = z.infer<typeof formUpdateSchema>;
