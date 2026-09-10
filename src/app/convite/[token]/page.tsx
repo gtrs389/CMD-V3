@@ -9,8 +9,9 @@ export const metadata: Metadata = {
 /**
  * Rota publica de cadastro.
  *
- * O token e opaco e nao carrega nenhum dado pessoal. A validacao acontece
- * no navegador porque, nesta etapa, os dados vivem no localStorage.
+ * O token e opaco e nao carrega nenhum dado pessoal. A validacao acontece no
+ * servidor: a tela chama a rota publica do convite, que confere o hash do
+ * token no banco antes de devolver qualquer coisa.
  */
 export default async function InvitePage({ params }: PageProps<'/convite/[token]'>) {
   const { token } = await params;

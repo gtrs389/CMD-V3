@@ -1,6 +1,6 @@
 'use client';
 
-import { clientRepository, memberRepository } from '@/lib/repositories';
+import { clientRepository } from '@/lib/repositories';
 import type { Client, CustomField } from '@/lib/types';
 import { pluralize } from '@/lib/utils/text';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -34,7 +34,8 @@ export function DeleteClientDialog({
   async function handleConfirm() {
     if (!client) return;
     try {
-      await memberRepository.removeByClient(client.id);
+      // Integrantes, respostas, campos e convite saem junto: o banco remove
+      // tudo em cascata e o servidor apaga as fotos do Storage privado.
       await clientRepository.remove(client.id);
       toast.success(`Cliente "${client.name}" excluido.`);
       onDeleted?.();

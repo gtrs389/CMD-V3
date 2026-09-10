@@ -12,8 +12,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: appConfig.name,
-    template: `%s | ${appConfig.name}`,
+    default: `${appConfig.name} (${appConfig.shortName})`,
+    template: `%s | ${appConfig.shortName}`,
   },
   description: appConfig.description,
   robots: { index: false, follow: false },
@@ -24,7 +24,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Garante o respeito as areas seguras do iPhone.
   viewportFit: 'cover',
-  themeColor: '#ffffff',
+  themeColor: '#DBE2E9',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

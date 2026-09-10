@@ -3,9 +3,9 @@ import { appConfig } from '@/config/app.config';
 /**
  * Tratamento de imagens no navegador.
  *
- * Nesta etapa as fotos ficam no localStorage como data URL. Por isso todo
- * arquivo passa por validacao de tipo/tamanho e por redimensionamento com
- * compressao, reduzindo o risco de estourar a cota do navegador.
+ * A imagem escolhida e validada e comprimida aqui antes de subir. O servidor
+ * recebe a data URL ja reduzida, valida tipo e tamanho outra vez e grava o
+ * arquivo no bucket privado, guardando apenas o caminho no banco.
  */
 
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;

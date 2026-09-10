@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
 import { appConfig } from '@/config/app.config';
 import type { Client } from '@/lib/types';
-import { memberRepository } from '@/lib/repositories';
-import { StorageFullError } from '@/lib/repositories/types';
+import { submitInvite } from '@/lib/repositories';
+import { NetworkError } from '@/lib/repositories/http/api';
 import {
   CONSENT_KEY,
   toSubmission,
@@ -87,14 +87,13 @@ export function PublicFormView({ client }: PublicFormViewProps) {
 
     try {
       const payload = toSubmission(client.form, values);
-      await memberRepository.create({
-        clientId: client.id,
+      // O cliente de destino vem do token do link, conferido no servidor.
+      await submitInvite(client.invite.token ?? '', {
         name: payload.name,
         phone: payload.phone,
         photo: payload.photo,
         responses: payload.responses,
         consentAt: payload.consentAt,
-        source: 'invite',
       });
 
       draft.clear();
@@ -102,7 +101,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
     } catch (error) {
       submittedRef.current = false;
       toast.error(
-        error instanceof StorageFullError
+        error instanceof NetworkError
           ? error.message
           : 'Nao foi possivel enviar o cadastro. Tente novamente.',
       );
@@ -206,7 +205,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
           </p>
         </form>
 
-        <p className="mt-6 text-center text-xs text-ink-400">{appConfig.name}</p>
+        <p className="mt-6 text-center text-xs text-ink-400">{appConfig.shortName}</p>
       </div>
     </main>
   );
@@ -237,7 +236,7 @@ function SuccessScreen({ client, onNew }: SuccessScreenProps) {
           Cadastrar outra pessoa
         </Button>
 
-        <p className="mt-6 text-xs text-ink-400">{appConfig.name}</p>
+        <p className="mt-6 text-xs text-ink-400">{appConfig.shortName}</p>
       </div>
     </main>
   );

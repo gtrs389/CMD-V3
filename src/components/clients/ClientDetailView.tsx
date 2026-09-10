@@ -39,7 +39,7 @@ interface ClientDetailViewProps {
 /** Pagina individual do cliente, organizada em abas. */
 export function ClientDetailView({ clientId }: ClientDetailViewProps) {
   const router = useRouter();
-  const { data: client, loading } = useClient(clientId);
+  const { data: client, loading, error, reload } = useClient(clientId);
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
   const [tab, setTab] = useState<TabId>('visao-geral');
@@ -50,12 +50,26 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
 
   if (loading) return <DetailSkeleton />;
 
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="rounded-card border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700"
+      >
+        <p>{error}</p>
+        <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  }
+
   if (!client) {
     return (
       <EmptyState
         icon={<Building2 className="size-6" />}
         title="Cliente nao encontrado"
-        description="O cliente pode ter sido excluido ou os dados deste navegador foram limpos."
+        description="O cliente pode ter sido excluido por outra pessoa."
         action={
           <Link
             href="/clientes"

@@ -21,10 +21,21 @@ const RECENT_WINDOW_DAYS = 7;
 
 export function DashboardView() {
   const [creating, setCreating] = useState(false);
-  const { data: clients, loading: loadingClients } = useClientSummaries();
-  const { data: members, loading: loadingMembers } = useAllMembers();
+  const {
+    data: clients,
+    loading: loadingClients,
+    error: clientsError,
+    reload: reloadClients,
+  } = useClientSummaries();
+  const {
+    data: members,
+    loading: loadingMembers,
+    error: membersError,
+    reload: reloadMembers,
+  } = useAllMembers();
 
   const loading = loadingClients || loadingMembers;
+  const error = clientsError ?? membersError;
 
   const clientList = useMemo(() => clients ?? [], [clients]);
   const memberList = useMemo(() => members ?? [], [members]);
@@ -58,7 +69,7 @@ export function DashboardView() {
     <div className="space-y-6">
       <PageHeader
         title="Painel"
-        description="Resumo da operacao com os dados registrados neste navegador."
+        description="Resumo da operacao com os dados registrados no sistema."
         actions={
           <>
             <Button onClick={() => setCreating(true)}>
@@ -75,6 +86,26 @@ export function DashboardView() {
           </>
         }
       />
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-card border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700"
+        >
+          <p>{error}</p>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              reloadClients();
+              reloadMembers();
+            }}
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Reveal>

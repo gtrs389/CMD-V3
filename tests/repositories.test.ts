@@ -27,13 +27,13 @@ describe('repositorio de clientes', () => {
     expect(client.email).toBe('contato@exemplo.com');
     expect(client.notes).toBe('anotacao');
     expect(client.invite.active).toBe(true);
-    expect(client.invite.token).toHaveLength(20);
+    expect(client.invite.token ?? '').toHaveLength(20);
     expect(client.form.fields).toHaveLength(3);
   });
 
   it('nao coloca dado pessoal no token do convite', async () => {
     const client = await clients.create(clientInput);
-    const token = client.invite.token.toLowerCase();
+    const token = (client.invite.token ?? '').toLowerCase();
 
     expect(token).not.toContain('comite');
     expect(token).not.toContain('contato');
@@ -43,14 +43,14 @@ describe('repositorio de clientes', () => {
   it('localiza pelo token e trata token inexistente', async () => {
     const client = await clients.create(clientInput);
 
-    expect(await clients.getByToken(client.invite.token)).not.toBeNull();
+    expect(await clients.getByToken(client.invite.token ?? '')).not.toBeNull();
     expect(await clients.getByToken('token-invalido')).toBeNull();
     expect(await clients.getByToken('')).toBeNull();
   });
 
   it('gera novo token invalidando o anterior', async () => {
     const client = await clients.create(clientInput);
-    const previous = client.invite.token;
+    const previous = client.invite.token ?? '';
 
     const rotated = await clients.regenerateInviteToken(client.id);
 

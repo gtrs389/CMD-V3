@@ -11,7 +11,9 @@ interface LogoProps {
 
 /** Marca do sistema. Nome e logotipo vem de `src/config/app.config.ts`. */
 export function Logo({ className, withName = true, size = 'md' }: LogoProps) {
-  const box = size === 'sm' ? 'size-8 text-xs' : 'size-9 text-sm';
+  const box = size === 'sm' ? 'size-8 text-[0.625rem]' : 'size-9 text-xs';
+  // Espaco compacto usa a sigla; o nome completo fica nos titulos principais.
+  const displayName = size === 'sm' ? appConfig.shortName : appConfig.name;
 
   return (
     <span className={cn('flex min-w-0 items-center gap-2.5', className)}>
@@ -36,7 +38,7 @@ export function Logo({ className, withName = true, size = 'md' }: LogoProps) {
       {withName ? (
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold text-ink-900">
-            {appConfig.name}
+            {displayName}
           </span>
           <span className="block truncate text-xs text-ink-500">{appConfig.tagline}</span>
         </span>

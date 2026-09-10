@@ -1,12 +1,23 @@
 import 'server-only';
-import { cookies } from 'next/headers';
 import type { SessionUser } from '@/lib/types';
-import { SESSION_COOKIE } from './constants';
-import { readSessionToken, toSessionUser } from './session';
+import { SupabaseConfigError } from '@/lib/supabase/env';
+import { currentUser } from '@/lib/server/auth.service';
 
-/** Le a sessao atual em Server Components e Route Handlers. */
+/**
+ * Sessao atual em Server Components e layouts.
+ *
+ * Sem configuracao do Supabase o sistema falha fechado: devolve `null`, o que
+ * leva ao login. Em nenhum caso existe acesso liberado sem banco.
+ */
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  const store = await cookies();
-  const payload = await readSessionToken(store.get(SESSION_COOKIE)?.value);
-  return payload ? toSessionUser(payload) : null;
+  try {
+    return await currentUser();
+  } catch (error) {
+    if (error instanceof SupabaseConfigError) {
+      console.error('[auth] Supabase nao configurado:', error.message);
+      return null;
+    }
+    console.error('[auth] Nao foi possivel validar a sessao:', error);
+    return null;
+  }
 }
