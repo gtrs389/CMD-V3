@@ -5,7 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { clientSchema, type ClientFormValues } from '@/lib/validation/client.schema';
 import { clientRepository } from '@/lib/repositories';
-import { StorageFullError } from '@/lib/repositories/types';
+import { NetworkError } from '@/lib/repositories';
 import type { Client } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Field, describedBy } from '@/components/ui/Field';
@@ -64,7 +64,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
       onSaved?.(saved);
       onClose();
     } catch (error) {
-      if (error instanceof StorageFullError) {
+      if (error instanceof NetworkError) {
         toast.error(error.message);
         return;
       }

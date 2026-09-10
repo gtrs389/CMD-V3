@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { subscribeToData } from '@/lib/repositories';
-import { watchCrossTabChanges } from '@/lib/repositories/events';
-import { STORAGE_PREFIX } from '@/lib/repositories/local/storage';
 
 export interface QueryState<T> {
   data: T | null;
@@ -23,9 +21,10 @@ const INITIAL = { data: null, loading: true, error: null };
 /**
  * Le dados de um repositorio e mantem a tela sincronizada.
  *
- * Reage a escritas locais e a alteracoes feitas em outra aba do navegador.
- * O `loader` deve ser estavel (envolvido em `useCallback` por quem chama);
- * sua identidade define quando a consulta e refeita.
+ * Reage as escritas feitas nesta aba e recarrega ao voltar o foco, para
+ * refletir o que outra pessoa alterou no banco. O `loader` deve ser estavel
+ * (envolvido em `useCallback` por quem chama); sua identidade define quando a
+ * consulta e refeita.
  */
 export function useRepositoryQuery<T>(loader: () => Promise<T>): QueryState<T> {
   const [state, setState] = useState<InternalState<T>>(INITIAL);
@@ -55,7 +54,14 @@ export function useRepositoryQuery<T>(loader: () => Promise<T>): QueryState<T> {
   const reload = useCallback(() => setTick((value) => value + 1), []);
 
   useEffect(() => subscribeToData(reload), [reload]);
-  useEffect(() => watchCrossTabChanges(STORAGE_PREFIX), []);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') reload();
+    };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, [reload]);
 
   return { ...state, reload };
 }

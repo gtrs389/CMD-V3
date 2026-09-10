@@ -1,42 +1,34 @@
-import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { loginSchema } from '@/lib/validation/auth.schema';
-import { verifyCredentials } from '@/lib/auth/credentials';
-import { createSessionToken } from '@/lib/auth/session';
-import { SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth/constants';
+import { login } from '@/lib/server/auth.service';
+import { GENERIC_LOGIN_ERROR, SESSION_COOKIE, SESSION_MAX_AGE } from '@/lib/auth/constants';
+import { jsonError, jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 
-const GENERIC_ERROR = 'E-mail ou senha invalidos.';
-
-export async function POST(request: Request) {
-  let body: unknown;
+/**
+ * Login proprio, sobre `cmd_users` e `cmd_sessions`.
+ * O cookie recebe o token original; o banco guarda apenas o hash.
+ */
+export async function POST(request: NextRequest) {
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ message: 'Requisicao invalida.' }, { status: 400 });
+    const { email, password } = await readJson(request, loginSchema);
+    const result = await login(email, password);
+
+    if (!result.user || !result.token) {
+      return jsonError(result.throttled ? 429 : 401, result.message ?? GENERIC_LOGIN_ERROR);
+    }
+
+    const response = jsonOk({ user: result.user });
+    response.cookies.set({
+      name: SESSION_COOKIE,
+      value: result.token,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: SESSION_MAX_AGE,
+    });
+    return response;
+  } catch (error) {
+    return toErrorResponse(error);
   }
-
-  const parsed = loginSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ message: GENERIC_ERROR }, { status: 400 });
-  }
-
-  const { user } = verifyCredentials(parsed.data.email, parsed.data.password);
-  if (!user) {
-    // Mensagem generica: nao revela se o e-mail existe.
-    return NextResponse.json({ message: GENERIC_ERROR }, { status: 401 });
-  }
-
-  const token = await createSessionToken(user);
-  const response = NextResponse.json({ user });
-
-  response.cookies.set({
-    name: SESSION_COOKIE,
-    value: token,
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: SESSION_MAX_AGE,
-  });
-
-  return response;
 }

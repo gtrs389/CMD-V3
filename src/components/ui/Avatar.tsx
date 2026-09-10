@@ -19,7 +19,7 @@ interface AvatarProps {
 }
 
 /**
- * As fotos ficam como data URL no localStorage nesta etapa, por isso usamos
+ * As fotos chegam como URL assinada de um bucket privado, por isso usamos
  * `img` puro: o otimizador de imagens do Next nao processa data URL.
  */
 export function Avatar({ name, src, size = 'md', className }: AvatarProps) {

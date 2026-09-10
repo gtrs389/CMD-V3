@@ -17,11 +17,11 @@ import { IconButton } from '@/components/ui/IconButton';
 interface LoginFormProps {
   /** Caminho interno para onde voltar apos entrar. */
   next?: string;
-  /** Indica que o ambiente ainda usa a credencial de demonstracao. */
-  showDemoHint: boolean;
+  /** Indica que o servidor esta sem as variaveis do Supabase. */
+  configured: boolean;
 }
 
-export function LoginForm({ next, showDemoHint }: LoginFormProps) {
+export function LoginForm({ next, configured }: LoginFormProps) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [showPassword, setShowPassword] = useState(false);
@@ -114,16 +114,15 @@ export function LoginForm({ next, showDemoHint }: LoginFormProps) {
         Entrar
       </Button>
 
-      {showDemoHint ? (
-        <div className="rounded-control border border-line bg-ink-50 px-3 py-3 text-xs text-ink-700">
-          <p className="font-semibold text-ink-900">Ambiente de demonstracao</p>
+      {!configured ? (
+        <div
+          role="status"
+          className="rounded-control border border-danger-200 bg-danger-50 px-3 py-3 text-xs text-danger-700"
+        >
+          <p className="font-semibold">Servidor sem banco de dados</p>
           <p className="mt-1">
-            Nenhuma credencial foi configurada no servidor. Use{' '}
-            <code className="rounded bg-ink-100 px-1 py-0.5">admin@exemplo.com</code> com a senha{' '}
-            <code className="rounded bg-ink-100 px-1 py-0.5">equipe123</code>.
-          </p>
-          <p className="mt-1">
-            Defina ADMIN_EMAIL e ADMIN_PASSWORD_HASH no servidor para desativar este acesso.
+            Defina SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente do servidor. Enquanto isso,
+            nenhum login e aceito.
           </p>
         </div>
       ) : null}

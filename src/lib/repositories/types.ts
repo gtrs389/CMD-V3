@@ -10,11 +10,10 @@ import type {
 /**
  * Contratos de persistencia.
  *
- * As telas dependem apenas destas interfaces. A implementacao atual guarda os
- * dados no localStorage; para migrar para uma API + banco de dados basta criar
- * outra implementacao (ex.: `HttpClientRepository`) e trocar a fabrica em
- * `src/lib/repositories/index.ts`. Todos os metodos ja sao assincronos
- * justamente para permitir essa troca sem alterar componentes.
+ * As telas dependem apenas destas interfaces. A implementacao ativa fala com
+ * as rotas de API do proprio Next.js (`./http`), que sao o unico caminho ate o
+ * Supabase. A implementacao em `./local` continua existindo como referencia da
+ * regra de negocio e e exercitada pelos testes.
  */
 
 export interface ClientRepository {

@@ -1,16 +1,19 @@
-import { createLocalClientRepository } from './local/client.repository';
-import { createLocalMemberRepository } from './local/member.repository';
+import { createHttpClientRepository } from './http/client.repository';
+import { createHttpMemberRepository } from './http/member.repository';
 import type { ClientRepository, MemberRepository } from './types';
 
 /**
  * Fabrica unica de repositorios.
  *
- * Ponto de troca para a futura integracao com API + banco de dados:
- * substitua as duas linhas abaixo por implementacoes HTTP que respeitem
- * as mesmas interfaces. Nenhuma tela precisa ser alterada.
+ * As telas continuam falando apenas com estas interfaces. A implementacao
+ * ativa conversa com as rotas de API do proprio Next.js, que sao o unico
+ * caminho ate o Supabase. As implementacoes em `./local` seguem existindo
+ * como referencia da regra de negocio e sao exercitadas pelos testes.
  */
-export const clientRepository: ClientRepository = createLocalClientRepository();
-export const memberRepository: MemberRepository = createLocalMemberRepository();
+export const clientRepository: ClientRepository = createHttpClientRepository();
+export const memberRepository: MemberRepository = createHttpMemberRepository();
 
 export * from './types';
+export { NetworkError } from './http/api';
+export { submitInvite, type PublicSubmission } from './http/public';
 export { subscribeToData, notifyDataChanged } from './events';

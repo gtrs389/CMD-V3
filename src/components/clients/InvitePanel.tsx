@@ -18,32 +18,52 @@ interface InvitePanelProps {
   client: Client;
 }
 
-/** Link individual de cadastro: copiar, prever, ativar/desativar e gerar novo token. */
+/**
+ * Link individual de cadastro: copiar, prever, ativar/desativar e renovar.
+ *
+ * O banco guarda apenas o hash SHA-256 do token, entao o endereco completo
+ * aparece uma unica vez: no momento em que e gerado. Depois disso, quem
+ * precisar do link novamente gera outro por aqui.
+ */
 export function InvitePanel({ client }: InvitePanelProps) {
   const toast = useToast();
   const [rotating, setRotating] = useState(false);
-  const origin = useOrigin();
+  const [working, setWorking] = useState(false);
+  // Token recebido agora, nesta sessao da tela. Nunca vem do banco.
+  const [token, setToken] = useState<string | null>(client.invite.token);
 
-  const path = invitePath(client.invite.token);
+  const origin = useOrigin();
+  const path = token ? invitePath(token) : null;
   // A origem so existe no navegador; ate hidratar, mostramos o caminho relativo.
-  const url = origin ? `${origin}${path}` : path;
+  const url = path ? (origin ? `${origin}${path}` : path) : '';
 
   async function toggleActive(active: boolean) {
     try {
       await clientRepository.setInviteActive(client.id, active);
       toast.success(active ? 'Convite ativado.' : 'Convite desativado.');
-    } catch {
-      toast.error('Nao foi possivel alterar o convite.');
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Nao foi possivel alterar o convite.',
+      );
     }
   }
 
   async function regenerate() {
+    setWorking(true);
     try {
-      await clientRepository.regenerateInviteToken(client.id);
+      const updated = await clientRepository.regenerateInviteToken(client.id);
+      setToken(updated.invite.token);
       toast.success('Novo link gerado. O link anterior deixou de funcionar.');
-    } catch {
-      toast.error('Nao foi possivel gerar um novo link.');
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Nao foi possivel gerar um novo link.',
+      );
     } finally {
+      setWorking(false);
       setRotating(false);
     }
   }
@@ -56,25 +76,41 @@ export function InvitePanel({ client }: InvitePanelProps) {
             <CardTitle>Link de convite</CardTitle>
             <CardDescription>
               Envie este endereco para a equipe preencher o cadastro. O link contem apenas um
-              token aleatorio, sem nenhum dado pessoal.
+              token aleatorio, sem nenhum dado pessoal. O banco guarda somente o hash do token,
+              por isso o endereco completo aparece apenas no momento em que e gerado.
             </CardDescription>
           </div>
         </CardHeader>
 
         <CardBody className="space-y-4">
-          <CopyField value={url} label="Link de convite" actionLabel="Copiar link" />
+          {path ? (
+            <>
+              <CopyField value={url} label="Link de convite" actionLabel="Copiar link" />
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <a
-              href={path}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-4 text-sm font-medium text-ink-900 shadow-card transition-colors hover:bg-ink-50"
-            >
-              <ExternalLink aria-hidden="true" className="size-4" />
-              Abrir previa em nova aba
-            </a>
-          </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <a
+                  href={path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-4 text-sm font-medium text-ink-900 shadow-card transition-colors hover:bg-ink-50"
+                >
+                  <ExternalLink aria-hidden="true" className="size-4" />
+                  Abrir previa em nova aba
+                </a>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-control border border-line bg-ink-50 p-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-ink-900">
+                <Link2 aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
+                Link nao visivel
+              </p>
+              <p className="mt-1 text-xs text-ink-500">
+                O token fica guardado apenas como hash. Os links ja enviados continuam
+                funcionando. Para obter um endereco visivel de novo, gere um novo link abaixo.
+              </p>
+            </div>
+          )}
 
           <dl className="grid gap-3 rounded-control bg-ink-50 p-3 text-sm sm:grid-cols-2">
             <div className="min-w-0">
@@ -118,8 +154,13 @@ export function InvitePanel({ client }: InvitePanelProps) {
                 O endereco atual para de funcionar imediatamente.
               </p>
             </div>
-            <Button variant="secondary" onClick={() => setRotating(true)} className="shrink-0">
-              <KeyRound aria-hidden="true" className="size-4" />
+            <Button
+              variant="secondary"
+              loading={working}
+              onClick={() => setRotating(true)}
+              className="shrink-0"
+            >
+              {!working ? <KeyRound aria-hidden="true" className="size-4" /> : null}
               Gerar novo token
             </Button>
           </div>

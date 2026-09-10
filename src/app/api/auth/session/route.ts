@@ -1,11 +1,7 @@
-import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth/server';
+import { jsonOk } from '@/lib/server/http';
 
-/** Usado para restaurar visualmente a sessao ao abrir o painel. */
+/** Usado para reconferir a sessao ao voltar para a aba do painel. */
 export async function GET() {
-  const user = await getCurrentUser();
-  return NextResponse.json(
-    { user },
-    { headers: { 'Cache-Control': 'no-store, max-age=0' } },
-  );
+  return jsonOk({ user: await getCurrentUser() });
 }

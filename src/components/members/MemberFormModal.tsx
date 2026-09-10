@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import type { Client, Member } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
-import { StorageFullError } from '@/lib/repositories/types';
+import { NetworkError } from '@/lib/repositories';
 import {
   CONSENT_KEY,
   toSubmission,
@@ -74,11 +74,15 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
       }
       onClose();
     } catch (error) {
-      if (error instanceof StorageFullError) {
+      if (error instanceof NetworkError) {
         toast.error(error.message);
         return;
       }
-      toast.error('Nao foi possivel salvar o integrante.');
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Nao foi possivel salvar o integrante.',
+      );
     }
   }
 

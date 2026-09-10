@@ -16,7 +16,11 @@ function writeMembers(storage: StorageDriver, members: Member[]): void {
   notifyDataChanged();
 }
 
-/** Implementacao de `MemberRepository` sobre o localStorage. */
+/**
+ * Implementacao de referencia de `MemberRepository` sobre armazenamento
+ * chave/valor. Nao e mais a fonte oficial dos dados: serve de documentacao
+ * executavel da regra de negocio e e o alvo dos testes.
+ */
 export function createLocalMemberRepository(
   storageFactory: () => StorageDriver = getStorage,
 ): MemberRepository {

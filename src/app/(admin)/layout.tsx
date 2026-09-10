@@ -8,9 +8,13 @@ import { SessionProvider } from '@/components/layout/SessionProvider';
 /**
  * Camada administrativa.
  *
- * Alem do proxy, a sessao e conferida aqui: acesso direto a qualquer rota
- * do painel sem permissao volta para o login.
+ * A autorizacao acontece aqui, contra `cmd_sessions` no banco. O `proxy.ts`
+ * apenas melhora a navegacao olhando a presenca do cookie; cada rota de API
+ * confere a sessao por conta propria antes de qualquer operacao.
  */
+/** Depende do cookie de sessao: nunca e pre-renderizada. */
+export const dynamic = 'force-dynamic';
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
 

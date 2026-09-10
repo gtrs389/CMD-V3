@@ -7,8 +7,14 @@ export interface StorageDriver {
   remove(key: string): void;
 }
 
-/** Prefixo com versao, para permitir migracoes futuras. */
-export const STORAGE_PREFIX = 'sistema.v1.';
+/**
+ * Prefixo com versao.
+ *
+ * O localStorage nao e mais fonte de dados: o Supabase e a fonte oficial.
+ * Aqui restam o rascunho temporario do formulario publico e o armazenamento
+ * em memoria usado pelos testes das regras de negocio.
+ */
+export const STORAGE_PREFIX = 'cmd.v1.';
 
 export const STORAGE_KEYS = {
   clients: `${STORAGE_PREFIX}clients`,

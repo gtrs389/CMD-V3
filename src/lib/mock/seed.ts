@@ -1,13 +1,13 @@
 import { clientRepository, memberRepository } from '@/lib/repositories';
 import { createField, createOption } from '@/lib/domain/form-config';
-import type { Client, CustomField } from '@/lib/types';
+import type { Client, CustomField, FieldResponse } from '@/lib/types';
 
 /**
  * Dados de exemplo.
  *
- * Servem para demonstrar a operacao sem banco de dados. Sao gravados nos
- * mesmos repositorios usados pelo restante do sistema, portanto passam pelas
- * mesmas regras e serao substituidos automaticamente quando existir uma API.
+ * Servem para demonstrar a operacao. Sao gravados pelos mesmos repositorios
+ * usados pelo restante do sistema, ou seja, vao para o Supabase pelas rotas
+ * de API e passam pelas mesmas regras e validacoes.
  */
 
 interface SeedMember {
@@ -70,10 +70,16 @@ const SEED: SeedClient[] = [
   },
 ];
 
-function buildExtraFields(order: number): { fields: CustomField[]; ids: Record<string, string> } {
+const EXTRA_LABELS = {
+  regiao: 'Regiao de atuacao',
+  disponibilidade: 'Disponibilidade',
+  observacao: 'Observacoes',
+} as const;
+
+function buildExtraFields(order: number): CustomField[] {
   const regiao: CustomField = {
     ...createField('select'),
-    label: 'Regiao de atuacao',
+    label: EXTRA_LABELS.regiao,
     helpText: 'Onde a pessoa atua com mais frequencia.',
     required: true,
     order,
@@ -82,7 +88,7 @@ function buildExtraFields(order: number): { fields: CustomField[]; ids: Record<s
 
   const disponibilidade: CustomField = {
     ...createField('multiselect'),
-    label: 'Disponibilidade',
+    label: EXTRA_LABELS.disponibilidade,
     helpText: 'Pode marcar mais de um periodo.',
     order: order + 1,
     options: [createOption('Manha'), createOption('Tarde'), createOption('Noite')],
@@ -90,16 +96,23 @@ function buildExtraFields(order: number): { fields: CustomField[]; ids: Record<s
 
   const observacao: CustomField = {
     ...createField('textarea'),
-    label: 'Observacoes',
+    label: EXTRA_LABELS.observacao,
     placeholder: 'Algo que a coordenacao precisa saber',
     order: order + 2,
     options: [],
   };
 
-  return {
-    fields: [regiao, disponibilidade, observacao],
-    ids: { regiao: regiao.id, disponibilidade: disponibilidade.id, observacao: observacao.id },
-  };
+  return [regiao, disponibilidade, observacao];
+}
+
+/**
+ * Localiza o campo pelo rotulo.
+ *
+ * Os identificadores definitivos sao gerados pelo banco ao salvar, entao os
+ * IDs montados aqui nao servem para referenciar as respostas.
+ */
+function fieldByLabel(fields: CustomField[], label: string): CustomField | undefined {
+  return fields.find((field) => field.label === label);
 }
 
 function optionIdByLabel(field: CustomField | undefined, label: string): string | null {
@@ -118,14 +131,15 @@ export async function loadSampleData(): Promise<number> {
       notes: entry.notes,
     });
 
-    const { fields, ids } = buildExtraFields(client.form.fields.length);
+    const extras = buildExtraFields(client.form.fields.length);
     const updated = await clientRepository.updateForm(client.id, {
-      fields: [...client.form.fields, ...fields],
+      fields: [...client.form.fields, ...extras],
       introText: 'Preencha seus dados para integrar a equipe.',
     });
 
-    const regiaoField = updated.form.fields.find((field) => field.id === ids.regiao);
-    const dispField = updated.form.fields.find((field) => field.id === ids.disponibilidade);
+    const regiaoField = fieldByLabel(updated.form.fields, EXTRA_LABELS.regiao);
+    const dispField = fieldByLabel(updated.form.fields, EXTRA_LABELS.disponibilidade);
+    const obsField = fieldByLabel(updated.form.fields, EXTRA_LABELS.observacao);
 
     for (const member of entry.members) {
       await memberRepository.create({
@@ -135,16 +149,22 @@ export async function loadSampleData(): Promise<number> {
         photo: null,
         consentAt: null,
         source: 'invite',
-        responses: [
-          { fieldId: ids.regiao, value: optionIdByLabel(regiaoField, member.regiao) },
-          {
-            fieldId: ids.disponibilidade,
-            value: member.disponibilidade
-              .map((label) => optionIdByLabel(dispField, label))
-              .filter((id): id is string => id !== null),
-          },
-          { fieldId: ids.observacao, value: member.observacao || null },
-        ],
+        responses: ([
+          regiaoField
+            ? { fieldId: regiaoField.id, value: optionIdByLabel(regiaoField, member.regiao) }
+            : null,
+          dispField
+            ? {
+                fieldId: dispField.id,
+                value: member.disponibilidade
+                  .map((label) => optionIdByLabel(dispField, label))
+                  .filter((id): id is string => id !== null),
+              }
+            : null,
+          obsField ? { fieldId: obsField.id, value: member.observacao || null } : null,
+        ] as (FieldResponse | null)[]).filter(
+          (response): response is FieldResponse => response !== null,
+        ),
       });
       created += 1;
     }

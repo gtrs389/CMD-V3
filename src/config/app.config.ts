@@ -12,10 +12,10 @@ export type LogoConfig =
   | { kind: 'image'; src: string; monogram?: undefined };
 
 export const appConfig = {
-  /** Nome provisorio. Substituir quando a marca for definida. */
-  name: 'Nome do Sistema',
-  /** Usado em espacos reduzidos (menu recolhido, titulo de aba curto). */
-  shortName: 'Sistema',
+  /** Nome completo: usado no login e nos titulos principais. */
+  name: 'Cadastro Mobilização Digital',
+  /** Sigla usada em espacos compactos (menu recolhido, marca, rodapes). */
+  shortName: 'CMD',
   tagline: 'Cadastro e gestao de equipes',
   description:
     'Painel administrativo para cadastro de clientes, montagem de formularios e gestao de equipes.',
@@ -24,14 +24,14 @@ export const appConfig = {
    * Logotipo. Troque para `{ kind: 'image', src: '/logo.svg' }`
    * quando existir um arquivo de marca em `public/`.
    */
-  logo: { kind: 'monogram', monogram: 'NS' } as LogoConfig,
+  logo: { kind: 'monogram', monogram: 'CMD' } as LogoConfig,
 
   locale: 'pt-BR',
 
   /** Prefixo das rotas publicas de convite. */
   invitePath: '/convite',
 
-  /** Limites aplicados no navegador (etapa sem banco de dados). */
+  /** Limites de upload e de montagem de formulario. */
   limits: {
     /** Tamanho maximo do arquivo escolhido pelo usuario, antes da compressao. */
     maxUploadBytes: 10 * 1024 * 1024,
@@ -39,6 +39,8 @@ export const appConfig = {
     maxImageEdge: 720,
     /** Alvo de tamanho da imagem ja comprimida, em bytes. */
     targetImageBytes: 160 * 1024,
+    /** Teto aceito pelo servidor ao gravar a imagem no Storage privado. */
+    maxStoredImageBytes: 2 * 1024 * 1024,
     maxOptionsPerField: 30,
     maxFieldsPerForm: 40,
   },

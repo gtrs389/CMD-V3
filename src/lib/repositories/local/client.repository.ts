@@ -22,9 +22,9 @@ function writeClients(storage: StorageDriver, clients: Client[]): void {
 }
 
 /**
- * Implementacao de `ClientRepository` sobre o localStorage.
- * Serve apenas a esta primeira etapa; a interface permanece a mesma
- * quando existir uma API real.
+ * Implementacao de referencia de `ClientRepository` sobre armazenamento
+ * chave/valor. Nao e mais a fonte oficial dos dados: serve de documentacao
+ * executavel da regra de negocio e e o alvo dos testes.
  */
 export function createLocalClientRepository(
   storageFactory: () => StorageDriver = getStorage,

@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { appConfig } from '@/config/app.config';
-import { isUsingFallbackCredentials } from '@/lib/auth/credentials';
+import { isSupabaseConfigured } from '@/lib/supabase/env';
+import { getCurrentUser } from '@/lib/auth/server';
+import { DEFAULT_AUTHENTICATED_PATH } from '@/lib/auth/constants';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { Logo } from '@/components/layout/Logo';
 
@@ -8,9 +11,16 @@ export const metadata: Metadata = {
   title: 'Entrar',
 };
 
+/** Depende do cookie de sessao: nunca e pre-renderizada. */
+export const dynamic = 'force-dynamic';
+
 export default async function LoginPage({
   searchParams,
 }: PageProps<'/login'>) {
+  // Sessao valida nao precisa ver o login. A conferencia e feita no banco,
+  // nunca apenas pela presenca do cookie.
+  if (await getCurrentUser()) redirect(DEFAULT_AUTHENTICATED_PATH);
+
   const params = await searchParams;
   const raw = params?.proximo;
   const candidate = Array.isArray(raw) ? raw[0] : raw;
@@ -33,11 +43,11 @@ export default async function LoginPage({
             Entre com as credenciais de administrador para gerenciar clientes e equipes.
           </p>
 
-          <LoginForm next={next} showDemoHint={isUsingFallbackCredentials()} />
+          <LoginForm next={next} configured={isSupabaseConfigured()} />
         </div>
 
         <p className="mt-6 text-center text-xs text-balance text-ink-500">
-          {appConfig.name} — nesta etapa os dados ficam apenas neste navegador.
+          {appConfig.name} ({appConfig.shortName}) — acesso restrito a administradores.
         </p>
       </div>
     </main>

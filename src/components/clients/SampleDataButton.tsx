@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { loadSampleData } from '@/lib/mock/seed';
-import { StorageFullError } from '@/lib/repositories/types';
+import { NetworkError } from '@/lib/repositories';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 
@@ -22,7 +22,7 @@ export function SampleDataButton() {
       toast.success(`Dados de exemplo carregados: 2 clientes e ${total} integrantes.`);
     } catch (error) {
       toast.error(
-        error instanceof StorageFullError
+        error instanceof NetworkError
           ? error.message
           : 'Nao foi possivel carregar os dados de exemplo.',
       );

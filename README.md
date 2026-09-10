@@ -1,38 +1,62 @@
-# Nome do Sistema
+# Cadastro Mobilização Digital (CMD)
 
-Primeira etapa de um sistema de cadastro e gerenciamento de equipes.
-O ADMIN cadastra clientes, monta o formulário de cada cliente e compartilha um
-link individual de convite; quem recebe o link preenche o cadastro pelo celular
-e passa a integrar a equipe daquele cliente.
+Sistema de cadastro e gerenciamento de equipes. O ADMIN cadastra clientes, monta
+o formulário de cada cliente e compartilha um link individual de convite; quem
+recebe o link preenche o cadastro pelo celular, de qualquer aparelho, e o
+registro aparece no painel do ADMIN.
 
-> **O nome é provisório.** Nome, logotipo e textos institucionais ficam em
-> `src/config/app.config.ts`. Cores, fontes, raios, sombras e espaçamentos ficam
-> no bloco `TOKENS DE IDENTIDADE VISUAL` de `src/app/globals.css`.
-> Nenhuma marca definitiva foi criada.
+Nos espaços compactos o sistema aparece como **CMD**; o nome completo fica no
+login e nos títulos principais. Nome, logotipo e textos institucionais ficam em
+`src/config/app.config.ts`. A paleta e os demais tokens visuais ficam no bloco
+`TOKENS DE IDENTIDADE VISUAL` de `src/app/globals.css`.
 
 ---
 
-## Limitações desta etapa (leia antes de usar)
+## Banco de dados
 
-**Não existe banco de dados.** Nenhum foi instalado ou configurado — nem
-Supabase, Firebase, PostgreSQL, MySQL, MongoDB, SQLite, Prisma ou serviço
-externo de armazenamento.
+A fonte oficial dos dados é o **Supabase**. Todo acesso acontece no servidor do
+Next.js, por Route Handlers e serviços `server-only`. **Nenhuma tela ou
+componente cliente consulta o Supabase diretamente.**
 
-Consequências práticas, sem rodeios:
+O projeto **não usa Supabase Authentication** em nenhum ponto: nada de
+`supabase.auth`, `auth.users`, Auth.js, usuários criados pelo painel
+Authentication ou políticas baseadas em `auth.uid()`. Usuários, níveis de
+acesso, senhas e sessões vivem nas tabelas `cmd_users` e `cmd_sessions`.
 
-- **Os dados ficam apenas no navegador em que foram digitados** (localStorage).
-- Um cadastro enviado pelo celular de outra pessoa **fica no aparelho dela** e
-  **não aparece no seu painel**. O link público funciona como demonstração
-  dentro do mesmo navegador.
-- Limpar os dados do site, usar aba anônima ou trocar de aparelho **apaga ou
-  esconde tudo**.
-- O armazenamento do navegador tem cota (poucos MB). As fotos são
-  redimensionadas e comprimidas antes de salvar, mas ainda assim há limite; o
-  sistema avisa quando a cota estoura.
-- **O recebimento real de cadastros feitos em outros aparelhos depende de
-  backend e banco de dados**, previstos para a etapa seguinte.
+O `localStorage` permanece apenas para o rascunho temporário do formulário
+público, apagado assim que o cadastro é enviado.
 
-A autenticação também é provisória: ver [Autenticação](#autenticação-provisória).
+Antes de rodar, siga [`supabase/SETUP.md`](supabase/SETUP.md): ele traz a ordem
+exata dos SQLs, como gerar o hash do primeiro ADMIN e como configurar as
+variáveis na Vercel.
+
+### Tabelas
+
+| Tabela | Papel |
+| --- | --- |
+| `cmd_users` | Usuários do painel. Senha em `scrypt$salt$hash` |
+| `cmd_sessions` | Sessões ativas. Guarda apenas o hash SHA-256 do token do cookie |
+| `cmd_clients` | Clientes e configuração do formulário público |
+| `cmd_form_fields` | Campos do formulário, com `system_key` nos campos nativos |
+| `cmd_members` | Integrantes cadastrados |
+| `cmd_member_responses` | Respostas por campo, referenciadas pelo ID estável |
+| `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
+
+Todas ficam com RLS habilitado e **sem nenhuma policy**, e o acesso de `anon` e
+`authenticated` é revogado. As fotos vão para o bucket privado `cmd-media`: as
+tabelas guardam somente o caminho e os metadados, e o navegador recebe URLs
+assinadas geradas no servidor.
+
+### Variáveis de ambiente
+
+| Variável | Obrigatória | Para que serve |
+| --- | --- | --- |
+| `SUPABASE_URL` | sim | Endereço https do projeto Supabase |
+| `SUPABASE_SECRET_KEY` | sim | Chave secreta. Somente no servidor |
+| `SUPABASE_SERVICE_ROLE_KEY` | não | Reserva legada de `SUPABASE_SECRET_KEY` |
+
+Nenhuma usa o prefixo `NEXT_PUBLIC_`. Sem elas o sistema falha de forma segura:
+o login é recusado e a tela de entrada exibe o aviso de configuração ausente.
 
 ---
 
@@ -42,9 +66,12 @@ Requisitos: Node.js 20.9 ou superior.
 
 ```bash
 npm install
-cp .env.example .env.local     # opcional nesta etapa (ver Autenticação)
+cp .env.example .env.local     # preencha SUPABASE_URL e SUPABASE_SECRET_KEY
 npm run dev                    # http://localhost:3000
 ```
+
+Execute os SQLs de `supabase/` antes do primeiro login. Veja
+[`supabase/SETUP.md`](supabase/SETUP.md).
 
 ### Scripts
 
@@ -57,38 +84,48 @@ npm run dev                    # http://localhost:3000
 | `npm run typecheck` | Gera os tipos de rota e roda `tsc --noEmit` |
 | `npm test` | Testes da camada de regras (Vitest) |
 | `npm run verificar` | Lint + tipos + testes + build, em sequência |
-| `npm run gerar-hash -- "sua-senha"` | Gera o valor de `ADMIN_PASSWORD_HASH` |
+| `npm run gerar-hash -- "email" "senha"` | Gera o hash scrypt e imprime o `INSERT` do ADMIN |
 
 ---
 
-## Autenticação provisória
+## Autenticação própria
 
-Somente o perfil **ADMIN** tem login e painel. As credenciais vivem em
-variáveis de ambiente **do servidor** e nunca chegam ao navegador — nenhuma
-delas usa o prefixo `NEXT_PUBLIC_`.
+Somente o perfil **ADMIN** tem login e painel nesta etapa. A autenticação é
+própria, sobre `cmd_users` e `cmd_sessions`.
 
 Como funciona:
 
 1. A tela de login envia e-mail e senha para `POST /api/auth/login`.
-2. O servidor compara com `ADMIN_EMAIL` e com o hash scrypt em
-   `ADMIN_PASSWORD_HASH`, em comparação de tempo constante.
-3. Em caso de sucesso emite um cookie `httpOnly`, `SameSite=Lax`, assinado com
-   HMAC-SHA256 usando `AUTH_SECRET`, válido por 8 horas.
-4. `src/proxy.ts` valida a assinatura antes de renderizar qualquer rota
-   administrativa; `src/app/(admin)/layout.tsx` confere de novo no servidor.
+2. O servidor busca o usuário em `cmd_users` e confere a senha com `scrypt`,
+   salt aleatório por usuário e comparação em tempo constante. O `scrypt` roda
+   mesmo quando o e-mail não existe, para o tempo de resposta não denunciar
+   nada.
+3. Em caso de sucesso é gerado um token de sessão criptograficamente seguro.
+   O banco guarda **apenas o hash SHA-256** do token; o valor original vai para
+   um cookie `httpOnly`, `Secure` em produção, `SameSite=Lax`, válido por 8
+   horas.
+4. Cada rota administrativa confere a sessão no servidor antes de qualquer
+   operação, via `requirePermission` em `src/lib/server/guard.ts`. O
+   `src/proxy.ts` apenas melhora a navegação olhando a presença do cookie.
 
-### Configuração
+Proteções:
+
+- `password_hash` nunca é devolvido ao navegador.
+- Login inválido responde sempre com a mesma mensagem genérica.
+- Cinco tentativas seguidas bloqueiam a conta por 15 minutos.
+- Logout revoga a sessão no banco e limpa as sessões expiradas.
+- **Não existe login padrão.** O antigo `admin@exemplo.com / equipe123` foi
+  removido; sem as variáveis do Supabase, nenhum login é aceito.
+
+### Primeiro administrador
 
 ```bash
-cp .env.example .env.local
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  # AUTH_SECRET
-npm run gerar-hash -- "sua-senha-forte"                                   # ADMIN_PASSWORD_HASH
+npm run gerar-hash -- "seu-email@dominio.com" "sua-senha-forte"
 ```
 
-**Modo de demonstração:** sem `ADMIN_EMAIL` e `ADMIN_PASSWORD_HASH`
-configurados, o sistema aceita `admin@exemplo.com` / `equipe123`, registra um
-aviso no log do servidor e exibe um aviso visível na tela de login. Configure as
-variáveis antes de qualquer uso real.
+O comando imprime o `INSERT` pronto para colar no SQL Editor do Supabase. A
+senha em texto puro não vai para o banco, para o repositório nem para o
+navegador.
 
 ### Perfis
 
@@ -112,11 +149,23 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/clientes` | ADMIN | Lista, busca e CRUD de clientes |
 | `/clientes/[id]` | ADMIN | Visão geral, Equipe, Formulário e Link de convite |
 | `/convite/[token]` | Pública | Formulário de cadastro da equipe |
-| `/api/auth/login` | Pública | Valida credenciais e emite a sessão |
-| `/api/auth/logout` | Pública | Encerra a sessão |
+| `/api/auth/login` | Pública | Valida credenciais e abre a sessão |
+| `/api/auth/logout` | Pública | Revoga a sessão e limpa o cookie |
 | `/api/auth/session` | Pública | Devolve a sessão atual (recuperação visual) |
+| `/api/clients` | ADMIN | Lista e cria clientes |
+| `/api/clients/[id]` | ADMIN | Lê, atualiza e exclui um cliente |
+| `/api/clients/[id]/form` | ADMIN | Atualiza campos, privacidade e textos |
+| `/api/clients/[id]/invite` | ADMIN | Ativa/desativa e renova o convite |
+| `/api/clients/[id]/members` | ADMIN | Equipe de um cliente |
+| `/api/members` | ADMIN | Lista e cadastra integrantes pelo painel |
+| `/api/members/[id]` | ADMIN | Atualiza e exclui um integrante |
+| `/api/public/convite/[token]` | Pública | Resolve o convite pelo token do link |
+| `/api/public/convite/[token]/membros` | Pública | Recebe o cadastro do formulário |
 
 O token do convite é opaco e aleatório: **nenhum dado pessoal vai para a URL**.
+O banco guarda apenas o hash SHA-256 dele, por isso o endereço completo aparece
+uma única vez, no momento em que é gerado. Para obter um link visível de novo,
+use **Gerar novo token** — o anterior deixa de funcionar na hora.
 
 ---
 
@@ -133,8 +182,9 @@ src/
 │   ├── login/                 Tela de login
 │   ├── (admin)/               Área protegida (dashboard e clientes)
 │   ├── convite/[token]/       Rota pública de cadastro
-│   └── api/auth/              Login, logout e leitura de sessão
-├── proxy.ts                   Proteção das rotas administrativas
+│   └── api/                   Route Handlers: auth, clientes, integrantes
+│                              e as rotas públicas do convite
+├── proxy.ts                   Redirecionamento das rotas administrativas
 ├── components/
 │   ├── ui/                    Biblioteca visual (sem regra de negócio)
 │   ├── layout/                Casca do painel, sidebar, menu móvel, sessão
@@ -153,9 +203,13 @@ src/
     ├── permissions/           Matriz central de permissões
     ├── validation/            Schemas zod + validação dinâmica do formulário
     ├── domain/                Regras do construtor de formulário
-    ├── repositories/          Interfaces + implementação localStorage
+    ├── repositories/          Interfaces + implementação HTTP (fonte oficial)
+    │                          e a implementação local de referência
+    ├── supabase/              Cliente PostgREST, Storage privado e variáveis
+    ├── server/                Serviços server-only, guarda de permissão e
+    │                          respostas de erro das rotas
     ├── mock/                  Dados de exemplo
-    ├── auth/                  Sessão assinada e verificação de credenciais
+    ├── auth/                  Senha scrypt, tokens e sessão do servidor
     └── utils/                 Telefone, data, imagem, texto, ID, área de transferência
 ```
 
@@ -170,17 +224,22 @@ src/
 | `src/lib/repositories/index.ts` | Fábrica de repositórios (ponto de troca) |
 | `src/lib/validation/dynamic-form.ts` | Schema tipado gerado a partir dos campos |
 | `src/lib/domain/form-config.ts` | Regras de campos, ordem e duplicação |
-| `src/lib/auth/session.ts` | Assinatura e leitura do cookie de sessão |
-| `src/proxy.ts` | Bloqueio das rotas administrativas |
+| `src/lib/server/auth.service.ts` | Login, sessão e revogação sobre `cmd_users`/`cmd_sessions` |
+| `src/lib/server/guard.ts` | Confere sessão e permissão em toda rota administrativa |
+| `src/lib/supabase/rest.ts` | Único caminho até o banco, sempre no servidor |
+| `src/lib/supabase/storage.ts` | Upload, exclusão e URL assinada do bucket privado |
+| `src/lib/validation/server.schema.ts` | Zod de tudo que chega ao servidor |
+| `supabase/migrations/001_cmd_initial.sql` | Estrutura completa do banco |
+| `src/proxy.ts` | Redirecionamento das rotas administrativas |
 
 ---
 
 ## Decisões de arquitetura
 
 **Repositórios assíncronos.** As telas conversam apenas com as interfaces
-`ClientRepository` e `MemberRepository`. Todos os métodos já retornam `Promise`,
-mesmo lendo do localStorage, justamente para que a troca por HTTP não altere
-nenhum componente.
+`ClientRepository` e `MemberRepository`. A implementação ativa fala com as rotas
+de API do próprio Next.js, que são o único caminho até o Supabase. A troca de
+persistência não alterou nenhum componente de tela.
 
 **Campos com ID estável.** Cada campo do formulário tem um ID interno que nunca
 muda. As respostas são gravadas por ID, não por título — renomear um campo não
@@ -191,9 +250,10 @@ quantos integrantes já responderam a ele.
 renomeados e reordenados; nome e telefone não podem ser desativados e o nome
 permanece obrigatório, porque identifica o integrante.
 
-**Fotos.** Toda imagem passa por validação de tipo (JPG, PNG, WEBP) e de tamanho,
-é redimensionada e comprimida no navegador antes de virar `data URL`, reduzindo
-o risco de estourar a cota do localStorage.
+**Fotos.** A imagem é validada (JPG, PNG, WEBP), redimensionada e comprimida no
+navegador. O servidor valida tipo e tamanho outra vez, grava o arquivo no bucket
+privado `cmd-media` e guarda no banco apenas o caminho e os metadados. O
+navegador só recebe URLs assinadas, com validade curta.
 
 **Movimento.** As animações são curtas e o CSS respeita
 `prefers-reduced-motion`. O conteúdo de página anima apenas o deslocamento, sem
@@ -214,34 +274,22 @@ no desktop e cartões no celular, alvos de toque de no mínimo 44 px e respeito 
 - `npm run typecheck` — sem erros
 - `npm test` — 38 testes (telefone, permissões, regras de formulário, validação
   dinâmica e repositórios)
-- `npm run build` — build de produção concluído
-- Conferência manual em navegador dos fluxos completos: login inválido e válido,
-  CRUD de cliente, construtor de campos, reordenação, pré-visualização, cópia do
-  link, preenchimento público, aparecimento do integrante na equipe, edição e
-  exclusão, persistência após recarregar, desativação e renovação do convite,
-  logout e bloqueio das rotas administrativas
-- Larguras conferidas: 320, 375, 390, 768, 1024 e 1440 px
+- `npm run build` — build de produção concluído, sem avisos
+- Conferência de que nenhuma chave secreta aparece no pacote enviado ao
+  navegador
+
+**Não verificado nesta etapa:** o banco não foi executado nem testado
+remotamente. Os SQLs de `supabase/` precisam ser aplicados no seu projeto
+Supabase e o fluxo ponta a ponta conferido no navegador, conforme o passo 6 de
+[`supabase/SETUP.md`](supabase/SETUP.md).
 
 ---
 
-## Preparado para a próxima etapa
+## Próximos passos
 
-O que já está pronto para receber backend e banco de dados:
-
-1. **Troca de persistência** — substituir as duas linhas de
-   `src/lib/repositories/index.ts` por implementações HTTP que respeitem
-   `ClientRepository` e `MemberRepository`. Nenhuma tela muda.
-2. **Autenticação real** — trocar `verifyCredentials` em
-   `src/lib/auth/credentials.ts` por uma consulta à tabela de usuários. A tela de
-   login e o cookie de sessão continuam iguais.
-3. **Perfil EQUIPE** — acrescentar as permissões em
+1. **Perfil EQUIPE** — acrescentar as permissões em
    `src/lib/permissions/index.ts` e criar as rotas correspondentes; a navegação
-   já é filtrada por permissão.
-4. **Modelo de dados** — os tipos em `src/lib/types/` mapeiam diretamente para
-   tabelas (`users`, `clients`, `client_form_fields`, `members`,
-   `member_responses`, `invites`).
-5. **Fotos** — o pipeline de validação e compressão já está isolado em
-   `src/lib/utils/image.ts`; basta trocar o destino da `data URL` por um upload.
-6. **Aviso de privacidade** — a área é configurável por cliente. O texto atual é
-   um marcador operacional e **precisa ser revisado por responsável jurídico**
-   antes de qualquer uso real.
+   já é filtrada por permissão e `cmd_users.role` já aceita `EQUIPE`.
+2. **Gestão de usuários pelo painel** — criar e desativar ADMINs pela interface,
+   reaproveitando `src/lib/auth/password.ts`.
+3. **Exportação de dados** — CSV da equipe de um cliente, direto do servidor.

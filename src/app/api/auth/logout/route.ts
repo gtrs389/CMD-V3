@@ -1,8 +1,21 @@
-import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/constants';
+import { purgeExpiredSessions, revokeSession } from '@/lib/server/auth.service';
+import { jsonOk } from '@/lib/server/http';
 
-export async function POST() {
-  const response = NextResponse.json({ ok: true });
+/** Encerra a sessao no banco e apaga o cookie. */
+export async function POST(request: NextRequest) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+
+  try {
+    await revokeSession(token);
+    await purgeExpiredSessions();
+  } catch (error) {
+    // O cookie e removido de qualquer forma: sair nunca pode falhar.
+    console.error('[auth] Falha ao revogar a sessao:', error);
+  }
+
+  const response = jsonOk({ ok: true });
   response.cookies.set({
     name: SESSION_COOKIE,
     value: '',
