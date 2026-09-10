@@ -2,7 +2,8 @@ import 'server-only';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextRequest } from 'next/server';
 import { TABLES, type MemberDeviceRow } from '@/lib/supabase/tables';
-import { insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
+import { insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
+import type { MemberDevice } from '@/lib/domain/device-summary';
 import type { DeviceSignalsInput } from '@/lib/validation/server.schema';
 
 /**
@@ -170,4 +171,60 @@ export async function recordMemberDevice(input: RecordDeviceInput): Promise<void
     // Sinal de seguranca e melhoria: falhar aqui nao pode derrubar o cadastro.
     // Sem log: qualquer mensagem poderia carregar cabecalhos do visitante.
   }
+}
+
+/**
+ * Colunas devolvidas ao painel.
+ *
+ * `device_token_hash`, `ip_hash`, `id`, `member_id` e `client_id` ficam de
+ * fora de proposito: nenhum identificador tecnico ou valor derivado de token
+ * ou de IP pode chegar ao navegador.
+ */
+const SAFE_SELECT =
+  'user_agent,ch_ua,ch_ua_mobile,ch_ua_platform,platform,is_mobile,language,timezone,' +
+  'screen_width,screen_height,max_touch_points,geo_country,geo_region,' +
+  'first_seen_at,last_seen_at,status';
+
+type SafeRow = Pick<
+  MemberDeviceRow,
+  | 'user_agent'
+  | 'platform'
+  | 'is_mobile'
+  | 'language'
+  | 'timezone'
+  | 'screen_width'
+  | 'screen_height'
+  | 'max_touch_points'
+  | 'geo_country'
+  | 'geo_region'
+  | 'first_seen_at'
+  | 'last_seen_at'
+  | 'status'
+> &
+  Pick<MemberDeviceRow, 'ch_ua_platform'>;
+
+/** Aparelhos de um integrante, do mais recente para o mais antigo. */
+export async function listMemberDevices(memberId: string): Promise<MemberDevice[]> {
+  const rows = await selectRows<SafeRow>(TABLES.memberDevices, {
+    select: SAFE_SELECT,
+    filters: { member_id: `eq.${memberId}` },
+    order: 'last_seen_at.desc',
+  });
+
+  return rows.map((row) => ({
+    // A plataforma lida na pagina vem primeiro; o Client Hint e a reserva.
+    platform: row.platform ?? row.ch_ua_platform?.replace(/"/g, '') ?? null,
+    userAgent: row.user_agent,
+    isMobile: row.is_mobile,
+    language: row.language,
+    timezone: row.timezone,
+    screenWidth: row.screen_width,
+    screenHeight: row.screen_height,
+    maxTouchPoints: row.max_touch_points,
+    country: row.geo_country,
+    region: row.geo_region,
+    firstSeenAt: row.first_seen_at,
+    lastSeenAt: row.last_seen_at,
+    status: row.status,
+  }));
 }
