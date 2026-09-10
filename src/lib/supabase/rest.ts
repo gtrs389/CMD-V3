@@ -153,3 +153,18 @@ export async function deleteRows<T>(
   });
   return rows ?? [];
 }
+
+/**
+ * Executa uma funcao SQL pelo endpoint de RPC do PostgREST.
+ * Usado apenas onde a operacao precisa acontecer em uma transacao so.
+ */
+export async function callFunction<T>(
+  name: string,
+  args: Record<string, QueryValue>,
+): Promise<T> {
+  const { url } = supabaseEnv();
+  return request<T>(`${url}/rest/v1/rpc/${name}`, {
+    method: 'POST',
+    body: JSON.stringify(args),
+  });
+}

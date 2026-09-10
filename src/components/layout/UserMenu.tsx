@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { initials } from '@/lib/utils/text';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { useSession } from './SessionProvider';
 
 /** Identificacao da sessao e saida do painel, no rodape da barra lateral. */
 export function UserMenu() {
   const { user, signOut, restoring } = useSession();
   const [confirming, setConfirming] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   if (!user) return null;
 
@@ -30,13 +32,27 @@ export function UserMenu() {
 
       <button
         type="button"
+        onClick={() => setChangingPassword(true)}
+        className="mt-2 flex min-h-9 w-full items-center gap-2.5 rounded-control px-3 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700 hover:text-white"
+      >
+        <KeyRound aria-hidden="true" className="size-4 shrink-0" />
+        Alterar senha
+      </button>
+
+      <button
+        type="button"
         disabled={restoring}
         onClick={() => setConfirming(true)}
-        className="mt-2 flex min-h-9 w-full items-center gap-2.5 rounded-control px-3 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700 hover:text-white disabled:opacity-60"
+        className="flex min-h-9 w-full items-center gap-2.5 rounded-control px-3 text-xs font-medium text-navy-200 transition-colors hover:bg-navy-700 hover:text-white disabled:opacity-60"
       >
         <LogOut aria-hidden="true" className="size-4 shrink-0" />
         Sair
       </button>
+
+      <ChangePasswordModal
+        open={changingPassword}
+        onClose={() => setChangingPassword(false)}
+      />
 
       <ConfirmDialog
         open={confirming}

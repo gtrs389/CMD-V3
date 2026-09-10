@@ -28,6 +28,9 @@ export default async function LoginPage({
   // Aceita apenas caminhos internos: evita redirecionamento para outro site.
   const next = candidate && /^\/(?!\/)/.test(candidate) ? candidate : undefined;
 
+  const senha = Array.isArray(params?.senha) ? params.senha[0] : params?.senha;
+  const senhaAlterada = senha === 'alterada';
+
   return (
     <main className="safe-x flex min-h-dvh flex-col justify-center bg-surface-muted px-4 py-10 sm:px-6">
       <div className="mx-auto w-full max-w-md">
@@ -42,6 +45,15 @@ export default async function LoginPage({
           <p className="mt-1 text-sm text-ink-500">
             Entre com as credenciais de administrador para gerenciar clientes e equipes.
           </p>
+
+          {senhaAlterada ? (
+            <p
+              role="status"
+              className="mt-4 rounded-control border border-success-50 bg-success-50 px-3 py-2.5 text-sm font-medium text-success-700"
+            >
+              Senha alterada com sucesso. Entre novamente.
+            </p>
+          ) : null}
 
           <LoginForm next={next} configured={isSupabaseConfigured()} />
         </div>

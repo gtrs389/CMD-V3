@@ -10,3 +10,27 @@ export const loginSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+/** Mesmos limites usados pelo comando `npm run gerar-hash`. */
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 200;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Informe a senha atual.'),
+    newPassword: z
+      .string()
+      .min(PASSWORD_MIN, `A nova senha precisa ter pelo menos ${PASSWORD_MIN} caracteres.`)
+      .max(PASSWORD_MAX, `A nova senha precisa ter no máximo ${PASSWORD_MAX} caracteres.`),
+    confirmPassword: z.string().min(1, 'Confirme a nova senha.'),
+  })
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'As senhas não conferem.',
+  })
+  .refine((value) => value.newPassword !== value.currentPassword, {
+    path: ['newPassword'],
+    message: 'A nova senha precisa ser diferente da atual.',
+  });
+
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
