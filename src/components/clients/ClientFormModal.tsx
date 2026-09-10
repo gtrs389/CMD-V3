@@ -68,7 +68,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
         toast.error(error.message);
         return;
       }
-      toast.error('Nao foi possivel salvar o cliente. Tente novamente.');
+      toast.error('Não foi possível salvar o cliente. Tente novamente.');
     }
   }
 
@@ -80,8 +80,8 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
       title={editing ? 'Editar cliente' : 'Novo cliente'}
       description={
         editing
-          ? 'Atualize os dados de identificacao do cliente.'
-          : 'Cadastre o cliente para gerar o formulario e o link de convite.'
+          ? 'Atualize os dados de identificação do cliente.'
+          : 'Cadastre o cliente para gerar o formulário e o link de convite.'
       }
       footer={
         <>
@@ -89,7 +89,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
             Cancelar
           </Button>
           <Button form="form-cliente" type="submit" loading={isSubmitting}>
-            {editing ? 'Salvar alteracoes' : 'Cadastrar cliente'}
+            {editing ? 'Salvar alterações' : 'Cadastrar cliente'}
           </Button>
         </>
       }
@@ -133,18 +133,18 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
 
         <Field
           id="cliente-notas"
-          label="Observacoes"
-          help="Anotacao interna. Nao aparece no formulario publico."
+          label="Observações"
+          help="Anotação interna. Não aparece no formulário público."
           error={errors.notes?.message}
         >
           <Textarea
             id="cliente-notas"
             rows={3}
-            placeholder="Informacoes uteis para a operacao"
+            placeholder="Informações úteis para a operação"
             invalid={Boolean(errors.notes)}
             aria-describedby={describedBy(
               'cliente-notas',
-              'Anotacao interna.',
+              'Anotação interna.',
               errors.notes?.message,
             )}
             {...register('notes')}

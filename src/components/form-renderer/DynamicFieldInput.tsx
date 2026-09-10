@@ -103,7 +103,7 @@ export function DynamicFieldInput({
             <Checkbox
               key={option.id}
               id={`${id}-${option.id}`}
-              label={option.label || 'Opcao sem titulo'}
+              label={option.label || 'Opção sem título'}
               checked={selected.includes(option.id)}
               disabled={disabled}
               onChange={(event) => {
@@ -131,10 +131,10 @@ export function DynamicFieldInput({
           aria-describedby={described}
           onChange={(event) => onChange(event.target.value)}
         >
-          <option value="">{field.placeholder || 'Selecione uma opcao'}</option>
+          <option value="">{field.placeholder || 'Selecione uma opção'}</option>
           {field.options.map((option) => (
             <option key={option.id} value={option.id}>
-              {option.label || 'Opcao sem titulo'}
+              {option.label || 'Opção sem título'}
             </option>
           ))}
         </Select>

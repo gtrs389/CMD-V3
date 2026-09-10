@@ -24,7 +24,7 @@ interface MenuProps {
  * Menu de acoes acionado por clique/toque.
  * Nunca depende de hover, para funcionar em telas sensiveis ao toque.
  */
-export function Menu({ actions, label = 'Mais acoes', align = 'right' }: MenuProps) {
+export function Menu({ actions, label = 'Mais ações', align = 'right' }: MenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuId = useId();

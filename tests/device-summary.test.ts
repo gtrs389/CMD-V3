@@ -44,16 +44,16 @@ describe('tipo do dispositivo', () => {
     expect(deviceType({ ...vazio, isMobile: true, userAgent: 'Mozilla/5.0 (iPad)' })).toBe('Tablet');
   });
 
-  it('cai para o User-Agent quando nao ha sinal de mobile', () => {
+  it('cai para o User-Agent quando não há sinal de mobile', () => {
     expect(deviceType({ ...vazio, userAgent: 'Android 14; Mobile Safari' })).toBe('Celular');
   });
 
-  it('usa os pontos de toque como ultimo recurso', () => {
+  it('usa os pontos de toque como último recurso', () => {
     expect(deviceType({ ...vazio, maxTouchPoints: 5 })).toBe('Aparelho com toque');
     expect(deviceType({ ...vazio, maxTouchPoints: 0 })).toBe('Computador');
   });
 
-  it('sem nenhum sinal, nao inventa', () => {
+  it('sem nenhum sinal, não inventa', () => {
     expect(deviceType(vazio)).toBe(EMPTY);
   });
 });
@@ -71,7 +71,7 @@ describe('navegador', () => {
     expect(browserName('Mozilla/5.0 (iPhone) Version/17 Safari/605')).toBe('Safari');
   });
 
-  it('sem User-Agent, nao inventa', () => {
+  it('sem User-Agent, não inventa', () => {
     expect(browserName(null)).toBe(EMPTY);
     expect(browserName('algo-desconhecido')).toBe(EMPTY);
   });
@@ -82,12 +82,12 @@ describe('rotulos', () => {
     expect(screenLabel({ ...vazio, screenWidth: 390, screenHeight: 844 })).toBe('390 x 844');
     expect(locationLabel({ ...vazio, country: 'BR', region: 'SP' })).toBe('SP / BR');
     expect(mobileLabel(true)).toBe('Sim');
-    expect(mobileLabel(false)).toBe('Nao');
+    expect(mobileLabel(false)).toBe('Não');
     expect(touchLabel(0)).toBe('0');
-    expect(statusLabel('OBSERVED')).toBe('Em observacao');
+    expect(statusLabel('OBSERVED')).toBe('Aparelho registrado');
   });
 
-  it('marca como ausente o que nao veio', () => {
+  it('marca como ausente o que não veio', () => {
     expect(screenLabel({ ...vazio, screenWidth: 390 })).toBe(EMPTY);
     expect(locationLabel(vazio)).toBe(EMPTY);
     expect(mobileLabel(null)).toBe(EMPTY);

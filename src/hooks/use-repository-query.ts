@@ -42,7 +42,7 @@ export function useRepositoryQuery<T>(loader: () => Promise<T>): QueryState<T> {
         setState({
           data: null,
           loading: false,
-          error: cause instanceof Error ? cause.message : 'Nao foi possivel carregar os dados.',
+          error: cause instanceof Error ? cause.message : 'Não foi possível carregar os dados.',
         });
       });
 

@@ -41,7 +41,7 @@ export async function buildConsentEvidence(clientId: string): Promise<ConsentEvi
     select: PRIVACY_SELECT,
     filters: { id: `eq.${clientId}` },
   });
-  if (!row) throw notFound('Cliente nao encontrado.');
+  if (!row) throw notFound('Cliente não encontrado.');
 
   const snapshot = canonicalPrivacyText(row);
 

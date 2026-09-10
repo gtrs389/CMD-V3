@@ -79,7 +79,7 @@ export function FieldRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
-            {field.label || 'Campo sem titulo'}
+            {field.label || 'Campo sem título'}
           </p>
           {system ? (
             <Badge tone="neutral">
@@ -92,7 +92,7 @@ export function FieldRow({
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <Badge tone="brand">{FIELD_TYPE_LABELS[field.type]}</Badge>
           <Badge tone={field.required ? 'warning' : 'neutral'}>
-            {field.required ? 'Obrigatorio' : 'Opcional'}
+            {field.required ? 'Obrigatório' : 'Opcional'}
           </Badge>
           {!field.enabled ? <Badge tone="neutral">Desativado</Badge> : null}
           {responseCount > 0 ? (
@@ -121,7 +121,7 @@ export function FieldRow({
           onClick={() => onMove(index, index + 1)}
         />
         <Menu
-          label={`Acoes do campo ${field.label}`}
+          label={`Ações do campo ${field.label}`}
           actions={[
             {
               id: 'editar',

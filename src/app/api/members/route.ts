@@ -21,11 +21,11 @@ export async function POST(request: NextRequest) {
     const input = await readJson(request, memberCreateSchema);
 
     const client = await getClient(input.clientId);
-    if (!client) throw notFound('Cliente nao encontrado.');
+    if (!client) throw notFound('Cliente não encontrado.');
 
     const { privacy } = client.form;
     if (privacy.enabled && privacy.requireConsent && !input.consentAt) {
-      throw badRequest('E necessario registrar o aceite do aviso de privacidade.');
+      throw badRequest('E necessário registrar o aceite do aviso de privacidade.');
     }
 
     return jsonOk({ member: await createMember({ ...input, source: 'admin' }) }, 201);

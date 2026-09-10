@@ -42,13 +42,13 @@ export function formatRelative(iso: string | null | undefined): string {
   const minutes = Math.round(diffMs / 60000);
 
   if (minutes < 1) return 'agora';
-  if (minutes < 60) return `ha ${minutes} min`;
+  if (minutes < 60) return `há ${minutes} min`;
 
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `ha ${hours} h`;
+  if (hours < 24) return `há ${hours} h`;
 
   const days = Math.round(hours / 24);
-  if (days < 7) return days === 1 ? 'ontem' : `ha ${days} dias`;
+  if (days < 7) return days === 1 ? 'ontem' : `há ${days} dias`;
 
   return formatDate(iso);
 }

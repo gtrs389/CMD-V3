@@ -27,11 +27,11 @@ export async function login(email: string, password: string): Promise<LoginResul
     };
 
     if (!response.ok) {
-      return { ok: false, message: data.message ?? 'Nao foi possivel entrar. Tente novamente.' };
+      return { ok: false, message: data.message ?? 'Não foi possível entrar. Tente novamente.' };
     }
     return { ok: true, user: data.user };
   } catch {
-    return { ok: false, message: 'Falha de conexao. Verifique sua rede e tente novamente.' };
+    return { ok: false, message: 'Falha de conexão. Verifique sua rede e tente novamente.' };
   }
 }
 

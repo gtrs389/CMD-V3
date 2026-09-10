@@ -16,12 +16,12 @@ export class ApiError extends Error {
   }
 }
 
-export const notFound = (message = 'Registro nao encontrado.') => new ApiError(404, message);
-export const unauthorized = (message = 'Sessao expirada. Entre novamente.') =>
+export const notFound = (message = 'Registro não encontrado.') => new ApiError(404, message);
+export const unauthorized = (message = 'Sessão expirada. Entre novamente.') =>
   new ApiError(401, message);
-export const forbidden = (message = 'Voce nao tem permissao para esta acao.') =>
+export const forbidden = (message = 'Você não tem permissão para esta ação.') =>
   new ApiError(403, message);
-export const badRequest = (message = 'Dados invalidos.') => new ApiError(400, message);
+export const badRequest = (message = 'Dados inválidos.') => new ApiError(400, message);
 
 export function jsonError(status: number, message: string): NextResponse {
   return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -40,17 +40,17 @@ export function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof MediaError) return jsonError(400, error.message);
 
   if (error instanceof SupabaseConfigError) {
-    console.error('[cmd] Supabase nao configurado:', error.message);
-    return jsonError(503, 'Servico indisponivel. Configuracao do banco ausente.');
+    console.error('[cmd] Supabase não configurado:', error.message);
+    return jsonError(503, 'Serviço indisponível. Configuração do banco ausente.');
   }
 
   if (error instanceof SupabaseRequestError) {
     console.error('[cmd] Erro no banco:', error.code, error.message);
-    if (error.isUniqueViolation) return jsonError(409, 'Ja existe um registro com estes dados.');
+    if (error.isUniqueViolation) return jsonError(409, 'Já existe um registro com estes dados.');
     if (error.status === 503) {
-      return jsonError(503, 'Falha de conexao com o banco. Tente novamente.');
+      return jsonError(503, 'Falha de conexão com o banco. Tente novamente.');
     }
-    return jsonError(500, 'Nao foi possivel concluir a operacao.');
+    return jsonError(500, 'Não foi possível concluir a operação.');
   }
 
   console.error('[cmd] Erro inesperado:', error);
@@ -63,13 +63,13 @@ export async function readJson<T>(request: Request, schema: z.ZodType<T>): Promi
   try {
     raw = await request.json();
   } catch {
-    throw badRequest('Corpo da requisicao invalido.');
+    throw badRequest('Corpo da requisição inválido.');
   }
 
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const first = parsed.error.issues[0];
-    throw badRequest(first?.message ?? 'Dados invalidos.');
+    throw badRequest(first?.message ?? 'Dados inválidos.');
   }
   return parsed.data;
 }

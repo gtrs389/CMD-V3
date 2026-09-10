@@ -42,7 +42,7 @@ export function UserMenu() {
       <ConfirmDialog
         open={confirming}
         title="Sair do painel"
-        description="Voce precisara entrar novamente para acessar as areas administrativas."
+        description="Você precisará entrar novamente para acessar as áreas administrativas."
         confirmLabel="Sair"
         tone="brand"
         onCancel={() => setConfirming(false)}

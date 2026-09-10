@@ -20,7 +20,7 @@ export interface ClientRepository {
   list(): Promise<Client[]>;
   listSummaries(): Promise<ClientSummary[]>;
   getById(id: string): Promise<Client | null>;
-  /** Busca pelo token opaco do convite (rota publica). */
+  /** Busca pelo token opaco do convite (rota pública). */
   getByToken(token: string): Promise<Client | null>;
   create(input: ClientInput): Promise<Client>;
   update(id: string, input: Partial<ClientInput>): Promise<Client>;

@@ -69,7 +69,7 @@ export function DashboardView() {
     <div className="space-y-6">
       <PageHeader
         title="Painel"
-        description="Resumo da operacao com os dados registrados no sistema."
+        description="Resumo da operação com os dados registrados no sistema."
         actions={
           <>
             <Button onClick={() => setCreating(true)}>
@@ -130,7 +130,7 @@ export function DashboardView() {
           <StatCard
             label="Cadastros recentes"
             value={recentCount}
-            hint={`Integrantes cadastrados nos ultimos ${RECENT_WINDOW_DAYS} dias.`}
+            hint={`Integrantes cadastrados nos últimos ${RECENT_WINDOW_DAYS} dias.`}
             icon={<UserPlus className="size-5" />}
             loading={loading}
           />
@@ -141,7 +141,7 @@ export function DashboardView() {
         <EmptyState
           icon={<Building2 className="size-6" />}
           title="Nenhum cliente cadastrado ainda"
-          description="Cadastre o primeiro cliente para montar o formulario de equipe e gerar o link de convite."
+          description="Cadastre o primeiro cliente para montar o formulário de equipe e gerar o link de convite."
           action={
             <Button onClick={() => setCreating(true)}>
               <Plus aria-hidden="true" className="size-4" />

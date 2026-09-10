@@ -22,7 +22,7 @@ interface MemberDeviceSectionProps {
   memberId: string;
 }
 
-const EMPTY_MESSAGE = 'Informacoes do aparelho nao disponiveis.';
+const EMPTY_MESSAGE = 'Informações do aparelho não disponíveis.';
 
 /**
  * Sinais tecnicos do aparelho usado no cadastro.
@@ -38,7 +38,7 @@ export function MemberDeviceSection({ memberId }: MemberDeviceSectionProps) {
     <section>
       <h4 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
         <MonitorSmartphone aria-hidden="true" className="size-4 text-brand-700" />
-        Aparelho e seguranca
+        Aparelho e segurança
       </h4>
 
       {loading ? (
@@ -67,14 +67,14 @@ function DeviceCard({ device }: { device: MemberDevice }) {
     ['Tipo do dispositivo', deviceType(device)],
     ['Sistema / plataforma', textOrEmpty(device.platform)],
     ['Navegador', browserName(device.userAgent)],
-    ['Dispositivo movel', mobileLabel(device.isMobile)],
+    ['Dispositivo móvel', mobileLabel(device.isMobile)],
     ['Idioma', textOrEmpty(device.language)],
-    ['Fuso horario', textOrEmpty(device.timezone)],
-    ['Resolucao da tela', screenLabel(device)],
+    ['Fuso horário', textOrEmpty(device.timezone)],
+    ['Resolução da tela', screenLabel(device)],
     ['Pontos de toque', touchLabel(device.maxTouchPoints)],
-    ['Pais / regiao', locationLabel(device)],
+    ['País / região', locationLabel(device)],
     ['Primeiro registro', formatDateTime(device.firstSeenAt)],
-    ['Ultima atividade', formatDateTime(device.lastSeenAt)],
+    ['Última atividade', formatDateTime(device.lastSeenAt)],
   ];
 
   return (

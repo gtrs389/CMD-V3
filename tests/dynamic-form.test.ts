@@ -35,7 +35,7 @@ describe('schema dinamico', () => {
     expect(paths).toContain(systemField(config, 'phone').id);
   });
 
-  it('recusa telefone fora do padrao brasileiro', () => {
+  it('recusa telefone fora do padrão brasileiro', () => {
     const config = configWith();
     const values = {
       ...emptyValues(config),
@@ -47,7 +47,7 @@ describe('schema dinamico', () => {
     expect(result.success).toBe(false);
   });
 
-  it('aceita o preenchimento minimo valido', () => {
+  it('aceita o preenchimento mínimo valido', () => {
     const config = configWith();
     const values = {
       ...emptyValues(config),
@@ -109,7 +109,7 @@ describe('conversao para persistencia', () => {
     expect(payload.responses).toEqual([{ fieldId: extra.id, value: 32 }]);
   });
 
-  it('mantem a resposta ligada ao ID mesmo apos renomear o campo', () => {
+  it('mantem a resposta ligada ao ID mesmo após renomear o campo', () => {
     const extra: CustomField = { ...createField('text'), label: 'Bairro', order: 3 };
     const config = configWith([extra]);
 
@@ -123,7 +123,7 @@ describe('conversao para persistencia', () => {
     const renamed: ClientFormConfig = {
       ...config,
       fields: config.fields.map((field) =>
-        field.id === extra.id ? { ...field, label: 'Regiao de atuacao' } : field,
+        field.id === extra.id ? { ...field, label: 'Região de atuação' } : field,
       ),
     };
 
@@ -145,7 +145,7 @@ describe('conversao para persistencia', () => {
 });
 
 describe('formatacao de respostas', () => {
-  it('resolve rotulos de lista e multipla escolha', () => {
+  it('resolve rotulos de lista e múltipla escolha', () => {
     const select = createField('select');
     select.options = [
       { id: 'o1', label: 'Norte' },
@@ -159,6 +159,6 @@ describe('formatacao de respostas', () => {
 
     const checkbox = createField('checkbox');
     expect(formatResponse(checkbox, true)).toBe('Sim');
-    expect(formatResponse(checkbox, false)).toBe('Nao');
+    expect(formatResponse(checkbox, false)).toBe('Não');
   });
 });

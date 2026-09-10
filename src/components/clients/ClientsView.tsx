@@ -35,7 +35,7 @@ export function ClientsView() {
     <div className="space-y-6">
       <PageHeader
         title="Clientes"
-        description="Cadastre clientes, configure o formulario da equipe e compartilhe o link de convite."
+        description="Cadastre clientes, configure o formulário da equipe e compartilhe o link de convite."
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" className="size-4" />
@@ -75,7 +75,7 @@ export function ClientsView() {
         <EmptyState
           icon={<Building2 className="size-6" />}
           title="Nenhum cliente cadastrado"
-          description="Cadastre o primeiro cliente para gerar o formulario de equipe e o link de convite."
+          description="Cadastre o primeiro cliente para gerar o formulário de equipe e o link de convite."
           action={
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button onClick={() => setCreating(true)}>

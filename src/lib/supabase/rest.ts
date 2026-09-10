@@ -68,7 +68,7 @@ async function request<T>(
   try {
     response = await fetch(url, { ...init, headers, cache: 'no-store' });
   } catch {
-    throw new SupabaseRequestError('Falha de conexao com o banco de dados.', 503, null);
+    throw new SupabaseRequestError('Falha de conexão com o banco de dados.', 503, null);
   }
 
   if (!response.ok) {
@@ -124,7 +124,7 @@ export async function insertOne<T>(
   select = '*',
 ): Promise<T> {
   const [row] = await insertRows<T>(table, [value], select);
-  if (!row) throw new SupabaseRequestError('Registro nao pode ser criado.', 500, null);
+  if (!row) throw new SupabaseRequestError('Registro não pode ser criado.', 500, null);
   return row;
 }
 

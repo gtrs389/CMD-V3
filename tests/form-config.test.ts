@@ -10,14 +10,14 @@ import {
 } from '@/lib/domain/form-config';
 import type { Member } from '@/lib/types';
 
-describe('configuracao padrao', () => {
-  it('cria os tres campos nativos na ordem correta', () => {
+describe('configuração padrão', () => {
+  it('cria os três campos nativos na ordem correta', () => {
     const config = createDefaultFormConfig();
     expect(config.fields.map((field) => field.systemKey)).toEqual(['photo', 'name', 'phone']);
     expect(config.fields.map((field) => field.order)).toEqual([0, 1, 2]);
   });
 
-  it('protege os campos nativos contra exclusao', () => {
+  it('protege os campos nativos contra exclusão', () => {
     const config = createDefaultFormConfig();
     expect(config.fields.every((field) => canDeleteField(field))).toBe(false);
     expect(canDeleteField(createField('text'))).toBe(true);
@@ -33,7 +33,7 @@ describe('reordenacao', () => {
     expect(moved.map((field) => field.order)).toEqual([0, 1, 2]);
   });
 
-  it('ignora indices invalidos sem perder campos', () => {
+  it('ignora indices inválidos sem perder campos', () => {
     const fields = reindex([createField('text'), createField('email')]);
     expect(moveField(fields, 0, 5)).toHaveLength(2);
     expect(moveField(fields, -1, 0)).toHaveLength(2);
@@ -41,12 +41,12 @@ describe('reordenacao', () => {
 });
 
 describe('duplicacao', () => {
-  it('gera novos IDs para o campo e para as opcoes', () => {
-    const original = { ...createField('select'), label: 'Regiao' };
+  it('gera novos IDs para o campo e para as opções', () => {
+    const original = { ...createField('select'), label: 'Região' };
     const copy = duplicateField(original);
 
     expect(copy.id).not.toBe(original.id);
-    expect(copy.label).toBe('Regiao (copia)');
+    expect(copy.label).toBe('Região (cópia)');
     copy.options.forEach((option, index) => {
       expect(option.id).not.toBe(original.options[index].id);
     });

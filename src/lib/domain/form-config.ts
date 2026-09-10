@@ -17,25 +17,25 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   textarea: 'Texto longo',
   phone: 'Telefone',
   email: 'E-mail',
-  number: 'Numero',
+  number: 'Número',
   date: 'Data',
-  select: 'Lista de selecao',
-  multiselect: 'Multipla escolha',
+  select: 'Lista de seleção',
+  multiselect: 'Múltipla escolha',
   checkbox: 'Checkbox',
   photo: 'Foto ou imagem',
 };
 
 export const FIELD_TYPE_HINTS: Record<FieldType, string> = {
   text: 'Uma linha. Ideal para nomes, apelidos e identificadores.',
-  textarea: 'Varias linhas. Ideal para observacoes.',
-  phone: 'Mascara brasileira e normalizacao automatica.',
-  email: 'Validacao de endereco de e-mail.',
-  number: 'Aceita apenas valores numericos.',
-  date: 'Seletor de data do proprio aparelho.',
-  select: 'Uma opcao entre varias, em lista suspensa.',
-  multiselect: 'Varias opcoes ao mesmo tempo.',
-  checkbox: 'Confirmacao unica de sim ou nao.',
-  photo: 'Camera ou galeria, com previa antes do envio.',
+  textarea: 'Várias linhas. Ideal para observações.',
+  phone: 'Máscara brasileira e normalização automática.',
+  email: 'Validação de endereço de e-mail.',
+  number: 'Aceita apenas valores numéricos.',
+  date: 'Seletor de data do próprio aparelho.',
+  select: 'Uma opção entre várias, em lista suspensa.',
+  multiselect: 'Várias opções ao mesmo tempo.',
+  checkbox: 'Confirmação única de sim ou não.',
+  photo: 'Câmera ou galeria, com prévia antes do envio.',
 };
 
 /** Campos nativos: existem em todo formulario e nao podem ser excluidos. */
@@ -52,7 +52,7 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     type: 'photo',
     label: 'Foto',
     placeholder: '',
-    helpText: 'Use a camera ou escolha uma imagem da galeria.',
+    helpText: 'Use a câmera ou escolha uma imagem da galeria.',
     required: false,
   },
   {
@@ -162,7 +162,7 @@ export function duplicateField(field: CustomField): CustomField {
     ...field,
     id: createId('fld'),
     systemKey: null,
-    label: `${field.label} (copia)`.slice(0, 80),
+    label: `${field.label} (cópia)`.slice(0, 80),
     options: field.options.map((option) => ({ ...option, id: createId('opt') })),
   };
 }

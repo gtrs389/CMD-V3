@@ -50,7 +50,7 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
       await clientRepository.updateForm(client.id, { fields: reindex(next) });
       toast.success(message);
     } catch {
-      toast.error('Nao foi possivel salvar o formulario.');
+      toast.error('Não foi possível salvar o formulário.');
     }
   }
 
@@ -109,7 +109,7 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
 
   const views: Array<{ id: View; label: string; icon: React.ReactNode }> = [
     { id: 'campos', label: 'Campos', icon: <ListPlus className="size-4" /> },
-    { id: 'previa', label: 'Pre-visualizacao', icon: <Eye className="size-4" /> },
+    { id: 'previa', label: 'Pre-visualização', icon: <Eye className="size-4" /> },
     { id: 'ajustes', label: 'Ajustes', icon: <Settings2 className="size-4" /> },
   ];
 
@@ -147,7 +147,7 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
         <Card>
           <CardHeader>
             <div className="min-w-0">
-              <CardTitle>Campos do formulario</CardTitle>
+              <CardTitle>Campos do formulário</CardTitle>
               <CardDescription>
                 Arraste para reordenar no computador ou use as setas no celular.
               </CardDescription>
@@ -159,7 +159,7 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
                 compact
                 icon={<ListPlus className="size-5" />}
                 title="Nenhum campo configurado"
-                description="Adicione os campos que a equipe devera preencher."
+                description="Adicione os campos que a equipe deverá preencher."
                 action={<Button onClick={openNewField}>Adicionar campo</Button>}
               />
             ) : (
@@ -207,7 +207,7 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
       <ConfirmDialog
         open={removing !== null}
         title="Excluir campo"
-        description={`O campo "${removing?.label ?? ''}" sera removido do formulario publico.`}
+        description={`O campo "${removing?.label ?? ''}" será removido do formulário público.`}
         confirmLabel="Excluir campo"
         onCancel={() => setRemoving(null)}
         onConfirm={handleDelete}
@@ -215,12 +215,12 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
           removingResponses > 0 ? (
             <p className="rounded-control bg-warning-50 p-3 text-sm text-warning-600">
               <strong>{removingResponses}</strong>{' '}
-              {removingResponses === 1 ? 'integrante ja respondeu' : 'integrantes ja responderam'}{' '}
+              {removingResponses === 1 ? 'integrante já respondeu' : 'integrantes já responderam'}{' '}
               a este campo. As respostas deixarao de ser exibidas nas fichas.
             </p>
           ) : (
             <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
-              Nenhum integrante respondeu a este campo ate agora.
+              Nenhum integrante respondeu a este campo até agora.
             </p>
           )
         }

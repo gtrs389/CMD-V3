@@ -14,10 +14,10 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     return await currentUser();
   } catch (error) {
     if (error instanceof SupabaseConfigError) {
-      console.error('[auth] Supabase nao configurado:', error.message);
+      console.error('[auth] Supabase não configurado:', error.message);
       return null;
     }
-    console.error('[auth] Nao foi possivel validar a sessao:', error);
+    console.error('[auth] Não foi possível validar a sessão:', error);
     return null;
   }
 }

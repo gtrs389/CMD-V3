@@ -7,7 +7,7 @@ import { deviceSignalsSchema } from '@/lib/validation/server.schema';
  */
 
 describe('sinais do aparelho', () => {
-  it('aceita a ausencia total de sinais', () => {
+  it('aceita a ausência total de sinais', () => {
     const parsed = deviceSignalsSchema.safeParse({});
     expect(parsed.success).toBe(true);
   });
@@ -34,7 +34,7 @@ describe('sinais do aparelho', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('descarta qualquer campo nao previsto', () => {
+  it('descarta qualquer campo não previsto', () => {
     const parsed = deviceSignalsSchema.safeParse({
       language: 'pt-BR',
       canvasFingerprint: 'abc',

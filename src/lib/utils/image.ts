@@ -26,11 +26,11 @@ function isAcceptedType(type: string): boolean {
 
 export function validateImageFile(file: File): void {
   if (!isAcceptedType(file.type)) {
-    throw new ImageError('Formato nao suportado. Envie uma imagem JPG, PNG ou WEBP.');
+    throw new ImageError('Formato não suportado. Envie uma imagem JPG, PNG ou WEBP.');
   }
   if (file.size > appConfig.limits.maxUploadBytes) {
     const maxMb = Math.round(appConfig.limits.maxUploadBytes / (1024 * 1024));
-    throw new ImageError(`Imagem muito grande. O limite e de ${maxMb} MB.`);
+    throw new ImageError(`Imagem muito grande. O limite é de ${maxMb} MB.`);
   }
 }
 
@@ -38,7 +38,7 @@ function readAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new ImageError('Nao foi possivel ler a imagem.'));
+    reader.onerror = () => reject(new ImageError('Não foi possível ler a imagem.'));
     reader.readAsDataURL(file);
   });
 }
@@ -47,7 +47,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new ImageError('Arquivo de imagem invalido.'));
+    img.onerror = () => reject(new ImageError('Arquivo de imagem inválido.'));
     img.src = src;
   });
 }
@@ -84,7 +84,7 @@ export async function processImageFile(
 
   const context = canvas.getContext('2d');
   if (!context) {
-    throw new ImageError('Nao foi possivel processar a imagem neste navegador.');
+    throw new ImageError('Não foi possível processar a imagem neste navegador.');
   }
   context.drawImage(image, 0, 0, width, height);
 

@@ -21,7 +21,7 @@ export function CopyField({ value, label, actionLabel = 'Copiar' }: CopyFieldPro
   async function handleCopy() {
     const ok = await copyText(value);
     if (!ok) {
-      toast.error('Nao foi possivel copiar. Selecione o texto manualmente.');
+      toast.error('Não foi possível copiar. Selecione o texto manualmente.');
       return;
     }
     setCopied(true);

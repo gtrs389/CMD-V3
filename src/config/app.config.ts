@@ -16,9 +16,9 @@ export const appConfig = {
   name: 'Cadastro Mobilização Digital',
   /** Sigla usada em espacos compactos (menu recolhido, marca, rodapes). */
   shortName: 'CMD',
-  tagline: 'Cadastro e gestao de equipes',
+  tagline: 'Cadastro e gestão de equipes',
   description:
-    'Painel administrativo para cadastro de clientes, montagem de formularios e gestao de equipes.',
+    'Painel administrativo para cadastro de clientes, montagem de formulários e gestão de equipes.',
 
   /**
    * Logotipo. Troque para `{ kind: 'image', src: '/logo.svg' }`
@@ -54,7 +54,7 @@ export const appConfig = {
     enabledByDefault: false,
     defaultTitle: 'Aviso de privacidade',
     defaultText:
-      'Texto provisorio. Descreva aqui quem coleta os dados, com qual finalidade, por quanto tempo serao mantidos e como a pessoa pode solicitar exclusao. Revise com o responsavel juridico antes de publicar.',
+      'Texto provisório. Descreva aqui quem coleta os dados, com qual finalidade, por quanto tempo serão mantidos e como a pessoa pode solicitar exclusão. Revise com o responsável jurídico antes de publicar.',
     defaultConsentLabel: 'Li e concordo com o aviso de privacidade.',
   },
 } as const;

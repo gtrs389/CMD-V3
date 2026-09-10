@@ -25,13 +25,13 @@ export interface MemberDevice {
 }
 
 export const DEVICE_STATUS_LABELS: Record<DeviceStatus, string> = {
-  OBSERVED: 'Em observacao',
-  TRUSTED: 'Confiavel',
+  OBSERVED: 'Aparelho registrado',
+  TRUSTED: 'Confiável',
   BLOCKED: 'Bloqueado',
 };
 
 /** Valor ausente aparece sempre do mesmo jeito. */
-export const EMPTY = 'Nao informado';
+export const EMPTY = 'Não informado';
 
 export function statusLabel(status: DeviceStatus): string {
   return DEVICE_STATUS_LABELS[status] ?? EMPTY;
@@ -85,7 +85,7 @@ export function locationLabel(device: MemberDevice): string {
 
 export function mobileLabel(isMobile: boolean | null): string {
   if (isMobile === null) return EMPTY;
-  return isMobile ? 'Sim' : 'Nao';
+  return isMobile ? 'Sim' : 'Não';
 }
 
 export function touchLabel(points: number | null): string {

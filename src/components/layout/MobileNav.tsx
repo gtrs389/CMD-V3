@@ -63,7 +63,7 @@ export function MobileNav() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Menu de navegacao"
+            aria-label="Menu de navegação"
             className="safe-top relative h-full w-[min(18rem,85vw)] animate-slide-right border-r border-line bg-surface shadow-overlay"
           >
             <IconButton

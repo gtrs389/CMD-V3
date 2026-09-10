@@ -11,19 +11,19 @@ describe('permissoes', () => {
     expect(can(admin, 'form.manage')).toBe(true);
   });
 
-  it('nao da painel ao perfil EQUIPE nesta etapa', () => {
+  it('não da painel ao perfil EQUIPE nesta etapa', () => {
     expect(hasPanelAccess(equipe)).toBe(false);
     expect(can(equipe, 'client.view')).toBe(false);
     expect(can(equipe, 'member.view')).toBe(false);
   });
 
-  it('permite apenas o envio publico para EQUIPE e visitantes', () => {
+  it('permite apenas o envio público para EQUIPE e visitantes', () => {
     expect(can(equipe, 'invite.submit')).toBe(true);
     expect(can(null, 'invite.submit')).toBe(true);
     expect(can(null, 'admin.access')).toBe(false);
   });
 
-  it('visitante nao herda nenhuma permissao administrativa', () => {
+  it('visitante não herda nenhuma permissão administrativa', () => {
     expect(permissionsOf(null)).toEqual(['invite.submit']);
   });
 });

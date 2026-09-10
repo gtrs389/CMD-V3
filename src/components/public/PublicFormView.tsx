@@ -25,7 +25,7 @@ import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
  * Aparece sempre, independente do aviso de privacidade do cliente.
  */
 const DEVICE_NOTICE =
-  'Ao enviar, registramos dados tecnicos do aparelho e da conexao para seguranca e prevencao de fraude.';
+  'Ao enviar, registramos dados técnicos do aparelho e da conexão para segurança e prevenção de fraude.';
 
 interface PublicFormViewProps {
   client: Client;
@@ -110,7 +110,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
       toast.error(
         error instanceof NetworkError
           ? error.message
-          : 'Nao foi possivel enviar o cadastro. Tente novamente.',
+          : 'Não foi possível enviar o cadastro. Tente novamente.',
       );
     } finally {
       setSubmitting(false);
@@ -209,7 +209,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
           </Button>
 
           <p className="text-center text-xs text-ink-500">
-            Seu preenchimento fica salvo neste aparelho ate o envio.
+            Seu preenchimento fica salvo neste aparelho até o envio.
           </p>
 
           <p className="text-center text-xs text-ink-500">{DEVICE_NOTICE}</p>

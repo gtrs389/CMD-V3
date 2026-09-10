@@ -16,11 +16,11 @@ describe('normalizePhone', () => {
 });
 
 describe('maskPhone', () => {
-  it('aplica a mascara de celular', () => {
+  it('aplica a máscara de celular', () => {
     expect(maskPhone('11987654321')).toBe('(11) 98765-4321');
   });
 
-  it('aplica a mascara de telefone fixo', () => {
+  it('aplica a máscara de telefone fixo', () => {
     expect(maskPhone('1133334444')).toBe('(11) 3333-4444');
   });
 
@@ -36,7 +36,7 @@ describe('isValidPhone', () => {
     expect(isValidPhone('(11) 3333-4444')).toBe(true);
   });
 
-  it('recusa DDD invalido, tamanho errado e celular sem o 9', () => {
+  it('recusa DDD inválido, tamanho errado e celular sem o 9', () => {
     expect(isValidPhone('(01) 98765-4321')).toBe(false);
     expect(isValidPhone('1198765')).toBe(false);
     expect(isValidPhone('11887654321')).toBe(false);
@@ -44,7 +44,7 @@ describe('isValidPhone', () => {
 });
 
 describe('formatPhone', () => {
-  it('devolve o valor original quando nao reconhece', () => {
+  it('devolve o valor original quando não reconhece', () => {
     expect(formatPhone('123')).toBe('123');
   });
 });

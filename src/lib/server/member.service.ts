@@ -67,7 +67,7 @@ async function requireMemberRow(id: string): Promise<MemberRow> {
     select: '*',
     filters: { id: `eq.${id}` },
   });
-  if (!row) throw notFound('Integrante nao encontrado.');
+  if (!row) throw notFound('Integrante não encontrado.');
   return row;
 }
 
