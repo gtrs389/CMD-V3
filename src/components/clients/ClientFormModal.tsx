@@ -157,7 +157,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="cliente-nome" label="Nome" required error={errors.name?.message}>
+            <Field id="cliente-nome" label="Nome do time" required error={errors.name?.message}>
               <Input
                 id="cliente-nome"
                 placeholder="Nome do time"
