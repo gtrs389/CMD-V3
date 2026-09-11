@@ -1,14 +1,19 @@
-import type { StoredImage } from './common';
-import type { ClientFormConfig } from './form-field';
-import type { PersonalInvite } from './invite';
+import type { IsoDate, StoredImage } from './common';
+import type { Client } from './client';
 import type { Member } from './member';
 
 /**
- * Tudo que a pagina "Minha mobilizacao" mostra.
+ * Tudo que a pagina do integrante mostra.
  *
  * Montado no servidor a partir da sessao: o identificador do integrante e o
  * da operacao nunca vem da URL nem do corpo da requisicao. A lista traz
- * somente os recrutados diretos, e o formulario vem apenas para leitura.
+ * somente os recrutados diretos.
+ *
+ * `client` tem exatamente o mesmo formato usado na pagina do candidato, para
+ * que os mesmos quadros sejam reaproveitados sem nenhuma variante: a
+ * diferenca esta no que o servidor coloca dentro dele. O convite e o link
+ * PESSOAL do integrante, e o formulario e o configurado pelo candidato,
+ * sempre em leitura.
  */
 export interface TeamOverview {
   /** Identificacao do proprio integrante, para o cabecalho. */
@@ -17,13 +22,12 @@ export interface TeamOverview {
     name: string;
     email: string;
     photo: StoredImage | null;
+    /** Operacao a que ele pertence. */
+    candidateName: string;
+    /** Data do cadastro dele. */
+    joinedAt: IsoDate;
   };
-  /** Nome da operacao a que o integrante pertence. */
-  candidateName: string;
+  client: Client;
   /** Cadastrados diretamente pelo link deste integrante. */
   members: Member[];
-  /** Formulario configurado pelo candidato. Somente leitura. */
-  form: ClientFormConfig;
-  /** Link pessoal de recrutamento. */
-  invite: PersonalInvite;
 }

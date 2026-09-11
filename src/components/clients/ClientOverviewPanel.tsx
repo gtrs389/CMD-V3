@@ -376,7 +376,7 @@ function InviteCard({
           <Link2 className="size-[1.125rem]" />
         </span>
         <h2 id="link-de-convite" className="text-[0.8125rem] font-semibold text-ink-900">
-          Link de convite
+          Meu link de cadastro
         </h2>
         <span
           className={
@@ -403,14 +403,14 @@ function InviteCard({
             <input
               readOnly
               value={url}
-              aria-label="Link de convite"
+              aria-label="Meu link de cadastro"
               onFocus={(event) => event.currentTarget.select()}
               className="min-h-11 w-full min-w-0 bg-transparent font-mono text-xs text-ink-700 focus:outline-none"
             />
             <button
               type="button"
               onClick={handleCopy}
-              aria-label="Copiar link de convite"
+              aria-label="Copiar meu link de cadastro"
               className="flex size-11 shrink-0 items-center justify-center rounded-control text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900"
             >
               {copied ? (
@@ -422,7 +422,7 @@ function InviteCard({
           </div>
         ) : (
           <p className="flex min-h-11 min-w-0 flex-1 items-center rounded-control border border-line bg-ink-50 px-3 text-xs text-ink-500">
-            Link não visível. Gere um novo na aba Convite.
+            Link ainda não disponível.
           </p>
         )}
 
@@ -431,14 +431,14 @@ function InviteCard({
           onClick={onManage}
           className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
         >
-          {canManage ? 'Gerenciar convite' : 'Ver convite'}
+          {canManage ? 'Gerenciar link' : 'Ver link'}
         </button>
       </div>
 
       <p className="mt-2 text-[0.6875rem] text-ink-500">
         {client.invite.active
-          ? 'Recrutamento ativo: os links do candidato e da equipe aceitam cadastros.'
-          : 'Recrutamento desativado: nenhum link desta candidatura aceita cadastros.'}
+          ? 'Quem se cadastrar por este link entra na sua equipe.'
+          : 'Recrutamento desativado: nenhum link aceita cadastros no momento.'}
       </p>
     </section>
   );

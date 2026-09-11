@@ -23,10 +23,12 @@ import type { TeamSession } from './guard';
  * pessoal do proprio integrante.
  */
 export async function getTeamOverview(session: TeamSession): Promise<TeamOverview> {
-  const member = await selectOne<Pick<MemberRow, 'id' | 'client_id' | 'name' | 'email' | 'photo_path'>>(
+  const member = await selectOne<
+    Pick<MemberRow, 'id' | 'client_id' | 'name' | 'email' | 'photo_path' | 'created_at'>
+  >(
     TABLES.members,
     {
-      select: 'id,client_id,name,email,photo_path',
+      select: 'id,client_id,name,email,photo_path,created_at',
       // O par integrante + operacao vem da sessao: um nao vale sem o outro.
       filters: { id: `eq.${session.memberId}`, client_id: `eq.${session.candidateId}` },
     },
@@ -56,16 +58,34 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       name: member.name,
       email: member.email ?? session.email,
       photo,
+      candidateName: client.name,
+      joinedAt: member.created_at,
     },
-    candidateName: client.name,
+
+    // Mesmo formato da pagina do candidato, com o escopo do integrante: a
+    // identidade e a dele, o formulario e o da operacao (leitura) e o
+    // convite e o link PESSOAL dele.
+    client: {
+      id: client.id,
+      name: member.name,
+      email: member.email ?? session.email,
+      photo,
+      notes: '',
+      createdAt: member.created_at,
+      updatedAt: member.created_at,
+      invite: {
+        // O link continua o mesmo depois de sair, entrar de novo, trocar de
+        // aparelho ou recarregar: ele e lido do banco, nao do navegador.
+        token: invite?.token ?? null,
+        // O recrutamento da operacao manda: desligado pelo ADMIN, o link
+        // pessoal para de aceitar cadastros junto com todos os outros.
+        active: client.recruiting_active && (invite?.active ?? false),
+        createdAt: invite?.created_at ?? member.created_at,
+        rotatedAt: invite?.rotated_at ?? null,
+      },
+      form: toFormConfig(client, fields),
+    },
+
     members,
-    form: toFormConfig(client, fields),
-    invite: {
-      // O link continua o mesmo depois de sair, entrar de novo, trocar de
-      // aparelho ou recarregar: ele e lido do banco, nao do navegador.
-      token: invite?.token ?? null,
-      active: invite?.active ?? false,
-      operationActive: client.recruiting_active,
-    },
   };
 }

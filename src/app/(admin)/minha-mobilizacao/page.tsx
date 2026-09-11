@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { can } from '@/lib/permissions';
 import { homePathFor } from '@/lib/auth/constants';
 import { requirePageUser } from '@/lib/auth/server';
-import { TeamOverviewView } from '@/components/team/TeamOverviewView';
+import { TeamDetailView } from '@/components/team/TeamDetailView';
 
 export const metadata: Metadata = {
   title: 'Minha mobilização',
@@ -19,5 +19,5 @@ export default async function MyMobilizationPage() {
   const user = await requirePageUser();
   if (!can(user, 'team.access')) redirect(homePathFor(user));
 
-  return <TeamOverviewView />;
+  return <TeamDetailView />;
 }
