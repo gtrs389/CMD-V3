@@ -1,3 +1,5 @@
+import { appConfig } from '@/config/app.config';
+
 /** Remove acentos e normaliza para comparacao de busca. */
 export function normalizeSearch(value: string): string {
   return (value ?? '')
@@ -26,3 +28,10 @@ export function pluralize(count: number, singular: string, plural: string): stri
   return count === 1 ? singular : plural;
 }
 
+
+const numberFormatter = new Intl.NumberFormat(appConfig.locale);
+
+/** Numero com separador de milhar do idioma configurado. */
+export function formatNumber(value: number): string {
+  return numberFormatter.format(value);
+}
