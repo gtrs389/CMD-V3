@@ -10,7 +10,7 @@ import { resolveLocation } from '@/lib/server/map-location.service';
 
 export async function GET() {
   try {
-    // Lista de todas as equipes: apenas o ADMIN enxerga mais de um candidato.
+    // Lista de todas as equipes: apenas o ADMIN enxerga mais de um time.
     await requirePermission('client.list');
     return jsonOk({ members: await listAllMembers() });
   } catch (error) {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const user = await requireClientAccess('member.create', input.clientId);
 
     const client = await getClient(input.clientId);
-    if (!client) throw notFound('Candidato não encontrado.');
+    if (!client) throw notFound('Time não encontrado.');
 
     const { privacy } = client.form;
     if (privacy.enabled && privacy.requireConsent && !input.consentAt) {

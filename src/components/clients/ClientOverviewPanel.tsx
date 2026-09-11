@@ -48,7 +48,7 @@ interface ClientOverviewPanelProps {
    */
   onOpenForm?: () => void;
   /**
-   * Exibe o cartao "Meu link de cadastro". Na pagina do candidato ele sai:
+   * Exibe o cartao "Meu link de cadastro". Na pagina do time ele sai:
    * o link fica no botao do cabecalho, ao lado do nome.
    */
   showInviteCard?: boolean;
@@ -61,7 +61,7 @@ function startOfDay(date: Date): number {
 }
 
 /**
- * Visao geral do candidato.
+ * Visao geral do time.
  *
  * Todos os numeros vem dos cadastros reais da equipe: nada aqui e estimado.
  * O cartao "Formulário de cadastro" e a unica parte exclusiva do ADMIN; sem

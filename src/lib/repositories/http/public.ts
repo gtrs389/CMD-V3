@@ -47,7 +47,7 @@ export async function fetchPublicInvite(token: string): Promise<PublicInviteOutc
  * Envio do formulario publico.
  *
  * A operacao de destino e o responsavel pelo cadastro vem do token do link,
- * resolvidos no servidor. O navegador nunca escolhe para qual candidato o
+ * resolvidos no servidor. O navegador nunca escolhe para qual time o
  * cadastro vai nem quem aparece como responsavel.
  */
 export interface PublicSubmission {

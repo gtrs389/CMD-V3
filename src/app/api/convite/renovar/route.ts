@@ -6,7 +6,7 @@ import { issuePersonalInvite } from '@/lib/server/invite.service';
  * Gera ou renova o PROPRIO link de recrutamento.
  *
  * O dono do link e sempre a sessao autenticada: nenhum identificador de
- * usuario, candidato ou duracao e lido do corpo da requisicao. Quem escolhe
+ * usuario, time ou duracao e lido do corpo da requisicao. Quem escolhe
  * a duracao e somente o ADMIN, em Configuracoes; aqui o prazo e aplicado no
  * banco conforme o PERFIL DO DONO.
  *

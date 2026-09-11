@@ -51,7 +51,7 @@ interface GrantOutcome {
   conflicts: { clientId: string; name: string; email: string }[];
 }
 
-/** Linha da lista: usuario existente, candidato ou integrante sem acesso. */
+/** Linha da lista: usuario existente, time ou integrante sem acesso. */
 interface Row {
   key: string;
   userId: string | null;
@@ -79,8 +79,8 @@ const STATUS_CLASSES: Record<AccessStatus, string> = {
 /**
  * Configuracoes do sistema.
  *
- * Lista ADMINs, candidatos e integrantes da equipe, com nome, e-mail,
- * perfil, candidato, responsavel pelo cadastro e estado do acesso. Nenhum
+ * Lista ADMINs, times e integrantes da equipe, com nome, e-mail,
+ * perfil, time, responsavel pelo cadastro e estado do acesso. Nenhum
  * hash de senha chega ao navegador; a senha temporaria existe apenas na
  * resposta da acao e no modal, e some ao fechar.
  */
@@ -114,7 +114,7 @@ export function SettingsView() {
       self: item.self,
     }));
 
-    const candidatos = (data?.pendingCandidates ?? []).map((item) => ({
+    const times = (data?.pendingCandidates ?? []).map((item) => ({
       key: `c-${item.clientId}`,
       userId: null,
       clientId: item.clientId,
@@ -148,7 +148,7 @@ export function SettingsView() {
       self: false,
     }));
 
-    return [...users, ...candidatos, ...integrantes];
+    return [...users, ...times, ...integrantes];
   }, [data]);
 
   const filtered = useMemo(
@@ -166,7 +166,7 @@ export function SettingsView() {
     [rows, term],
   );
 
-  // Somente candidatos entram na geracao em lote: integrante e sempre
+  // Somente times entram na geracao em lote: integrante e sempre
   // individual, e sem e-mail nao ha acesso a gerar.
   const pendentes = useMemo(
     () => rows.filter((row) => row.role === 'CANDIDATE' && row.status === 'PENDING').length,
@@ -288,8 +288,8 @@ export function SettingsView() {
               id="busca-usuarios"
               type="search"
               value={term}
-              aria-label="Buscar usuários por nome, e-mail, perfil, candidato ou responsável"
-              placeholder="Buscar por nome, e-mail, perfil, candidato ou responsável"
+              aria-label="Buscar usuários por nome, e-mail, perfil, time ou responsável"
+              placeholder="Buscar por nome, e-mail, perfil, time ou responsável"
               onChange={(event) => setTerm(event.target.value)}
               className="min-h-11 w-full rounded-control border border-line bg-surface pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none"
             />
@@ -328,7 +328,7 @@ export function SettingsView() {
             className="border-0 shadow-none"
             icon={<Users className="size-5" />}
             title="Nenhum usuário cadastrado"
-            description="Cadastre um candidato para gerar o primeiro acesso."
+            description="Cadastre um time para gerar o primeiro acesso."
           />
         ) : filtered.length === 0 ? (
           <EmptyState

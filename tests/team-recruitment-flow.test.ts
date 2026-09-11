@@ -121,6 +121,15 @@ vi.mock('@/lib/supabase/rest', () => ({
         active: true,
         created_at: new Date().toISOString(),
         rotated_at: null,
+        // Prazo obrigatorio (migration 013): o link nasce com 24 horas.
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+        status: 'ACTIVE',
+        claim_hash: null,
+        claimed_at: null,
+        consumed_at: null,
+        revoked_at: null,
+        generation: 1,
       });
       return userId;
     }
@@ -207,6 +216,14 @@ function seed() {
       active: true,
       created_at: new Date().toISOString(),
       rotated_at: null,
+      issued_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      status: 'ACTIVE',
+      claim_hash: null,
+      claimed_at: null,
+      consumed_at: null,
+      revoked_at: null,
+      generation: 1,
     },
     {
       id: 'inv-candb',
@@ -217,6 +234,14 @@ function seed() {
       active: true,
       created_at: new Date().toISOString(),
       rotated_at: null,
+      issued_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      status: 'ACTIVE',
+      claim_hash: null,
+      claimed_at: null,
+      consumed_at: null,
+      revoked_at: null,
+      generation: 1,
     },
   );
 }

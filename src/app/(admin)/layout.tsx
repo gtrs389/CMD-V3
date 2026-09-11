@@ -29,7 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <SessionProvider initialUser={user}>
-      {/* Candidato e equipe nao navegam entre rotas: cada um abre uma unica
+      {/* Time e equipe nao navegam entre rotas: cada um abre uma unica
           pagina, entao a barra lateral some e fica so o cabecalho. */}
       <AppShell withSidebar={user.role === 'ADMIN'}>{children}</AppShell>
     </SessionProvider>

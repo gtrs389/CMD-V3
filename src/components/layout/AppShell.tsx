@@ -9,7 +9,7 @@ interface AppShellProps {
   /**
    * Barra lateral de navegacao.
    *
-   * O candidato enxerga apenas o proprio cadastro: sem rotas para navegar,
+   * O time enxerga apenas o proprio cadastro: sem rotas para navegar,
    * a barra some e fica so o cabecalho com a marca e o menu de usuario.
    */
   withSidebar?: boolean;

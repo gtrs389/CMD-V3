@@ -20,7 +20,7 @@ type TabId = 'visao-geral' | 'equipe';
 /**
  * Pagina do integrante da equipe.
  *
- * Mesma estrutura e mesmos quadros da pagina do candidato: cabecalho, abas e
+ * Mesma estrutura e mesmos quadros da pagina do time: cabecalho, abas e
  * os paineis de visao geral e equipe sao exatamente os mesmos componentes. O
  * link pessoal abre em dialogo, pelo cartao da visao geral.
  *

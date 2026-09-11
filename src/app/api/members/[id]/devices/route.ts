@@ -13,7 +13,7 @@ import { listMemberDevices } from '@/lib/server/device';
 export async function GET(_request: NextRequest, ctx: RouteContext<'/api/members/[id]/devices'>) {
   try {
     const { id } = await ctx.params;
-    // Sinal do aparelho e exclusivo do ADMIN: o candidato nunca alcanca.
+    // Sinal do aparelho e exclusivo do ADMIN: o time nunca alcanca.
     await requireMemberAccess('device.view', id);
     return jsonOk({ devices: await listMemberDevices(id) });
   } catch (error) {

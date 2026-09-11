@@ -219,7 +219,7 @@ export async function changePassword(
 }
 
 /**
- * Conclui o primeiro acesso do candidato.
+ * Conclui o primeiro acesso do time.
  *
  * A senha temporaria e substituida, a obrigacao de troca cai e todas as
  * outras sessoes sao revogadas na mesma transacao: fica valendo apenas a

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     const input = await readJson(request, clientCreateSchema);
     const client = await createClient(input);
 
-    // Acesso do candidato criado junto com o cadastro. A senha temporaria
+    // Acesso do time criado junto com o cadastro. A senha temporaria
     // volta uma unica vez, nesta resposta, e nao e gravada em lugar nenhum.
     const access = await createCandidateAccess({
       id: client.id,

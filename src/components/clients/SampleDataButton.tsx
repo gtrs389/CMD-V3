@@ -19,7 +19,7 @@ export function SampleDataButton() {
     setLoading(true);
     try {
       const total = await loadSampleData();
-      toast.success(`Dados de exemplo carregados: 2 candidatos e ${total} integrantes.`);
+      toast.success(`Dados de exemplo carregados: 2 times e ${total} integrantes.`);
     } catch (error) {
       toast.error(
         error instanceof NetworkError

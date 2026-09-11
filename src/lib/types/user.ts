@@ -46,7 +46,7 @@ export interface SystemUser {
   email: string;
   role: Role;
   status: AccessStatus;
-  /** Candidato (operacao) do usuario. Nulo apenas no ADMIN. */
+  /** Time (operacao) do usuario. Nulo apenas no ADMIN. */
   candidate: { id: string; name: string; photo: string | null } | null;
   /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */
   memberId: string | null;
@@ -59,7 +59,7 @@ export interface SystemUser {
   self: boolean;
 }
 
-/** Candidato que ainda nao possui usuario vinculado. */
+/** Time que ainda nao possui usuario vinculado. */
 export interface CandidateWithoutAccess {
   clientId: string;
   name: string;

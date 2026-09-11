@@ -74,7 +74,7 @@ export interface ClientRow {
   privacy_text: string;
   privacy_require_consent: boolean;
   privacy_consent_label: string;
-  /** Interruptor da operacao: em false nenhum link daquele candidato aceita cadastro. */
+  /** Interruptor da operacao: em false nenhum link daquele time aceita cadastro. */
   recruiting_active: boolean;
   form_updated_at: string;
   created_at: string;

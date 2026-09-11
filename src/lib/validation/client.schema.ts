@@ -4,7 +4,7 @@ export const clientSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(2, 'Informe o nome do candidato.')
+    .min(2, 'Informe o nome do time.')
     .max(80, 'Use no máximo 80 caracteres.'),
   email: z
     .string()

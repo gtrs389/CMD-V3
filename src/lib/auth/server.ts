@@ -39,7 +39,7 @@ export async function requirePageUser(): Promise<SessionUser> {
 /**
  * Pagina exclusiva do ADMIN.
  *
- * O candidato que tentar abrir pela URL volta para a propria pagina: a
+ * O time que tentar abrir pela URL volta para a propria pagina: a
  * decisao de acesso dos dados continua acontecendo em cada rota de API.
  */
 export async function requireAdminPage(): Promise<SessionUser> {

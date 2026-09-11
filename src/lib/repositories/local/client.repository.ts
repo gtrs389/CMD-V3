@@ -34,7 +34,7 @@ export function createLocalClientRepository(
 
   function requireClient(clients: Client[], id: string): Client {
     const found = clients.find((client) => client.id === id);
-    if (!found) throw new NotFoundError('Candidato não encontrado.');
+    if (!found) throw new NotFoundError('Time não encontrado.');
     return found;
   }
 

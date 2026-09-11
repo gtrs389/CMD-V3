@@ -1,5 +1,5 @@
 /**
- * Abas da pagina do candidato.
+ * Abas da pagina do time.
  *
  * Modulo comum, SEM `'use client'`: a pagina (Server Component) precisa
  * conferir o parametro `aba` da URL antes de renderizar, e uma funcao

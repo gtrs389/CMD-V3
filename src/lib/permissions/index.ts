@@ -14,7 +14,7 @@ export const PERMISSIONS = [
   /** Abre o painel: ADMIN, CANDIDATE e EQUIPE. */
   'panel.access',
   'dashboard.view',
-  /** Lista de todos os candidatos: exclusivo do ADMIN. */
+  /** Lista de todos os times: exclusivo do ADMIN. */
   'client.list',
   'client.view',
   'client.create',
@@ -54,7 +54,7 @@ const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS;
 
 /**
  * Integrante da equipe: leitura, e sempre restrita a quem ele mesmo
- * cadastrou. Nao edita candidato, integrante nem convite, e nao ativa,
+ * cadastrou. Nao edita time, integrante nem convite, e nao ativa,
  * desativa ou renova o proprio link.
  *
  * A area interna do formulario fica inteiramente fora: sem `form.view` nao
@@ -71,11 +71,11 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
 ];
 
 /**
- * Candidato: leitura apenas, e sempre da propria operacao.
+ * Time: leitura apenas, e sempre da propria operacao.
  *
- * Enxerga toda a equipe, em qualquer nivel, porque o vinculo e o candidato.
+ * Enxerga toda a equipe, em qualquer nivel, porque o vinculo e o time.
  *
- * A area interna do formulario e do ADMIN: sem `form.view` o candidato nao
+ * A area interna do formulario e do ADMIN: sem `form.view` o time nao
  * ve aba, cartao, contagem de campos nem previa, e a configuracao dos campos
  * nao chega nem ao navegador.
  */
@@ -114,10 +114,10 @@ export function hasPanelAccess(user: Pick<SessionUser, 'role'> | null | undefine
 }
 
 /**
- * Conferencia de escopo por candidato (operacao).
+ * Conferencia de escopo por time (operacao).
  *
  * ADMIN alcanca qualquer registro. CANDIDATE alcanca somente a propria
- * operacao. EQUIPE nunca alcanca o registro do candidato: a pagina dela e
+ * operacao. EQUIPE nunca alcanca o registro do time: a pagina dela e
  * "Minha mobilizacao", montada a partir dos proprios recrutados.
  */
 export function canReachClient(
@@ -146,7 +146,7 @@ export interface MemberScope {
  *            nivel: cadastrados por ele e por qualquer membro da equipe.
  * EQUIPE     alcanca somente quem se cadastrou pelo proprio link. Irmaos,
  *            pessoas de outro recrutador, descendentes dos proprios
- *            recrutados e outra candidatura ficam de fora.
+ *            recrutados e outro time ficam de fora.
  */
 export function canReachMember(
   user: Pick<SessionUser, 'id' | 'role' | 'candidateId'> | null | undefined,
@@ -163,12 +163,12 @@ export function canReachMember(
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Administrador',
   EQUIPE: 'Equipe',
-  CANDIDATE: 'Candidato',
+  CANDIDATE: 'Time',
 };
 
 /** Rotulo curto usado ao lado do nome em "Cadastrado por". */
 export const ROLE_SHORT_LABELS: Record<Role, string> = {
   ADMIN: 'Administração',
   EQUIPE: 'Equipe',
-  CANDIDATE: 'Candidato',
+  CANDIDATE: 'Time',
 };

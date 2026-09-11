@@ -37,8 +37,8 @@ const CANDIDATO_A: SessionUser = {
 const CANDIDATO_B: SessionUser = { ...CANDIDATO_A, id: 'u-b', candidateId: 'cli-b' };
 
 describe('perfil Candidato', () => {
-  it('é exibido como Candidato e entra no painel', () => {
-    expect(ROLE_LABELS.CANDIDATE).toBe('Candidato');
+  it('é exibido como Time e entra no painel', () => {
+    expect(ROLE_LABELS.CANDIDATE).toBe('Time');
     expect(hasPanelAccess(CANDIDATO_A)).toBe(true);
     expect(hasPanelAccess(ADMIN)).toBe(true);
   });

@@ -20,7 +20,7 @@ interface InvitePanelProps {
 }
 
 /**
- * Link do candidato: copiar, prever, ativar/desativar e renovar.
+ * Link do time: copiar, prever, ativar/desativar e renovar.
  *
  * O endereco continua disponivel depois de sair, entrar de novo, trocar de
  * aparelho ou recarregar: ele e lido do banco a cada carregamento. Abrir a
@@ -151,8 +151,8 @@ export function InvitePanel({ client }: InvitePanelProps) {
             label="Recrutamento ativo"
             description={
               client.invite.active
-                ? 'Todos os links desta candidatura aceitam novos cadastros.'
-                : 'Nenhum link desta candidatura aceita cadastros: nem o do candidato, nem os da equipe.'
+                ? 'Todos os links deste time aceitam novos cadastros.'
+                : 'Nenhum link deste time aceita cadastros: nem o do time, nem os da equipe.'
             }
             checked={client.invite.active}
             onChange={toggleActive}
@@ -162,7 +162,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-ink-900">Gerar novo link</p>
               <p className="text-xs text-ink-500">
-                O endereço atual do candidato para de funcionar imediatamente. Os links pessoais
+                O endereço atual do time para de funcionar imediatamente. Os links pessoais
                 dos integrantes continuam valendo.
               </p>
             </div>
@@ -182,7 +182,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
       <ConfirmDialog
         open={rotating}
         title="Gerar novo link de convite"
-        description="Um novo token será criado para este candidato."
+        description="Um novo token será criado para este time."
         confirmLabel="Gerar novo link"
         tone="brand"
         onCancel={() => setRotating(false)}

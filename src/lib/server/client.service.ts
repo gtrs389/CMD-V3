@@ -74,10 +74,10 @@ async function loadFields(clientIds: string[]): Promise<Map<string, FormFieldRow
 }
 
 /**
- * Convite da operacao: o link pessoal do proprio candidato.
+ * Convite da operacao: o link pessoal do proprio time.
  *
- * Cada integrante tem o seu, mas o que aparece na tela do candidato e no
- * painel do ADMIN e o link do candidato.
+ * Cada integrante tem o seu, mas o que aparece na tela do time e no
+ * painel do ADMIN e o link do time.
  */
 async function loadInvites(clientIds: string[]): Promise<Map<string, InviteRow>> {
   return loadOperationInvites(clientIds);
@@ -108,7 +108,7 @@ async function requireClientRow(id: string): Promise<ClientRow> {
     select: CLIENT_COLUMNS,
     filters: { id: `eq.${id}` },
   });
-  if (!row) throw notFound('Candidato não encontrado.');
+  if (!row) throw notFound('Time não encontrado.');
   return row;
 }
 
@@ -209,7 +209,7 @@ export async function getClient(id: string): Promise<Client | null> {
 /**
  * Rota publica: resolve a operacao e o responsavel a partir do link.
  *
- * O formulario e sempre o configurado pelo candidato, o mesmo em todos os
+ * O formulario e sempre o configurado pelo time, o mesmo em todos os
  * links daquela operacao. O responsavel vem do token, nunca do corpo da
  * requisicao.
  */
@@ -228,7 +228,7 @@ export interface PublicInviteContext {
 /**
  * Dono do link como a pagina publica o mostra.
  *
- * Sai daqui apenas nome, foto e perfil. A foto do candidato e a do proprio
+ * Sai daqui apenas nome, foto e perfil. A foto do time e a do proprio
  * cadastro; a do integrante vem da linha dele. Identificador de usuario, de
  * integrante e e-mail ficam no servidor.
  */
@@ -290,7 +290,7 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
 }
 
 export async function createClient(input: ClientInput): Promise<Client> {
-  // O login do candidato usa o mesmo e-mail: conflito barra antes de gravar.
+  // O login do time usa o mesmo e-mail: conflito barra antes de gravar.
   await assertEmailAvailable(null, input.email);
 
   const photo = input.photo && isDataUrl(input.photo) ? await uploadImage('clients', input.photo) : null;
@@ -310,7 +310,7 @@ export async function createClient(input: ClientInput): Promise<Client> {
 
   await insertDefaultFields(row.id);
 
-  // O link pessoal nasce junto com o acesso do candidato, em
+  // O link pessoal nasce junto com o acesso do time, em
   // `createCandidateAccess`: e o usuario que da nome ao link.
   return assemble(row);
 }
@@ -463,8 +463,8 @@ export async function updateClientForm(
 /**
  * Liga ou desliga o recrutamento da operacao inteira.
  *
- * Desligado, TODOS os links daquele candidato param de aceitar cadastros:
- * o do proprio candidato e o de cada integrante.
+ * Desligado, TODOS os links daquele time param de aceitar cadastros:
+ * o do proprio time e o de cada integrante.
  */
 export async function setInviteActive(id: string, active: boolean): Promise<Client> {
   await requireClientRow(id);
@@ -475,7 +475,7 @@ export async function setInviteActive(id: string, active: boolean): Promise<Clie
     { recruiting_active: active },
   );
 
-  // O link do proprio candidato acompanha o interruptor da operacao.
+  // O link do proprio time acompanha o interruptor da operacao.
   const invites = await loadOperationInvites([id]);
   const invite = invites.get(id);
   if (invite) {
@@ -486,7 +486,7 @@ export async function setInviteActive(id: string, active: boolean): Promise<Clie
 }
 
 /**
- * Gera um novo token para o link do candidato. O anterior deixa de valer;
+ * Gera um novo token para o link do time. O anterior deixa de valer;
  * os links pessoais dos integrantes continuam como estao.
  */
 export async function regenerateInvite(id: string): Promise<Client> {
@@ -500,13 +500,13 @@ export async function regenerateInvite(id: string): Promise<Client> {
     return assemble(row);
   }
 
-  // Candidato ainda sem usuario: o link so existe depois que o acesso e
+  // Time ainda sem usuario: o link so existe depois que o acesso e
   // criado em Configuracoes.
   const user = await selectOne<Pick<UserRow, 'id'>>(TABLES.users, {
     select: 'id',
     filters: { client_id: `eq.${id}`, role: 'eq.CANDIDATE' },
   });
-  if (!user) throw notFound('Gere o acesso do candidato antes de criar o link.');
+  if (!user) throw notFound('Gere o acesso do time antes de criar o link.');
 
   await ensurePersonalInvite(user.id, id);
   await rotatePersonalInvite(user.id);
