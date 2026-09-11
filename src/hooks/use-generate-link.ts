@@ -29,6 +29,15 @@ export function useGenerateLinkFlow(generate: () => Promise<string | null>) {
       const ok = await copyText(url);
       setCopied(ok);
       setPendingUrl(url);
+    } catch (error) {
+      // Sem este `catch` a recusa do servidor virava rejeicao nao tratada: o
+      // botao voltava ao normal e a tela nao dizia absolutamente nada. A
+      // mensagem do servidor ja e escrita para ser lida por quem clicou.
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Não foi possível gerar o link. Tente novamente.',
+      );
     } finally {
       setGenerating(false);
     }
