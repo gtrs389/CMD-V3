@@ -1,20 +1,21 @@
 /* eslint-disable @next/next/no-img-element */
 import type { ReactNode } from 'react';
-import { Check } from 'lucide-react';
 import { appConfig } from '@/config/app.config';
 import type { PublicInviteOwner } from '@/lib/types';
 import { cn } from '@/lib/utils/cn';
 import { initials } from '@/lib/utils/text';
-import type { InviteStep } from './invite-steps';
 
 /**
  * Moldura da pagina publica de cadastro. Sem cabecalho de marca: a
  * identidade da tela vem so do cartao azul-marinho.
  *
- * Desktop: coluna azul-marinho fixa a esquerda (quem convidou e as etapas
- * verticais) e o formulario a direita, com rolagem propria.
- * Celular: cartao azul-marinho horizontal no topo, progresso em cartao
- * proprio e formulario em uma coluna, tudo rolando junto.
+ * Desktop: coluna azul-marinho fixa a esquerda, com quem convidou, e o
+ * formulario a direita, com rolagem propria.
+ * Celular: cartao azul-marinho horizontal no topo e o formulario em uma
+ * coluna, tudo rolando junto.
+ *
+ * Nao ha etapas, progresso nem pastilhas: o cadastro inteiro cabe em uma
+ * pagina so.
  */
 
 function OwnerAvatar({
@@ -85,19 +86,13 @@ export function InviteOwnerBanner({ owner, fallbackName, className }: OwnerProps
 }
 
 /**
- * Cartao azul-marinho lateral do desktop, com as etapas verticais.
+ * Cartao azul-marinho lateral do desktop.
  *
  * Fixo em toda a altura da tela: quem preenche o formulario nunca perde de
- * vista quem convidou nem em que etapa esta. Apenas a coluna do formulario,
- * ao lado, tem rolagem propria.
+ * vista quem convidou. Apenas a coluna do formulario, ao lado, tem rolagem
+ * propria.
  */
-export function InviteOwnerAside({
-  owner,
-  fallbackName,
-  className,
-  steps,
-  current,
-}: OwnerProps & { steps: InviteStep[]; current: number }) {
+export function InviteOwnerAside({ owner, fallbackName, className }: OwnerProps) {
   const name = owner?.name ?? fallbackName;
 
   return (
@@ -120,147 +115,7 @@ export function InviteOwnerAside({
           Faça parte desta mobilização e ajude a construir uma equipe mais próxima das pessoas.
         </p>
       </div>
-
-      <InviteStepTrail steps={steps} current={current} />
     </aside>
-  );
-}
-
-/** Etapas verticais do cartao lateral. */
-function InviteStepTrail({ steps, current }: { steps: InviteStep[]; current: number }) {
-  return (
-    <nav aria-label="Etapas do cadastro">
-      <ol className="space-y-1">
-        {steps.map((step, index) => {
-          const active = index === current;
-          const done = index < current;
-
-          return (
-            <li key={step.id}>
-              <div
-                aria-current={active ? 'step' : undefined}
-                className={cn(
-                  'flex min-h-11 items-center gap-3 rounded-control px-2.5 py-2',
-                  active && 'bg-navy-700',
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-                    active
-                      ? 'bg-accent-600 text-white'
-                      : done
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-navy-700 text-navy-300',
-                  )}
-                >
-                  {done ? <Check className="size-3.5" /> : index + 1}
-                </span>
-
-                <span
-                  className={cn(
-                    'min-w-0 text-[0.8125rem] leading-tight',
-                    active ? 'font-semibold text-white' : 'text-navy-300',
-                  )}
-                >
-                  {step.label}
-                </span>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
-
-/** "ETAPA X DE N" + percentual + barra. */
-export function InviteProgress({
-  steps,
-  current,
-  className,
-}: {
-  steps: InviteStep[];
-  current: number;
-  className?: string;
-}) {
-  const total = steps.length;
-  const percent = Math.round(((current + 1) / total) * 100);
-
-  return (
-    <div className={className}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase sm:text-[0.6875rem]">
-          Etapa {current + 1} de {total}
-        </p>
-        <p className="text-[0.6875rem] font-medium text-ink-500 sm:text-xs">
-          {percent}% concluído
-        </p>
-      </div>
-
-      <div
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        aria-label={`Cadastro ${percent}% concluído`}
-        className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-ink-100"
-      >
-        <span
-          className="block h-full rounded-pill bg-accent-600 transition-[width] duration-300"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/** Pastilhas horizontais das etapas, no celular. */
-export function InviteStepChips({ steps, current }: { steps: InviteStep[]; current: number }) {
-  return (
-    <nav aria-label="Etapas do cadastro" className="mt-3">
-      <ol className="scrollbar-slim -mx-1 flex items-center justify-between gap-1 overflow-x-auto px-1 pb-0.5">
-        {steps.map((step, index) => {
-          const active = index === current;
-          const done = index < current;
-
-          return (
-            <li key={step.id} className="min-w-0 shrink-0">
-              <div
-                aria-current={active ? 'step' : undefined}
-                className={cn(
-                  'flex items-center gap-1 rounded-pill py-1',
-                  active ? 'bg-accent-50 px-1.5' : 'bg-transparent',
-                )}
-              >
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'flex size-[1.125rem] shrink-0 items-center justify-center rounded-full text-[0.625rem] font-bold',
-                    active
-                      ? 'bg-accent-600 text-white'
-                      : done
-                        ? 'bg-success-600 text-white'
-                        : 'bg-ink-100 text-ink-500',
-                  )}
-                >
-                  {done ? <Check className="size-2.5" /> : index + 1}
-                </span>
-                <span
-                  className={cn(
-                    'text-[0.625rem] whitespace-nowrap',
-                    active ? 'font-semibold text-accent-700' : 'text-ink-500',
-                  )}
-                >
-                  {step.shortLabel}
-                </span>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
   );
 }
 

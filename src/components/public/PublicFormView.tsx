@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Send } from 'lucide-react';
+import { CheckCircle2, Send } from 'lucide-react';
 import type { Client, PublicInviteOwner } from '@/lib/types';
 import { PHONE_IN_USE } from '@/lib/types';
 import { submitInvite } from '@/lib/repositories';
@@ -22,18 +22,12 @@ import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
-import {
-  InviteOwnerAside,
-  InviteOwnerBanner,
-  InviteProgress,
-  InviteStateShell,
-  InviteStepChips,
-} from './InviteChrome';
+import { InviteOwnerAside, InviteOwnerBanner, InviteStateShell } from './InviteChrome';
 import { InviteConfirmValueModal } from './InviteConfirmValueModal';
-import { InviteReviewStep } from './InviteReviewStep';
+import { InvitePrivacyNotice } from './InvitePrivacyNotice';
 import { InviteVerifyingModal } from './InviteVerifyingModal';
 import { InviteExpired } from './PublicInviteView';
-import { buildInviteSteps, isWideField, stepValueKeys } from './invite-steps';
+import { buildInviteSections, isWideField } from './invite-sections';
 import { useInviteVerification } from './use-invite-verification';
 
 /**
@@ -49,7 +43,6 @@ interface PublicFormViewProps {
   client: Client;
   /** Quem enviou o convite: apenas nome, foto e perfil. */
   owner: PublicInviteOwner | null;
-  /** Token do link aberto. Identifica no servidor a operacao e o responsavel. */
 }
 
 /** Rolagem sem movimento quando o sistema pede menos animacao. */
@@ -75,12 +68,17 @@ function focusFirstInvalid(container: HTMLElement | null) {
 }
 
 /**
- * Pagina publica de cadastro, em quatro etapas.
+ * Pagina publica de cadastro, em UMA pagina so.
+ *
+ * Nao ha etapas: todos os campos ficam visiveis de uma vez, agrupados por
+ * secao, e a pessoa rola a tela ate o fim. Ninguem se perde entre telas nem
+ * descobre tarde que faltava preencher algo la atras.
  *
  * Os campos, a obrigatoriedade e as opcoes vem da configuracao real feita
  * pelo ADMIN: campo desativado nao aparece e nao e enviado. Nada do que e
  * digitado sai da memoria da aba — nem `localStorage`, nem `sessionStorage`,
- * nem cookie, nem URL — e o envio acontece so depois da confirmacao final.
+ * nem cookie, nem URL — e o envio acontece so depois da confirmacao final,
+ * no resumo do modal.
  */
 export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const toast = useToast();
@@ -90,11 +88,10 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   /** Link encerrado durante o preenchimento: o envio nao acontece. */
   const [expired, setExpired] = useState<'taken' | 'expired' | null>(null);
   const submittedRef = useRef(false);
-  const stepRef = useRef<HTMLDivElement | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   const form = useDynamicForm(client.form);
-  const steps = useMemo(() => buildInviteSteps(client.form), [client.form]);
+  const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
   const allFields = useMemo(() => visibleFields(client.form), [client.form]);
 
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
@@ -113,61 +110,20 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
     },
   });
 
-  const [index, setIndex] = useState(0);
-  const position = Math.min(index, steps.length - 1);
-  const current = steps[position];
-  const isReview = current.id === 'revisao';
-  const fillSteps = useMemo(() => steps.filter((step) => step.id !== 'revisao'), [steps]);
-
-  /** Muda de etapa e volta o cartao para o topo. */
-  function goTo(next: number) {
-    setIndex(Math.max(0, Math.min(next, steps.length - 1)));
-    cardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
-  }
-
-  /** Abre a etapa do primeiro campo com erro, quando ele nao e desta. */
-  function jumpToInvalid(): boolean {
-    const invalid = Object.keys(form.errors);
-    if (invalid.length === 0) return false;
-
-    const target = steps.findIndex((step) =>
-      stepValueKeys(step, client.form).some((key) => invalid.includes(key)),
-    );
-    if (target >= 0 && target !== position) {
-      goTo(target);
-      return true;
-    }
-    return false;
-  }
-
   /**
-   * "Continuar": valida somente a etapa atual.
+   * Envio: o formulario inteiro e conferido de uma vez.
    *
-   * Com erro, a pessoa fica onde esta, ve a mensagem e o foco vai para o
-   * primeiro campo invalido.
+   * Com erro, a pessoa fica onde esta, ve as mensagens em todos os campos
+   * destacados e o foco vai para o primeiro deles — que pode estar em
+   * qualquer ponto da pagina, porque tudo e uma tela so.
    */
-  function handleAdvance(event: React.FormEvent) {
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submittedRef.current || submitting) return;
 
-    const keys = stepValueKeys(current, client.form);
-    if (!form.validateOnly(keys)) {
-      toast.error('Revise os campos destacados para continuar.');
-      window.requestAnimationFrame(() => focusFirstInvalid(stepRef.current));
-      return;
-    }
-
-    if (!isReview) {
-      goTo(position + 1);
-      return;
-    }
-
-    // Ultima etapa: confere o formulario inteiro antes da confirmacao.
     if (!form.validate()) {
       toast.error('Revise os campos destacados antes de enviar.');
-      window.requestAnimationFrame(() => {
-        if (!jumpToInvalid()) focusFirstInvalid(stepRef.current);
-      });
+      window.requestAnimationFrame(() => focusFirstInvalid(formRef.current));
       return;
     }
 
@@ -229,8 +185,9 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
       submittedRef.current = false;
 
       // Telefone ja cadastrado naquele time: o cadastro nao foi concluido e a
-      // recusa aparece no proprio campo, na etapa dele. So o servidor sabe
-      // disso — a tela publica nunca consulta quem ja existe no time.
+      // recusa aparece no proprio campo, que a pagina rola ate mostrar. So o
+      // servidor sabe disso — a tela publica nunca consulta quem ja existe
+      // no time.
       const duplicado =
         error instanceof RepositoryError &&
         !(error instanceof NetworkError) &&
@@ -239,11 +196,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
       if (duplicado && phoneFieldId) {
         setConfirming(false);
         form.setFieldError(phoneFieldId, PHONE_IN_USE);
-        const target = steps.findIndex((step) =>
-          stepValueKeys(step, client.form).includes(phoneFieldId),
-        );
-        if (target >= 0) goTo(target);
-        window.requestAnimationFrame(() => focusFirstInvalid(stepRef.current));
+        window.requestAnimationFrame(() => focusFirstInvalid(formRef.current));
         toast.error(PHONE_IN_USE);
         return;
       }
@@ -263,45 +216,27 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
   if (done) return <SuccessScreen />;
 
-  const nextLabel = isReview ? 'Confirmar cadastro' : 'Continuar';
-
+  // Uma acao so: o resumo para conferir vem depois, no modal de confirmacao.
   const actions = (
-    <>
-      {position > 0 ? (
-        <Button
-          variant="secondary"
-          disabled={submitting}
-          onClick={() => goTo(position - 1)}
-          className="shrink-0"
-        >
-          <ArrowLeft aria-hidden="true" className="size-4" />
-          Voltar
-        </Button>
-      ) : null}
-
-      <Button
-        type="submit"
-        form="cadastro-publico"
-        variant="accent"
-        loading={submitting}
-        className="flex-1 lg:flex-none"
-      >
-        {isReview && !submitting ? <Send aria-hidden="true" className="size-4" /> : null}
-        {nextLabel}
-        {!isReview ? <ArrowRight aria-hidden="true" className="size-4" /> : null}
-      </Button>
-    </>
+    <Button
+      type="submit"
+      form="cadastro-publico"
+      variant="accent"
+      loading={submitting}
+      className="flex-1 lg:flex-none"
+    >
+      {!submitting ? <Send aria-hidden="true" className="size-4" /> : null}
+      Enviar cadastro
+    </Button>
   );
 
   return (
     <main className="safe-x min-h-dvh bg-surface-muted lg:flex lg:h-dvh lg:overflow-hidden">
-      {/* Desktop: coluna azul-marinho fixa, com as etapas verticais. Nunca
-          rola — so a coluna do formulario, ao lado, tem rolagem propria. */}
+      {/* Desktop: coluna azul-marinho fixa. Nunca rola — so a coluna do
+          formulario, ao lado, tem rolagem propria. */}
       <InviteOwnerAside
         owner={owner}
         fallbackName={client.name}
-        steps={steps}
-        current={position}
         className="hidden lg:flex lg:h-dvh lg:w-[22rem] lg:shrink-0 lg:overflow-y-auto"
       />
 
@@ -314,85 +249,95 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
         <LocationProvider fields={allFields} values={form.values} setValue={form.setValue}>
           <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-32 sm:px-6 lg:px-14 lg:py-12 lg:pb-16">
-            {/* Celular: progresso em cartao proprio. */}
-            <div className="rounded-card border border-line bg-surface p-3.5 shadow-card lg:hidden">
-              <InviteProgress steps={steps} current={position} />
-              <InviteStepChips steps={steps} current={position} />
-            </div>
-
-            <section
-              ref={cardRef}
-              className="mt-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:mt-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
-            >
-              <InviteProgress steps={steps} current={position} className="hidden lg:block" />
-
-              <div className="lg:mt-8">
+            <section className="mt-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:mt-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+              <div>
                 <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
-                  {current.title}
+                  Faça seu cadastro
                 </h1>
-                <p className="mt-1.5 text-sm text-ink-500">{current.description}</p>
+                <p className="mt-1.5 text-sm text-ink-500">
+                  Preencha os campos abaixo e envie. É tudo em uma página só.
+                </p>
               </div>
 
-              <form id="cadastro-publico" onSubmit={handleAdvance} noValidate className="contents">
-                <div key={current.id} ref={stepRef} className="mt-5 animate-rise lg:mt-6">
-                  {position === 0 && client.form.introText ? (
-                    <p className="mb-4 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
-                      {client.form.introText}
-                    </p>
-                  ) : null}
+              {client.form.introText ? (
+                <p className="mt-4 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
+                  {client.form.introText}
+                </p>
+              ) : null}
 
-                  {isReview ? (
-                    <InviteReviewStep
-                      config={client.form}
-                      values={form.values}
-                      steps={fillSteps}
-                      disabled={submitting}
-                      consentError={form.errors[CONSENT_KEY]}
-                      deviceNotice={DEVICE_NOTICE}
-                      onEditStep={goTo}
-                      onConsentChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
-                    />
-                  ) : (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-5">
-                      {current.fields.map((field) => (
-                        <div
-                          key={field.id}
-                          className={isWideField(field) ? 'sm:col-span-2' : undefined}
-                        >
-                          <DynamicFieldInput
-                            field={field}
-                            idPrefix="publico"
-                            variant="invite"
-                            allowCamera
-                            disabled={submitting}
-                            value={form.values[field.id] ?? null}
-                            error={form.errors[field.id]}
-                            onChange={(value) => form.setValue(field.id, value)}
-                            onBlur={
-                              field.systemKey === 'cpf'
-                                ? (value) => {
-                                    const digits = normalizeCpf(
-                                      typeof value === 'string' ? value : '',
-                                    );
-                                    if (isValidCpf(digits)) verification.requestCpfConfirmation(digits);
-                                  }
-                                : field.systemKey === 'voter_id'
+              <form
+                id="cadastro-publico"
+                ref={formRef}
+                onSubmit={handleSubmit}
+                noValidate
+                className="contents"
+              >
+                {/* Todas as secoes, uma embaixo da outra: nada fica escondido
+                    atras de um "Continuar". */}
+                <div className="mt-5 space-y-7 animate-rise lg:mt-6">
+                  {sections.map((section) => (
+                    <section key={section.id} aria-labelledby={`secao-${section.id}`}>
+                      <h2
+                        id={`secao-${section.id}`}
+                        className="text-[0.9375rem] font-semibold text-ink-900"
+                      >
+                        {section.title}
+                      </h2>
+                      <p className="mt-1 text-[0.8125rem] text-ink-500">{section.description}</p>
+
+                      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-5">
+                        {section.fields.map((field) => (
+                          <div
+                            key={field.id}
+                            className={isWideField(field) ? 'sm:col-span-2' : undefined}
+                          >
+                            <DynamicFieldInput
+                              field={field}
+                              idPrefix="publico"
+                              variant="invite"
+                              allowCamera
+                              disabled={submitting}
+                              value={form.values[field.id] ?? null}
+                              error={form.errors[field.id]}
+                              onChange={(value) => form.setValue(field.id, value)}
+                              onBlur={
+                                field.systemKey === 'cpf'
                                   ? (value) => {
-                                      const digits = normalizeVoterId(
+                                      const digits = normalizeCpf(
                                         typeof value === 'string' ? value : '',
                                       );
-                                      if (isValidVoterId(digits)) {
-                                        verification.requestTituloConfirmation(digits);
+                                      if (isValidCpf(digits)) {
+                                        verification.requestCpfConfirmation(digits);
                                       }
                                     }
-                                  : undefined
-                            }
-                            onImageError={(message) => toast.error(message)}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                                  : field.systemKey === 'voter_id'
+                                    ? (value) => {
+                                        const digits = normalizeVoterId(
+                                          typeof value === 'string' ? value : '',
+                                        );
+                                        if (isValidVoterId(digits)) {
+                                          verification.requestTituloConfirmation(digits);
+                                        }
+                                      }
+                                    : undefined
+                              }
+                              onImageError={(message) => toast.error(message)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+
+                  {/* Aviso e aceite ficam onde a pessoa termina de preencher. */}
+                  <InvitePrivacyNotice
+                    config={client.form}
+                    accepted={form.values[CONSENT_KEY] === true}
+                    disabled={submitting}
+                    error={form.errors[CONSENT_KEY]}
+                    deviceNotice={DEVICE_NOTICE}
+                    onChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
+                  />
                 </div>
 
                 {/* Desktop: acoes abaixo do formulario. */}
@@ -408,7 +353,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
         </LocationProvider>
       </div>
 
-      {/* Celular: "Continuar" fixo no rodape, com area segura. O conteudo
+      {/* Celular: o envio fica fixo no rodape, com area segura. O conteudo
           reserva espaco equivalente para nunca ficar encoberto. */}
       <div className="safe-bottom safe-x fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-3 sm:px-6">

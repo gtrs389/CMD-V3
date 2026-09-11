@@ -249,7 +249,7 @@ export function MemberVerificationSection({ member }: { member: Member | null })
               state={compareGender(member.gender, data.cadastro?.sexo)}
             />
             <Comparison
-              label="Localização"
+              label="Endereço"
               declared={[member.city, member.state].filter(Boolean).join(' - ') || null}
               found={
                 [data.eleitoral?.municipio, data.eleitoral?.uf].filter(Boolean).join(' - ') || null

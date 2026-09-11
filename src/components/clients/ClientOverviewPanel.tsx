@@ -618,7 +618,7 @@ function RecentMembersCard({
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-line">
-                  {['Nome', 'Vínculo', 'Localização', 'Cadastrado em'].map((coluna) => (
+                  {['Nome', 'Vínculo', 'Endereço', 'Cadastrado em'].map((coluna) => (
                     <th
                       key={coluna}
                       scope="col"
