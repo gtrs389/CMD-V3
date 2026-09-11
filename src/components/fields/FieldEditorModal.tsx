@@ -349,8 +349,8 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
             id="campo-obrigatorio"
             label="Preenchimento obrigatório"
             description={
-              draft.systemKey === 'email'
-                ? 'O e-mail cria o acesso ao CMD e permanece obrigatório.'
+              draft.systemKey === 'phone'
+                ? 'O telefone cria o acesso ao CMD e permanece obrigatório.'
                 : isLockedRequired(draft)
                   ? 'O nome identifica o integrante e permanece obrigatório.'
                   : 'A pessoa não consegue enviar sem preencher.'

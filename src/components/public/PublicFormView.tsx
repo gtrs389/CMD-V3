@@ -3,8 +3,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, Send } from 'lucide-react';
 import type { Client, PublicInviteOwner } from '@/lib/types';
+import { PHONE_IN_USE } from '@/lib/types';
 import { submitInvite } from '@/lib/repositories';
 import { GoneError, NetworkError } from '@/lib/repositories/http/api';
+import { RepositoryError } from '@/lib/repositories/types';
 import {
   formatCpf,
   formatVoterId,
@@ -97,6 +99,7 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
   const allFields = useMemo(() => visibleFields(client.form), [client.form]);
 
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
+  const phoneFieldId = allFields.find((field) => field.systemKey === 'phone')?.id;
   const zoneFieldId = allFields.find((field) => field.systemKey === 'zone')?.id;
   const sectionFieldId = allFields.find((field) => field.systemKey === 'section')?.id;
 
@@ -194,7 +197,6 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
       // O cliente de destino vem do token do link, conferido no servidor.
       await submitInvite(token, {
         name: payload.name,
-        email: payload.email,
         phone: payload.phone,
         photo: payload.photo,
         gender: payload.gender,
@@ -226,6 +228,27 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
       }
 
       submittedRef.current = false;
+
+      // Telefone ja cadastrado naquele time: o cadastro nao foi concluido e a
+      // recusa aparece no proprio campo, na etapa dele. So o servidor sabe
+      // disso — a tela publica nunca consulta quem ja existe no time.
+      const duplicado =
+        error instanceof RepositoryError &&
+        !(error instanceof NetworkError) &&
+        error.message === PHONE_IN_USE;
+
+      if (duplicado && phoneFieldId) {
+        setConfirming(false);
+        form.setFieldError(phoneFieldId, PHONE_IN_USE);
+        const target = steps.findIndex((step) =>
+          stepValueKeys(step, client.form).includes(phoneFieldId),
+        );
+        if (target >= 0) goTo(target);
+        window.requestAnimationFrame(() => focusFirstInvalid(stepRef.current));
+        toast.error(PHONE_IN_USE);
+        return;
+      }
+
       toast.error(
         error instanceof NetworkError
           ? error.message
@@ -431,9 +454,10 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
 /**
  * Tela final do cadastro.
  *
- * Somente o agradecimento: nenhuma senha, e-mail, botao de login, link
- * pessoal ou instrucao. O integrante nasce com acesso pendente e o ADMIN
- * gera a senha temporaria em Configuracoes quando quiser.
+ * Somente o agradecimento: nenhum link, telefone, credencial, botao de
+ * login ou instrucao. O acesso do integrante ja existe — ele entra pelo link
+ * do time com o telefone que acabou de informar —, mas nada disso aparece
+ * aqui.
  *
  * Recarregar esta pagina ou abrir o mesmo link de novo mostra "Link
  * expirado": o link foi consumido em definitivo.

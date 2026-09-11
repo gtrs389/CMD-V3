@@ -166,7 +166,9 @@ const { resolveInvite, inviteAccepts, ensurePersonalInvite, findInviteByUser } =
 const { createMember, listMembersForUser, rollbackMember, listMembersRecruitedBy } = await import(
   '@/lib/server/member.service'
 );
-const { assertMemberEmailFree, createTeamAccess } = await import('@/lib/server/user.service');
+const { assertTeamPhoneAvailable, createMemberAccess } = await import(
+  '@/lib/server/user.service'
+);
 
 const OPERACAO_A = 'cli-a';
 const OPERACAO_B = 'cli-b';
@@ -247,18 +249,19 @@ function seed() {
 }
 
 /** Reproduz o que a rota publica faz, na mesma ordem. */
-async function cadastrarPeloLink(token: string, entrada: { name: string; email: string }) {
+async function cadastrarPeloLink(token: string, entrada: { name: string; phone: string }) {
   const invite = await resolveInvite(token);
   if (!inviteAccepts(invite) || !invite) throw new Error('link inativo');
 
-  await assertMemberEmailFree(entrada.email);
+  // O telefone identifica a pessoa no acesso: conflito no time barra antes
+  // de gravar qualquer coisa.
+  await assertTeamPhoneAvailable(invite.clientId, entrada.phone);
 
   const member = await createMember(
     {
       clientId: invite.clientId,
       name: entrada.name,
-      email: entrada.email,
-      phone: '',
+      phone: entrada.phone,
       photo: null,
       responses: [],
       consentAt: null,
@@ -270,13 +273,13 @@ async function cadastrarPeloLink(token: string, entrada: { name: string; email: 
   );
 
   try {
-    const access = await createTeamAccess({
+    const userId = await createMemberAccess({
       clientId: invite.clientId,
       memberId: member.id,
       name: member.name,
-      email: entrada.email,
+      phone: member.phone,
     });
-    return { member, access };
+    return { member, userId };
   } catch (error) {
     await rollbackMember(member.id);
     throw error;
@@ -289,7 +292,7 @@ describe('atribuição pelo link', () => {
   it('registra o responsável a partir do link do candidato', async () => {
     const { member } = await cadastrarPeloLink('token-marina', {
       name: 'João Silva',
-      email: 'joao@exemplo.test',
+      phone: '11911110001',
     });
 
     expect(member.recruitedBy).toEqual({
@@ -302,12 +305,12 @@ describe('atribuição pelo link', () => {
   });
 
   it('registra o responsável a partir do link de um integrante', async () => {
-    await cadastrarPeloLink('token-marina', { name: 'João Silva', email: 'joao@exemplo.test' });
+    await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
     const joaoInvite = db.cmd_invites.find((row) => row.token !== 'token-marina' && row.client_id === OPERACAO_A);
 
     const { member } = await cadastrarPeloLink(String(joaoInvite?.token), {
       name: 'Ana Ribeiro',
-      email: 'ana@exemplo.test',
+      phone: '11911110002',
     });
 
     expect(member.recruitedBy?.name).toBe('João Silva');
@@ -339,7 +342,7 @@ describe('atribuição pelo link', () => {
   });
 
   it('desligar o recrutamento derruba todos os links da operação', async () => {
-    await cadastrarPeloLink('token-marina', { name: 'João Silva', email: 'joao@exemplo.test' });
+    await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
     const joaoToken = String(
       db.cmd_invites.find((row) => row.client_id === OPERACAO_A && row.user_id !== 'u-marina')?.token,
     );
@@ -355,19 +358,26 @@ describe('atribuição pelo link', () => {
 });
 
 describe('acesso criado com o cadastro', () => {
-  it('cria o usuário EQUIPE, o link pessoal e devolve a senha uma única vez', async () => {
-    const { member, access } = await cadastrarPeloLink('token-marina', {
+  it('cria o usuário EQUIPE sem e-mail e sem senha, com o link pessoal', async () => {
+    const { member, userId } = await cadastrarPeloLink('token-marina', {
       name: 'João Silva',
-      email: 'joao@exemplo.test',
+      phone: '11911110001',
     });
 
     const user = db.cmd_users.find((row) => row.member_id === member.id);
-    expect(user).toMatchObject({ role: 'EQUIPE', client_id: OPERACAO_A, must_change_password: true });
+    expect(user?.id).toBe(userId);
+    expect(user).toMatchObject({
+      role: 'EQUIPE',
+      client_id: OPERACAO_A,
+      must_change_password: false,
+      is_active: true,
+    });
 
-    // No banco so existe o hash scrypt: a senha em texto puro nao e gravada.
-    expect(String(user?.password_hash)).toMatch(/^scrypt\$[0-9a-f]{32}\$[0-9a-f]{128}$/);
-    expect(String(user?.password_hash)).not.toContain(access.password);
-    expect(access.password.length).toBeGreaterThanOrEqual(12);
+    // Quem entra por link do time + telefone nao tem e-mail nem senha:
+    // nenhuma credencial e criada, nem mesmo temporaria.
+    expect(user?.email).toBeNull();
+    expect(user?.password_hash).toBeNull();
+    expect(user?.phone).toBe('11911110001');
 
     // Link pessoal criado junto, com o token guardado tambem como hash.
     const invite = db.cmd_invites.find((row) => row.user_id === user?.id);
@@ -379,50 +389,38 @@ describe('acesso criado com o cadastro', () => {
     expect(invite?.token_hash).not.toBe(invite?.token);
   });
 
-  it('e-mail já usado interrompe antes de gravar: nenhum registro órfão', async () => {
-    await cadastrarPeloLink('token-marina', { name: 'João Silva', email: 'joao@exemplo.test' });
+  it('telefone já usado no time interrompe antes de gravar: nenhum registro órfão', async () => {
+    await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
 
     const antes = { membros: db.cmd_members.length, usuarios: db.cmd_users.length };
 
     await expect(
-      cadastrarPeloLink('token-marina', { name: 'Outro João', email: 'joao@exemplo.test' }),
+      cadastrarPeloLink('token-marina', { name: 'Outro João', phone: '11911110001' }),
     ).rejects.toThrow();
 
     expect(db.cmd_members).toHaveLength(antes.membros);
     expect(db.cmd_users).toHaveLength(antes.usuarios);
   });
 
-  it('e-mail de outra candidatura também bloqueia: é único no sistema', async () => {
-    await cadastrarPeloLink('token-marina', { name: 'João Silva', email: 'joao@exemplo.test' });
+  it('o mesmo telefone em outro time é aceito: quem identifica o time é o link', async () => {
+    await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
 
-    await expect(
-      cadastrarPeloLink('token-candb', { name: 'Homônimo', email: 'joao@exemplo.test' }),
-    ).rejects.toThrow();
-    expect(db.cmd_members.filter((row) => row.client_id === OPERACAO_B)).toHaveLength(0);
+    const { member } = await cadastrarPeloLink('token-candb', {
+      name: 'Homônimo',
+      phone: '11911110001',
+    });
+
+    expect(member.clientId).toBe(OPERACAO_B);
+    expect(db.cmd_members.filter((row) => row.client_id === OPERACAO_B)).toHaveLength(1);
   });
 
   it('desfaz o integrante quando a criação do acesso falha', async () => {
-    // E-mail livre para o integrante, mas ja usado por um usuario: a
-    // criacao do acesso quebra e o integrante nao pode sobrar.
-    db.cmd_users.push({
-      id: 'u-intruso',
-      name: 'Intruso',
-      email: 'colidido@exemplo.test',
-      role: 'ADMIN',
-      client_id: null,
-      member_id: null,
-      is_active: true,
-      password_hash: 'scrypt$x$y',
-      must_change_password: false,
-    });
-
     const invite = await resolveInvite('token-marina');
     const member = await createMember(
       {
         clientId: OPERACAO_A,
         name: 'Vai Falhar',
-        email: 'colidido@exemplo.test',
-        phone: '',
+        phone: '11911110009',
         photo: null,
         responses: [],
         consentAt: null,
@@ -433,12 +431,14 @@ describe('acesso criado com o cadastro', () => {
         : null,
     );
 
+    // Integrante que nao existe mais: a criacao do acesso quebra e o
+    // cadastro recem-gravado nao pode sobrar.
     await expect(
-      createTeamAccess({
+      createMemberAccess({
         clientId: OPERACAO_A,
-        memberId: member.id,
+        memberId: 'm-inexistente',
         name: member.name,
-        email: 'colidido@exemplo.test',
+        phone: member.phone,
       }),
     ).rejects.toThrow();
 
@@ -447,16 +447,14 @@ describe('acesso criado com o cadastro', () => {
     expect(db.cmd_invites.filter((row) => row.client_id === OPERACAO_A)).toHaveLength(1);
   });
 
-  it('normaliza o e-mail em minúsculas e sem espaços', async () => {
+  it('normaliza o telefone: somente dígitos, no cadastro e no acesso', async () => {
     const { member } = await cadastrarPeloLink('token-marina', {
       name: 'João Silva',
-      email: '  Joao.Silva@Exemplo.TEST  ',
+      phone: '  (11) 91111-0001  ',
     });
 
-    expect(member.email).toBe('joao.silva@exemplo.test');
-    expect(db.cmd_users.find((row) => row.member_id === member.id)?.email).toBe(
-      'joao.silva@exemplo.test',
-    );
+    expect(member.phone).toBe('11911110001');
+    expect(db.cmd_users.find((row) => row.member_id === member.id)?.phone).toBe('11911110001');
   });
 });
 
@@ -465,21 +463,21 @@ describe('escopo das consultas', () => {
   async function montarArvore() {
     const joao = await cadastrarPeloLink('token-marina', {
       name: 'João Silva',
-      email: 'joao@exemplo.test',
+      phone: '11911110001',
     });
-    await cadastrarPeloLink('token-marina', { name: 'Bruna Costa', email: 'bruna@exemplo.test' });
+    await cadastrarPeloLink('token-marina', { name: 'Bruna Costa', phone: '11911110003' });
 
     const joaoUser = db.cmd_users.find((row) => row.member_id === joao.member.id);
     const joaoToken = String(db.cmd_invites.find((row) => row.user_id === joaoUser?.id)?.token);
 
     const ana = await cadastrarPeloLink(joaoToken, {
       name: 'Ana Ribeiro',
-      email: 'ana@exemplo.test',
+      phone: '11911110002',
     });
     const anaUser = db.cmd_users.find((row) => row.member_id === ana.member.id);
     const anaToken = String(db.cmd_invites.find((row) => row.user_id === anaUser?.id)?.token);
 
-    await cadastrarPeloLink(anaToken, { name: 'Carlos Dias', email: 'carlos@exemplo.test' });
+    await cadastrarPeloLink(anaToken, { name: 'Carlos Dias', phone: '11911110004' });
 
     return {
       joaoUserId: String(joaoUser?.id),
@@ -524,13 +522,13 @@ describe('escopo das consultas', () => {
   });
 
   it('mostra o estado do acesso de cada integrante', async () => {
-    await cadastrarPeloLink('token-marina', { name: 'João Silva', email: 'joao@exemplo.test' });
+    await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
 
-    // Integrante antigo, sem e-mail: continua sem acesso.
+    // Integrante antigo, sem telefone: continua sem acesso.
     db.cmd_members.push({
       id: 'm-antigo',
       client_id: OPERACAO_A,
-      name: 'Antiga Sem E-mail',
+      name: 'Antiga Sem Telefone',
       phone: '',
       email: null,
       photo_path: null,
@@ -548,8 +546,8 @@ describe('escopo das consultas', () => {
     );
 
     expect(porNome.get('João Silva')?.access).toBe('ACTIVE');
-    expect(porNome.get('Antiga Sem E-mail')?.access).toBe('NO_EMAIL');
-    expect(porNome.get('Antiga Sem E-mail')?.recruitedBy).toBeNull();
+    expect(porNome.get('Antiga Sem Telefone')?.access).toBe('NO_PHONE');
+    expect(porNome.get('Antiga Sem Telefone')?.recruitedBy).toBeNull();
   });
 });
 
@@ -557,7 +555,7 @@ describe('link pessoal', () => {
   it('permanece o mesmo entre sessões: consultar não gera nem renova token', async () => {
     const { member } = await cadastrarPeloLink('token-marina', {
       name: 'João Silva',
-      email: 'joao@exemplo.test',
+      phone: '11911110001',
     });
     const user = db.cmd_users.find((row) => row.member_id === member.id);
     const primeiro = await findInviteByUser(String(user?.id));

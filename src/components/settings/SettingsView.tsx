@@ -49,11 +49,6 @@ interface Payload {
   pendingMembers: MemberWithoutAccess[];
 }
 
-interface GrantOutcome {
-  credentials: GeneratedCredential[];
-  conflicts: { clientId: string; name: string; email: string }[];
-}
-
 /** Linha da lista: usuario existente, time ou integrante sem acesso. */
 interface Row {
   key: string;
@@ -61,10 +56,13 @@ interface Row {
   clientId: string | null;
   memberId: string | null;
   name: string;
-  /** Contato exibido: e-mail nos perfis com senha, telefone no do time. */
+  /** Contato exibido: telefone de acesso, ou e-mail no ADMIN geral. */
   contact: string;
-  /** Administrador do time: entra por link + telefone, nunca por senha. */
-  teamAdmin: boolean;
+  /**
+   * Entra por link do time + telefone, nunca por senha: Administrador do
+   * time e membro da equipe. E quem tem aparelho vinculado.
+   */
+  phoneAccess: boolean;
   /** Aparelho autorizado. Nulo enquanto nenhum navegador foi vinculado. */
   device: AdminDeviceInfo | null;
   role: Role;
@@ -81,15 +79,17 @@ const STATUS_CLASSES: Record<AccessStatus, string> = {
   ACTIVE: 'bg-success-50 text-success-600',
   PENDING: 'bg-warning-50 text-warning-600',
   DISABLED: 'bg-danger-50 text-danger-600',
-  NO_EMAIL: 'bg-ink-100 text-ink-700',
+  NO_PHONE: 'bg-ink-100 text-ink-700',
+  DUPLICATE_PHONE: 'bg-warning-50 text-warning-600',
 };
 
 /**
  * Configuracoes do sistema.
  *
- * Lista ADMINs, times e integrantes da equipe, com nome, e-mail,
- * perfil, time, responsavel pelo cadastro e estado do acesso. Nenhum
- * hash de senha chega ao navegador; a senha temporaria existe apenas na
+ * Lista ADMINs, Administradores do time e membros da equipe, com foto, nome,
+ * telefone, time, responsavel pelo cadastro, estado do acesso e estado do
+ * aparelho autorizado. Nenhum hash de senha ou de credencial de aparelho
+ * chega ao navegador; a senha temporaria do ADMIN geral existe apenas na
  * resposta da acao e no modal, e some ao fechar.
  */
 export function SettingsView() {
@@ -100,7 +100,7 @@ export function SettingsView() {
 
   const [term, setTerm] = useState('');
   const [working, setWorking] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<GrantOutcome | null>(null);
+  const [credential, setCredential] = useState<GeneratedCredential | null>(null);
   const [confirming, setConfirming] = useState<{
     row: Row;
     action: 'disable' | 'revoke' | 'device';
@@ -113,10 +113,11 @@ export function SettingsView() {
       clientId: item.candidate?.id ?? null,
       memberId: item.memberId,
       name: item.name,
-      // O administrador do time nao tem e-mail: o contato dele e o telefone
-      // com que entra, junto do link do time.
-      contact: item.teamPersonId ? formatPhone(item.phone ?? '') : (item.email ?? '--'),
-      teamAdmin: Boolean(item.teamPersonId),
+      // Somente o ADMIN geral tem e-mail: nos outros perfis o contato e o
+      // telefone com que a pessoa entra, junto do link do time.
+      contact:
+        item.role === 'ADMIN' ? (item.email ?? '--') : formatPhone(item.phone ?? '') || '--',
+      phoneAccess: item.role !== 'ADMIN',
       device: item.device,
       role: item.role,
       status: item.status,
@@ -135,7 +136,7 @@ export function SettingsView() {
       memberId: null,
       name: item.name,
       contact: 'Nenhum administrador cadastrado',
-      teamAdmin: true,
+      phoneAccess: true,
       device: null,
       role: 'CANDIDATE' as Role,
       status: 'PENDING' as AccessStatus,
@@ -146,19 +147,20 @@ export function SettingsView() {
       self: false,
     }));
 
-    // Integrante sem usuario: com e-mail valido o acesso pode ser gerado;
-    // sem e-mail o estado fica em "E-mail necessário".
+    // Integrante ainda sem acesso liberado: falta telefone, ou o numero se
+    // repete dentro do time. Corrigido o telefone no cadastro do integrante,
+    // o acesso e criado ou liberado sozinho — nao ha acao a executar aqui.
     const integrantes = (data?.pendingMembers ?? []).map((item) => ({
       key: `m-${item.memberId}`,
       userId: null,
       clientId: item.clientId,
       memberId: item.memberId,
       name: item.name,
-      contact: item.email ?? '--',
-      teamAdmin: false,
+      contact: formatPhone(item.phone ?? '') || '--',
+      phoneAccess: true,
       device: null,
       role: 'EQUIPE' as Role,
-      status: (item.email ? 'PENDING' : 'NO_EMAIL') as AccessStatus,
+      status: item.status,
       candidate: { id: item.clientId, name: item.candidateName, photo: null },
       recruitedBy: item.recruitedBy,
       photo: item.photo,
@@ -202,30 +204,21 @@ export function SettingsView() {
   }
 
   /**
-   * Senha do ADMIN ou do integrante da equipe.
+   * Nova senha temporaria do ADMIN geral.
    *
-   * O administrador do time nunca passa por aqui: ele nao tem senha nenhuma,
-   * nem visivel nem oculta — entra com o link do time e o proprio telefone.
+   * Nenhum outro perfil passa por aqui: o Administrador do time e o membro
+   * da equipe nao tem senha, nem visivel nem oculta — entram com o link do
+   * time e o proprio telefone. A rota recusa de novo, do lado do servidor.
    */
-  function gerarAcesso(row: Row) {
-    if (row.teamAdmin) return;
+  function redefinirSenha(row: Row) {
+    if (row.phoneAccess || !row.userId) return;
 
     void run(row.key, async () => {
-      if (row.userId) {
-        const { credential } = await api<{ credential: GeneratedCredential }>(
-          `/api/usuarios/${row.userId}/senha`,
-          { method: 'POST' },
-        );
-        setOutcome({ credentials: [credential], conflicts: [] });
-        return;
-      }
-
-      setOutcome(
-        await api<GrantOutcome>('/api/usuarios', {
-          method: 'POST',
-          body: { action: 'grant-member', memberId: row.memberId },
-        }),
+      const { credential: gerada } = await api<{ credential: GeneratedCredential }>(
+        `/api/usuarios/${row.userId}/senha`,
+        { method: 'POST' },
       );
+      setCredential(gerada);
     });
   }
 
@@ -239,9 +232,10 @@ export function SettingsView() {
   /**
    * Libera um novo aparelho.
    *
-   * O aparelho atual e revogado e as sessoes daquele usuario caem. Telefone,
-   * nome, foto, time e link nao mudam: o proximo acesso correto vincula o
-   * navegador novo. Exclusivo do ADMIN geral — a rota confere de novo.
+   * Vale para o Administrador do time e para o membro da equipe. O aparelho
+   * atual e revogado e as sessoes daquele usuario caem. Telefone, nome, foto,
+   * time e link nao mudam: o proximo acesso correto vincula o navegador novo.
+   * Exclusivo do ADMIN geral — a rota confere de novo.
    */
   function liberarAparelho(row: Row) {
     void run(row.key, async () => {
@@ -289,9 +283,10 @@ export function SettingsView() {
               Usuários do sistema
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Cada administrador do time entra com o link do time e o próprio telefone, sem senha.
-              Todo integrante cadastrado por um link tem acesso próprio; quem não tem e-mail fica
-              em &quot;{ACCESS_STATUS_LABELS.NO_EMAIL}&quot; e não recebe senha.
+              Administradores do time e membros da equipe entram com o link do time e o próprio
+              telefone, sem e-mail e sem senha. Quem está sem telefone fica em &quot;
+              {ACCESS_STATUS_LABELS.NO_PHONE}&quot;, e o telefone repetido dentro do time bloqueia
+              o acesso até ser corrigido no cadastro da pessoa.
             </p>
           </div>
         </div>
@@ -306,8 +301,8 @@ export function SettingsView() {
               id="busca-usuarios"
               type="search"
               value={term}
-              aria-label="Buscar usuários por nome, e-mail, perfil, time ou responsável"
-              placeholder="Buscar por nome, e-mail, perfil, time ou responsável"
+              aria-label="Buscar usuários por nome, telefone, perfil, time ou responsável"
+              placeholder="Buscar por nome, telefone, perfil, time ou responsável"
               onChange={(event) => setTerm(event.target.value)}
               className="min-h-11 w-full rounded-control border border-line bg-surface pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none"
             />
@@ -401,12 +396,12 @@ export function SettingsView() {
                     </p>
                   ) : null}
 
-                  {/* Aparelho autorizado: so o Administrador do time tem. */}
-                  {row.teamAdmin && row.userId ? <DeviceLine device={row.device} /> : null}
+                  {/* Aparelho autorizado: quem entra por link + telefone. */}
+                  {row.phoneAccess && row.userId ? <DeviceLine device={row.device} /> : null}
                 </div>
 
                 {/* No celular o estado desce para a segunda linha, para o
-                    nome e o e-mail nao serem espremidos. */}
+                    nome e o telefone nao serem espremidos. */}
                 <div className="order-last flex w-full flex-wrap items-center gap-x-2 gap-y-1 sm:order-none sm:w-auto sm:flex-col sm:items-end">
                   <span
                     className={cn(
@@ -424,24 +419,18 @@ export function SettingsView() {
                 <Menu
                   label={`Ações de ${row.name}`}
                   actions={[
-                    // O administrador do time nao tem senha para gerar nem
-                    // redefinir: a acao simplesmente nao existe para ele.
-                    ...(row.teamAdmin
+                    // Somente o ADMIN geral tem senha. Quem entra por link do
+                    // time + telefone nao tem senha para gerar nem redefinir:
+                    // a acao simplesmente nao existe para essas pessoas.
+                    ...(row.phoneAccess
                       ? []
                       : [
                           {
                             id: 'senha',
-                            label:
-                              row.status === 'NO_EMAIL'
-                                ? 'E-mail necessário'
-                                : row.status === 'PENDING'
-                                  ? 'Gerar acesso'
-                                  : 'Redefinir senha',
+                            label: 'Redefinir senha',
                             icon: <KeyRound className="size-4" />,
-                            // Sem e-mail nao ha acesso a gerar: o integrante
-                            // antigo precisa do endereco antes.
-                            disabled: row.self || row.status === 'NO_EMAIL' || working !== null,
-                            onSelect: () => gerarAcesso(row),
+                            disabled: row.self || !row.userId || working !== null,
+                            onSelect: () => redefinirSenha(row),
                           },
                         ]),
                     {
@@ -459,7 +448,7 @@ export function SettingsView() {
                           ? alterarAtivo(row, true)
                           : setConfirming({ row, action: 'disable' }),
                     },
-                    ...(row.teamAdmin && row.userId
+                    ...(row.phoneAccess && row.userId
                       ? [
                           {
                             id: 'aparelho',
@@ -494,10 +483,10 @@ export function SettingsView() {
       <InviteHistoryCard />
 
       <CredentialsModal
-        open={outcome !== null}
-        credentials={outcome?.credentials ?? []}
-        conflicts={outcome?.conflicts ?? []}
-        onClose={() => setOutcome(null)}
+        open={credential !== null}
+        credentials={credential ? [credential] : []}
+        conflicts={[]}
+        onClose={() => setCredential(null)}
       />
 
       <ConfirmDialog
@@ -537,7 +526,8 @@ export function SettingsView() {
 }
 
 /**
- * Estado do aparelho autorizado de um Administrador do time.
+ * Estado do aparelho autorizado de quem entra por link do time + telefone:
+ * Administrador do time e membro da equipe.
  *
  * Apenas auditoria: tipo, navegador, sistema e as datas. Nenhum
  * identificador tecnico, credencial ou valor derivado de IP chega aqui.

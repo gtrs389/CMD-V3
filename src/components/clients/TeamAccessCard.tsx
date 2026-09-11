@@ -12,14 +12,18 @@ import { useToast } from '@/components/ui/Toast';
 import { TeamAccessLinkField } from './TeamAccessLinkField';
 
 /**
- * Acesso dos administradores do time. Exclusivo do ADMIN geral.
+ * Acesso ao sistema pelo link do time. Exclusivo do ADMIN geral.
  *
- * O link vale para todos os administradores ativos daquele time: cada um
- * entra com o proprio telefone e abre a propria sessao. Ele nao expira
+ * O MESMO link vale para todas as pessoas ativas daquele time —
+ * Administradores do time e membros da equipe: cada uma entra com o proprio
+ * telefone e abre a propria sessao, com o proprio escopo. Ele nao expira
  * sozinho e nao e consumido — vale ate ser renovado aqui.
  *
+ * Este nao e o link de recrutamento, que e de uso unico e tem prazo.
+ *
  * Copiar nunca gera um endereco novo. Gerar um novo invalida o anterior na
- * hora e derruba todas as sessoes abertas dos administradores do time.
+ * hora e derruba as sessoes abertas do time inteiro; os aparelhos ja
+ * autorizados continuam valendo.
  */
 export function TeamAccessCard({ clientId }: { clientId: string }) {
   const toast = useToast();
@@ -60,7 +64,7 @@ export function TeamAccessCard({ clientId }: { clientId: string }) {
           className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
         >
           <KeyRound aria-hidden="true" className="size-4 text-accent-600" />
-          Acesso dos administradores
+          Acesso ao sistema
         </h2>
 
         {link ? (
@@ -94,13 +98,10 @@ export function TeamAccessCard({ clientId }: { clientId: string }) {
           </div>
         ) : (
           <>
-            <TeamAccessLinkField
-              token={link.token}
-              label="Link de acesso dos administradores"
-            />
+            <TeamAccessLinkField token={link.token} label="Link de acesso ao sistema" />
 
             <p className="text-[0.6875rem] text-ink-500">
-              Cada administrador entra com este link e o próprio telefone.
+              Envie este link aos administradores e membros do time.
             </p>
 
             <Button
@@ -119,7 +120,7 @@ export function TeamAccessCard({ clientId }: { clientId: string }) {
       <ConfirmDialog
         open={confirming}
         title="Gerar novo link de acesso"
-        description="O link atual deixará de funcionar e todos os administradores deste time serão desconectados."
+        description="O link atual deixará de funcionar e todas as pessoas deste time — administradores e membros — serão desconectadas."
         confirmLabel="Gerar novo link"
         onCancel={() => setConfirming(false)}
         onConfirm={() => {

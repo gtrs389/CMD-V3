@@ -39,7 +39,12 @@ export const FIELD_TYPE_HINTS: Record<FieldType, string> = {
   photo: 'Câmera ou galeria, com prévia antes do envio.',
 };
 
-/** Campos nativos: existem em todo formulario e nao podem ser excluidos. */
+/**
+ * Campos nativos: existem em todo formulario e nao podem ser excluidos.
+ *
+ * Sem E-mail: o integrante nao tem endereco nem senha. Ele entra pelo link
+ * do time com o telefone deste cadastro, por isso o telefone e obrigatorio.
+ */
 const SYSTEM_FIELD_DEFAULTS: Array<{
   systemKey: SystemFieldKey;
   type: FieldType;
@@ -62,14 +67,6 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     label: 'Nome completo',
     placeholder: 'Digite o nome completo',
     helpText: '',
-    required: true,
-  },
-  {
-    systemKey: 'email',
-    type: 'email',
-    label: 'E-mail',
-    placeholder: 'voce@exemplo.com',
-    helpText: 'Usado para acessar o CMD.',
     required: true,
   },
   {
@@ -231,11 +228,11 @@ export function isSystemField(field: CustomField): boolean {
 /**
  * Campos que nao podem deixar de ser obrigatorios.
  *
- * Nome identifica a pessoa. E-mail e o que da acesso ao CMD e o que amarra
- * o link pessoal dela: sem ele nao existe integrante com acesso.
+ * Nome identifica a pessoa; telefone e o que da acesso ao CMD, junto do link
+ * do time. Sem um dos dois nao existe integrante com acesso.
  */
 export function isLockedRequired(field: CustomField): boolean {
-  return field.systemKey === 'name' || field.systemKey === 'email';
+  return field.systemKey === 'name' || field.systemKey === 'phone';
 }
 
 export function canDeleteField(field: CustomField): boolean {
@@ -247,11 +244,9 @@ export function canDuplicateField(field: CustomField): boolean {
   return !isSystemField(field);
 }
 
-/** E-mail nao pode ser desativado: e ele que cria o acesso do integrante. */
+/** Telefone nao pode ser desativado: e ele que cria o acesso do integrante. */
 export function canDisableField(field: CustomField): boolean {
-  return (
-    field.systemKey !== 'name' && field.systemKey !== 'phone' && field.systemKey !== 'email'
-  );
+  return field.systemKey !== 'name' && field.systemKey !== 'phone';
 }
 
 /** Reindexa a ordem apos qualquer operacao na lista. */

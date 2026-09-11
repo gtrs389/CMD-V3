@@ -4,7 +4,7 @@ import { badRequest, jsonGone, jsonOk, readJson, toErrorResponse } from '@/lib/s
 import { publicSubmissionSchema } from '@/lib/validation/server.schema';
 import { getInviteContext } from '@/lib/server/client.service';
 import { createMember, rollbackMember } from '@/lib/server/member.service';
-import { assertMemberEmailFree, createPendingTeamAccess } from '@/lib/server/user.service';
+import { assertTeamPhoneAvailable, createMemberAccess } from '@/lib/server/user.service';
 import {
   beginInviteSubmit,
   consumeInvite,
@@ -49,8 +49,10 @@ import {
  * reserva, dentro do prazo). Depois que o integrante e salvo, o link fica
  * CONSUMED em definitivo.
  *
- * Nenhuma credencial volta nesta resposta: o integrante nasce com acesso
- * pendente e o ADMIN gera a senha temporaria em Configuracoes.
+ * Nenhuma credencial volta nesta resposta, e nenhuma existe: o integrante
+ * nasce com acesso proprio, sem e-mail e sem senha. Ele entra pelo link do
+ * time com o telefone deste cadastro. A tela final mostra apenas o
+ * agradecimento.
  */
 export async function POST(
   request: NextRequest,
@@ -95,9 +97,11 @@ export async function POST(
         throw badRequest('E necessário aceitar o aviso de privacidade para enviar o cadastro.');
       }
 
-      // Conferencia do e-mail ANTES de gravar qualquer coisa: e-mail repetido
-      // interrompe o cadastro sem deixar integrante, usuario ou link orfao.
-      await assertMemberEmailFree(input.email);
+      // Conferencia do telefone ANTES de gravar qualquer coisa: numero ja em
+      // uso naquele time interrompe o cadastro sem deixar integrante,
+      // usuario ou link orfao. E o telefone que identifica a pessoa no
+      // acesso, entao ele nao pode apontar para duas.
+      await assertTeamPhoneAvailable(client.id, input.phone);
 
       const { device, ...submission } = input;
       const member = await createMember(
@@ -106,15 +110,15 @@ export async function POST(
         owner ? { userId: owner.userId, name: owner.name, role: owner.role } : null,
       );
 
-      // Acesso do integrante: usuario EQUIPE e link pessoal, criados juntos,
-      // SEM senha utilizavel. O estado fica "Acesso pendente" e o ADMIN gera
-      // a senha temporaria em Configuracoes quando quiser.
+      // Acesso do integrante: usuario EQUIPE e link pessoal, criados juntos.
+      // Sem e-mail, sem senha e sem primeiro acesso — ele ja entra pelo link
+      // do time com o telefone que acabou de informar.
       try {
-        await createPendingTeamAccess({
+        await createMemberAccess({
           clientId: client.id,
           memberId: member.id,
           name: member.name,
-          email: input.email,
+          phone: member.phone,
         });
       } catch (error) {
         await rollbackMember(member.id);

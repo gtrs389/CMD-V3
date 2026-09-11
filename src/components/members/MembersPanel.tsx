@@ -286,9 +286,11 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                           <span className="block truncate font-medium text-ink-900">
                             {member.name}
                           </span>
-                          {!somenteBasico ? (
+                          {/* E-mail historico: sem endereco a linha some, e
+                              nenhum cadastro novo tem um. */}
+                          {!somenteBasico && member.email ? (
                             <span className="block truncate text-xs text-ink-500">
-                              {member.email ?? (member.source === 'invite' ? 'Via link de convite' : '--')}
+                              {member.email}
                             </span>
                           ) : null}
                         </span>

@@ -8,10 +8,9 @@ import type {
   Role,
   SystemUser,
 } from '@/lib/types';
+import { PHONE_IN_USE } from '@/lib/types';
 import { hashPassword } from '@/lib/auth/password';
 import { generateTempPassword } from '@/lib/auth/temp-password';
-import { createInviteToken } from '@/lib/auth/tokens';
-import { isValidEmail, normalizeEmail } from '@/lib/utils/email';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
@@ -37,18 +36,21 @@ import { ApiError, badRequest, notFound } from './http';
  * Usuarios do sistema: ADMINs, administradores de time e integrantes da
  * equipe.
  *
- * Todo integrante cadastrado por um link passa a ter acesso proprio ao CMD,
- * com um link pessoal de recrutamento. Integrantes anteriores ao campo de
- * e-mail continuam sem acesso ate que o endereco seja informado.
+ * Somente o ADMIN geral tem e-mail e senha. Os dois outros perfis entram
+ * pelo par LINK DO TIME + TELEFONE (ver `team-access.service.ts`):
  *
- * O Administrador do time (perfil CANDIDATE) nao usa e-mail nem senha: ele
- * entra pelo par LINK DO TIME + TELEFONE (ver `team-access.service.ts`). Cada
- * pessoa cadastrada em "Administradores do time" tem o proprio usuario, a
- * propria sessao e o proprio link de recrutamento.
+ *   Administrador do time (CANDIDATE) -> telefone do cadastro em
+ *                                        "Administradores do time";
+ *   Membro da equipe (EQUIPE)         -> telefone do proprio cadastro.
+ *
+ * O telefone nunca e senha: sozinho ele nao autentica ninguem. Dentro de um
+ * mesmo time um telefone ativo identifica UMA pessoa, contando os dois
+ * perfis juntos; em times diferentes o mesmo numero pode existir, porque o
+ * link diz primeiro de qual time se trata.
  *
  * Senha em texto puro nunca e gravada nem registrada. A geracao devolve o
  * valor uma unica vez, na resposta da acao; no banco fica apenas o hash
- * scrypt calculado aqui.
+ * scrypt calculado aqui, e ela existe apenas para o ADMIN geral.
  */
 
 const USER_COLUMNS =
@@ -72,38 +74,39 @@ type UserColumns = Pick<
   | 'created_at'
 >;
 
-/** E-mail ja usado por outro usuario. Mensagem unica em todo o sistema. */
-export const EMAIL_IN_USE = 'E-mail já utilizado por outro usuário.';
-
-/** Integrante sem e-mail: nao ha como criar acesso. */
-export const EMAIL_REQUIRED = 'E-mail necessário para criar o acesso.';
-
-export function emailConflict(): ApiError {
-  return new ApiError(409, EMAIL_IN_USE);
+/**
+ * Recusa por telefone repetido.
+ *
+ * A mensagem vive em `@/lib/types` porque a tela publica tambem a usa: ela
+ * aparece no proprio campo Telefone quando o cadastro e recusado.
+ */
+export function phoneConflict(): ApiError {
+  return new ApiError(409, PHONE_IN_USE);
 }
 
-/** Telefone ja usado por outro administrador do mesmo time. */
-export const PHONE_IN_USE = 'Telefone já utilizado por outro administrador deste time.';
+/** Perfis que entram por link do time + telefone, com aparelho vinculado. */
+function usesPhoneAccess(
+  row: Pick<UserColumns, 'role'> & { team_person_id?: string | null },
+): boolean {
+  return row.role === 'EQUIPE' || Boolean(row.team_person_id);
+}
 
 /**
- * Sem senha utilizavel o acesso esta pendente; desativado vem antes de ativo.
+ * Estado do acesso.
  *
- * O Administrador do time nunca tem senha: para ele o acesso esta ativo
- * enquanto o usuario estiver ativo, porque quem autentica e o link + telefone.
+ * Quem entra por link + telefone nao tem senha: para essas pessoas o acesso
+ * esta ativo enquanto o usuario estiver ativo e tiver telefone. Sem telefone
+ * nao ha como identificar a pessoa no link do time, e o estado fica em
+ * "Telefone necessário". Somente o ADMIN geral depende de senha.
  */
 export function accessStatus(
-  row: Pick<UserColumns, 'is_active' | 'password_hash'> & { team_person_id?: string | null },
+  row: Pick<UserColumns, 'is_active' | 'password_hash' | 'role' | 'phone'> & {
+    team_person_id?: string | null;
+  },
 ): AccessStatus {
   if (!row.is_active) return 'DISABLED';
-  if (row.team_person_id) return 'ACTIVE';
+  if (usesPhoneAccess(row)) return row.phone ? 'ACTIVE' : 'NO_PHONE';
   return row.password_hash ? 'ACTIVE' : 'PENDING';
-}
-
-async function findUserByEmail(email: string): Promise<UserColumns | null> {
-  return selectOne<UserColumns>(TABLES.users, {
-    select: USER_COLUMNS,
-    filters: { email: `eq.${normalizeEmail(email)}` },
-  });
 }
 
 async function findUserByMember(memberId: string): Promise<UserColumns | null> {
@@ -177,12 +180,14 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
       : Promise.resolve([]),
   ]);
 
-  const [photos, personPhotos, devices] = await Promise.all([
+  const [photos, personPhotos, memberPhotos, devices] = await Promise.all([
     signedUrls(clients.map((client) => client.photo_path)),
     signedUrls(people.map((person) => person.photo_path)),
-    // Aparelho autorizado de cada Administrador do time. Somente auditoria:
-    // nenhum hash de credencial ou de IP sai daqui.
-    activeAdminDevices(rows.filter((row) => row.team_person_id).map((row) => row.id)),
+    signedUrls(members.map((member) => member.photo_path)),
+    // Aparelho autorizado de quem entra por link + telefone: Administrador do
+    // time e membro da equipe. Somente auditoria: nenhum hash de credencial
+    // ou de IP sai daqui.
+    activeAdminDevices(rows.filter(usesPhoneAccess).map((row) => row.id)),
   ]);
   const byId = new Map(
     clients.map((client, index) => [
@@ -194,6 +199,9 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
   const personPhotoById = new Map(
     people.map((person, index) => [person.id, personPhotos[index] ?? null]),
   );
+  const memberPhotoById = new Map(
+    members.map((member, index) => [member.id, memberPhotos[index] ?? null]),
+  );
 
   return rows.map((row) => {
     const member = row.member_id ? memberById.get(row.member_id) : undefined;
@@ -202,13 +210,17 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
       name: row.name,
       email: row.email,
       phone: row.phone,
-      photo: row.team_person_id ? (personPhotoById.get(row.team_person_id) ?? null) : null,
+      photo: row.team_person_id
+        ? (personPhotoById.get(row.team_person_id) ?? null)
+        : row.member_id
+          ? (memberPhotoById.get(row.member_id) ?? null)
+          : null,
       role: row.role as Role,
       status: accessStatus(row),
       candidate: row.client_id ? (byId.get(row.client_id) ?? null) : null,
       memberId: row.member_id,
       teamPersonId: row.team_person_id,
-      device: row.team_person_id ? (devices.get(row.id) ?? null) : null,
+      device: usesPhoneAccess(row) ? (devices.get(row.id) ?? null) : null,
       recruitedBy: member ? recruiterOf(member) : null,
       lastLoginAt: row.last_login_at,
       mustChangePassword: row.must_change_password,
@@ -249,10 +261,16 @@ export async function listTeamsWithoutAdmins(): Promise<CandidateWithoutAdmins[]
 }
 
 /**
- * Integrantes que ainda nao possuem usuario.
+ * Integrantes cujo acesso ainda nao esta liberado.
  *
- * Com e-mail valido, o ADMIN gera o acesso em Configuracoes. Sem e-mail o
- * estado fica em "E-mail necessário" e nenhuma senha e criada.
+ * O acesso nasce junto do cadastro, entao sobram apenas dois casos, os dois
+ * resolvidos pelo ADMIN geral no proprio cadastro do integrante:
+ *
+ *   NO_PHONE        - cadastro antigo sem telefone;
+ *   DUPLICATE_PHONE - o telefone se repete dentro do time (entre integrantes
+ *                     ou com um Administrador do time ativo). Ninguem e
+ *                     escolhido automaticamente: os dois ficam bloqueados ate
+ *                     o numero ser corrigido.
  */
 export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]> {
   const members = await selectRows<
@@ -261,7 +279,7 @@ export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]>
       | 'id'
       | 'client_id'
       | 'name'
-      | 'email'
+      | 'phone'
       | 'photo_path'
       | 'recruited_by_user_id'
       | 'recruited_by_name'
@@ -269,18 +287,39 @@ export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]>
     >
   >(TABLES.members, {
     select:
-      'id,client_id,name,email,photo_path,recruited_by_user_id,recruited_by_name,recruited_by_role',
+      'id,client_id,name,phone,photo_path,recruited_by_user_id,recruited_by_name,recruited_by_role',
     order: 'created_at.asc',
   });
   if (members.length === 0) return [];
 
-  const users = await selectRows<Pick<UserColumns, 'member_id'>>(TABLES.users, {
-    select: 'member_id',
-    filters: { member_id: inFilter(members.map((member) => member.id)) },
-  });
-  const comAcesso = new Set(users.map((user) => user.member_id));
+  const users = await selectRows<Pick<UserColumns, 'id' | 'member_id' | 'client_id' | 'phone' | 'is_active'>>(
+    TABLES.users,
+    { select: 'id,member_id,client_id,phone,is_active' },
+  );
 
-  const pendentes = members.filter((member) => !comAcesso.has(member.id));
+  const liberado = new Set(
+    users.filter((user) => user.member_id && user.is_active && user.phone).map((user) => user.member_id),
+  );
+
+  // Telefone ocupado por outra pessoa ATIVA do mesmo time, seja ela
+  // Administrador do time ou outro integrante.
+  const ocupado = new Set(
+    users
+      .filter((user) => user.is_active && user.phone && user.client_id)
+      .map((user) => `${user.client_id}:${user.phone}`),
+  );
+
+  const repetidos = new Map<string, number>();
+  for (const member of members) {
+    const phone = normalizePhone(member.phone ?? '');
+    if (phone.length < 10) continue;
+    const chave = `${member.client_id}:${phone}`;
+    repetidos.set(chave, (repetidos.get(chave) ?? 0) + 1);
+  }
+
+  const userByMember = new Map(users.filter((user) => user.member_id).map((user) => [user.member_id, user]));
+
+  const pendentes = members.filter((member) => !liberado.has(member.id));
   if (pendentes.length === 0) return [];
 
   const clients = await selectRows<Pick<ClientRow, 'id' | 'name'>>(TABLES.clients, {
@@ -291,15 +330,33 @@ export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]>
 
   const photos = await signedUrls(pendentes.map((member) => member.photo_path));
 
-  return pendentes.map((member, index) => ({
-    memberId: member.id,
-    clientId: member.client_id,
-    candidateName: clientName.get(member.client_id) ?? '--',
-    name: member.name,
-    email: member.email,
-    photo: photos[index] ?? null,
-    recruitedBy: recruiterOf(member),
-  }));
+  return pendentes.map((member, index) => {
+    const phone = normalizePhone(member.phone ?? '');
+    const chave = `${member.client_id}:${phone}`;
+    const proprio = userByMember.get(member.id);
+
+    // Telefone tomado por outra pessoa do time, ou repetido entre
+    // integrantes: em qualquer dos dois o acesso fica bloqueado.
+    const duplicado =
+      phone.length >= 10 &&
+      ((repetidos.get(chave) ?? 0) > 1 ||
+        (ocupado.has(chave) && !(proprio?.is_active && proprio.phone === phone)));
+
+    return {
+      memberId: member.id,
+      clientId: member.client_id,
+      candidateName: clientName.get(member.client_id) ?? '--',
+      name: member.name,
+      phone: phone || null,
+      photo: photos[index] ?? null,
+      status: (phone.length < 10
+        ? 'NO_PHONE'
+        : duplicado
+          ? 'DUPLICATE_PHONE'
+          : 'PENDING') as AccessStatus,
+      recruitedBy: recruiterOf(member),
+    };
+  });
 }
 
 /* -------------------------------------------------------------------------
@@ -321,24 +378,40 @@ async function findUserByTeamPerson(personId: string): Promise<UserColumns | nul
 /**
  * Confere o telefone antes de gravar.
  *
- * O mesmo telefone nunca se repete dentro do mesmo time; em times diferentes
- * pode, porque o link identifica primeiro qual time esta sendo acessado.
+ * Um telefone ATIVO identifica uma unica pessoa dentro do mesmo time,
+ * contando juntos os Administradores do time e os membros da equipe. Em
+ * times diferentes o mesmo numero pode existir, porque o link identifica
+ * primeiro qual time esta sendo acessado.
+ *
+ * `owner` isenta a propria pessoa da conferencia: sem isso, salvar o cadastro
+ * sem trocar o numero acusaria conflito com ela mesma.
  */
 export async function assertTeamPhoneAvailable(
   clientId: string,
   phone: string,
-  personId?: string,
+  owner?: { personId?: string | null; memberId?: string | null },
 ): Promise<void> {
   const normalized = normalizePhone(phone);
   if (normalized.length < 10) throw badRequest('Telefone inválido. Use DDD + número.');
 
-  const conflict = await selectOne<Pick<UserColumns, 'id' | 'team_person_id'>>(TABLES.users, {
-    select: 'id,team_person_id',
-    filters: { client_id: `eq.${clientId}`, phone: `eq.${normalized}` },
-  });
-  if (conflict && conflict.team_person_id !== (personId ?? null)) {
-    throw new ApiError(409, PHONE_IN_USE);
-  }
+  const conflicts = await selectRows<Pick<UserColumns, 'id' | 'team_person_id' | 'member_id'>>(
+    TABLES.users,
+    {
+      select: 'id,team_person_id,member_id',
+      filters: {
+        client_id: `eq.${clientId}`,
+        phone: `eq.${normalized}`,
+        is_active: 'is.true',
+      },
+    },
+  );
+
+  const proprio = conflicts.every(
+    (row) =>
+      (owner?.personId && row.team_person_id === owner.personId) ||
+      (owner?.memberId && row.member_id === owner.memberId),
+  );
+  if (conflicts.length > 0 && !proprio) throw phoneConflict();
 }
 
 /**
@@ -429,120 +502,101 @@ export async function revokeTeamPersonUser(personId: string): Promise<void> {
    Acesso do integrante (perfil EQUIPE)
    ------------------------------------------------------------------------- */
 
-export interface TeamSeed {
+export interface MemberAccessSeed {
   clientId: string;
   memberId: string;
   name: string;
-  email: string;
+  /** Telefone do proprio cadastro. Normalizado aqui antes de gravar. */
+  phone: string;
 }
 
 /**
- * Conferencia previa do e-mail do integrante.
+ * Cria o acesso do integrante: usuario EQUIPE e link pessoal.
  *
- * Roda ANTES de gravar qualquer coisa: se o endereco ja pertence a um
- * usuario ou a outro integrante, o cadastro para aqui e nenhum dado orfao e
- * criado.
- */
-export async function assertMemberEmailFree(email: string, memberId?: string): Promise<void> {
-  const normalized = normalizeEmail(email);
-  if (!isValidEmail(normalized)) throw badRequest('Informe um e-mail válido.');
-
-  const user = await findUserByEmail(normalized);
-  if (user && user.member_id !== (memberId ?? null)) throw emailConflict();
-
-  const member = await selectOne<Pick<MemberRow, 'id'>>(TABLES.members, {
-    select: 'id',
-    filters: { email: `eq.${normalized}` },
-  });
-  if (member && member.id !== memberId) throw emailConflict();
-}
-
-/**
- * Acesso EQUIPE do integrante: usuario e link pessoal em uma transacao so.
+ * O usuario nasce SEM e-mail e SEM senha — `email` e `password_hash` ficam
+ * nulos, nenhuma senha temporaria e gerada e nenhum primeiro acesso e
+ * exigido. Quem autentica e o par link do time + telefone, e o aparelho e
+ * vinculado no primeiro acesso valido.
  *
- * A funcao `cmd_create_team_access` grava os dois juntos: nunca sobra
- * usuario sem link nem link sem usuario. O token vai pronto daqui e nao e
- * registrado em log.
+ * A conferencia do telefone acontece ANTES (ver `assertTeamPhoneAvailable`),
+ * para o cadastro parar sem deixar integrante orfao. Idempotente: chamada de
+ * novo para o mesmo integrante, apenas devolve o usuario existente.
  */
-export async function createTeamAccess(seed: TeamSeed): Promise<GeneratedCredential> {
-  const email = normalizeEmail(seed.email);
-  const password = generateTempPassword();
+export async function createMemberAccess(seed: MemberAccessSeed): Promise<string> {
+  const existing = await findUserByMember(seed.memberId);
+  if (existing) return existing.id;
 
-  const userId = await callFunction<string>('cmd_create_team_access', {
-    p_client_id: seed.clientId,
-    p_member_id: seed.memberId,
-    p_name: seed.name.trim().slice(0, 120),
-    p_email: email,
-    p_password_hash: await hashPassword(password),
-    p_token: createInviteToken(),
-  });
-
-  return { userId, name: seed.name, email, password };
-}
-
-/**
- * Acesso pendente de um integrante antigo.
- *
- * O usuario existe, mas sem senha utilizavel: o ADMIN gera a senha em
- * Configuracoes quando quiser.
- */
-export async function createPendingTeamAccess(seed: TeamSeed): Promise<string> {
-  return callFunction<string>('cmd_create_team_access', {
-    p_client_id: seed.clientId,
-    p_member_id: seed.memberId,
-    p_name: seed.name.trim().slice(0, 120),
-    p_email: normalizeEmail(seed.email),
-    p_password_hash: null,
-    p_token: createInviteToken(),
-  });
-}
-
-export interface GrantOutcome {
-  credentials: GeneratedCredential[];
-  /** Ignorados porque o e-mail pertence a outro usuario ou nao existe. */
-  conflicts: { clientId: string; name: string; email: string }[];
-}
-
-/**
- * Gera o acesso de um integrante, a pedido do ADMIN.
- *
- * Sem e-mail valido nada e criado: o integrante continua em
- * "E-mail necessário".
- */
-export async function grantMemberAccess(memberId: string): Promise<GrantOutcome> {
-  const member = await selectOne<Pick<MemberRow, 'id' | 'client_id' | 'name' | 'email'>>(
-    TABLES.members,
-    { select: 'id,client_id,name,email', filters: { id: `eq.${memberId}` } },
+  const row = await insertOne<Pick<UserRow, 'id'>>(
+    TABLES.users,
+    {
+      name: seed.name.trim().slice(0, 120),
+      email: null,
+      phone: normalizePhone(seed.phone),
+      role: 'EQUIPE',
+      client_id: seed.clientId,
+      member_id: seed.memberId,
+      password_hash: null,
+      must_change_password: false,
+      is_active: true,
+    },
+    'id',
   );
-  if (!member) throw notFound('Integrante não encontrado.');
 
-  if (!member.email || !isValidEmail(member.email)) {
-    throw badRequest(EMAIL_REQUIRED);
+  // O link pessoal de recrutamento nasce junto: e por ele que a pessoa
+  // cadastra a propria equipe.
+  await ensurePersonalInvite(row.id, seed.clientId);
+  return row.id;
+}
+
+/**
+ * Mantem o acesso do integrante igual ao cadastro dele.
+ *
+ * Vale para nome e telefone. Trocar o telefone revoga o aparelho autorizado
+ * e derruba as sessoes na hora: o numero antigo deixa de entrar
+ * imediatamente e o proximo acesso correto vincula um aparelho novo.
+ *
+ * Integrante que ainda nao tinha acesso — cadastro antigo sem telefone ou
+ * bloqueado por telefone duplicado — passa a ter assim que o numero fica
+ * valido e unico no time. E assim que a correcao feita pelo ADMIN geral
+ * libera o acesso, sem nenhuma acao extra.
+ */
+export async function syncMemberAccess(
+  memberId: string,
+  patch: { clientId: string; name?: string; phone?: string | null },
+): Promise<void> {
+  const user = await findUserByMember(memberId);
+  const phone = patch.phone === undefined ? undefined : normalizePhone(patch.phone ?? '');
+  const name = patch.name?.trim();
+
+  if (!user) {
+    if (!phone || phone.length < 10 || !name) return;
+    await createMemberAccess({
+      clientId: patch.clientId,
+      memberId,
+      name,
+      phone,
+    });
+    return;
   }
 
-  const existing = await findUserByMember(member.id);
-  if (existing) {
-    const credential = await resetPassword(existing.id);
-    await updateRows<UserRow>(TABLES.users, { id: `eq.${existing.id}` }, { is_active: true }, 'id');
-    await ensurePersonalInvite(existing.id, member.client_id);
-    return { credentials: [credential], conflicts: [] };
+  const changes: Record<string, string | boolean | null> = {};
+  if (name && name !== user.name) changes.name = name;
+
+  if (phone !== undefined) {
+    const valido = phone.length >= 10 ? phone : null;
+    if (valido !== user.phone) changes.phone = valido;
+    // Telefone valido devolve o acesso a quem estava bloqueado por
+    // duplicidade ou por falta de numero.
+    if (valido && !user.is_active) changes.is_active = true;
   }
 
-  const conflict = await findUserByEmail(member.email);
-  if (conflict) {
-    return {
-      credentials: [],
-      conflicts: [{ clientId: member.client_id, name: member.name, email: member.email }],
-    };
-  }
+  if (Object.keys(changes).length === 0) return;
 
-  const credential = await createTeamAccess({
-    clientId: member.client_id,
-    memberId: member.id,
-    name: member.name,
-    email: member.email,
-  });
-  return { credentials: [credential], conflicts: [] };
+  await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, changes, 'id');
+
+  // Telefone novo, aparelho novo: o vinculo atual cai junto das sessoes.
+  if (changes.phone !== undefined) await releaseAdminDevice(user.id);
+  await ensurePersonalInvite(user.id, patch.clientId).catch(() => undefined);
 }
 
 /* -------------------------------------------------------------------------
@@ -550,13 +604,21 @@ export async function grantMemberAccess(memberId: string): Promise<GrantOutcome>
    ------------------------------------------------------------------------- */
 
 /**
- * Nova senha temporaria.
+ * Nova senha temporaria. Exclusiva do ADMIN geral.
+ *
+ * Nenhum outro perfil tem senha: o Administrador do time e o membro da
+ * equipe entram por link do time + telefone, entao a acao e recusada para
+ * eles aqui, e nao apenas escondida na tela.
  *
  * O primeiro acesso volta a ser obrigatorio e todas as sessoes caem, na
  * mesma transacao da funcao `cmd_set_temp_password`.
  */
 export async function resetPassword(userId: string): Promise<GeneratedCredential> {
   const user = await requireUser(userId);
+  if (usesPhoneAccess(user)) {
+    throw badRequest('Este perfil entra pelo link do time e não usa senha.');
+  }
+
   const password = generateTempPassword();
 
   await callFunction<number>('cmd_set_temp_password', {
@@ -573,22 +635,27 @@ export async function setUserActive(userId: string, active: boolean): Promise<vo
   await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, { is_active: active }, 'id');
   if (active) return;
 
-  // Desativar o Administrador do time tambem desfaz o vinculo do aparelho:
-  // reativado, ele autoriza um navegador novo no proximo acesso valido.
-  if (user.team_person_id) await releaseAdminDevice(user.id);
+  // Desativar quem entra por link + telefone tambem desfaz o vinculo do
+  // aparelho: reativada, a pessoa autoriza um navegador novo no proximo
+  // acesso valido.
+  if (usesPhoneAccess(user)) await releaseAdminDevice(user.id);
   else await revokeUserSessions(user.id);
 }
 
 /**
- * Libera um novo aparelho para o Administrador do time.
+ * Libera um novo aparelho.
  *
- * Revoga o aparelho atual e derruba as sessoes daquele usuario. Telefone,
- * nome, foto, time e link continuam como estao. Exclusivo do ADMIN geral: a
- * rota confere `settings.manage` antes de chegar aqui.
+ * Vale para os dois perfis que entram por link do time + telefone: o
+ * Administrador do time e o membro da equipe. Revoga o aparelho atual e
+ * derruba as sessoes daquele usuario; telefone, nome, foto, time e link
+ * continuam como estao, e o proximo acesso correto vincula o navegador novo.
+ *
+ * Exclusivo do ADMIN geral: a rota confere `settings.manage` e o papel antes
+ * de chegar aqui.
  */
 export async function releaseUserDevice(userId: string): Promise<number> {
   const user = await requireUser(userId);
-  if (!user.team_person_id) {
+  if (!usesPhoneAccess(user)) {
     throw badRequest('Este perfil não usa vínculo de aparelho.');
   }
   return releaseAdminDevice(user.id);
@@ -602,34 +669,6 @@ export async function revokeUserSessions(userId: string): Promise<number> {
 /* -------------------------------------------------------------------------
    Sincronizacao com o cadastro do integrante
    ------------------------------------------------------------------------- */
-
-/**
- * Mantem o login do integrante igual ao cadastro dele.
- *
- * Vale para nome e e-mail. Trocar o e-mail derruba as sessoes antigas.
- */
-export async function syncMemberLogin(
-  memberId: string,
-  patch: { name?: string; email?: string | null },
-): Promise<void> {
-  const user = await findUserByMember(memberId);
-  if (!user) return;
-
-  const changes: Record<string, string> = {};
-  const email = patch.email ? normalizeEmail(patch.email) : undefined;
-  const name = patch.name?.trim();
-
-  if (email && email !== user.email) {
-    const conflict = await findUserByEmail(email);
-    if (conflict && conflict.id !== user.id) throw emailConflict();
-    changes.email = email;
-  }
-  if (name && name !== user.name) changes.name = name;
-  if (Object.keys(changes).length === 0) return;
-
-  await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, changes, 'id');
-  if (changes.email) await revokeUserSessions(user.id);
-}
 
 /**
  * Encerra o acesso do time antes da exclusao do cadastro.

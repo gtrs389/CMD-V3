@@ -91,6 +91,11 @@ async function registerFailure(row: UserRow): Promise<void> {
 /**
  * Confere as credenciais e, quando validas, abre uma sessao.
  * O token devolvido e o valor original: o banco guarda apenas o hash.
+ *
+ * E-mail e senha sao exclusivos do ADMIN geral. O Administrador do time e o
+ * membro da equipe entram pelo link do time + telefone: mesmo que exista um
+ * e-mail historico gravado na linha deles, esta porta nao abre — e a recusa
+ * usa a MESMA mensagem de credencial invalida, sem revelar o motivo.
  */
 export async function login(email: string, password: string): Promise<LoginOutcome> {
   const normalized = email.trim().toLowerCase();
@@ -100,7 +105,7 @@ export async function login(email: string, password: string): Promise<LoginOutco
     filters: { email: `eq.${normalized}` },
   });
 
-  if (!row || !row.is_active) {
+  if (!row || !row.is_active || row.role !== 'ADMIN') {
     await burnTime(password);
     return { user: null, token: null, message: GENERIC_LOGIN_ERROR, throttled: false };
   }
@@ -141,11 +146,15 @@ export async function login(email: string, password: string): Promise<LoginOutco
 }
 
 /**
- * Sessao do Administrador do time: alem de valida, ela precisa continuar
- * vindo do aparelho autorizado.
+ * Sessao de quem entra por link do time + telefone: alem de valida, ela
+ * precisa continuar vindo do aparelho autorizado.
+ *
+ * Vale para o Administrador do time e para o membro da equipe. O ADMIN geral
+ * fica de fora: ele entra por e-mail e senha e nao tem aparelho vinculado.
  */
-function isTeamAdmin(user: SessionColumns): boolean {
-  return user.role === 'CANDIDATE' && user.team_person_id !== null;
+function usesTrustedDevice(user: SessionColumns): boolean {
+  if (user.role === 'CANDIDATE') return user.team_person_id !== null;
+  return user.role === 'EQUIPE' && user.member_id !== null;
 }
 
 interface SessionJoinRow extends SessionRow {
@@ -154,6 +163,8 @@ interface SessionJoinRow extends SessionRow {
         Pick<UserRow, 'is_active'> & {
           /** Administrador do time correspondente, so para a foto do menu. */
           team_person: { photo_path: string | null } | null;
+          /** Integrante correspondente, so para a foto do menu. */
+          member: { photo_path: string | null } | null;
         })
     | null;
 }
@@ -161,11 +172,12 @@ interface SessionJoinRow extends SessionRow {
 /**
  * Resolve o token bruto do cookie para o usuario da sessao.
  *
- * No Administrador do time a conferencia nao para na sessao: o aparelho
- * precisa continuar ativo, a credencial do cookie precisa bater com o hash
- * guardado e o aparelho precisa ser do MESMO usuario. Qualquer divergencia
- * revoga a sessao ali mesmo e devolve `null`, o que nega paginas e APIs e
- * leva de volta a tela de acesso.
+ * Em quem entra por link + telefone — Administrador do time e membro da
+ * equipe — a conferencia nao para na sessao: o aparelho precisa continuar
+ * ativo, a credencial do cookie precisa bater com o hash guardado e o
+ * aparelho precisa ser do MESMO usuario. Qualquer divergencia revoga a
+ * sessao ali mesmo e devolve `null`, o que nega paginas e APIs e leva de
+ * volta a tela de acesso.
  */
 export async function resolveSession(
   token: string | undefined,
@@ -177,7 +189,8 @@ export async function resolveSession(
     select:
       `id,expires_at,revoked_at,admin_device_id,` +
       `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
-      `team_person:${TABLES.teamPeople}(photo_path))`,
+      `team_person:${TABLES.teamPeople}(photo_path),` +
+      `member:${TABLES.members}(photo_path))`,
     filters: { token_hash: `eq.${hashToken(token)}` },
   });
 
@@ -185,7 +198,7 @@ export async function resolveSession(
   if (row.revoked_at !== null) return null;
   if (new Date(row.expires_at).getTime() <= Date.now()) return null;
 
-  if (isTeamAdmin(row.user)) {
+  if (usesTrustedDevice(row.user)) {
     const autorizado = await checkAdminDevice(row.user.id, row.admin_device_id, deviceToken);
     if (!autorizado) {
       await revokeSession(token);
@@ -193,9 +206,11 @@ export async function resolveSession(
     }
   }
 
-  // Somente o Administrador do time tem foto propria: nos demais perfis
-  // nenhuma assinatura e pedida ao Storage.
-  const photo = await signedUrl(row.user.team_person?.photo_path ?? null);
+  // Foto do cadastro correspondente: do Administrador do time ou do proprio
+  // integrante. No ADMIN geral nenhuma assinatura e pedida ao Storage.
+  const photo = await signedUrl(
+    row.user.team_person?.photo_path ?? row.user.member?.photo_path ?? null,
+  );
   return toSessionUser(row.user, photo);
 }
 

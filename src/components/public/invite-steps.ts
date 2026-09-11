@@ -29,7 +29,6 @@ const PERSONAL_KEYS: readonly SystemFieldKey[] = [
   'photo',
   'name',
   'phone',
-  'email',
   'gender',
   'cpf',
   'voter_id',

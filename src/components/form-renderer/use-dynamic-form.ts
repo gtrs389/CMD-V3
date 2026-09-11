@@ -13,6 +13,14 @@ export interface DynamicFormState {
   values: DynamicFormValues;
   errors: Record<string, string>;
   setValue: (fieldId: string, value: DynamicValue) => void;
+  /**
+   * Marca um campo com uma mensagem vinda do servidor.
+   *
+   * Existe para as regras que so o servidor conhece — telefone ja cadastrado
+   * naquele time, por exemplo. O erro some assim que a pessoa corrige o
+   * campo, como qualquer outro.
+   */
+  setFieldError: (fieldId: string, message: string) => void;
   reset: (next?: DynamicFormValues) => void;
   /** Valida tudo e devolve os valores quando nao ha erro. */
   validate: () => DynamicFormValues | null;
@@ -61,6 +69,10 @@ export function useDynamicForm(
     },
     [onValuesChange],
   );
+
+  const setFieldError = useCallback((fieldId: string, message: string) => {
+    setErrors((current) => ({ ...current, [fieldId]: message }));
+  }, []);
 
   const reset = useCallback(
     (next?: DynamicFormValues) => {
@@ -113,6 +125,7 @@ export function useDynamicForm(
     values,
     errors,
     setValue,
+    setFieldError,
     reset,
     validate,
     validateOnly,

@@ -2,7 +2,6 @@ import 'server-only';
 import type { AccessStatus, Member, MemberInput, Recruiter, SessionUser } from '@/lib/types';
 import { canReachMember } from '@/lib/permissions';
 import { normalizePhone } from '@/lib/utils/phone';
-import { isValidEmail, normalizeEmail } from '@/lib/utils/email';
 import {
   isGenderValue,
   normalizeCpf,
@@ -72,15 +71,21 @@ interface MemberContext {
   userId: Map<string, string>;
 }
 
-type AccessColumns = Pick<UserRow, 'id' | 'member_id' | 'is_active' | 'password_hash'>;
+type AccessColumns = Pick<UserRow, 'id' | 'member_id' | 'is_active' | 'phone'>;
 
-function statusOf(row: AccessColumns | undefined, email: string | null): AccessStatus {
-  // Sem e-mail nao ha como entrar: o integrante antigo fica assim ate que
-  // alguem informe o endereco.
-  if (!email) return 'NO_EMAIL';
+/**
+ * Estado do acesso do integrante.
+ *
+ * O acesso e o par link do time + telefone: sem telefone no cadastro nao ha
+ * como identificar a pessoa, e o estado fica em "Telefone necessário". O
+ * usuario desativado por telefone duplicado aparece como DISABLED ate o
+ * ADMIN geral corrigir o numero.
+ */
+function statusOf(row: AccessColumns | undefined, phone: string | null): AccessStatus {
+  if (!phone || normalizePhone(phone).length < 10) return 'NO_PHONE';
   if (!row) return 'PENDING';
   if (!row.is_active) return 'DISABLED';
-  return row.password_hash ? 'ACTIVE' : 'PENDING';
+  return row.phone ? 'ACTIVE' : 'NO_PHONE';
 }
 
 async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
@@ -97,7 +102,7 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
 
   const [users, recruiters] = await Promise.all([
     selectRows<AccessColumns>(TABLES.users, {
-      select: 'id,member_id,is_active,password_hash',
+      select: 'id,member_id,is_active,phone',
       filters: { member_id: inFilter(rows.map((row) => row.id)) },
     }),
     recruiterIds.length
@@ -111,7 +116,7 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
   const byMember = new Map(users.map((row) => [row.member_id, row]));
   for (const row of rows) {
     const user = byMember.get(row.id);
-    context.access.set(row.id, statusOf(user ?? undefined, row.email));
+    context.access.set(row.id, statusOf(user ?? undefined, row.phone));
     if (user) context.userId.set(row.id, user.id);
   }
 
@@ -171,7 +176,7 @@ async function assembleMany(rows: MemberRow[]): Promise<Member[]> {
       responses: responses.get(row.id) ?? [],
       photoUrl: photos[index] ?? null,
       recruitedBy: recruiterOf(row, context),
-      access: context.access.get(row.id) ?? 'NO_EMAIL',
+      access: context.access.get(row.id) ?? 'NO_PHONE',
       userId: context.userId.get(row.id) ?? null,
     }),
   );
@@ -417,13 +422,12 @@ export async function createMember(
   const photo =
     input.photo && isDataUrl(input.photo) ? await uploadImage('members', input.photo) : null;
 
-  const email = normalizeEmail(input.email);
-
+  // O e-mail saiu do cadastro: o integrante nasce sem endereco. Os
+  // enderecos antigos continuam gravados nos registros que ja os tinham.
   const row = await insertOne<MemberRow>(TABLES.members, {
     client_id: input.clientId,
     name: input.name.trim(),
     phone: normalizePhone(input.phone),
-    email: email && isValidEmail(email) ? email : null,
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
@@ -451,10 +455,7 @@ export async function updateMember(
 
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.phone !== undefined) patch.phone = normalizePhone(input.phone);
-  if (input.email !== undefined) {
-    const email = normalizeEmail(input.email);
-    patch.email = email && isValidEmail(email) ? email : null;
-  }
+  // O e-mail nao e mais editavel: o valor gravado permanece como esta.
   Object.assign(patch, standardColumns(input));
 
   if (input.consentAt !== undefined) {
@@ -509,16 +510,6 @@ export async function deleteMember(id: string): Promise<void> {
   const current = await requireMemberRow(id);
   await deleteImage(current.photo_path);
   await deleteRows(TABLES.members, { id: `eq.${id}` });
-}
-
-/** Confere se o e-mail ja pertence a outro integrante. */
-export async function findMemberByEmail(email: string): Promise<MemberRow | null> {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return null;
-  return selectOne<MemberRow>(TABLES.members, {
-    select: '*',
-    filters: { email: `eq.${normalized}` },
-  });
 }
 
 /** Apaga um integrante recem-criado quando a criacao do acesso falha. */

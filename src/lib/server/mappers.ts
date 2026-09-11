@@ -43,7 +43,14 @@ export function toField(row: FormFieldRow): CustomField {
 
 export function toFormConfig(row: ClientRow, fields: FormFieldRow[]): ClientFormConfig {
   return {
-    fields: [...fields].sort((a, b) => a.position - b.position).map(toField),
+    // O campo padrao E-mail nao existe mais em lugar nenhum: nem no
+    // construtor, nem no formulario publico, nem na revisao, nem na ficha. A
+    // linha continua no banco, desativada (migration 018), para que as
+    // respostas e os enderecos ja gravados nao sejam perdidos.
+    fields: [...fields]
+      .filter((field) => field.system_key !== 'email')
+      .sort((a, b) => a.position - b.position)
+      .map(toField),
     introText: row.form_intro_text,
     successMessage: row.form_success_message,
     privacy: {

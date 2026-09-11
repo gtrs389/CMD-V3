@@ -160,25 +160,24 @@ const standardMemberFields = {
 };
 
 /**
- * E-mail do integrante: campo padrao, obrigatorio e normalizado.
+ * Telefone do integrante: campo padrao obrigatorio.
  *
- * Chega sempre em minusculas e sem espaco nas pontas, porque e ele que cria
- * o acesso e precisa bater com o que esta gravado.
+ * E ele que identifica a pessoa no acesso pelo link do time, entao precisa
+ * existir e ser valido. A normalizacao (somente digitos) acontece no
+ * servico, antes de gravar e antes de qualquer comparacao.
+ *
+ * O e-mail saiu do cadastro: o integrante nao tem endereco nem senha. Os
+ * enderecos ja gravados sao preservados, mas nao autenticam ninguem.
  */
-const memberEmail = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .min(1, 'Informe o e-mail.')
-  .max(254, 'E-mail muito longo.')
-  .pipe(z.email('E-mail inválido.'));
+const memberPhone = trimmed(30)
+  .min(1, 'Informe o telefone.')
+  .refine((value) => isValidPhone(value), 'Telefone inválido.');
 
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */
 const memberBase = {
   ...standardMemberFields,
   name: trimmed(120).min(2, 'Informe o nome completo.'),
-  email: memberEmail,
-  phone: trimmed(30).default(''),
+  phone: memberPhone,
   photo: photoValue.default(null),
   responses: responsesSchema.default([]),
   consentAt: z.iso.datetime().nullable().default(null),
@@ -193,8 +192,7 @@ export const memberUpdateSchema = z
   .object({
     ...standardMemberFields,
     name: trimmed(120).min(2, 'Informe o nome completo.'),
-    email: memberEmail,
-    phone: trimmed(30),
+    phone: memberPhone,
     photo: photoValue,
     responses: responsesSchema,
     consentAt: z.iso.datetime().nullable(),
@@ -222,10 +220,11 @@ export const deviceSignalsSchema = z
   .partial();
 
 /**
- * Acesso do administrador do time: apenas o telefone.
+ * Acesso pelo link do time: apenas o telefone.
  *
- * O token vem da propria URL e nunca do corpo; o telefone e normalizado no
- * servidor antes de qualquer comparacao.
+ * Atende os dois perfis daquele time — Administrador do time e membro da
+ * equipe. O token vem da propria URL e nunca do corpo; o telefone e
+ * normalizado no servidor antes de qualquer comparacao.
  */
 export const teamPhoneLoginSchema = z.object({
   phone: trimmed(30).min(1, 'Informe o telefone.'),

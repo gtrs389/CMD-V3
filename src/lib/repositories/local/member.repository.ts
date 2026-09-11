@@ -75,7 +75,7 @@ export function createLocalMemberRepository(
         // A origem do cadastro e sempre decidida no servidor, pelo dono do
         // link: a implementacao local nao inventa responsavel.
         recruitedBy: null,
-        access: isValidEmail(input.email) ? 'PENDING' : 'NO_EMAIL',
+        access: normalizePhone(input.phone).length >= 10 ? 'PENDING' : 'NO_PHONE',
         // A referencia local nao cria acesso: o usuario vive so no servidor.
         userId: null,
         createdAt: timestamp,

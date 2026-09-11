@@ -19,16 +19,39 @@ export interface User {
   createdAt: IsoDate;
 }
 
-/** Estado do acesso mostrado ao ADMIN em Configuracoes. */
-export const ACCESS_STATUSES = ['PENDING', 'ACTIVE', 'DISABLED', 'NO_EMAIL'] as const;
+/**
+ * Estado do acesso mostrado ao ADMIN em Configuracoes.
+ *
+ * Quem entra por link do time + telefone (Administrador do time e membro da
+ * equipe) depende do telefone: sem numero nao ha como identificar a pessoa, e
+ * com o numero repetido dentro do mesmo time o acesso fica bloqueado ate o
+ * ADMIN geral corrigir — o sistema nunca escolhe entre duas pessoas.
+ */
+export const ACCESS_STATUSES = [
+  'PENDING',
+  'ACTIVE',
+  'DISABLED',
+  'NO_PHONE',
+  'DUPLICATE_PHONE',
+] as const;
 export type AccessStatus = (typeof ACCESS_STATUSES)[number];
 
 export const ACCESS_STATUS_LABELS: Record<AccessStatus, string> = {
   PENDING: 'Acesso pendente',
   ACTIVE: 'Ativo',
   DISABLED: 'Desativado',
-  NO_EMAIL: 'E-mail necessário',
+  NO_PHONE: 'Telefone necessário',
+  DUPLICATE_PHONE: 'Telefone duplicado — corrija para liberar o acesso',
 };
+
+/**
+ * Telefone ja usado por outra pessoa ativa do mesmo time.
+ *
+ * Unica mensagem do sistema para o caso: o servidor recusa com ela e a tela
+ * publica a mostra no proprio campo Telefone. Em times diferentes o mesmo
+ * numero pode existir, porque o link identifica o time antes do telefone.
+ */
+export const PHONE_IN_USE = 'Este telefone já está cadastrado neste time.';
 
 /** Time que ainda nao possui nenhum administrador cadastrado. */
 export interface CandidateWithoutAdmins {
@@ -38,7 +61,9 @@ export interface CandidateWithoutAdmins {
 }
 
 /**
- * Aparelho autorizado de um Administrador do time, como o ADMIN geral o ve.
+ * Aparelho autorizado de quem entra por link do time + telefone, como o
+ * ADMIN geral o ve: vale para o Administrador do time e para o membro da
+ * equipe.
  *
  * Somente auditoria: nenhum identificador tecnico, hash de credencial ou
  * valor derivado de IP chega ao navegador.
@@ -64,12 +89,12 @@ export interface Recruiter {
 /** Linha da lista de usuarios do sistema. Nunca carrega hash de senha. */
 export interface SystemUser {
   id: string;
-  name: string;
-  /** Nulo no Administrador do time: o acesso dele e por link + telefone. */
+  /** Historico: so o ADMIN geral ainda autentica por e-mail. */
   email: string | null;
-  /** Telefone de acesso. Preenchido somente no Administrador do time. */
+  name: string;
+  /** Telefone de acesso: Administrador do time e membro da equipe. */
   phone: string | null;
-  /** Foto do administrador do time. */
+  /** Foto do administrador do time ou do integrante. */
   photo: string | null;
   role: Role;
   status: AccessStatus;
@@ -81,7 +106,7 @@ export interface SystemUser {
   teamPersonId: string | null;
   /**
    * Aparelho autorizado. Nulo enquanto nenhum navegador foi vinculado, e
-   * sempre nulo nos perfis que nao usam essa regra.
+   * sempre nulo no ADMIN geral, que nao usa essa regra.
    */
   device: AdminDeviceInfo | null;
   /** Quem cadastrou este usuario. Preenchido somente no perfil EQUIPE. */
@@ -94,23 +119,26 @@ export interface SystemUser {
 }
 
 /**
- * Integrante que ainda nao possui usuario.
+ * Integrante que ainda nao possui acesso liberado.
  *
- * Com e-mail valido o ADMIN pode gerar o acesso; sem e-mail o estado fica
- * em `E-mail necessário` e nenhuma senha e criada.
+ * O acesso nasce junto do cadastro. Fica de fora apenas quem nao tem
+ * telefone (`NO_PHONE`) ou cujo telefone se repete dentro do time
+ * (`DUPLICATE_PHONE`): corrigido o numero, o acesso e criado ou liberado.
  */
 export interface MemberWithoutAccess {
   memberId: string;
   clientId: string;
   candidateName: string;
   name: string;
-  email: string | null;
+  phone: string | null;
   photo: string | null;
+  status: AccessStatus;
   recruitedBy: Recruiter | null;
 }
 
 /**
- * Credencial gerada agora.
+ * Credencial gerada agora. Exclusiva do ADMIN geral: nenhum outro perfil
+ * possui senha.
  *
  * Existe apenas na resposta da acao e no estado temporario do modal: nao e
  * gravada em banco, log, URL ou armazenamento do navegador.
