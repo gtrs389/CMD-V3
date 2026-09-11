@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutList, Users } from 'lucide-react';
+import { LayoutList, Link2, Users } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
-import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
@@ -101,29 +100,25 @@ export function TeamDetailView() {
               <span className="inline-flex shrink-0 items-center rounded-pill bg-accent-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-accent-700">
                 {ROLE_LABELS.EQUIPE}
               </span>
-              <span
-                className={
-                  inviteIsLive(client.invite)
-                    ? 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-success-600'
-                    : 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-danger-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-danger-600'
-                }
-              >
-                <span
-                  aria-hidden="true"
-                  className={
-                    inviteIsLive(client.invite)
-                      ? 'size-1.5 rounded-full bg-success-600'
-                      : 'size-1.5 rounded-full bg-danger-600'
-                  }
-                />
-                {inviteIsLive(client.invite) ? 'Link ativo' : 'Link expirado'}
-              </span>
             </div>
 
             <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{profile.email}</p>
             <p className="mt-0.5 text-xs text-ink-400">
               Equipe de {profile.candidateName} desde {formatLongDate(profile.joinedAt)}
             </p>
+          </div>
+
+          {/* Mesma logica da pagina do time: o link de cadastro vive no
+              cabecalho, e o estado e o prazo aparecem dentro do dialogo. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setInvite(true)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
+            >
+              <Link2 aria-hidden="true" className="size-4" />
+              Gerar Link
+            </button>
           </div>
         </div>
       </header>
@@ -141,7 +136,9 @@ export function TeamDetailView() {
           client={client}
           members={members}
           onOpenTab={setTab}
-          onManageInvite={() => setInvite(true)}
+          // O link fica no botao do cabecalho: o cartao "Meu link de
+          // cadastro" sai da visao geral.
+          showInviteCard={false}
         />
       </TabPanel>
 
