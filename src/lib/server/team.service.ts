@@ -1,5 +1,5 @@
 import 'server-only';
-import type { TeamOverview } from '@/lib/types';
+import type { Member, TeamOverview } from '@/lib/types';
 import {
   TABLES,
   type ClientRow,
@@ -13,6 +13,30 @@ import { listMembersRecruitedBy } from './member.service';
 import { findInviteByUser } from './invite.service';
 import { notFound } from './http';
 import type { TeamSession } from './guard';
+
+/**
+ * O integrante da equipe ve quem cadastrou, mas so nome, foto e telefone.
+ * CPF, titulo de eleitor, endereco, e-mail, respostas do formulario,
+ * consentimento e quem recrutou sao dados do ADMIN: nunca saem daqui.
+ */
+function redactForEquipe(member: Member): Member {
+  return {
+    ...member,
+    email: null,
+    gender: null,
+    cpf: null,
+    voterId: null,
+    state: null,
+    city: null,
+    district: null,
+    street: null,
+    relationshipOptionId: null,
+    relationshipLabel: null,
+    responses: [],
+    consentAt: null,
+    recruitedBy: null,
+  };
+}
 
 /**
  * Pagina "Minha mobilizacao".
@@ -86,6 +110,6 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       form: toFormConfig(client, fields),
     },
 
-    members,
+    members: members.map(redactForEquipe),
   };
 }

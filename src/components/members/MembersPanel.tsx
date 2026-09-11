@@ -42,10 +42,13 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
   const toast = useToast();
   // Perfil somente leitura nao recebe as acoes. O servidor recusa do mesmo
   // jeito: esconder o botao nunca e a protecao.
-  const { can } = useSession();
+  const { can, user } = useSession();
   const podeCriar = can('member.create');
   const podeEditar = can('member.update');
   const podeExcluir = can('member.delete');
+  // O integrante da equipe ve apenas nome, foto e telefone: nada de e-mail,
+  // responsavel pelo cadastro ou origem, que o servidor ja nao envia mais.
+  const somenteBasico = user?.role === 'EQUIPE';
   const [term, setTerm] = useState('');
   // Filtro por responsavel pelo cadastro. Recorte de leitura apenas: o que
   // chega da API ja vem limitado pela hierarquia, no servidor.
@@ -199,18 +202,22 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                         <p className="truncate text-xs text-ink-500">{member.email}</p>
                       ) : null}
 
-                      {/* No celular a origem fica na propria coluna do cartao:
-                          nada de rolagem horizontal. */}
-                      <RecruitedBy
-                        recruiter={member.recruitedBy}
-                        withLabel
-                        className="mt-1.5"
-                      />
+                      {!somenteBasico ? (
+                        <>
+                          {/* No celular a origem fica na propria coluna do cartao:
+                              nada de rolagem horizontal. */}
+                          <RecruitedBy
+                            recruiter={member.recruitedBy}
+                            withLabel
+                            className="mt-1.5"
+                          />
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
-                        {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
-                      </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
+                            {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
+                          </div>
+                        </>
+                      ) : null}
 
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button variant="secondary" size="sm" onClick={() => setViewing(member)}>
@@ -248,18 +255,22 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
               <caption className="sr-only">Integrantes da equipe de {client.name}</caption>
               <thead className="bg-ink-50 text-xs tracking-wide text-ink-500 uppercase">
                 <tr>
-                  <th scope="col" className="w-[28%] px-4 py-3 font-medium">
+                  <th scope="col" className={somenteBasico ? 'w-[52%] px-4 py-3 font-medium' : 'w-[28%] px-4 py-3 font-medium'}>
                     Integrante
                   </th>
-                  <th scope="col" className="w-[18%] px-4 py-3 font-medium">
+                  <th scope="col" className={somenteBasico ? 'w-[32%] px-4 py-3 font-medium' : 'w-[18%] px-4 py-3 font-medium'}>
                     Telefone
                   </th>
-                  <th scope="col" className="w-[24%] px-4 py-3 font-medium">
-                    {RECRUITED_BY_LABEL}
-                  </th>
-                  <th scope="col" className="w-[14%] px-4 py-3 font-medium">
-                    Cadastro
-                  </th>
+                  {!somenteBasico ? (
+                    <>
+                      <th scope="col" className="w-[24%] px-4 py-3 font-medium">
+                        {RECRUITED_BY_LABEL}
+                      </th>
+                      <th scope="col" className="w-[14%] px-4 py-3 font-medium">
+                        Cadastro
+                      </th>
+                    </>
+                  ) : null}
                   <th scope="col" className="w-[16%] px-4 py-3 text-right font-medium">
                     Ações
                   </th>
@@ -275,19 +286,25 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                           <span className="block truncate font-medium text-ink-900">
                             {member.name}
                           </span>
-                          <span className="block truncate text-xs text-ink-500">
-                            {member.email ?? (member.source === 'invite' ? 'Via link de convite' : '--')}
-                          </span>
+                          {!somenteBasico ? (
+                            <span className="block truncate text-xs text-ink-500">
+                              {member.email ?? (member.source === 'invite' ? 'Via link de convite' : '--')}
+                            </span>
+                          ) : null}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-ink-700 tabular-nums">
                       {member.phone ? formatPhone(member.phone) : '--'}
                     </td>
-                    <td className="px-4 py-3">
-                      <RecruitedBy recruiter={member.recruitedBy} />
-                    </td>
-                    <td className="px-4 py-3 text-ink-500">{formatDate(member.createdAt)}</td>
+                    {!somenteBasico ? (
+                      <>
+                        <td className="px-4 py-3">
+                          <RecruitedBy recruiter={member.recruitedBy} />
+                        </td>
+                        <td className="px-4 py-3 text-ink-500">{formatDate(member.createdAt)}</td>
+                      </>
+                    ) : null}
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
                         <IconButton
