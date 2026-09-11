@@ -503,13 +503,13 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
         men: 0,
         women: 0,
         others: 0,
-        withPhone: 0,
       } satisfies PollingPlacePin);
 
+    // Uma pessoa cadastrada que vota ali, um voto: e daqui que sai a
+    // estimativa mostrada na escola.
     current.total += 1;
     // Genero declarado no cadastro; o que a consulta externa devolveu nao entra.
     current[genderBucket(member.gender)] += 1;
-    if (member.phone?.trim()) current.withPhone += 1;
 
     grouped.set(key, current);
   }

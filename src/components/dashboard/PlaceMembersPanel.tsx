@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Phone, Search, X } from 'lucide-react';
 import type { PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
+import {
+  estimatedVotes,
+  voteBreakdown,
+  ESTIMATED_VOTES_HINT,
+  ESTIMATED_VOTES_LABEL,
+} from '@/lib/domain/map-pin';
 import { api } from '@/lib/repositories/http/api';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber, initials } from '@/lib/utils/text';
@@ -103,28 +109,28 @@ export function PlaceMembersPanel({
             </button>
           </div>
 
-          <dl className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-500">
-            <div className="flex gap-1">
-              <dt>Total:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.total)}</dd>
+          {/* O mesmo numero e o mesmo nome do popup do mapa. */}
+          <section className="rounded-control border border-brand-100 bg-brand-50 px-3 py-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[0.6875rem] font-semibold tracking-wide text-brand-800 uppercase">
+                {ESTIMATED_VOTES_LABEL}
+              </p>
+              <p className="text-2xl leading-none font-semibold text-brand-900">
+                {formatNumber(estimatedVotes(place))}
+              </p>
             </div>
-            <div className="flex gap-1">
-              <dt>Homens:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.men)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Mulheres:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.women)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Não informado:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.others)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Com telefone:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.withPhone)}</dd>
-            </div>
-          </dl>
+
+            <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-500">
+              {voteBreakdown(place).map((item) => (
+                <div key={item.label} className="flex gap-1">
+                  <dt>{item.label}:</dt>
+                  <dd className="font-semibold text-ink-900">{formatNumber(item.value)}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <p className="mt-1 text-[0.6875rem] text-ink-500 italic">{ESTIMATED_VOTES_HINT}</p>
+          </section>
 
           <div className="relative flex items-center">
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 size-4 text-ink-400" />

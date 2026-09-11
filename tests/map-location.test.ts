@@ -11,13 +11,17 @@ import {
   cellSize,
   clusterPins,
   DEFAULT_MAP_FILTER,
+  estimatedVotes,
   filterPins,
   genderBucket,
   MAP_FILTER_LABELS,
   pinLabel,
   pollingPlaceKey,
   precisionLabel,
+  voteBreakdown,
+  ESTIMATED_VOTES_LABEL,
   type MapPin,
+  type PollingPlacePin,
 } from '@/lib/domain/map-pin';
 import { can } from '@/lib/permissions';
 import { lookupPlace, MapLookupError } from '@/lib/server/serpapi.service';
@@ -426,5 +430,40 @@ describe('agrupamento do local de votação', () => {
     expect(genderBucket('OUTRO')).toBe('others');
     expect(genderBucket('NAO_INFORMAR')).toBe('others');
     expect(genderBucket(null)).toBe('others');
+  });
+});
+
+describe('estimativa de votos da escola', () => {
+  const escola: PollingPlacePin = {
+    locationId: 'loc-1',
+    latitude: -23.5505,
+    longitude: -46.6333,
+    title: 'Escola Municipal Exemplo',
+    address: 'Rua das Flores, s/n',
+    city: 'São Paulo',
+    state: 'SP',
+    imageUrl: null,
+    total: 12,
+    men: 5,
+    women: 6,
+    others: 1,
+  };
+
+  it('uma pessoa cadastrada que vota ali, um voto', () => {
+    expect(ESTIMATED_VOTES_LABEL).toBe('Estimativa de votos');
+    expect(estimatedVotes(escola)).toBe(escola.total);
+    expect(estimatedVotes({ total: 0 })).toBe(0);
+  });
+
+  it('a composição por gênero fecha a estimativa', () => {
+    const partes = voteBreakdown(escola);
+
+    expect(partes.map((parte) => parte.label)).toEqual(['Homens', 'Mulheres', 'Não informado']);
+    expect(partes.reduce((soma, parte) => soma + parte.value, 0)).toBe(estimatedVotes(escola));
+  });
+
+  it('o resumo da escola não carrega contagem de telefone', () => {
+    expect(Object.keys(escola)).not.toContain('withPhone');
+    expect(JSON.stringify(escola)).not.toMatch(/phone/i);
   });
 });
