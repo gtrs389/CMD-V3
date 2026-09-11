@@ -128,6 +128,10 @@ describe('consulta eleitoral', () => {
     expect(toBirthDate('2003-12-10 00:00:00')).toBe('10/12/2003');
     expect(toBirthDate('  2003-12-10  ')).toBe('10/12/2003');
 
+    // Formato brasileiro com horario, como a consulta de CPF costuma devolver.
+    expect(toBirthDate('01/06/2003 00:00:00')).toBe('01/06/2003');
+    expect(toBirthDate('01/06/2003 12:30')).toBe('01/06/2003');
+
     // Valor legado, cortado quando o campo ainda tinha 20 caracteres.
     expect(toBirthDate('2003-12-10T00:00:00.')).toBe('10/12/2003');
 
@@ -137,6 +141,11 @@ describe('consulta eleitoral', () => {
     expect(toBirthDate('2003-13-10')).toBeNull();
     expect(toBirthDate('2003-02-30')).toBeNull();
     expect(toBirthDate('0000-00-00T00:00:00.')).toBeNull();
+
+    // Texto solto depois da data continua recusado.
+    expect(toBirthDate('01/06/2003 invalido')).toBeNull();
+    expect(toBirthDate('01/06/2003xx')).toBeNull();
+    expect(toBirthDate('31/02/2003 00:00:00')).toBeNull();
   });
 
   it('libera a consulta eleitoral de cadastro antigo com data truncada', () => {

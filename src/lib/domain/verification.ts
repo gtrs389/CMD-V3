@@ -190,11 +190,16 @@ export function parseTseResult(payload: unknown): TseResult {
  * Normaliza a data de nascimento devolvida pela consulta de CPF para
  * DD/MM/AAAA.
  *
- * Aceita `DD/MM/AAAA` e qualquer valor que comece por `AAAA-MM-DD`: a data ISO
- * completa, com `T` e fuso, com espaco e hora, e tambem o texto legado cortado
- * no meio (`2003-12-10T00:00:00.`), gravado antes da correcao do tamanho do
- * campo. Sao os dez primeiros caracteres que valem; o resto e descartado.
- * O que nao comeca por uma data valida continua sendo tratado como ausente.
+ * Aceita qualquer valor que comece por `AAAA-MM-DD`: a data ISO completa, com
+ * `T` e fuso, com espaco e hora, e tambem o texto legado cortado no meio
+ * (`2003-12-10T00:00:00.`), gravado antes da correcao do tamanho do campo.
+ *
+ * Aceita tambem `DD/MM/AAAA`, sozinho ou seguido de espaco e horario
+ * (`01/06/2003 00:00:00`), que e como a consulta de CPF costuma devolver.
+ *
+ * Em ambos os casos valem os dez primeiros caracteres, sempre com dia, mes e
+ * ano conferidos. Texto solto depois da data, sem ser um horario, e recusado,
+ * assim como qualquer valor que nao comece por uma data.
  */
 export function toBirthDate(value: string | null | undefined): string | null {
   const raw = (value ?? '').trim();
@@ -203,7 +208,7 @@ export function toBirthDate(value: string | null | undefined): string | null {
   const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   if (iso) return validDate(iso[3], iso[2], iso[1]);
 
-  const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw);
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})(?: \d{2}:\d{2}(?::\d{2})?(?:\.\d+)?)?$/.exec(raw);
   return br ? validDate(br[1], br[2], br[3]) : null;
 }
 
