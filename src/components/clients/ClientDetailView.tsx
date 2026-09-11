@@ -28,10 +28,9 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
-import { InvitePanel } from './InvitePanel';
-import { InviteStatusPanel } from './InviteStatusPanel';
+import { InviteLinkModal } from './InviteLinkModal';
 
-const TAB_IDS = ['visao-geral', 'equipe', 'formulario', 'convite'] as const;
+const TAB_IDS = ['visao-geral', 'equipe', 'formulario'] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 /** Confere o parametro `aba` da URL antes de escolher a aba inicial. */
@@ -41,12 +40,21 @@ export function isTabId(value: string): value is TabId {
 
 interface ClientDetailViewProps {
   clientId: string;
-  /** Aba aberta ao entrar. Usada pelo atalho de recrutamento. */
+  /** Aba aberta ao entrar. */
   initialTab?: TabId;
+  /**
+   * Abre o link de cadastro ao entrar. O convite nao e mais uma aba: o
+   * atalho de "Recrutar" e os enderecos antigos (`?aba=convite`) caem aqui.
+   */
+  initialInvite?: boolean;
 }
 
 /** Pagina individual do candidato, organizada em abas. */
-export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps) {
+export function ClientDetailView({
+  clientId,
+  initialTab,
+  initialInvite = false,
+}: ClientDetailViewProps) {
   const router = useRouter();
   const { can } = useSession();
   const { data: client, loading, error, reload } = useClient(clientId);
@@ -55,6 +63,7 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
   const [tab, setTab] = useState<TabId>(initialTab ?? 'visao-geral');
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [invite, setInvite] = useState(initialInvite);
 
   const memberList = members ?? [];
 
@@ -124,7 +133,6 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
     ...(mostrarFormulario
       ? [{ id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> }]
       : []),
-    { id: 'convite', label: 'Convite', icon: <Link2 className="size-4" /> },
   ];
 
   return (
@@ -187,32 +195,29 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
             </p>
           </div>
 
-          {!podeGerenciarConvite ? (
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {/* O link de cadastro vive aqui: nao ha mais aba "Convite". */}
+            <button
+              type="button"
+              onClick={() => setInvite(true)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
+            >
+              <Link2 aria-hidden="true" className="size-4" />
+              {podeGerenciarConvite ? 'Gerenciar link' : 'Gerar Link'}
+            </button>
+
+            {podeEditar ? (
               <button
                 type="button"
-                onClick={() => setTab('convite')}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
+                onClick={() => setEditing(true)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium text-accent-600 shadow-card transition-colors hover:bg-accent-50"
               >
-                <Link2 aria-hidden="true" className="size-4" />
-                Gerar Link
+                <Pencil aria-hidden="true" className="size-4" />
+                Editar candidato
               </button>
-            </div>
-          ) : null}
+            ) : null}
 
-          {podeEditar || podeExcluir ? (
-            <div className="flex shrink-0 items-center gap-2">
-              {podeEditar ? (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium text-accent-600 shadow-card transition-colors hover:bg-accent-50"
-                >
-                  <Pencil aria-hidden="true" className="size-4" />
-                  Editar candidato
-                </button>
-              ) : null}
-
+            {podeEditar || podeExcluir ? (
               <div className="rounded-control border border-line bg-surface shadow-card">
                 <Menu
                   label={`Ações de ${client.name}`}
@@ -241,8 +246,8 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
                   ]}
                 />
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -260,9 +265,9 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
           members={memberList}
           onOpenTab={setTab}
           onOpenForm={mostrarFormulario ? () => setTab('formulario') : undefined}
-          // O candidato acessa o link pelo botao do cabecalho: o cartao
+          // O link de cadastro fica no botao do cabecalho: o cartao
           // "Meu link de cadastro" sai da visao geral.
-          showInviteCard={podeGerenciarConvite}
+          showInviteCard={false}
         />
       </TabPanel>
 
@@ -276,13 +281,12 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
         </TabPanel>
       ) : null}
 
-      <TabPanel id="convite" active={abaAtiva}>
-        {podeGerenciarConvite ? (
-          <InvitePanel client={client} />
-        ) : (
-          <InviteStatusPanel client={client} />
-        )}
-      </TabPanel>
+      <InviteLinkModal
+        open={invite}
+        client={client}
+        canManage={podeGerenciarConvite}
+        onClose={() => setInvite(false)}
+      />
 
       <ClientFormModal open={editing} client={client} onClose={() => setEditing(false)} />
 

@@ -17,12 +17,16 @@ export default async function CandidateDetailPage({ params, searchParams }: Page
   if (!canReachClient(user, id)) return <AccessDenied />;
 
   const { aba } = await searchParams;
-  const tab = typeof aba === 'string' && isTabId(aba) ? aba : undefined;
+  const param = typeof aba === 'string' ? aba : '';
+  const tab = isTabId(param) ? param : undefined;
+  // O convite deixou de ser aba: o atalho de "Recrutar" e os enderecos ja
+  // compartilhados abrem o link de cadastro em dialogo.
+  const abrirLink = param === 'convite';
 
   // A area interna do formulario e exclusiva do ADMIN: `?aba=formulario` na
   // mao volta para a visao geral, sem o parametro na URL. A configuracao dos
   // campos tambem nao vem na resposta da API para este perfil.
   if (tab === 'formulario' && !can(user, 'form.view')) redirect(`/candidatos/${id}`);
 
-  return <ClientDetailView clientId={id} initialTab={tab} />;
+  return <ClientDetailView clientId={id} initialTab={tab} initialInvite={abrirLink} />;
 }

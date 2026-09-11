@@ -30,6 +30,14 @@ const FOCUSABLE =
   'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 /**
+ * Pilha dos dialogos abertos.
+ *
+ * Com um dialogo dentro de outro (uma confirmacao sobre um painel, por
+ * exemplo), o Escape fecha somente o de cima: o de baixo continua aberto.
+ */
+const stack: symbol[] = [];
+
+/**
  * Dialogo responsivo: painel inferior deslizante no celular e caixa
  * centralizada a partir de `sm`. Sempre com rolagem vertical propria.
  */
@@ -53,6 +61,9 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
 
+    const id = Symbol('modal');
+    stack.push(id);
+
     previouslyFocused.current = document.activeElement as HTMLElement | null;
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
@@ -64,6 +75,8 @@ export function Modal({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // Apenas o dialogo do topo responde ao Escape.
+        if (stack[stack.length - 1] !== id) return;
         event.stopPropagation();
         requestClose();
         return;
@@ -91,9 +104,13 @@ export function Modal({
     document.addEventListener('keydown', onKeyDown, true);
 
     return () => {
+      const position = stack.indexOf(id);
+      if (position >= 0) stack.splice(position, 1);
+
       window.clearTimeout(focusTimer);
       document.removeEventListener('keydown', onKeyDown, true);
-      document.body.style.overflow = overflow;
+      // A rolagem do fundo so volta quando nao ha mais dialogo aberto.
+      if (stack.length === 0) document.body.style.overflow = overflow;
       previouslyFocused.current?.focus?.();
     };
   }, [open, requestClose]);

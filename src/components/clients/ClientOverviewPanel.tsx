@@ -39,7 +39,7 @@ interface ClientOverviewPanelProps {
   client: Client;
   members: Member[];
   /** Abre outra aba da propria pagina. */
-  onOpenTab: (tab: 'equipe' | 'convite') => void;
+  onOpenTab: (tab: 'equipe') => void;
   /**
    * Abre a area interna do formulario. So e passado a quem tem `form.view`
    * (ADMIN): sem ele o cartao "Formulário de cadastro" nao existe, e a
@@ -47,10 +47,12 @@ interface ClientOverviewPanelProps {
    */
   onOpenForm?: () => void;
   /**
-   * Exibe o cartao "Meu link de cadastro". No painel do candidato ele sai:
-   * o atalho do link fica no cabecalho, ao lado do nome.
+   * Exibe o cartao "Meu link de cadastro". Na pagina do candidato ele sai:
+   * o link fica no botao do cabecalho, ao lado do nome.
    */
   showInviteCard?: boolean;
+  /** Abre o link de cadastro. Sem ele o cartao nao oferece a acao. */
+  onManageInvite?: () => void;
 }
 
 function startOfDay(date: Date): number {
@@ -70,6 +72,7 @@ export function ClientOverviewPanel({
   onOpenTab,
   onOpenForm,
   showInviteCard = true,
+  onManageInvite,
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
@@ -185,7 +188,7 @@ export function ClientOverviewPanel({
             <InviteCard
               client={client}
               canManage={podeGerenciarConvite}
-              onManage={() => onOpenTab('convite')}
+              onManage={onManageInvite}
             />
           ) : null}
         </div>
@@ -384,7 +387,8 @@ function InviteCard({
 }: {
   client: Client;
   canManage: boolean;
-  onManage: () => void;
+  /** Ausente quando nao ha para onde ir: o cartao fica so com a copia. */
+  onManage?: () => void;
 }) {
   const toast = useToast();
   const origin = useOrigin();
@@ -471,13 +475,15 @@ function InviteCard({
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={onManage}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
-        >
-          {canManage ? 'Gerenciar link' : 'Ver link'}
-        </button>
+        {onManage ? (
+          <button
+            type="button"
+            onClick={onManage}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
+          >
+            {canManage ? 'Gerenciar link' : 'Ver link'}
+          </button>
+        ) : null}
       </div>
 
       <p className="mt-2 text-[0.6875rem] text-ink-500">

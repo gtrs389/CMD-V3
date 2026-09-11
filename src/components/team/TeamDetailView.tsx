@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutList, Link2, Users } from 'lucide-react';
+import { LayoutList, Users } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
@@ -9,19 +9,19 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { ClientOverviewPanel } from '@/components/clients/ClientOverviewPanel';
-import { InviteStatusPanel } from '@/components/clients/InviteStatusPanel';
+import { InviteLinkModal } from '@/components/clients/InviteLinkModal';
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { useTeamOverview } from '@/hooks/use-team';
 
 /** As abas do integrante: o formulario e area interna do ADMIN. */
-type TabId = 'visao-geral' | 'equipe' | 'convite';
+type TabId = 'visao-geral' | 'equipe';
 
 /**
  * Pagina do integrante da equipe.
  *
  * Mesma estrutura e mesmos quadros da pagina do candidato: cabecalho, abas e
- * os paineis de visao geral, equipe e convite sao exatamente os mesmos
- * componentes.
+ * os paineis de visao geral e equipe sao exatamente os mesmos componentes. O
+ * link pessoal abre em dialogo, pelo cartao da visao geral.
  *
  * O que muda e o escopo, e ele vem do servidor: a lista traz somente quem se
  * cadastrou pelo link deste integrante e o convite e o link pessoal dele.
@@ -36,6 +36,7 @@ type TabId = 'visao-geral' | 'equipe' | 'convite';
 export function TeamDetailView() {
   const { data: overview, loading, error, reload } = useTeamOverview();
   const [tab, setTab] = useState<TabId>('visao-geral');
+  const [invite, setInvite] = useState(false);
 
   if (loading) return <DetailSkeleton />;
 
@@ -69,7 +70,6 @@ export function TeamDetailView() {
         </span>
       ),
     },
-    { id: 'convite', label: 'Convite', icon: <Link2 className="size-4" /> },
   ];
 
   return (
@@ -136,16 +136,24 @@ export function TeamDetailView() {
       />
 
       <TabPanel id="visao-geral" active={tab}>
-        <ClientOverviewPanel client={client} members={members} onOpenTab={setTab} />
+        <ClientOverviewPanel
+          client={client}
+          members={members}
+          onOpenTab={setTab}
+          onManageInvite={() => setInvite(true)}
+        />
       </TabPanel>
 
       <TabPanel id="equipe" active={tab}>
         <MembersPanel client={client} members={members} loading={false} />
       </TabPanel>
 
-      <TabPanel id="convite" active={tab}>
-        <InviteStatusPanel client={client} />
-      </TabPanel>
+      <InviteLinkModal
+        open={invite}
+        client={client}
+        canManage={false}
+        onClose={() => setInvite(false)}
+      />
     </div>
   );
 }
