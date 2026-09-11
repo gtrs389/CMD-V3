@@ -125,9 +125,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
             <span className={styles['badge-word']}>CMD</span>
           </div>
 
-          <p className={styles.eyebrow}>Acesso administrativo</p>
           <h1 id="login-title">Bem-vindo de volta</h1>
-          <p className={styles.subtitle}>Entre para acessar sua operação.</p>
 
           <LoginForm
             next={next}
@@ -148,7 +146,6 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
               <rect x="5" y="10" width="14" height="11" rx="2" />
               <path d="M8 10V7a4 4 0 0 1 8 0v3" />
             </svg>
-            <span>Área exclusiva para administradores</span>
           </div>
         </div>
       </section>

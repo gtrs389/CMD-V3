@@ -147,7 +147,7 @@ export function LoginForm({ next, configured, senhaAlterada = false }: LoginForm
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            placeholder="seuemail@exemplo.com"
+            placeholder=""
             required
             aria-describedby="form-status"
           />
@@ -174,7 +174,7 @@ export function LoginForm({ next, configured, senhaAlterada = false }: LoginForm
             name="password"
             type={showPassword ? 'text' : 'password'}
             autoComplete="current-password"
-            placeholder="Digite sua senha"
+            placeholder=""
             required
             minLength={8}
             aria-describedby="form-status"
