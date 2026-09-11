@@ -345,12 +345,23 @@ begin
     v_geracao := v_atual.generation + 1;
 
     -- A geracao anterior morre agora: token anterior deixa de valer na hora.
+    --
+    -- O evento e inserido com `where not exists` e colunas qualificadas, e
+    -- nao com `on conflict (invite_id, ...)`: nesta funcao `invite_id` tambem
+    -- e nome de coluna de saida (`returns table`), e o PostgreSQL recusaria a
+    -- referencia como ambigua (42702).
     if v_atual.status in ('ACTIVE', 'CLAIMED', 'SUBMITTING') then
       insert into public.cmd_invite_events
         (invite_id, client_id, user_id, owner_name, owner_role, generation, event)
-      values (v_id, v_user.client_id, v_user.id, v_user.name, v_user.role,
-              v_atual.generation, 'REVOKED')
-      on conflict (invite_id, generation, event) do nothing;
+      select v_id, v_user.client_id, v_user.id, v_user.name, v_user.role,
+             v_atual.generation, 'REVOKED'
+       where not exists (
+         select 1
+           from public.cmd_invite_events e
+          where e.invite_id = v_id
+            and e.generation = v_atual.generation
+            and e.event = 'REVOKED'
+       );
     end if;
 
     update public.cmd_invites
@@ -379,8 +390,14 @@ begin
 
   insert into public.cmd_invite_events
     (invite_id, client_id, user_id, owner_name, owner_role, generation, event)
-  values (v_id, v_user.client_id, v_user.id, v_user.name, v_user.role, v_geracao, 'GENERATED')
-  on conflict (invite_id, generation, event) do nothing;
+  select v_id, v_user.client_id, v_user.id, v_user.name, v_user.role, v_geracao, 'GENERATED'
+   where not exists (
+     select 1
+       from public.cmd_invite_events e
+      where e.invite_id = v_id
+        and e.generation = v_geracao
+        and e.event = 'GENERATED'
+   );
 
   return query select v_id, v_agora, v_fim;
 end
