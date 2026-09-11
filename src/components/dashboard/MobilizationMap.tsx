@@ -10,7 +10,9 @@ import {
   MAP_FILTER_LABELS,
   type MapFilter,
   type MapOverviewPayload,
+  type PollingPlacePin,
 } from '@/lib/domain/map-pin';
+import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
@@ -37,7 +39,17 @@ export function MobilizationMap() {
   const loader = useCallback(() => api<MapOverviewPayload>('/api/mapa'), []);
   const { data, loading, error, reload } = useRepositoryQuery<MapOverviewPayload>(loader);
 
-  const pins = useMemo(() => filterPins(data?.pins ?? [], filter), [data, filter]);
+  const [openPlace, setOpenPlace] = useState<PollingPlacePin | null>(null);
+
+  // Moradia continua sendo um pino por pessoa; local de votacao, um por escola.
+  const pins = useMemo(
+    () => (filter === 'POLLING_PLACE' ? [] : filterPins(data?.pins ?? [], 'RESIDENCE')),
+    [data, filter],
+  );
+  const places = useMemo(
+    () => (filter === 'RESIDENCE' ? [] : (data?.pollingPlaces ?? [])),
+    [data, filter],
+  );
   const totals = data?.totals;
   const pendentes = (totals?.pending ?? 0) + (totals?.notFound ?? 0);
 
@@ -70,7 +82,7 @@ export function MobilizationMap() {
               Mapa da mobilização
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Distribuição dos integrantes por local de votação
+              Distribuição dos integrantes por localização cadastrada e local de votação
             </p>
           </div>
 
@@ -104,11 +116,11 @@ export function MobilizationMap() {
         {totals ? (
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
             <div className="flex gap-1">
-              <dt>Moradia localizada:</dt>
+              <dt>Pessoas localizadas:</dt>
               <dd className="font-semibold text-ink-900">{formatNumber(totals.residence)}</dd>
             </div>
             <div className="flex gap-1">
-              <dt>Local de votação:</dt>
+              <dt>Locais de votação:</dt>
               <dd className="font-semibold text-ink-900">{formatNumber(totals.pollingPlace)}</dd>
             </div>
             <div className="flex gap-1">
@@ -132,9 +144,9 @@ export function MobilizationMap() {
         ) : (
           <>
             {/* O mapa fica sempre na tela, mesmo sem pino no filtro. */}
-            <MapCanvas pins={pins} />
+            <MapCanvas pins={pins} places={places} onOpenPlace={setOpenPlace} />
 
-            {pins.length === 0 ? (
+            {pins.length === 0 && places.length === 0 ? (
               <p className="pointer-events-none absolute inset-x-3 top-3 z-[500] rounded-control border border-line bg-surface/95 px-3 py-2 text-center text-xs text-ink-700 shadow-card">
                 Nenhuma localização neste filtro ainda. Nenhuma posição é estimada.
               </p>
@@ -143,9 +155,9 @@ export function MobilizationMap() {
         )}
       </div>
 
-      <p className="border-t border-line px-4 py-2 text-[0.6875rem] text-ink-500">
-        Coordenadas obtidas pelo Google Maps via SerpAPI. Mapa © OpenStreetMap contributors.
-      </p>
+      {openPlace ? (
+        <PlaceMembersPanel place={openPlace} onClose={() => setOpenPlace(null)} />
+      ) : null}
     </section>
   );
 }

@@ -57,6 +57,10 @@ vi.mock('@/lib/supabase/rest', () => ({
     }
     if (table === 'cmd_map_locations') return db.places;
     if (table === 'cmd_members') return Object.values(db.members);
+    if (table === 'cmd_clients') return [{ id: 'cli-1', name: 'Comitê Exemplo' }];
+    if (table === 'cmd_member_verifications') {
+      return Object.values(db.verifications);
+    }
     return [];
   },
   insertOne: async (table: string, value: Record<string, unknown>) => {
@@ -124,6 +128,8 @@ vi.mock('@/lib/supabase/storage', () => ({ signedUrls: async (paths: unknown[]) 
 
 const {
   createPendingLocation,
+  mapOverview,
+  placeMembers,
   ensureResidenceLinks,
   invalidateLocation,
   queryHash,
@@ -358,5 +364,94 @@ describe('localizar pendentes', () => {
     // Duas ruas distintas: duas consultas, nao tres.
     expect(lookupPlace).toHaveBeenCalledTimes(2);
     expect(db.links.every((link) => link.status === 'SUCCESS')).toBe(true);
+  });
+});
+
+describe('mapa agrupado por local de votação', () => {
+  /** Tres pessoas do mesmo local, com generos e telefones diferentes. */
+  async function montarLocal() {
+    const eleitoral = (nome: string) =>
+      encryptJson({
+        local: 'ESCOLA MUNICIPAL EXEMPLO',
+        logradouro: 'RUA DAS FLORES S/N',
+        bairro: 'CENTRO',
+        municipio: 'São Paulo',
+        uf: 'SP',
+        zona: '005',
+        secao: '0123',
+        eleitor: nome,
+      });
+
+    const pessoas = [
+      { id: 'p1', name: 'Ana Souza', gender: 'MULHER', phone: '11999999999' },
+      { id: 'p2', name: 'Bruno Lima', gender: 'HOMEM', phone: '11988888888' },
+      { id: 'p3', name: 'Cris Melo', gender: null, phone: '' },
+    ];
+
+    for (const pessoa of pessoas) {
+      member(pessoa.id, { name: pessoa.name, gender: pessoa.gender, phone: pessoa.phone });
+      db.verifications[pessoa.id] = {
+        member_id: pessoa.id,
+        tse_status: 'SUCCESS',
+        tse_payload: eleitoral(pessoa.name),
+      };
+      await createPendingLocation('cli-1', pessoa.id, 'POLLING_PLACE');
+      await resolveLocation(pessoa.id, 'POLLING_PLACE');
+    }
+  }
+
+  it('três integrantes no mesmo local geram um pino só, com as contagens', async () => {
+    await montarLocal();
+
+    const { pins, pollingPlaces } = await mapOverview();
+
+    expect(pollingPlaces).toHaveLength(1);
+    expect(pins).toHaveLength(0); // moradia nao entra aqui
+
+    const local = pollingPlaces[0];
+    expect(local.total).toBe(3);
+    expect(local.men).toBe(1);
+    expect(local.women).toBe(1);
+    expect(local.others).toBe(1);
+    expect(local.men + local.women + local.others).toBe(local.total);
+    expect(local.withPhone).toBe(2);
+
+    // O resumo do pino nao carrega nome, telefone nem e-mail.
+    const serializado = JSON.stringify(local);
+    for (const proibido of ['Ana Souza', 'Bruno', 'Cris', '11999999999', '@']) {
+      expect(serializado).not.toContain(proibido);
+    }
+  });
+
+  it('"Ver pessoas" traz só quem vota naquele local, sem dado sensível', async () => {
+    await montarLocal();
+    const { pollingPlaces } = await mapOverview();
+
+    const lista = await placeMembers(pollingPlaces[0].locationId);
+
+    expect(lista.total).toBe(3);
+    expect(lista.items.map((item) => item.name).sort()).toEqual([
+      'Ana Souza',
+      'Bruno Lima',
+      'Cris Melo',
+    ]);
+
+    // Telefone ausente vira nulo: a tela nao mostra linha vazia.
+    expect(lista.items.find((item) => item.name === 'Cris Melo')?.phone).toBeNull();
+    expect(lista.items.find((item) => item.name === 'Ana Souza')?.phone).toBe('11999999999');
+    expect(lista.items.every((item) => item.clientId === 'cli-1')).toBe(true);
+
+    const serializado = JSON.stringify(lista);
+    expect(serializado).not.toMatch(/cpf|nomeMae|situacaoCadastral|renda|device/i);
+  });
+
+  it('a busca por nome filtra a lista no servidor', async () => {
+    await montarLocal();
+    const { pollingPlaces } = await mapOverview();
+
+    const lista = await placeMembers(pollingPlaces[0].locationId, { search: 'bruno' });
+
+    expect(lista.total).toBe(1);
+    expect(lista.items[0].name).toBe('Bruno Lima');
   });
 });

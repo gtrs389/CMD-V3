@@ -5,8 +5,10 @@ import Link from 'next/link';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { MapPin } from '@/lib/domain/map-pin';
-import { clusterPins, pinLabel, precisionLabel, type PinCluster } from '@/lib/domain/map-pin';
+import type { MapPin, PollingPlacePin } from '@/lib/domain/map-pin';
+import { clusterPins, precisionLabel, type PinCluster } from '@/lib/domain/map-pin';
+import { formatPhone } from '@/lib/utils/phone';
+import { formatNumber } from '@/lib/utils/text';
 import { initials } from '@/lib/utils/text';
 
 /**
@@ -106,8 +108,10 @@ function PinPhoto({ pin }: { pin: MapPin }) {
   );
 }
 
+/** Cartao da pessoa. Telefone e e-mail so aparecem quando existem. */
 function PinDetails({ pin }: { pin: MapPin }) {
-  const residence = pin.locationKind === 'RESIDENCE';
+  const local = [pin.place, pin.district].filter(Boolean).join(' - ');
+  const municipio = [pin.city, pin.state].filter(Boolean).join('/');
 
   return (
     <div className="flex min-w-52 gap-2.5">
@@ -117,25 +121,21 @@ function PinDetails({ pin }: { pin: MapPin }) {
         <p className="text-sm font-semibold text-ink-900">{pin.memberName}</p>
         <p className="text-xs text-ink-500">{pin.clientName}</p>
 
-        <p className="text-xs text-ink-700">{pinLabel(pin)}</p>
-        {pin.district ? <p className="text-xs text-ink-500">{pin.district}</p> : null}
-        <p className="text-xs text-ink-500">
-          {[pin.city, pin.state].filter(Boolean).join('/') || '--'}
-        </p>
+        {pin.phone ? (
+          <p className="text-xs text-ink-500">{formatPhone(pin.phone)}</p>
+        ) : null}
+        {pin.email ? <p className="truncate text-xs text-ink-500">{pin.email}</p> : null}
 
-        {residence ? (
-          <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
-        ) : (
-          <p className="text-xs text-ink-500">
-            Zona {pin.zone ?? '--'} · Seção {pin.section ?? '--'}
-          </p>
-        )}
+        {local ? <p className="text-xs text-ink-700">{local}</p> : null}
+        {municipio ? <p className="text-xs text-ink-500">{municipio}</p> : null}
+
+        <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
 
         <Link
           href={`/clientes/${pin.clientId}?integrante=${pin.memberId}`}
           className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-brand-700 hover:text-brand-800"
         >
-          Abrir ficha
+          Ver ficha completa
         </Link>
       </div>
     </div>
@@ -178,9 +178,100 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
   );
 }
 
-export default function MapCanvas({ pins }: { pins: MapPin[] }) {
+/**
+ * Pino do local de votacao.
+ *
+ * Representa a escola, nunca uma pessoa: o resumo traz apenas contagens, e os
+ * nomes so aparecem depois do clique em "Ver pessoas".
+ */
+function PlaceMarker({
+  place,
+  onOpen,
+}: {
+  place: PollingPlacePin;
+  onOpen: (place: PollingPlacePin) => void;
+}) {
+  return (
+    <Marker position={[place.latitude, place.longitude]} icon={markerIcon('POLLING_PLACE')}>
+      <Popup>
+        <div className="w-56 space-y-1.5">
+          {place.imageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={place.imageUrl}
+              alt={place.title ?? 'Local de votação'}
+              className="h-24 w-full rounded-control border border-line object-cover"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex h-24 w-full items-center justify-center rounded-control border border-line bg-ink-50 text-ink-400"
+            >
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M4 20h16M5 20V10M19 20V10M12 3l9 7H3zM9 20v-6h6v6" />
+              </svg>
+            </span>
+          )}
+
+          <p className="text-sm font-semibold text-ink-900">
+            {place.title ?? 'Local de votação'}
+          </p>
+          {place.address ? <p className="text-xs text-ink-500">{place.address}</p> : null}
+          <p className="text-xs text-ink-500">
+            {[place.city, place.state].filter(Boolean).join('/') || '--'}
+          </p>
+
+          <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs text-ink-500">
+            <div className="col-span-2 flex gap-1">
+              <dt>Pessoas que votam aqui:</dt>
+              <dd className="font-semibold text-ink-900">{formatNumber(place.total)}</dd>
+            </div>
+            <div className="flex gap-1">
+              <dt>Homens:</dt>
+              <dd className="font-semibold text-ink-900">{formatNumber(place.men)}</dd>
+            </div>
+            <div className="flex gap-1">
+              <dt>Mulheres:</dt>
+              <dd className="font-semibold text-ink-900">{formatNumber(place.women)}</dd>
+            </div>
+            <div className="flex gap-1">
+              <dt>Não informado:</dt>
+              <dd className="font-semibold text-ink-900">{formatNumber(place.others)}</dd>
+            </div>
+            <div className="flex gap-1">
+              <dt>Com telefone:</dt>
+              <dd className="font-semibold text-ink-900">{formatNumber(place.withPhone)}</dd>
+            </div>
+          </dl>
+
+          <button
+            type="button"
+            onClick={() => onOpen(place)}
+            className="inline-flex min-h-9 w-full items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
+          >
+            Ver pessoas
+          </button>
+        </div>
+      </Popup>
+    </Marker>
+  );
+}
+
+export default function MapCanvas({
+  pins,
+  places = [],
+  onOpenPlace,
+}: {
+  pins: MapPin[];
+  places?: PollingPlacePin[];
+  onOpenPlace?: (place: PollingPlacePin) => void;
+}) {
   const [zoom, setZoom] = useState(4);
   const clusters = useMemo(() => clusterPins(pins, zoom), [pins, zoom]);
+  const focus = useMemo(
+    () => [...pins, ...places.map((place) => ({ ...place }) as unknown as MapPin)],
+    [pins, places],
+  );
 
   return (
     <MapContainer
@@ -192,15 +283,19 @@ export default function MapCanvas({ pins }: { pins: MapPin[] }) {
     >
       <TileLayer
         url={TILE_URL}
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         maxZoom={19}
       />
 
-      <FitBounds pins={pins} />
+      <FitBounds pins={focus} />
       <ZoomWatcher onChange={setZoom} />
 
       {clusters.map((cluster) => (
         <ClusterMarker key={cluster.id} cluster={cluster} />
+      ))}
+
+      {places.map((place) => (
+        <PlaceMarker key={place.locationId} place={place} onOpen={onOpenPlace ?? (() => {})} />
       ))}
     </MapContainer>
   );

@@ -213,6 +213,7 @@ export interface MapLocationRow {
   address: string | null;
   place_id: string | null;
   data_id: string | null;
+  image_url: string | null;
   provider: string;
   searched_at: string;
   created_at: string;

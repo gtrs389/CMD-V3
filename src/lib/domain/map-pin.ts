@@ -25,6 +25,60 @@ export interface MapPin {
   section: string | null;
   /** Ate onde o endereco chegou: rua, bairro ou municipio. */
   precision: LocationPrecision;
+  /** Somente quando cadastrados. Ausentes nao viram linha vazia na tela. */
+  phone: string | null;
+  email: string | null;
+}
+
+/**
+ * Local de votacao agrupado.
+ *
+ * O pino representa a escola, nao uma pessoa: nenhum nome, telefone ou e-mail
+ * aparece aqui. As contagens vem dos integrantes cadastrados no CMD.
+ */
+export interface PollingPlacePin {
+  locationId: string;
+  latitude: number;
+  longitude: number;
+  title: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  imageUrl: string | null;
+  total: number;
+  men: number;
+  women: number;
+  /** Outro, prefiro nao informar ou sem genero declarado. Fecha o total. */
+  others: number;
+  withPhone: number;
+}
+
+/** Chave de agrupamento: place_id, senao data_id, senao coordenada + titulo. */
+export function pollingPlaceKey(place: {
+  placeId?: string | null;
+  dataId?: string | null;
+  latitude: number;
+  longitude: number;
+  title?: string | null;
+}): string {
+  if (place.placeId?.trim()) return `place:${place.placeId.trim()}`;
+  if (place.dataId?.trim()) return `data:${place.dataId.trim()}`;
+
+  const title = (place.title ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  return `geo:${place.latitude.toFixed(5)},${place.longitude.toFixed(5)}:${title}`;
+}
+
+/** Genero declarado no cadastro. O que a consulta externa devolveu nao entra. */
+export function genderBucket(gender: string | null | undefined): 'men' | 'women' | 'others' {
+  if (gender === 'HOMEM') return 'men';
+  if (gender === 'MULHER') return 'women';
+  return 'others';
 }
 
 export interface MapTotals {
@@ -35,8 +89,31 @@ export interface MapTotals {
 }
 
 export interface MapOverviewPayload {
+  /** Somente moradia: o local de votacao vem agrupado em `pollingPlaces`. */
   pins: MapPin[];
+  pollingPlaces: PollingPlacePin[];
   totals: MapTotals;
+}
+
+/** Pessoa listada apenas depois do clique em "Ver pessoas". */
+export interface PlaceMember {
+  memberId: string;
+  name: string;
+  photo: string | null;
+  clientId: string;
+  clientName: string;
+  /** Ausentes nao viram linha vazia: a tela simplesmente nao mostra. */
+  phone: string | null;
+  email: string | null;
+  zone: string | null;
+  section: string | null;
+}
+
+export interface PlaceMembersPayload {
+  items: PlaceMember[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /** Filtro do cabecalho. A tela comeca em "Moradia". */
@@ -47,8 +124,8 @@ export type MapFilter = (typeof MAP_FILTERS)[number];
 export const DEFAULT_MAP_FILTER: MapFilter = 'BOTH';
 
 export const MAP_FILTER_LABELS: Record<MapFilter, string> = {
-  RESIDENCE: 'Moradia',
-  POLLING_PLACE: 'Local de votação',
+  RESIDENCE: 'Pessoas',
+  POLLING_PLACE: 'Locais de votação',
   BOTH: 'Ambos',
 };
 
