@@ -9,6 +9,7 @@ import {
   EMPTY_SELECTION,
   LocationError,
   citiesUrl,
+  districtsPath,
   districtsUrl,
   findCity,
   parseCities,
@@ -88,6 +89,14 @@ describe('montagem das URLs', () => {
     expect(statesUrl()).toBe('https://api.brasilaberto.com/v1/states');
     expect(citiesUrl('sp')).toBe('https://api.brasilaberto.com/v1/cities/SP');
     expect(districtsUrl(669)).toBe('https://api.brasilaberto.com/v1/districts/669');
+  });
+
+  it('o caminho interno dos bairros leva o id do município, não o ibgeId', () => {
+    const [saoPaulo] = parseCities(CITIES).filter((city) => city.name === 'São Paulo');
+    const path = districtsPath(saoPaulo);
+
+    expect(path).toContain('/api/localidades/bairros/669');
+    expect(path).not.toContain(String(saoPaulo.ibgeId));
   });
 
   it('recusa UF fora das 27 siglas e identificador inválido', () => {

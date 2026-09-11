@@ -11,9 +11,12 @@ import {
 } from 'react';
 import type { CustomField, SystemFieldKey } from '@/lib/types';
 import {
+  citiesPath,
+  districtsPath,
   findCity,
   selectCity,
   selectState,
+  statesPath,
   type CityOption,
   type DistrictOption,
   type StateOption,
@@ -134,10 +137,8 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
 
   const [chosenCityId, setChosenCityId] = useState<number | null>(null);
 
-  const states = useLocationList<StateOption>(ids.state ? '/api/localidades/estados' : null);
-  const cities = useLocationList<CityOption>(
-    ids.city && state ? `/api/localidades/municipios/${encodeURIComponent(state)}` : null,
-  );
+  const states = useLocationList<StateOption>(ids.state ? statesPath() : null);
+  const cities = useLocationList<CityOption>(ids.city && state ? citiesPath(state) : null);
   /**
    * Codigo IBGE do municipio escolhido, usado so para buscar os bairros.
    *
@@ -159,7 +160,7 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
   );
 
   const districts = useLocationList<DistrictOption>(
-    ids.district && cityId ? `/api/localidades/bairros/${cityId}` : null,
+    ids.district && cityId ? districtsPath({ id: cityId }) : null,
   );
 
   const value = useMemo<LocationContextValue>(() => {
@@ -191,7 +192,18 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
         if (ids.district) setValue(ids.district, name);
       },
     };
-  }, [state, city, district, cityId, states, cities, districts, ids, setValue]);
+  }, [
+    state,
+    city,
+    district,
+    cityId,
+    states,
+    cities,
+    districts,
+    ids,
+    setValue,
+    setChosenCityId,
+  ]);
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
 }
