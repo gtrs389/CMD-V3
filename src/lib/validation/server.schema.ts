@@ -181,6 +181,26 @@ export const publicSubmissionSchema = z.object({
   device: deviceSignalsSchema.optional(),
 });
 
+/**
+ * Duracao dos links, enviada pelo ADMIN.
+ *
+ * Quantidade inteira e unidade fechada em uma lista: nenhum texto do usuario
+ * chega perto de um intervalo SQL. A conversao para segundos acontece no
+ * servidor, e o banco ainda confere os limites no proprio check da coluna.
+ */
+export const inviteExpirationSchema = z.object({
+  candidate: z.object({
+    amount: z.number().int().min(1).max(525_600),
+    unit: z.enum(['minutes', 'hours', 'days']),
+  }),
+  team: z.object({
+    amount: z.number().int().min(1).max(525_600),
+    unit: z.enum(['minutes', 'hours', 'days']),
+  }),
+});
+
+export type InviteExpirationInputSchema = z.infer<typeof inviteExpirationSchema>;
+
 export type DeviceSignalsInput = z.infer<typeof deviceSignalsSchema>;
 
 export type ClientCreateInput = z.infer<typeof clientCreateSchema>;

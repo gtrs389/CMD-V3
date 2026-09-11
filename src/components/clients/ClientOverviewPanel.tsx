@@ -19,6 +19,7 @@ import {
   relationshipColor,
   relationshipLabel,
 } from '@/lib/domain/relationship';
+import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { copyText } from '@/lib/utils/clipboard';
 import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
@@ -394,10 +395,13 @@ function InviteCard({
   const origin = useOrigin();
   const [copied, setCopied] = useState(false);
 
+  // Link fora do prazo nunca aparece como ativo neste resumo.
+  const live = inviteIsLive(client.invite);
+
   // O endereco vem do banco a cada carregamento: o link continua disponivel
   // entre sessoes e aparelhos. Sem token (convite anterior ao link pessoal),
   // nada e exibido e nada e inventado.
-  const path = client.invite.token ? invitePath(client.invite.token) : null;
+  const path = client.invite.token && live ? invitePath(client.invite.token) : null;
   const url = path ? (origin ? `${origin}${path}` : path) : '';
 
   async function handleCopy() {
@@ -429,20 +433,16 @@ function InviteCard({
         </h2>
         <span
           className={
-            client.invite.active
+            live
               ? 'inline-flex items-center gap-1.5 rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-medium text-success-600'
               : 'inline-flex items-center gap-1.5 rounded-pill bg-danger-50 px-2 py-1 text-[0.6875rem] font-medium text-danger-600'
           }
         >
           <span
             aria-hidden="true"
-            className={
-              client.invite.active
-                ? 'size-1.5 rounded-full bg-success-600'
-                : 'size-1.5 rounded-full bg-danger-600'
-            }
+            className={live ? 'size-1.5 rounded-full bg-success-600' : 'size-1.5 rounded-full bg-danger-600'}
           />
-          {client.invite.active ? 'Ativo' : 'Inativo'}
+          {live ? 'Ativo' : 'Expirado'}
         </span>
       </div>
 
@@ -471,7 +471,7 @@ function InviteCard({
           </div>
         ) : (
           <p className="flex min-h-11 min-w-0 flex-1 items-center rounded-control border border-line bg-ink-50 px-3 text-xs text-ink-500">
-            Link ainda não disponível.
+            {live ? 'Link ainda não disponível.' : 'Link expirado. Gere um novo link.'}
           </p>
         )}
 
@@ -487,9 +487,9 @@ function InviteCard({
       </div>
 
       <p className="mt-2 text-[0.6875rem] text-ink-500">
-        {client.invite.active
+        {live
           ? 'Quem se cadastrar por este link entra na sua equipe.'
-          : 'Recrutamento desativado: nenhum link aceita cadastros no momento.'}
+          : 'Este link não aceita mais cadastros. Gere um novo link.'}
       </p>
     </section>
   );

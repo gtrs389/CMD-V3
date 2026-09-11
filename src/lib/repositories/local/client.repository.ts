@@ -1,5 +1,6 @@
 import type { Client, ClientFormConfig, ClientInput, ClientSummary, Member } from '@/lib/types';
 import { createDefaultFormConfig } from '@/lib/domain/form-config';
+import { DEFAULT_INVITE_SECONDS } from '@/lib/domain/invite-expiration';
 import { createId, createInviteToken } from '@/lib/utils/id';
 import { daysAgoIso, nowIso, startOfMonthIso } from '@/lib/utils/date';
 import { NotFoundError, type ClientRepository } from '../types';
@@ -109,6 +110,10 @@ export function createLocalClientRepository(
           active: true,
           createdAt: timestamp,
           rotatedAt: null,
+          // Referencia local: o prazo padrao do sistema e de 24 horas.
+          state: 'ACTIVE',
+          issuedAt: timestamp,
+          expiresAt: new Date(Date.parse(timestamp) + DEFAULT_INVITE_SECONDS * 1000).toISOString(),
         },
         form: createDefaultFormConfig(),
       };

@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Member, TeamOverview } from '@/lib/types';
+import type { InviteState } from '@/lib/domain/invite-expiration';
 import { TABLES, type ClientRow, type MemberRow } from '@/lib/supabase/tables';
 import { selectOne } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
@@ -99,6 +100,11 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
         active: client.recruiting_active && (invite?.active ?? false),
         createdAt: invite?.created_at ?? member.created_at,
         rotatedAt: invite?.rotated_at ?? null,
+        // Prazo obrigatorio: sem convite carregado o link aparece expirado,
+        // porque nenhum link do sistema e eterno.
+        state: (invite?.status as InviteState) ?? 'EXPIRED',
+        issuedAt: invite?.issued_at ?? member.created_at,
+        expiresAt: invite?.expires_at ?? member.created_at,
       },
       // Nenhuma configuracao de formulario: nem campos, nem opcoes, nem
       // textos, nem contagem de campos ativos ou obrigatorios.

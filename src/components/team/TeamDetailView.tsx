@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { LayoutList, Users } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
+import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
@@ -102,7 +103,7 @@ export function TeamDetailView() {
               </span>
               <span
                 className={
-                  client.invite.active
+                  inviteIsLive(client.invite)
                     ? 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-success-600'
                     : 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-danger-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-danger-600'
                 }
@@ -110,12 +111,12 @@ export function TeamDetailView() {
                 <span
                   aria-hidden="true"
                   className={
-                    client.invite.active
+                    inviteIsLive(client.invite)
                       ? 'size-1.5 rounded-full bg-success-600'
                       : 'size-1.5 rounded-full bg-danger-600'
                   }
                 />
-                {client.invite.active ? 'Link ativo' : 'Link inativo'}
+                {inviteIsLive(client.invite) ? 'Link ativo' : 'Link expirado'}
               </span>
             </div>
 

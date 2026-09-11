@@ -1,6 +1,6 @@
 'use client';
 
-import { Link2Off, WifiOff } from 'lucide-react';
+import { Clock, Link2Off, WifiOff } from 'lucide-react';
 import { usePublicInvite } from '@/hooks/use-clients';
 import { visibleFields } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
@@ -12,16 +12,20 @@ interface PublicInviteViewProps {
   token: string;
 }
 
+/** Mesmo texto para todos os casos de link encerrado. */
+const GONE_TEXT = 'Este link não está mais disponível. Solicite um novo link à pessoa que o enviou.';
+
 /**
  * Porta de entrada do convite.
  *
- * Convite inexistente ou desativado mostra o mesmo aviso neutro, sem revelar
- * detalhes internos do sistema. Carregamento, falha de rede e formulario sem
- * campo ativo usam a mesma moldura da pagina, entao nenhum estado quebra o
- * desenho.
+ * Link expirado, ja usado, revogado ou reservado por outro navegador mostra
+ * sempre a MESMA tela, sem revelar o motivo, sem data tecnica e sem nenhum
+ * campo do formulario. Convite inexistente ou com o recrutamento desligado
+ * mostra o aviso neutro de indisponibilidade. Carregamento e falha de rede
+ * usam a mesma moldura da pagina, entao nenhum estado quebra o desenho.
  */
 export function PublicInviteView({ token }: PublicInviteViewProps) {
-  const { data: invite, loading, error, reload } = usePublicInvite(token);
+  const { data, loading, error, reload } = usePublicInvite(token);
 
   if (loading) {
     return (
@@ -34,7 +38,7 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
     );
   }
 
-  // Falha de rede nao pode ser confundida com convite desativado.
+  // Falha de rede nao pode ser confundida com convite encerrado.
   if (error) {
     return (
       <InviteStateShell>
@@ -53,7 +57,11 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
     );
   }
 
-  if (!invite || !invite.client.invite.active) {
+  if (!data || data.kind === 'gone') {
+    return <InviteExpired reason={data?.reason ?? 'expired'} />;
+  }
+
+  if (data.kind === 'unavailable' || !data.invite.client.invite.active) {
     return (
       <InviteUnavailable description="Este link não está ativo no momento. Peça um novo link ao responsável pelo cadastro." />
     );
@@ -61,13 +69,39 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
 
   // Formulario sem nenhum campo ativo nao tem o que preencher: melhor um
   // aviso claro do que um cartao vazio.
-  if (visibleFields(invite.client.form).length === 0) {
+  if (visibleFields(data.invite.client.form).length === 0) {
     return (
       <InviteUnavailable description="O formulário deste convite ainda não tem campos disponíveis. Fale com o responsável pelo cadastro." />
     );
   }
 
-  return <PublicFormView client={invite.client} owner={invite.owner} token={token} />;
+  return (
+    <PublicFormView client={data.invite.client} owner={data.invite.owner} token={token} />
+  );
+}
+
+/**
+ * Link encerrado: nenhum campo do formulario e desenhado.
+ *
+ * Dois titulos, o mesmo texto: "Link não disponível" quando outra pessoa já
+ * reservou, "Link expirado" quando venceu ou ja foi usado. Nada do estado
+ * interno, da reserva, do aparelho ou de horario tecnico aparece.
+ */
+export function InviteExpired({ reason = 'expired' }: { reason?: 'taken' | 'expired' }) {
+  return (
+    <InviteStateShell>
+      <span
+        aria-hidden="true"
+        className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-ink-100 text-ink-500"
+      >
+        <Clock className="size-6" />
+      </span>
+      <h1 className="text-lg font-semibold text-ink-900">
+        {reason === 'taken' ? 'Link não disponível' : 'Link expirado'}
+      </h1>
+      <p className="mt-2 text-sm text-balance text-ink-500">{GONE_TEXT}</p>
+    </InviteStateShell>
+  );
 }
 
 function InviteUnavailable({ description }: { description: string }) {

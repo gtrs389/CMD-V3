@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, Megaphone, Search, SearchX, Users, X } from 'lucide-react';
 import { useClientSummaries } from '@/hooks/use-clients';
+import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, matchesSearch, pluralize } from '@/lib/utils/text';
 import { Avatar } from '@/components/ui/Avatar';
@@ -149,7 +150,7 @@ export function RecruitView() {
               <span
                 className={cn(
                   'inline-flex shrink-0 items-center gap-1.5 self-start rounded-pill px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap sm:self-center',
-                  client.invite.active
+                  inviteIsLive(client.invite)
                     ? 'bg-success-50 text-success-700'
                     : 'bg-danger-50 text-danger-700',
                 )}
@@ -158,10 +159,10 @@ export function RecruitView() {
                   aria-hidden="true"
                   className={cn(
                     'size-1.5 rounded-full',
-                    client.invite.active ? 'bg-success-600' : 'bg-danger-600',
+                    inviteIsLive(client.invite) ? 'bg-success-600' : 'bg-danger-600',
                   )}
                 />
-                {client.invite.active ? 'Convite ativo' : 'Convite inativo'}
+                {inviteIsLive(client.invite) ? 'Link ativo' : 'Link expirado'}
               </span>
 
               {/* Abre a aba de convite do candidato. Nenhum token e gerado aqui. */}

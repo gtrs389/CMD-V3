@@ -24,6 +24,8 @@ export const TABLES = {
   memberVerificationViews: 'cmd_member_verification_views',
   mapLocations: 'cmd_map_locations',
   memberLocations: 'cmd_member_locations',
+  settings: 'cmd_settings',
+  inviteEvents: 'cmd_invite_events',
 } as const;
 
 export interface UserRow {
@@ -145,6 +147,15 @@ export interface MemberResponseRow {
   value: FieldValue;
 }
 
+/** Ciclo de vida do link pessoal (migration 013). */
+export type InviteStatusRow =
+  | 'ACTIVE'
+  | 'CLAIMED'
+  | 'SUBMITTING'
+  | 'CONSUMED'
+  | 'EXPIRED'
+  | 'REVOKED';
+
 export interface InviteRow {
   id: string;
   client_id: string;
@@ -160,6 +171,40 @@ export interface InviteRow {
   active: boolean;
   created_at: string;
   rotated_at: string | null;
+  /** Prazo obrigatorio (migration 013), sempre no horario do banco. */
+  issued_at: string;
+  expires_at: string;
+  status: InviteStatusRow;
+  /** SHA-256 do segredo da reserva. O segredo nunca e guardado. */
+  claim_hash: string | null;
+  claimed_at: string | null;
+  consumed_at: string | null;
+  revoked_at: string | null;
+  /** Contador de geracoes do mesmo link pessoal. */
+  generation: number;
+}
+
+/** Configuracao global: uma unica linha. */
+export interface SettingsRow {
+  id: boolean;
+  candidate_invite_seconds: number;
+  team_invite_seconds: number;
+  updated_at: string;
+}
+
+export type InviteEventName = 'GENERATED' | 'CLAIMED' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
+
+/** Historico imutavel dos links. Sem token, segredo, senha, CPF ou IP. */
+export interface InviteEventRow {
+  id: string;
+  invite_id: string;
+  client_id: string;
+  user_id: string | null;
+  owner_name: string | null;
+  owner_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  generation: number;
+  event: InviteEventName;
+  occurred_at: string;
 }
 
 /**
