@@ -29,8 +29,10 @@ export interface StateOption {
 }
 
 export interface CityOption {
-  /** Codigo IBGE: usado apenas para buscar os bairros. Nunca e gravado. */
+  /** Identificador da Brasil Aberto. Usado apenas para buscar os bairros. */
   id: number;
+  /** Codigo IBGE, quando a resposta traz. Tambem so serve para os bairros. */
+  ibge: number | null;
   name: string;
 }
 
@@ -63,8 +65,8 @@ const stateSchema = z.object({
 });
 
 /**
- * Os bairros sao consultados por codigo IBGE, entao e o `ibgeId` que
- * interessa; o `id` interno da Brasil Aberto so entra como reserva.
+ * Os bairros sao consultados pelo codigo IBGE e, se preciso, pelo
+ * identificador interno: guardamos os dois quando a resposta traz ambos.
  */
 const citySchema = z.object({
   id: z.union([z.number(), z.string()]).optional(),
@@ -72,7 +74,15 @@ const citySchema = z.object({
   name: z.string().min(1),
 });
 
-const districtSchema = z.object({ name: z.string().min(1) });
+/** O nome do bairro pode chegar em `name`, `district` ou como texto solto. */
+const districtSchema = z.union([
+  z.string().min(1),
+  z.object({
+    name: z.string().min(1).optional(),
+    district: z.string().min(1).optional(),
+    districtName: z.string().min(1).optional(),
+  }),
+]);
 
 function items<T>(payload: unknown, schema: z.ZodType<T[] | { result: T[] }>): T[] {
   const parsed = schema.safeParse(payload);
@@ -101,9 +111,11 @@ export function parseCities(payload: unknown): CityOption[] {
   const cities: CityOption[] = [];
 
   for (const row of rows) {
-    const id = Number(row.ibgeId ?? row.id);
-    if (!isIbgeCode(id)) continue;
-    cities.push({ id, name: normalizePlace(row.name) || row.name.trim() });
+    const ibge = toIbgeCode(row.ibgeId ?? null);
+    const own = toIbgeCode(row.id ?? null);
+    const id = own ?? ibge;
+    if (id === null) continue;
+    cities.push({ id, ibge, name: normalizePlace(row.name) || row.name.trim() });
   }
 
   if (cities.length === 0) throw new LocationError();
@@ -111,12 +123,23 @@ export function parseCities(payload: unknown): CityOption[] {
 }
 
 export function parseDistricts(payload: unknown): DistrictOption[] {
-  const rows = items(payload, listOf(districtSchema));
+  // Alem da lista direta, a resposta pode trazer os bairros dentro do result.
+  const nested =
+    payload && typeof payload === 'object' && 'result' in payload
+      ? (payload as { result?: { districts?: unknown } }).result
+      : null;
+  const source =
+    nested && typeof nested === 'object' && !Array.isArray(nested) && 'districts' in nested
+      ? { result: nested.districts }
+      : payload;
+
+  const rows = items(source, listOf(districtSchema));
   const seen = new Set<string>();
   const districts: DistrictOption[] = [];
 
   for (const row of rows) {
-    const name = normalizePlace(row.name) || row.name.trim();
+    const raw = typeof row === 'string' ? row : (row.name ?? row.district ?? row.districtName ?? '');
+    const name = normalizePlace(raw) || raw.trim();
     const key = normalizeSearch(name);
     if (!name || seen.has(key)) continue;
     seen.add(key);
@@ -160,6 +183,12 @@ export function districtsUrl(ibgeCode: number): string {
   return `${BASE_URL}/districts-by-ibge-code/${ibgeCode}`;
 }
 
+/** Caminho alternativo, pelo identificador interno da Brasil Aberto. */
+export function districtsByCityUrl(cityId: number): string {
+  if (!isIbgeCode(cityId)) throw new LocationError('Município inválido.');
+  return `${BASE_URL}/districts/${cityId}`;
+}
+
 export const UF_CODES: readonly string[] = UF_OPTIONS.map((option) => option.id);
 
 /* -------------------------------------------------------------------------
@@ -171,8 +200,10 @@ export interface LocationSelection {
   state: string;
   /** Nome do municipio, como sera gravado. */
   city: string;
-  /** Codigo IBGE do municipio: vive apenas durante o preenchimento. */
+  /** Identificador da Brasil Aberto: vive apenas durante o preenchimento. */
   cityId: number | null;
+  /** Codigo IBGE do municipio, quando conhecido. Tambem nao e gravado. */
+  cityIbge: number | null;
   /** Nome do bairro, como sera gravado. */
   district: string;
 }
@@ -181,6 +212,7 @@ export const EMPTY_SELECTION: LocationSelection = {
   state: '',
   city: '',
   cityId: null,
+  cityIbge: null,
   district: '',
 };
 
@@ -188,7 +220,7 @@ export const EMPTY_SELECTION: LocationSelection = {
 export function selectState(current: LocationSelection, uf: string): LocationSelection {
   const state = normalizeState(uf) ?? '';
   if (state === current.state) return current;
-  return { state, city: '', cityId: null, district: '' };
+  return { state, city: '', cityId: null, cityIbge: null, district: '' };
 }
 
 /** Trocar o municipio limpa o bairro. */
@@ -197,6 +229,7 @@ export function selectCity(current: LocationSelection, city: CityOption | null):
     ...current,
     city: city?.name ?? '',
     cityId: city?.id ?? null,
+    cityIbge: city?.ibge ?? null,
     district: '',
   };
 }

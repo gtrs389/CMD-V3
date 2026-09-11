@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   CACHE_SECONDS,
+  districtsByCityUrl,
   LOCATION_TIMEOUT_MS,
   LocationError,
   citiesUrl,
@@ -54,13 +55,40 @@ async function load<T>(url: string, revalidate: number, parse: (payload: unknown
     });
   } catch {
     // A causa original fica fora da resposta e fora do log.
+    logFailure(url, 0);
     throw new LocationError();
   }
 
-  if (!response.ok) throw new LocationError();
+  if (!response.ok) {
+    logFailure(url, response.status);
+    throw new LocationError();
+  }
 
   const payload = await response.json().catch(() => null);
-  return parse(payload);
+
+  try {
+    return parse(payload);
+  } catch {
+    logFailure(url, response.status, 'formato inesperado');
+    throw new LocationError();
+  }
+}
+
+/**
+ * Registra apenas o caminho consultado e o codigo devolvido.
+ * Nunca entra aqui a chave da API nem qualquer dado da pessoa.
+ */
+function logFailure(url: string, status: number, detail = 'falha na consulta'): void {
+  console.warn('[cmd] localidades: %s (%s) em %s', detail, status || 'sem resposta', endpoint(url));
+}
+
+/** Caminho sem dominio e sem parametros de consulta, para o log. */
+function endpoint(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return 'desconhecido';
+  }
 }
 
 export function listStates(): Promise<StateOption[]> {
@@ -71,6 +99,32 @@ export function listCities(uf: string): Promise<CityOption[]> {
   return load(citiesUrl(uf), CACHE_SECONDS.cities, parseCities);
 }
 
-export function listDistricts(ibgeCode: number): Promise<DistrictOption[]> {
-  return load(districtsUrl(ibgeCode), CACHE_SECONDS.districts, parseDistricts);
+/**
+ * Bairros do municipio.
+ *
+ * O caminho oficial e por codigo IBGE. Quando ele nao responde (ou a resposta
+ * nao vem no formato esperado) e conhecemos o identificador interno da Brasil
+ * Aberto, o caminho antigo e tentado antes de desistir.
+ */
+export async function listDistricts(
+  ibgeCode: number | null,
+  cityId: number | null = null,
+): Promise<DistrictOption[]> {
+  const attempts: string[] = [];
+  if (ibgeCode) attempts.push(districtsUrl(ibgeCode));
+  if (cityId && cityId !== ibgeCode) attempts.push(districtsByCityUrl(cityId));
+
+  if (attempts.length === 0) throw new LocationError('Município inválido.');
+
+  let last: unknown = new LocationError();
+  for (const url of attempts) {
+    try {
+      return await load(url, CACHE_SECONDS.districts, parseDistricts);
+    } catch (error) {
+      if (error instanceof LocationConfigError) throw error;
+      last = error;
+    }
+  }
+
+  throw last instanceof Error ? last : new LocationError();
 }

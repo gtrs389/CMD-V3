@@ -132,7 +132,10 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
   const city = ids.city ? text(values[ids.city]) : '';
   const district = ids.district ? text(values[ids.district]) : '';
 
-  const [chosenCityId, setChosenCityId] = useState<number | null>(null);
+  const [chosen, setChosen] = useState<{ id: number | null; ibge: number | null }>({
+    id: null,
+    ibge: null,
+  });
 
   const states = useLocationList<StateOption>(ids.state ? '/api/localidades/estados' : null);
   const cities = useLocationList<CityOption>(
@@ -145,23 +148,36 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
    * carregada, o que libera os bairros. Se a API nao o conhece mais, o valor
    * segue guardado e apenas os bairros ficam indisponiveis.
    */
-  const cityId = useMemo(
-    () => chosenCityId ?? (city ? (findCity(cities.items, city)?.id ?? null) : null),
-    [chosenCityId, city, cities.items],
-  );
+  const chosenCity = useMemo(() => {
+    if (chosen.id !== null || chosen.ibge !== null) return chosen;
+    const found = city ? findCity(cities.items, city) : null;
+    return { id: found?.id ?? null, ibge: found?.ibge ?? null };
+  }, [chosen, city, cities.items]);
 
-  const districts = useLocationList<DistrictOption>(
-    ids.district && cityId ? `/api/localidades/bairros/${cityId}` : null,
-  );
+  const districtsPath = useMemo(() => {
+    if (!ids.district) return null;
+    const code = chosenCity.ibge ?? chosenCity.id;
+    if (!code) return null;
+    const query = chosenCity.id && chosenCity.id !== code ? `?cidade=${chosenCity.id}` : '';
+    return `/api/localidades/bairros/${code}${query}`;
+  }, [ids.district, chosenCity]);
+
+  const districts = useLocationList<DistrictOption>(districtsPath);
 
   const value = useMemo<LocationContextValue>(() => {
-    const current = { state, city, cityId, district };
+    const current = {
+      state,
+      city,
+      cityId: chosenCity.id,
+      cityIbge: chosenCity.ibge,
+      district,
+    };
 
     const apply = (next: typeof current) => {
       if (ids.state && next.state !== state) setValue(ids.state, next.state);
       if (ids.city && next.city !== city) setValue(ids.city, next.city);
       if (ids.district && next.district !== district) setValue(ids.district, next.district);
-      setChosenCityId(next.cityId);
+      setChosen({ id: next.cityId, ibge: next.cityIbge });
     };
 
     return {
@@ -172,18 +188,22 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
       cities,
       districts,
       cityBlocked: !state,
-      districtBlocked: !city || cityId === null,
+      districtBlocked: !city || districtsPath === null,
       selectState: (uf) => apply(selectState(current, uf)),
       selectCity: (name) => {
         const found = cities.items.find((option) => option.name === name) ?? null;
         // Sem correspondencia na lista (valor antigo): guarda o nome sem id.
-        apply(found ? selectCity(current, found) : { ...current, city: name, cityId: null, district: '' });
+        apply(
+          found
+            ? selectCity(current, found)
+            : { ...current, city: name, cityId: null, cityIbge: null, district: '' },
+        );
       },
       selectDistrict: (name) => {
         if (ids.district) setValue(ids.district, name);
       },
     };
-  }, [state, city, district, cityId, states, cities, districts, ids, setValue]);
+  }, [state, city, district, chosenCity, districtsPath, states, cities, districts, ids, setValue]);
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
 }
