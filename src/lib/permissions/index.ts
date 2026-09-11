@@ -78,6 +78,11 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
  * A area interna do formulario e do ADMIN: sem `form.view` o time nao
  * ve aba, cartao, contagem de campos nem previa, e a configuracao dos campos
  * nao chega nem ao navegador.
+ *
+ * O mapa entra apenas como leitura: `map.view` mostra os cadastros da
+ * propria operacao — o servidor forca esse recorte, o `clientId` da URL nao
+ * decide nada. `map.resolve` continua fora: localizar cadastro pendente
+ * aciona consulta paga e e decisao do ADMIN.
  */
 const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
@@ -85,6 +90,7 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'member.view',
   'invite.view',
   'invite.renew',
+  'map.view',
 ];
 
 const MATRIX: Record<Role, readonly Permission[]> = {

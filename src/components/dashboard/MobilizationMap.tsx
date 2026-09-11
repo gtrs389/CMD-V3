@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useSession } from '@/components/layout/SessionProvider';
 import { Spinner } from '@/components/ui/Spinner';
 
 /**
@@ -38,8 +39,13 @@ interface MobilizationMapProps {
 }
 
 export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
+  const { can } = useSession();
   const [filter, setFilter] = useState<MapFilter>(DEFAULT_MAP_FILTER);
   const [resolving, setResolving] = useState(false);
+
+  // Localizar cadastro pendente aciona consulta paga: exclusivo do ADMIN.
+  // O Administrador do time abre o mapa somente para ver.
+  const podeLocalizar = can('map.resolve');
 
   const loader = useCallback(
     () =>
@@ -97,7 +103,7 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
             </p>
           </div>
 
-          {pendentes > 0 ? (
+          {podeLocalizar && pendentes > 0 ? (
             <Button variant="secondary" onClick={localizar} disabled={resolving}>
               {resolving ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
               Localizar cadastros pendentes
