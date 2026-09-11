@@ -3,7 +3,7 @@ import type {
   ClientFormConfig,
   ClientInput,
   ClientSummary,
-  TeamAccessLink,
+  TeamAccessLinks,
 } from '@/lib/types';
 import { NotFoundError, type ClientCreation, type ClientRepository } from '../types';
 import { notifyDataChanged } from '../events';
@@ -50,13 +50,13 @@ export function createHttpClientRepository(): ClientRepository {
     },
 
     async create(input: ClientInput): Promise<ClientCreation> {
-      const data = await api<{ client: Client; accessLink: TeamAccessLink | null }>('/api/clients', {
+      const data = await api<{ client: Client; accessLinks: TeamAccessLinks | null }>('/api/clients', {
         method: 'POST',
         body: input,
       });
 
       notifyDataChanged();
-      return { client: data.client, accessLink: data.accessLink ?? null };
+      return { client: data.client, accessLinks: data.accessLinks ?? null };
     },
 
     async update(id, input) {

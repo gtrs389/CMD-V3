@@ -1,5 +1,5 @@
 import 'server-only';
-import type { FieldType, FieldValue, SystemFieldKey } from '@/lib/types';
+import type { FieldType, FieldValue, SystemFieldKey, TeamAccessAudience } from '@/lib/types';
 import type { StepStatus, VerificationStatus } from '@/lib/domain/verification';
 import type { LocationKind, LocationPrecision, LocationStatus } from '@/lib/domain/map-location';
 
@@ -182,6 +182,8 @@ export interface MemberRow {
 export interface TeamAccessLinkRow {
   id: string;
   client_id: string;
+  /** Publico do endereco (migration 019): TEAM_ADMIN ou EQUIPE. */
+  audience: TeamAccessAudience;
   /** Token em claro: o ADMIN geral precisa copiar o endereco. */
   token: string;
   token_hash: string;

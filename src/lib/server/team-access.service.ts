@@ -1,6 +1,11 @@
 import 'server-only';
 import type { NextRequest } from 'next/server';
-import type { SessionUser, TeamAccessLink } from '@/lib/types';
+import type {
+  SessionUser,
+  TeamAccessAudience,
+  TeamAccessLink,
+  TeamAccessLinks,
+} from '@/lib/types';
 import { createToken, hashToken } from '@/lib/auth/tokens';
 import { SESSION_MAX_AGE } from '@/lib/auth/constants';
 import { normalizePhone } from '@/lib/utils/phone';
@@ -20,20 +25,22 @@ import { revokeUserSessions } from './user.service';
 /**
  * Acesso ao sistema pelo link do time: link proprio + telefone.
  *
- * O MESMO link atende os dois perfis daquele time:
+ * Cada time tem DOIS enderecos, um por publico, e cada endereco aceita
+ * somente os telefones do seu publico:
  *
- *   Administrador do time (CANDIDATE) -> painel do proprio time;
- *   Membro da equipe (EQUIPE)         -> "Minha mobilizacao", so com quem
- *                                        ele mesmo cadastrou.
+ *   TEAM_ADMIN -> Administrador do time (CANDIDATE): painel do proprio time;
+ *   EQUIPE     -> membro da equipe: "Minha mobilizacao", so com quem ele
+ *                 mesmo cadastrou.
  *
- * Quem decide o perfil e o servidor, pelo telefone encontrado dentro daquele
- * time: o navegador nao escolhe nada, e um EQUIPE jamais recebe o escopo de
- * Administrador do time.
+ * A separacao e do servidor, nao da tela: o telefone de um membro
+ * apresentado no link dos Administradores recebe a mesma recusa generica de
+ * um telefone inexistente, e vice-versa. O perfil da sessao vem da linha do
+ * banco, entao um EQUIPE jamais recebe o escopo de Administrador do time.
  *
- * Este link NAO e o de recrutamento (`cmd_invites`): ele nao expira sozinho,
- * nao e reservado por navegador, nao e consumido no primeiro uso e vale para
- * todas as pessoas ativas daquele time. So o ADMIN geral consulta, copia e
- * renova.
+ * Estes links NAO sao o de recrutamento (`cmd_invites`): eles nao expiram
+ * sozinhos, nao sao reservados por navegador, nao sao consumidos no primeiro
+ * uso e valem para todas as pessoas ativas daquele publico. So o ADMIN geral
+ * consulta, copia e renova.
  *
  * O telefone nao e senha: sem o link correto ele nao autentica ninguem. Por
  * isso o limite de tentativas vive no proprio link, e nem telefone, nem
@@ -53,6 +60,7 @@ function createAccessToken(): string {
 
 function toAccessLink(row: TeamAccessLinkRow): TeamAccessLink {
   return {
+    audience: row.audience,
     token: row.token,
     active: row.active,
     createdAt: row.created_at,
@@ -60,55 +68,86 @@ function toAccessLink(row: TeamAccessLinkRow): TeamAccessLink {
   };
 }
 
-export async function findAccessLinkRow(clientId: string): Promise<TeamAccessLinkRow | null> {
+export async function findAccessLinkRow(
+  clientId: string,
+  audience: TeamAccessAudience,
+): Promise<TeamAccessLinkRow | null> {
   return selectOne<TeamAccessLinkRow>(TABLES.teamAccessLinks, {
     select: '*',
-    filters: { client_id: `eq.${clientId}` },
+    filters: { client_id: `eq.${clientId}`, audience: `eq.${audience}` },
   });
 }
 
-/** Cria o link do time quando ainda nao existe. Idempotente. */
-export async function ensureTeamAccessLink(clientId: string): Promise<TeamAccessLinkRow> {
-  const current = await findAccessLinkRow(clientId);
+/** Cria o endereco daquele publico quando ainda nao existe. Idempotente. */
+export async function ensureTeamAccessLink(
+  clientId: string,
+  audience: TeamAccessAudience,
+): Promise<TeamAccessLinkRow> {
+  const current = await findAccessLinkRow(clientId, audience);
   if (current) return current;
 
   const token = createAccessToken();
   return insertOne<TeamAccessLinkRow>(
     TABLES.teamAccessLinks,
-    { client_id: clientId, token, token_hash: hashToken(token), active: true },
+    { client_id: clientId, audience, token, token_hash: hashToken(token), active: true },
     '*',
   );
 }
 
-/** Link atual do time, para o ADMIN geral copiar. Cria se ainda nao existir. */
-export async function getTeamAccessLink(clientId: string): Promise<TeamAccessLink> {
-  return toAccessLink(await ensureTeamAccessLink(clientId));
+/**
+ * Os dois enderecos do time, para o ADMIN geral copiar.
+ *
+ * Cria o que faltar: um time cadastrado antes da migration 019 pode ainda
+ * nao ter o endereco da equipe.
+ */
+export async function getTeamAccessLinks(clientId: string): Promise<TeamAccessLinks> {
+  const [admin, equipe] = await Promise.all([
+    ensureTeamAccessLink(clientId, 'TEAM_ADMIN'),
+    ensureTeamAccessLink(clientId, 'EQUIPE'),
+  ]);
+
+  return { TEAM_ADMIN: toAccessLink(admin), EQUIPE: toAccessLink(equipe) };
 }
 
+/** Perfil de usuario que cada endereco atende. */
+const ROLE_OF_AUDIENCE: Record<TeamAccessAudience, 'CANDIDATE' | 'EQUIPE'> = {
+  TEAM_ADMIN: 'CANDIDATE',
+  EQUIPE: 'EQUIPE',
+};
+
 /**
- * Revoga as sessoes de todo mundo que entra por aquele link: Administradores
- * do time e membros da equipe.
+ * Revoga as sessoes de quem entra pelo endereco renovado — e somente delas.
+ *
+ * Renovar o endereco da equipe nao derruba nenhum Administrador do time, e o
+ * contrario tambem vale: os dois enderecos sao independentes.
  *
  * Os aparelhos autorizados NAO sao tocados: quem ja estava vinculado
- * continua vinculado e apenas precisa entrar de novo, agora pelo endereco
- * novo.
+ * continua vinculado e apenas precisa entrar de novo, pelo endereco novo.
  */
-async function revokeTeamSessions(clientId: string): Promise<void> {
+async function revokeAudienceSessions(
+  clientId: string,
+  audience: TeamAccessAudience,
+): Promise<void> {
   const users = await selectRows<Pick<UserRow, 'id'>>(TABLES.users, {
     select: 'id',
-    filters: { client_id: `eq.${clientId}`, role: 'in.(CANDIDATE,EQUIPE)' },
+    filters: { client_id: `eq.${clientId}`, role: `eq.${ROLE_OF_AUDIENCE[audience]}` },
   });
   for (const user of users) await revokeUserSessions(user.id);
 }
 
 /**
- * Gera um endereco novo. O anterior para de funcionar na hora e todas as
- * sessoes abertas daquele time caem junto — administradores e membros da
- * equipe. Os aparelhos autorizados permanecem: e preciso apenas entrar de
- * novo, pelo link novo.
+ * Gera um endereco novo para UM publico.
+ *
+ * O anterior daquele publico para de funcionar na hora e as sessoes abertas
+ * dele caem junto. O outro endereco do time continua exatamente como estava.
+ * Os aparelhos autorizados permanecem: e preciso apenas entrar de novo, pelo
+ * endereco novo.
  */
-export async function rotateTeamAccessLink(clientId: string): Promise<TeamAccessLink> {
-  const current = await ensureTeamAccessLink(clientId);
+export async function rotateTeamAccessLink(
+  clientId: string,
+  audience: TeamAccessAudience,
+): Promise<TeamAccessLink> {
+  const current = await ensureTeamAccessLink(clientId, audience);
   const token = createAccessToken();
 
   const [row] = await updateRows<TeamAccessLinkRow>(
@@ -125,7 +164,7 @@ export async function rotateTeamAccessLink(clientId: string): Promise<TeamAccess
     '*',
   );
 
-  await revokeTeamSessions(clientId);
+  await revokeAudienceSessions(clientId, audience);
   return toAccessLink(row ?? { ...current, token, token_hash: hashToken(token) });
 }
 
@@ -137,6 +176,8 @@ export interface TeamAccessContext {
   clientId: string;
   /** Nome do time exibido na tela. Nenhum telefone ou nome de pessoa sai daqui. */
   clientName: string;
+  /** Publico que aquele endereco atende. Nao aparece na tela. */
+  audience: TeamAccessAudience;
 }
 
 /**
@@ -160,7 +201,7 @@ export async function resolveTeamAccess(token: string): Promise<TeamAccessContex
   });
   if (!client) return null;
 
-  return { clientId: client.id, clientName: client.name };
+  return { clientId: client.id, clientName: client.name, audience: link.audience };
 }
 
 export interface TeamLoginOutcome {
@@ -175,8 +216,9 @@ export interface TeamLoginOutcome {
 /**
  * Resposta unica de recusa.
  *
- * Vale para telefone inexistente, duplicado, de outro time, acesso inativo e
- * aparelho diferente do autorizado. A tela nunca fica sabendo qual dos casos
+ * Vale para telefone inexistente, duplicado, de outro time, de outro publico
+ * (membro tentando o link dos Administradores, ou o contrario), acesso
+ * inativo e aparelho diferente do autorizado. A tela nunca fica sabendo qual dos casos
  * aconteceu: dizer "aparelho nao autorizado" ja confirmaria que o telefone
  * existe.
  */
@@ -207,9 +249,10 @@ async function registerAccessFailure(link: TeamAccessLinkRow): Promise<void> {
 /**
  * Entrada pelo link do time: link + telefone.
  *
- * O telefone e comparado somente na forma normalizada e apenas dentro do
- * time que o link identificou. Nenhum telefone, token ou URL vai para log, e
- * a resposta e sempre a mesma para qualquer telefone que nao sirva.
+ * O telefone e comparado somente na forma normalizada, apenas dentro do time
+ * que o link identificou e apenas entre as pessoas do publico daquele
+ * endereco. Nenhum telefone, token ou URL vai para log, e a resposta e
+ * sempre a mesma para qualquer telefone que nao sirva.
  */
 export interface TeamLoginInput {
   token: string;
@@ -248,23 +291,28 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
     return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
   }
 
-  // Dentro daquele time, o telefone procura primeiro um Administrador do
-  // time e depois um membro da equipe. A busca traz os dois perfis de uma
-  // vez: se o numero levar a mais de uma pessoa ativa — dado antigo
-  // duplicado — ninguem entra, porque escolher entre duas pessoas seria
+  // O endereco usado decide QUEM pode entrar por ele: o link dos
+  // Administradores so procura entre os Administradores daquele time, e o da
+  // equipe so entre os membros. Telefone certo no endereco errado recebe a
+  // mesma recusa generica de um telefone que nao existe.
+  //
+  // Se o numero levar a mais de uma pessoa ativa do mesmo publico — dado
+  // antigo duplicado — ninguem entra: escolher entre duas pessoas seria
   // decidir por conta propria quem e quem.
+  const papel = ROLE_OF_AUDIENCE[link.audience];
+
   const candidatos = await selectRows<UserRow>(TABLES.users, {
     select: '*',
     filters: {
       client_id: `eq.${link.client_id}`,
-      role: 'in.(CANDIDATE,EQUIPE)',
+      role: `eq.${papel}`,
       phone: `eq.${phone}`,
       is_active: 'is.true',
     },
   });
 
-  const ativos = candidatos.filter(
-    (row) => (row.role === 'CANDIDATE' && row.team_person_id) || (row.role === 'EQUIPE' && row.member_id),
+  const ativos = candidatos.filter((row) =>
+    row.role === 'CANDIDATE' ? Boolean(row.team_person_id) : Boolean(row.member_id),
   );
   const user = ativos.length === 1 ? ativos[0] : null;
 
@@ -319,8 +367,9 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
     );
   }
 
-  // O perfil da sessao vem da linha do banco, nunca do que foi digitado: um
-  // membro da equipe jamais recebe o escopo de Administrador do time.
+  // O perfil da sessao vem da linha do banco, nunca do endereco nem do que
+  // foi digitado: um membro da equipe jamais recebe o escopo de
+  // Administrador do time.
   const equipe = user.role === 'EQUIPE';
   const photo = equipe
     ? await memberPhoto(user.member_id)

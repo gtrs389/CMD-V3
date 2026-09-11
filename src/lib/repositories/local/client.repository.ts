@@ -147,7 +147,7 @@ export function createLocalClientRepository(
       writeClients(storage, [client, ...clients]);
       // A referencia local nao cria acesso: o link do time e os usuarios dos
       // administradores vivem apenas no servidor.
-      return { client, accessLink: null };
+      return { client, accessLinks: null };
     },
 
     async update(id, input) {

@@ -16,7 +16,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { clientSchema, type ClientFormValues, type TeamPersonFormValues } from '@/lib/validation/client.schema';
 import { clientRepository } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories';
-import type { Client, TeamAccessLink } from '@/lib/types';
+import type { Client, TeamAccessLinks } from '@/lib/types';
 import { maskPhone } from '@/lib/utils/phone';
 import { Button } from '@/components/ui/Button';
 import { Field, describedBy } from '@/components/ui/Field';
@@ -49,7 +49,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
    * administradores daquele time. O link continua disponivel depois, no
    * cartao "Acesso dos administradores" da pagina do time.
    */
-  const [created, setCreated] = useState<TeamAccessLink | null>(null);
+  const [created, setCreated] = useState<TeamAccessLinks | null>(null);
 
   const {
     register,
@@ -112,9 +112,9 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
 
       const result = await clientRepository.create(values);
       onSaved?.(result.client);
-      // O modal permanece aberto: o link de acesso dos administradores
-      // aparece aqui, para ser copiado antes de sair.
-      setCreated(result.accessLink);
+      // O modal permanece aberto: os dois enderecos de acesso aparecem aqui,
+      // para serem copiados antes de sair.
+      setCreated(result.accessLinks);
     } catch (error) {
       if (error instanceof NetworkError) {
         toast.error(error.message);
@@ -134,12 +134,24 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
         size="lg"
         footer={<Button onClick={close}>Concluir</Button>}
       >
-        <div className="space-y-4">
-          <TeamAccessLinkField
-            token={created.token}
-            label="Link de acesso dos administradores"
-          />
-          <p className="text-sm text-ink-500">Envie este link aos administradores do time.</p>
+        <div className="space-y-5">
+          {/* Dois enderecos, um por publico: cada um so aceita os telefones
+              do seu grupo. Nenhum deles substitui o link de recrutamento. */}
+          <div className="space-y-2">
+            <TeamAccessLinkField
+              token={created.TEAM_ADMIN.token}
+              label="Link de acesso — Administradores do time"
+            />
+            <p className="text-sm text-ink-500">Envie este link aos administradores do time.</p>
+          </div>
+
+          <div className="space-y-2">
+            <TeamAccessLinkField
+              token={created.EQUIPE.token}
+              label="Link de acesso — Equipe"
+            />
+            <p className="text-sm text-ink-500">Envie este link aos membros da equipe.</p>
+          </div>
         </div>
       </Modal>
     );
