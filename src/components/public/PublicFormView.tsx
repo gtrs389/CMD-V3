@@ -50,7 +50,6 @@ interface PublicFormViewProps {
   /** Quem enviou o convite: apenas nome, foto e perfil. */
   owner: PublicInviteOwner | null;
   /** Token do link aberto. Identifica no servidor a operacao e o responsavel. */
-  token: string;
 }
 
 /** Rolagem sem movimento quando o sistema pede menos animacao. */
@@ -83,7 +82,7 @@ function focusFirstInvalid(container: HTMLElement | null) {
  * digitado sai da memoria da aba — nem `localStorage`, nem `sessionStorage`,
  * nem cookie, nem URL — e o envio acontece so depois da confirmacao final.
  */
-export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
+export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -105,7 +104,6 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
 
   const { setValue } = form;
   const verification = useInviteVerification({
-    token,
     onNameCorrection: (nome) => {
       if (nameFieldId) setValue(nameFieldId, nome);
     },
@@ -194,8 +192,9 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
     try {
       const payload = toSubmission(client.form, values);
       const { cpfToken, tseToken } = verification.getTokens();
-      // O cliente de destino vem do token do link, conferido no servidor.
-      await submitInvite(token, {
+      // O cliente de destino vem do contexto do link, guardado em cookie e
+      // resolvido no servidor: o payload nao carrega token nenhum.
+      await submitInvite({
         name: payload.name,
         phone: payload.phone,
         photo: payload.photo,

@@ -12,6 +12,7 @@ import {
   releaseInviteSubmit,
 } from '@/lib/server/invite.service';
 import { readClaim } from '@/lib/server/invite-claim';
+import { readInviteContext } from '@/lib/server/public-context';
 import {
   createPendingVerification,
   recordConfirmation,
@@ -32,6 +33,9 @@ import {
 
 /**
  * Envio do formulario publico.
+ *
+ * O codigo do link vem do cookie `HttpOnly` do contexto, nunca da URL nem do
+ * corpo: o payload do formulario nao carrega token nenhum.
  *
  * Nao exige sessao, mas exige um link ativo, no prazo e reservado para este
  * navegador. A operacao E o responsavel pelo cadastro vem sempre do token:
@@ -54,12 +58,11 @@ import {
  * time com o telefone deste cadastro. A tela final mostra apenas o
  * agradecimento.
  */
-export async function POST(
-  request: NextRequest,
-  ctx: RouteContext<'/api/public/convite/[token]/membros'>,
-) {
+export async function POST(request: NextRequest) {
   try {
-    const { token } = await ctx.params;
+    const token = readInviteContext(request);
+    if (!token) return jsonGone('taken');
+
     const context = await getInviteContext(token);
 
     // Prazo vencido, cadastro ja concluido ou token substituido. Quem abriu

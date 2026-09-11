@@ -3,6 +3,7 @@ import { badRequest, jsonGone, jsonOk, readJson, toErrorResponse } from '@/lib/s
 import { getInviteContext } from '@/lib/server/client.service';
 import { claimInvite, expireDueInvites } from '@/lib/server/invite.service';
 import { readClaim } from '@/lib/server/invite-claim';
+import { readInviteContext } from '@/lib/server/public-context';
 import { lookupTseForInvite } from '@/lib/server/invite-verification.service';
 import { inviteTseLookupSchema } from '@/lib/validation/server.schema';
 
@@ -15,12 +16,11 @@ import { inviteTseLookupSchema } from '@/lib/validation/server.schema';
  * consulta anterior sem sucesso ou token expirado — zona e secao ficam para
  * a pessoa preencher a mao, sem nenhuma cobranca e sem travar o cadastro.
  */
-export async function POST(
-  request: NextRequest,
-  ctx: RouteContext<'/api/public/convite/[token]/titulo'>,
-) {
+export async function POST(request: NextRequest) {
   try {
-    const { token } = await ctx.params;
+    const token = readInviteContext(request);
+    if (!token) return jsonGone('taken');
+
     const context = await getInviteContext(token);
 
     if (context?.finished) {

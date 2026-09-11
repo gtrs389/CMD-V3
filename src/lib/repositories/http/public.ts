@@ -27,12 +27,17 @@ export type PublicInviteOutcome =
   | { kind: 'gone'; reason: 'taken' | 'expired' }
   | { kind: 'unavailable'; reason?: undefined };
 
-export async function fetchPublicInvite(token: string): Promise<PublicInviteOutcome> {
-  if (!token) return { kind: 'unavailable' };
-
+/**
+ * Convite em andamento.
+ *
+ * Nenhuma chamada daqui carrega token: o codigo do link vive em cookie
+ * `HttpOnly`, gravado pela rota de entrada e lido apenas no servidor. O
+ * navegador nao tem como ler nem reenviar esse valor.
+ */
+export async function fetchPublicInvite(): Promise<PublicInviteOutcome> {
   try {
     const { client, owner } = await api<{ client: Client | null; owner: PublicInviteOwner | null }>(
-      `/api/public/convite/${encodeURIComponent(token)}`,
+      '/api/public/convite',
     );
 
     if (!client) return { kind: 'unavailable' };
@@ -89,15 +94,15 @@ export interface PublicSubmission {
  * apenas o agradecimento — sem link, sem telefone, sem credencial e sem
  * botao de entrar.
  */
-export async function submitInvite(token: string, input: PublicSubmission): Promise<void> {
+export async function submitInvite(input: PublicSubmission): Promise<void> {
   // Sinais tecnicos do aparelho, apenas para seguranca. Se o navegador nao
   // expuser nada, o envio segue igual: `device` vai vazio.
   const device: DeviceSignals = collectDeviceSignals();
 
-  await api<{ ok: true; id: string }>(
-    `/api/public/convite/${encodeURIComponent(token)}/membros`,
-    { method: 'POST', body: { ...input, device } },
-  );
+  await api<{ ok: true; id: string }>('/api/public/convite/membros', {
+    method: 'POST',
+    body: { ...input, device },
+  });
 }
 
 /**
@@ -112,8 +117,8 @@ export interface InviteCpfLookup {
   token: string | null;
 }
 
-export async function lookupInviteCpf(token: string, cpf: string): Promise<InviteCpfLookup> {
-  return api<InviteCpfLookup>(`/api/public/convite/${encodeURIComponent(token)}/cpf`, {
+export async function lookupInviteCpf(cpf: string): Promise<InviteCpfLookup> {
+  return api<InviteCpfLookup>('/api/public/convite/cpf', {
     method: 'POST',
     body: { cpf },
   });
@@ -125,11 +130,8 @@ export interface InviteTituloLookup {
   token: string | null;
 }
 
-export async function lookupInviteTitulo(
-  token: string,
-  cpfToken: string | null,
-): Promise<InviteTituloLookup> {
-  return api<InviteTituloLookup>(`/api/public/convite/${encodeURIComponent(token)}/titulo`, {
+export async function lookupInviteTitulo(cpfToken: string | null): Promise<InviteTituloLookup> {
+  return api<InviteTituloLookup>('/api/public/convite/titulo', {
     method: 'POST',
     body: { cpfToken },
   });

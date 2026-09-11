@@ -10,7 +10,8 @@ import type { NextRequest, NextResponse } from 'next/server';
  * aleatorio gerado no servidor:
  *
  *  - vai apenas em cookie `HttpOnly`, `Secure` em producao e `SameSite=Lax`;
- *  - o `Path` cobre somente as rotas daquele convite;
+ *  - o `Path` e `/`, porque as rotas publicas deixaram de carregar o token
+ *    no caminho: o convite em andamento vive no cookie de contexto;
  *  - o banco guarda apenas o SHA-256 do segredo;
  *  - o segredo e o hash nunca aparecem em JSON, log ou URL.
  *
@@ -32,11 +33,6 @@ export interface ClaimSecret {
 
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
-}
-
-/** Caminho do cookie: apenas as rotas daquele convite. */
-function cookiePath(token: string): string {
-  return `/api/public/convite/${encodeURIComponent(token)}`;
 }
 
 /** Le o segredo do cookie, ou cria um novo quando ausente ou malformado. */
@@ -66,7 +62,6 @@ export function readClaim(request: NextRequest): ClaimSecret | null {
  */
 export function attachClaimCookie(
   response: NextResponse,
-  token: string,
   secret: string,
   expiresAt: string,
 ): void {
@@ -78,7 +73,7 @@ export function attachClaimCookie(
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    path: cookiePath(token),
+    path: '/',
     maxAge: Math.max(60, Number.isFinite(remaining) ? remaining : 60),
   });
 }

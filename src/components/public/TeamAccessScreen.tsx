@@ -1,37 +1,21 @@
-import type { Metadata, Viewport } from 'next';
 import { TeamAccessForm } from '@/components/public/TeamAccessForm';
-import { GENERIC_LINK_ERROR, resolveTeamAccess } from '@/lib/server/team-access.service';
+import { GENERIC_LINK_ERROR } from '@/lib/server/team-access.service';
 import styles from '@/components/auth/login.module.css';
 
-export const metadata: Metadata = {
-  title: 'Acesso do time',
-  robots: { index: false, follow: false },
-};
-
-/** A arte da tela e escura: a barra do navegador acompanha. */
-export const viewport: Viewport = {
-  themeColor: '#071b34',
-};
-
-/** O token e conferido no banco a cada abertura: nunca e pre-renderizada. */
-export const dynamic = 'force-dynamic';
-
 /**
- * Entrada dos Administradores do time.
+ * Entrada pelo link do time, desenhada em `/`.
+ *
+ * A tela nao recebe nem conhece o codigo do link: ele ficou no cookie
+ * `HttpOnly` que a rota de entrada gravou, e o envio do telefone o resolve
+ * no servidor. Por isso a barra de endereco mostra apenas o dominio.
  *
  * E a MESMA tela de login do sistema, com a mesma arte e o mesmo cartao: so
  * o conteudo do formulario muda, porque aqui existe um unico campo, o
- * telefone.
- *
- * O token e opaco e nao carrega nenhum dado pessoal: quem o traduz para um
- * time e o servidor, e nada do time chega a tela — nem o nome dele, nem nome
- * de pessoa, nem telefone, nem lista de quem tem acesso. Link inexistente,
- * revogado ou substituido recebe sempre a mesma mensagem neutra.
+ * telefone. Nada do time chega aqui — nem o nome dele, nem nome de pessoa,
+ * nem telefone, nem lista de quem tem acesso. Link inexistente, revogado ou
+ * substituido recebe sempre a mesma mensagem neutra.
  */
-export default async function TeamAccessPage({ params }: PageProps<'/acesso/time/[token]'>) {
-  const { token } = await params;
-  const context = await resolveTeamAccess(token).catch(() => null);
-
+export function TeamAccessScreen({ available = true }: { available?: boolean }) {
   return (
     <main className={styles['login-page']} data-fullbleed>
       <div className={styles.artwork} aria-hidden="true" />
@@ -123,13 +107,13 @@ export default async function TeamAccessPage({ params }: PageProps<'/acesso/time
             <span className={styles['badge-word']}>CMD</span>
           </div>
 
-          {context ? (
+          {available ? (
             <>
               {/* Nem o nome do time aparece aqui: a tela de entrada nao
                   revela nada sobre quem esta do outro lado do link. */}
               <h1 id="acesso-title">Bem-vindo de volta</h1>
 
-              <TeamAccessForm token={token} />
+              <TeamAccessForm />
             </>
           ) : (
             <>

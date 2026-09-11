@@ -41,14 +41,6 @@ export function createHttpClientRepository(): ClientRepository {
       }
     },
 
-    async getByToken(token) {
-      if (!token) return null;
-      const { client } = await api<{ client: Client | null }>(
-        `/api/public/convite/${encodeURIComponent(token)}`,
-      );
-      return client;
-    },
-
     async create(input: ClientInput): Promise<ClientCreation> {
       const data = await api<{ client: Client; accessLinks: TeamAccessLinks | null }>('/api/clients', {
         method: 'POST',

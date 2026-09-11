@@ -111,11 +111,6 @@ export function createLocalClientRepository(
       return load().find((client) => client.id === id) ?? null;
     },
 
-    async getByToken(token) {
-      if (!token) return null;
-      return load().find((client) => client.invite.token === token) ?? null;
-    },
-
     async create(input: ClientInput) {
       const storage = storageFactory();
       const clients = readClients(storage);

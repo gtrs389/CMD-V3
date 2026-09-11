@@ -40,14 +40,6 @@ describe('repositorio de clientes', () => {
     expect(token).toMatch(/^[a-z0-9]+$/);
   });
 
-  it('localiza pelo token e trata token inexistente', async () => {
-    const { client } = await clients.create(clientInput);
-
-    expect(await clients.getByToken(client.invite.token ?? '')).not.toBeNull();
-    expect(await clients.getByToken('token-invalido')).toBeNull();
-    expect(await clients.getByToken('')).toBeNull();
-  });
-
   it('gera novo token invalidando o anterior', async () => {
     const { client } = await clients.create(clientInput);
     const previous = client.invite.token ?? '';
@@ -55,8 +47,8 @@ describe('repositorio de clientes', () => {
     const rotated = await clients.regenerateInviteToken(client.id);
 
     expect(rotated.invite.token).not.toBe(previous);
+    expect(rotated.invite.token).toBeTruthy();
     expect(rotated.invite.rotatedAt).not.toBeNull();
-    expect(await clients.getByToken(previous)).toBeNull();
   });
 
   it('desativa o convite sem apagar o token', async () => {

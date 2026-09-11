@@ -22,7 +22,7 @@ export function useClient(id: string) {
  * A resposta vem da rota publica, que resolve o token no servidor. Nada e
  * guardado no navegador.
  */
-export function usePublicInvite(token: string) {
-  const loader = useCallback(() => fetchPublicInvite(token), [token]);
+export function usePublicInvite() {
+  const loader = useCallback(() => fetchPublicInvite(), []);
   return useRepositoryQuery<PublicInviteOutcome>(loader);
 }

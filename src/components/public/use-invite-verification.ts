@@ -6,7 +6,6 @@ import { lookupInviteCpf, lookupInviteTitulo } from '@/lib/repositories';
 export type PendingConfirmation = { kind: 'cpf' | 'titulo'; value: string } | null;
 
 interface UseInviteVerificationOptions {
-  token: string;
   /** Corrige o campo "Nome completo" silenciosamente, sem avisar a pessoa. */
   onNameCorrection: (nome: string) => void;
   /** Preenche zona e secao com o que a consulta eleitoral devolveu. */
@@ -26,7 +25,6 @@ interface UseInviteVerificationOptions {
  * do titulo: zona e secao eram do CPF antigo e deixam de valer.
  */
 export function useInviteVerification({
-  token,
   onNameCorrection,
   onZonaSecaoFilled,
 }: UseInviteVerificationOptions) {
@@ -69,7 +67,7 @@ export function useInviteVerification({
           onZonaSecaoFilled(null, null);
         }
 
-        const result = await lookupInviteCpf(token, value).catch(() => ({
+        const result = await lookupInviteCpf(value).catch(() => ({
           nome: null,
           token: null,
         }));
@@ -78,7 +76,7 @@ export function useInviteVerification({
       } else {
         confirmedTituloRef.current = value;
 
-        const result = await lookupInviteTitulo(token, cpfTokenRef.current).catch(() => ({
+        const result = await lookupInviteTitulo(cpfTokenRef.current).catch(() => ({
           zona: null,
           secao: null,
           token: null,
@@ -89,7 +87,7 @@ export function useInviteVerification({
     } finally {
       setLoading(false);
     }
-  }, [pending, token, onNameCorrection, onZonaSecaoFilled]);
+  }, [pending, onNameCorrection, onZonaSecaoFilled]);
 
   const getTokens = useCallback(
     () => ({ cpfToken: cpfTokenRef.current, tseToken: tseTokenRef.current }),

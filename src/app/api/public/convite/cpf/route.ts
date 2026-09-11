@@ -3,24 +3,25 @@ import { badRequest, jsonGone, jsonOk, readJson, toErrorResponse } from '@/lib/s
 import { getInviteContext } from '@/lib/server/client.service';
 import { claimInvite, expireDueInvites } from '@/lib/server/invite.service';
 import { readClaim } from '@/lib/server/invite-claim';
+import { readInviteContext } from '@/lib/server/public-context';
 import { lookupCpfForInvite } from '@/lib/server/invite-verification.service';
 import { inviteCpfLookupSchema } from '@/lib/validation/server.schema';
 
 /**
  * Confirmacao do CPF, durante o preenchimento do link publico.
  *
- * So o navegador que reservou o link pode pedir esta consulta: o cookie da
- * reserva e conferido do mesmo jeito que no envio final, mas nada aqui muda
+ * O link vem do cookie do contexto, nunca da URL. So o navegador que
+ * reservou o link pode pedir esta consulta: o cookie da reserva e conferido
+ * do mesmo jeito que no envio final, mas nada aqui muda
  * o estado do link nem o consome. Falha do fornecedor nunca aparece para
  * quem preenche: a resposta apenas deixa de trazer nome e token, e o
  * cadastro segue normal.
  */
-export async function POST(
-  request: NextRequest,
-  ctx: RouteContext<'/api/public/convite/[token]/cpf'>,
-) {
+export async function POST(request: NextRequest) {
   try {
-    const { token } = await ctx.params;
+    const token = readInviteContext(request);
+    if (!token) return jsonGone('taken');
+
     const context = await getInviteContext(token);
 
     if (context?.finished) {
