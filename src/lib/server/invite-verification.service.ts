@@ -1,7 +1,7 @@
 import 'server-only';
 import { tseInputFrom, type CpfResult, type TseResult } from '@/lib/domain/verification';
 import { normalizeCpf } from '@/lib/utils/documents';
-import { consultCpf, consultTse } from './fontedata.service';
+import { consultCpf, consultTse, FonteDataError } from './fontedata.service';
 import { decryptJson, encryptJson, hasEncryptionKey } from './crypto';
 
 /**
@@ -38,7 +38,12 @@ export interface CpfLookupOutcome {
 
 /** Consulta o CPF confirmado. Nunca lanca: falha vira resultado vazio. */
 export async function lookupCpfForInvite(rawCpf: string): Promise<CpfLookupOutcome> {
-  if (!hasEncryptionKey()) return { nome: null, token: null };
+  if (!hasEncryptionKey()) {
+    // So no log do servidor: a pessoa nunca ve isso, mas sem isto nao ha como
+    // descobrir por que o formulario nao corrigiu nada sozinho.
+    console.error('[cmd] Consulta de CPF pulada: MEMBER_VERIFICATION_ENCRYPTION_KEY ausente.');
+    return { nome: null, token: null };
+  }
 
   // Normalizado aqui: precisa bater, digito a digito, com o CPF que o
   // integrante vai gravar no final, para o envio poder aproveitar o token.
@@ -48,7 +53,9 @@ export async function lookupCpfForInvite(rawCpf: string): Promise<CpfLookupOutco
     const result = await consultCpf(cpf);
     const token: CpfToken = { cpf, result };
     return { nome: result.nome, token: encryptJson(token) };
-  } catch {
+  } catch (error) {
+    const code = error instanceof FonteDataError ? error.code : 'UNEXPECTED';
+    console.error('[cmd] Falha na consulta de CPF do formulário público:', code);
     return { nome: null, token: null };
   }
 }
@@ -69,19 +76,36 @@ export interface TseLookupOutcome {
  */
 export async function lookupTseForInvite(cpfToken: string | null): Promise<TseLookupOutcome> {
   const empty: TseLookupOutcome = { zona: null, secao: null, token: null };
-  if (!cpfToken || !hasEncryptionKey()) return empty;
+
+  if (!cpfToken) {
+    console.error('[cmd] Consulta eleitoral pulada: CPF não foi confirmado com sucesso antes.');
+    return empty;
+  }
+  if (!hasEncryptionKey()) {
+    console.error('[cmd] Consulta eleitoral pulada: MEMBER_VERIFICATION_ENCRYPTION_KEY ausente.');
+    return empty;
+  }
 
   const decoded = decryptJson<CpfToken>(cpfToken);
-  if (!decoded) return empty;
+  if (!decoded) {
+    console.error('[cmd] Consulta eleitoral pulada: token de CPF inválido ou expirado.');
+    return empty;
+  }
 
   const input = tseInputFrom(decoded.cpf, decoded.result);
-  if (!input) return empty;
+  if (!input) {
+    // Esperado: nem todo CPF devolve nome da mae e data de nascimento.
+    console.error('[cmd] Consulta eleitoral pulada: CPF sem nome da mãe/nascimento para o TSE.');
+    return empty;
+  }
 
   try {
     const result = await consultTse(input);
     const token: TseToken = { cpf: decoded.cpf, result };
     return { zona: result.zona, secao: result.secao, token: encryptJson(token) };
-  } catch {
+  } catch (error) {
+    const code = error instanceof FonteDataError ? error.code : 'UNEXPECTED';
+    console.error('[cmd] Falha na consulta eleitoral do formulário público:', code);
     return empty;
   }
 }
