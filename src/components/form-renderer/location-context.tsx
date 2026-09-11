@@ -139,6 +139,8 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
     ids.city && state ? `/api/localidades/municipios/${encodeURIComponent(state)}` : null,
   );
   /**
+   * Codigo IBGE do municipio escolhido, usado so para buscar os bairros.
+   *
    * Cadastro antigo: o municipio ja gravado e reconhecido dentro da lista
    * carregada, o que libera os bairros. Se a API nao o conhece mais, o valor
    * segue guardado e apenas os bairros ficam indisponiveis.

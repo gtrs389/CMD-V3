@@ -71,6 +71,6 @@ export function listCities(uf: string): Promise<CityOption[]> {
   return load(citiesUrl(uf), CACHE_SECONDS.cities, parseCities);
 }
 
-export function listDistricts(cityId: number): Promise<DistrictOption[]> {
-  return load(districtsUrl(cityId), CACHE_SECONDS.districts, parseDistricts);
+export function listDistricts(ibgeCode: number): Promise<DistrictOption[]> {
+  return load(districtsUrl(ibgeCode), CACHE_SECONDS.districts, parseDistricts);
 }
