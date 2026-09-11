@@ -18,12 +18,22 @@ import { bindAdminDevice } from './admin-device';
 import { revokeUserSessions } from './user.service';
 
 /**
- * Acesso administrativo do time: link proprio + telefone.
+ * Acesso ao sistema pelo link do time: link proprio + telefone.
+ *
+ * O MESMO link atende os dois perfis daquele time:
+ *
+ *   Administrador do time (CANDIDATE) -> painel do proprio time;
+ *   Membro da equipe (EQUIPE)         -> "Minha mobilizacao", so com quem
+ *                                        ele mesmo cadastrou.
+ *
+ * Quem decide o perfil e o servidor, pelo telefone encontrado dentro daquele
+ * time: o navegador nao escolhe nada, e um EQUIPE jamais recebe o escopo de
+ * Administrador do time.
  *
  * Este link NAO e o de recrutamento (`cmd_invites`): ele nao expira sozinho,
  * nao e reservado por navegador, nao e consumido no primeiro uso e vale para
- * todos os administradores ativos daquele time. So o ADMIN geral consulta,
- * copia e renova.
+ * todas as pessoas ativas daquele time. So o ADMIN geral consulta, copia e
+ * renova.
  *
  * O telefone nao e senha: sem o link correto ele nao autentica ninguem. Por
  * isso o limite de tentativas vive no proprio link, e nem telefone, nem
@@ -75,18 +85,27 @@ export async function getTeamAccessLink(clientId: string): Promise<TeamAccessLin
   return toAccessLink(await ensureTeamAccessLink(clientId));
 }
 
-/** Revoga as sessoes de todos os administradores daquele time. */
-async function revokeTeamAdminSessions(clientId: string): Promise<void> {
-  const admins = await selectRows<Pick<UserRow, 'id'>>(TABLES.users, {
+/**
+ * Revoga as sessoes de todo mundo que entra por aquele link: Administradores
+ * do time e membros da equipe.
+ *
+ * Os aparelhos autorizados NAO sao tocados: quem ja estava vinculado
+ * continua vinculado e apenas precisa entrar de novo, agora pelo endereco
+ * novo.
+ */
+async function revokeTeamSessions(clientId: string): Promise<void> {
+  const users = await selectRows<Pick<UserRow, 'id'>>(TABLES.users, {
     select: 'id',
-    filters: { client_id: `eq.${clientId}`, role: 'eq.CANDIDATE' },
+    filters: { client_id: `eq.${clientId}`, role: 'in.(CANDIDATE,EQUIPE)' },
   });
-  for (const admin of admins) await revokeUserSessions(admin.id);
+  for (const user of users) await revokeUserSessions(user.id);
 }
 
 /**
  * Gera um endereco novo. O anterior para de funcionar na hora e todas as
- * sessoes abertas dos administradores daquele time caem junto.
+ * sessoes abertas daquele time caem junto — administradores e membros da
+ * equipe. Os aparelhos autorizados permanecem: e preciso apenas entrar de
+ * novo, pelo link novo.
  */
 export async function rotateTeamAccessLink(clientId: string): Promise<TeamAccessLink> {
   const current = await ensureTeamAccessLink(clientId);
@@ -106,7 +125,7 @@ export async function rotateTeamAccessLink(clientId: string): Promise<TeamAccess
     '*',
   );
 
-  await revokeTeamAdminSessions(clientId);
+  await revokeTeamSessions(clientId);
   return toAccessLink(row ?? { ...current, token, token_hash: hashToken(token) });
 }
 
@@ -156,7 +175,7 @@ export interface TeamLoginOutcome {
 /**
  * Resposta unica de recusa.
  *
- * Vale para telefone inexistente, telefone de outro time, acesso inativo e
+ * Vale para telefone inexistente, duplicado, de outro time, acesso inativo e
  * aparelho diferente do autorizado. A tela nunca fica sabendo qual dos casos
  * aconteceu: dizer "aparelho nao autorizado" ja confirmaria que o telefone
  * existe.
@@ -186,7 +205,7 @@ async function registerAccessFailure(link: TeamAccessLinkRow): Promise<void> {
 }
 
 /**
- * Entrada do administrador do time: link + telefone.
+ * Entrada pelo link do time: link + telefone.
  *
  * O telefone e comparado somente na forma normalizada e apenas dentro do
  * time que o link identificou. Nenhum telefone, token ou URL vai para log, e
@@ -229,16 +248,27 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
     return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
   }
 
-  const user = await selectOne<UserRow>(TABLES.users, {
+  // Dentro daquele time, o telefone procura primeiro um Administrador do
+  // time e depois um membro da equipe. A busca traz os dois perfis de uma
+  // vez: se o numero levar a mais de uma pessoa ativa — dado antigo
+  // duplicado — ninguem entra, porque escolher entre duas pessoas seria
+  // decidir por conta propria quem e quem.
+  const candidatos = await selectRows<UserRow>(TABLES.users, {
     select: '*',
     filters: {
       client_id: `eq.${link.client_id}`,
-      role: 'eq.CANDIDATE',
+      role: 'in.(CANDIDATE,EQUIPE)',
       phone: `eq.${phone}`,
+      is_active: 'is.true',
     },
   });
 
-  if (!user || !user.is_active || !user.team_person_id) {
+  const ativos = candidatos.filter(
+    (row) => (row.role === 'CANDIDATE' && row.team_person_id) || (row.role === 'EQUIPE' && row.member_id),
+  );
+  const user = ativos.length === 1 ? ativos[0] : null;
+
+  if (!user) {
     await registerAccessFailure(link);
     return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
   }
@@ -289,7 +319,12 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
     );
   }
 
-  const photo = await teamPersonPhoto(user.team_person_id);
+  // O perfil da sessao vem da linha do banco, nunca do que foi digitado: um
+  // membro da equipe jamais recebe o escopo de Administrador do time.
+  const equipe = user.role === 'EQUIPE';
+  const photo = equipe
+    ? await memberPhoto(user.member_id)
+    : await teamPersonPhoto(user.team_person_id);
 
   return {
     user: {
@@ -297,9 +332,11 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
       name: user.name,
       email: user.email,
       photo,
-      role: 'CANDIDATE',
+      role: equipe ? 'EQUIPE' : 'CANDIDATE',
       candidateId: user.client_id,
-      memberId: null,
+      memberId: equipe ? user.member_id : null,
+      // Nenhum dos dois perfis tem senha: nao existe primeiro acesso a
+      // cumprir nem troca a exigir.
       mustChangePassword: false,
     },
     sessionToken,
@@ -316,4 +353,14 @@ export async function teamPersonPhoto(teamPersonId: string | null): Promise<stri
     filters: { id: `eq.${teamPersonId}` },
   });
   return signedUrl(person?.photo_path ?? null);
+}
+
+/** Foto do integrante, ja assinada. */
+async function memberPhoto(memberId: string | null): Promise<string | null> {
+  if (!memberId) return null;
+  const member = await selectOne<{ photo_path: string | null }>(TABLES.members, {
+    select: 'photo_path',
+    filters: { id: `eq.${memberId}` },
+  });
+  return signedUrl(member?.photo_path ?? null);
 }

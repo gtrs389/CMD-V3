@@ -4,7 +4,7 @@ import { requireClientAccess, requirePermission } from '@/lib/server/guard';
 import { badRequest, jsonOk, notFound, readJson, toErrorResponse } from '@/lib/server/http';
 import { memberCreateSchema } from '@/lib/validation/server.schema';
 import { createMember, listAllMembers, rollbackMember } from '@/lib/server/member.service';
-import { assertMemberEmailFree, createPendingTeamAccess } from '@/lib/server/user.service';
+import { assertTeamPhoneAvailable, createMemberAccess } from '@/lib/server/user.service';
 import { getClient } from '@/lib/server/client.service';
 import { resolveLocation } from '@/lib/server/map-location.service';
 
@@ -22,8 +22,8 @@ export async function GET() {
  * Cadastro feito dentro do painel. O envio publico usa a rota do convite.
  *
  * O responsavel pelo cadastro e a sessao autenticada, nunca um valor do
- * corpo da requisicao. O integrante nasce com acesso pendente: o ADMIN gera
- * a senha temporaria em Configuracoes quando quiser.
+ * corpo da requisicao. O integrante nasce com acesso proprio, sem e-mail e
+ * sem senha: ele entra pelo link do time com o telefone deste cadastro.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
       throw badRequest('E necessário registrar o aceite do aviso de privacidade.');
     }
 
-    // E-mail repetido interrompe antes de gravar: nada orfao e criado.
-    await assertMemberEmailFree(input.email);
+    // Telefone repetido no time interrompe antes de gravar: nada orfao e
+    // criado, e o numero continua identificando uma unica pessoa.
+    await assertTeamPhoneAvailable(client.id, input.phone);
 
     const member = await createMember(
       { ...input, source: 'admin' },
@@ -47,11 +48,11 @@ export async function POST(request: NextRequest) {
     );
 
     try {
-      await createPendingTeamAccess({
+      await createMemberAccess({
         clientId: client.id,
         memberId: member.id,
         name: member.name,
-        email: input.email,
+        phone: member.phone,
       });
     } catch (error) {
       await rollbackMember(member.id);

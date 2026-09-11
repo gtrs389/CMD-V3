@@ -8,7 +8,7 @@ import { useOrigin } from '@/hooks/use-origin';
 import { useToast } from '@/components/ui/Toast';
 
 /**
- * Endereco de acesso dos administradores do time, com a acao de copiar.
+ * Endereco de acesso ao sistema pelo link do time, com a acao de copiar.
  *
  * Copiar nunca gera um link novo: o endereco exibido e sempre o que ja esta
  * valendo. So o ADMIN geral chega ate aqui.

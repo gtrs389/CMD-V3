@@ -190,7 +190,11 @@ export function MemberDetailModal({
             </p>
             {!somenteBasico ? (
               <>
-                <p className="truncate text-sm text-ink-500">{member.email ?? 'Sem e-mail'}</p>
+                {/* E-mail historico: a linha nao aparece quando esta vazio,
+                    e nenhum cadastro novo tem endereco. */}
+                {member.email ? (
+                  <p className="truncate text-sm text-ink-500">{member.email}</p>
+                ) : null}
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
                     {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}

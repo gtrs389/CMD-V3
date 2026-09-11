@@ -4,15 +4,17 @@ import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
 import { releaseUserDevice } from '@/lib/server/user.service';
 
 /**
- * Libera um novo aparelho para o Administrador do time.
+ * Libera um novo aparelho.
  *
- * Revoga o aparelho autorizado e todas as sessoes daquele usuario, na mesma
- * transacao do banco. Telefone, nome, foto, time e link nao sao tocados: o
- * proximo acesso valido vincula o navegador novo.
+ * Vale para os dois perfis que entram por link do time + telefone: o
+ * Administrador do time e o membro da equipe. Revoga o aparelho autorizado e
+ * todas as sessoes daquele usuario, na mesma transacao do banco. Telefone,
+ * nome, foto, time e link nao sao tocados: o proximo acesso valido vincula o
+ * navegador novo.
  *
  * Exclusivo do ADMIN geral. `settings.manage` ja e uma permissao so desse
  * perfil; o papel e conferido de novo para o escopo nunca depender apenas da
- * matriz. Administrador do time e EQUIPE recebem 403.
+ * matriz. Administrador do time e EQUIPE recebem 403 ao tentar usar a acao.
  *
  * Nenhum dado do aparelho, do usuario ou do telefone sai nesta resposta.
  */

@@ -441,7 +441,7 @@ async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Prom
   // Telefone em uso por outro administrador do mesmo time para a edicao
   // antes de qualquer gravacao.
   for (const person of people) {
-    await assertTeamPhoneAvailable(clientId, person.phone, person.id);
+    await assertTeamPhoneAvailable(clientId, person.phone, { personId: person.id });
   }
 
   try {
@@ -613,10 +613,14 @@ export async function deleteClient(id: string): Promise<void> {
  * Campos padrao que nao podem deixar de ser obrigatorios ou ativos.
  *
  * A mesma regra existe na tela, mas quem decide e o servidor: alterar o
- * corpo da requisicao nao desativa nem torna opcional o e-mail.
+ * corpo da requisicao nao desativa nem torna opcional o telefone, que e o
+ * que da acesso ao integrante junto do link do time.
+ *
+ * O campo padrao E-mail nao aparece aqui nem chega nesta lista: ele sai da
+ * configuracao antes (ver `toFormConfig`) e permanece desativado no banco.
  */
-const LOCKED_REQUIRED: readonly string[] = ['name', 'email'];
-const LOCKED_ENABLED: readonly string[] = ['name', 'phone', 'email'];
+const LOCKED_REQUIRED: readonly string[] = ['name', 'phone'];
+const LOCKED_ENABLED: readonly string[] = ['name', 'phone'];
 
 /** Sincroniza a lista de campos: atualiza, cria e remove conforme o enviado. */
 async function syncFields(clientId: string, fields: CustomField[]): Promise<void> {
@@ -641,9 +645,8 @@ async function syncFields(clientId: string, fields: CustomField[]): Promise<void
       label: field.label,
       placeholder: field.placeholder,
       help_text: field.helpText,
-      // Nome, e-mail e telefone continuam ativos, e nome e e-mail continuam
-      // obrigatorios, venha o que vier no corpo da requisicao: o e-mail e o
-      // que cria o acesso do integrante.
+      // Nome e telefone continuam ativos e obrigatorios, venha o que vier no
+      // corpo da requisicao: o telefone e o que cria o acesso do integrante.
       required: LOCKED_REQUIRED.includes(systemKey ?? '') ? true : field.required,
       enabled: LOCKED_ENABLED.includes(systemKey ?? '') ? true : field.enabled,
       position: index,

@@ -52,8 +52,10 @@ export async function fetchPublicInvite(token: string): Promise<PublicInviteOutc
  */
 export interface PublicSubmission {
   name: string;
-  /** Campo padrao obrigatorio: vira o login do integrante. */
-  email: string;
+  /**
+   * Campo padrao obrigatorio: e com ele, junto do link do time, que o
+   * integrante passa a entrar no CMD. Nao existe e-mail nem senha.
+   */
   phone: string;
   photo: string | null;
   /** Campos padrao. Nulo quando a pessoa nao informou. */
@@ -82,9 +84,10 @@ export interface PublicSubmission {
 /**
  * Envio do cadastro.
  *
- * Nenhuma credencial volta do servidor: o integrante nasce com acesso
- * pendente e o ADMIN gera a senha temporaria em Configuracoes. A tela final
- * mostra apenas o agradecimento.
+ * Nenhuma credencial volta do servidor, e nenhuma existe: o integrante nasce
+ * com acesso proprio, pelo link do time + telefone. A tela final mostra
+ * apenas o agradecimento — sem link, sem telefone, sem credencial e sem
+ * botao de entrar.
  */
 export async function submitInvite(token: string, input: PublicSubmission): Promise<void> {
   // Sinais tecnicos do aparelho, apenas para seguranca. Se o navegador nao

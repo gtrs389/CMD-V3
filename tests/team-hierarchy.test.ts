@@ -268,7 +268,7 @@ describe('rótulo "Cadastrado por"', () => {
   });
 });
 
-describe('e-mail de acesso', () => {
+describe('e-mail histórico', () => {
   it('normaliza em minúsculas e sem espaços nas pontas', () => {
     expect(normalizeEmail('  Joao.Silva@Exemplo.TEST ')).toBe('joao.silva@exemplo.test');
     expect(normalizeEmail(null)).toBe('');
@@ -283,7 +283,7 @@ describe('e-mail de acesso', () => {
     expect(isValidEmail(null)).toBe(false);
   });
 
-  it('é obrigatório no envio público e chega normalizado', () => {
+  it('não é mais pedido no envio público: quem identifica é o telefone', () => {
     const base = {
       name: 'João Silva',
       phone: '11987654321',
@@ -291,24 +291,25 @@ describe('e-mail de acesso', () => {
       consentAt: null,
     };
 
-    const semEmail = publicSubmissionSchema.safeParse(base);
-    expect(semEmail.success).toBe(false);
+    // Sem e-mail o envio passa: o campo saiu do cadastro.
+    expect(publicSubmissionSchema.safeParse(base).success).toBe(true);
 
-    const invalido = publicSubmissionSchema.safeParse({ ...base, email: 'joao@exemplo' });
-    expect(invalido.success).toBe(false);
+    // Sem telefone, nao: e ele que identifica a pessoa no acesso.
+    const semTelefone = publicSubmissionSchema.safeParse({ ...base, phone: '' });
+    expect(semTelefone.success).toBe(false);
 
-    const valido = publicSubmissionSchema.safeParse({
+    // E-mail enviado por engano e simplesmente ignorado, nunca gravado.
+    const comEmail = publicSubmissionSchema.safeParse({
       ...base,
-      email: '  Joao@Exemplo.TEST ',
+      email: 'joao@exemplo.test',
     });
-    expect(valido.success).toBe(true);
-    expect(valido.data?.email).toBe('joao@exemplo.test');
+    expect(comEmail.success).toBe(true);
+    expect(comEmail.data).not.toHaveProperty('email');
   });
 
   it('ignora qualquer responsável forjado no corpo da requisição', () => {
     const parsed = publicSubmissionSchema.safeParse({
       name: 'Forjado',
-      email: 'forjado@exemplo.test',
       phone: '11987654321',
       responses: [],
       consentAt: null,
