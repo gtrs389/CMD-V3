@@ -130,8 +130,10 @@ export function TeamDetailView() {
           members={members}
           onOpenTab={setTab}
           // O link fica no botao do cabecalho: o cartao "Meu link de
-          // cadastro" sai da visao geral.
+          // cadastro" sai da visao geral. "Pessoas do time" e area
+          // exclusiva de ADMIN e do proprio time.
           showInviteCard={false}
+          showPeopleCard={false}
         />
       </TabPanel>
 

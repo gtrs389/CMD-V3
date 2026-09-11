@@ -16,6 +16,7 @@ export const TABLES = {
   clients: 'cmd_clients',
   formFields: 'cmd_form_fields',
   members: 'cmd_members',
+  teamPeople: 'cmd_team_people',
   memberResponses: 'cmd_member_responses',
   invites: 'cmd_invites',
   memberDevices: 'cmd_member_devices',
@@ -133,6 +134,23 @@ export interface MemberRow {
   recruited_by_user_id: string | null;
   recruited_by_name: string | null;
   recruited_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Pessoa do time (migration 015): registro interno do ADMIN, sem relacao
+ * com cmd_members ou cmd_users.
+ */
+export interface TeamPersonRow {
+  id: string;
+  client_id: string;
+  name: string;
+  phone: string;
+  photo_path: string | null;
+  photo_mime: string | null;
+  photo_size: number | null;
+  position: number;
   created_at: string;
   updated_at: string;
 }

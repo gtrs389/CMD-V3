@@ -13,7 +13,7 @@ import {
   TrendingUp,
   UsersRound,
 } from 'lucide-react';
-import type { Client, FieldOption, Member } from '@/lib/types';
+import type { Client, FieldOption, Member, TeamPerson } from '@/lib/types';
 import {
   RELATIONSHIP_COLOR_CLASSES,
   relationshipColor,
@@ -22,6 +22,7 @@ import {
 import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { copyText } from '@/lib/utils/clipboard';
 import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
+import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
@@ -54,6 +55,17 @@ interface ClientOverviewPanelProps {
   showInviteCard?: boolean;
   /** Abre o link de cadastro. Sem ele o cartao nao oferece a acao. */
   onManageInvite?: () => void;
+  /**
+   * Exibe o cartao "Pessoas do time". Sai na pagina do integrante da
+   * equipe (EQUIPE): essa area e exclusiva de ADMIN e do proprio time.
+   */
+  showPeopleCard?: boolean;
+  /**
+   * Abre o formulario de edicao do time, na secao "Pessoas do time".
+   * Exclusivo do ADMIN: sem `client.update` o botao "Gerenciar pessoas"
+   * nao aparece.
+   */
+  onManagePeople?: () => void;
 }
 
 function startOfDay(date: Date): number {
@@ -74,6 +86,8 @@ export function ClientOverviewPanel({
   onOpenForm,
   showInviteCard = true,
   onManageInvite,
+  showPeopleCard = true,
+  onManagePeople,
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
@@ -195,11 +209,11 @@ export function ClientOverviewPanel({
         </div>
       </div>
 
-      {/* Sem o cartao do formulario a lista de integrantes ocupa a linha
-          inteira: nao sobra vao vazio ao lado dela. */}
+      {/* Sem nenhum dos dois cartoes secundarios, a lista de integrantes
+          ocupa a linha inteira: nao sobra vao vazio ao lado dela. */}
       <div
         className={
-          form
+          (form && onOpenForm) || showPeopleCard
             ? 'grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
             : 'grid gap-3'
         }
@@ -210,14 +224,22 @@ export function ClientOverviewPanel({
           onOpenTeam={() => onOpenTab('equipe')}
         />
 
-        {form && onOpenForm ? (
-          <FormCard
-            ativos={form.ativos}
-            obrigatorios={form.obrigatorios}
-            percentual={form.percentual}
-            canEdit={podeEditarFormulario}
-            onEdit={onOpenForm}
-          />
+        {showPeopleCard || (form && onOpenForm) ? (
+          <div className="flex flex-col gap-3">
+            {showPeopleCard ? (
+              <TeamPeopleCard people={client.people} onManage={onManagePeople} />
+            ) : null}
+
+            {form && onOpenForm ? (
+              <FormCard
+                ativos={form.ativos}
+                obrigatorios={form.obrigatorios}
+                percentual={form.percentual}
+                canEdit={podeEditarFormulario}
+                onEdit={onOpenForm}
+              />
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -648,6 +670,99 @@ function RecentMembersCard({
           </ul>
         </>
       )}
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Pessoas do time
+   ------------------------------------------------------------------------- */
+
+/** Quantidade de pessoas exibidas no cartao antes do "+N". */
+const PEOPLE_PREVIEW_LIMIT = 5;
+
+function TeamPeopleCard({
+  people,
+  onManage,
+}: {
+  people: TeamPerson[];
+  /** Abre o formulario de edicao do time. Ausente para quem nao e ADMIN. */
+  onManage?: () => void;
+}) {
+  const visiveis = people.slice(0, PEOPLE_PREVIEW_LIMIT);
+  const restantes = people.length - visiveis.length;
+
+  return (
+    <section
+      aria-labelledby="pessoas-do-time"
+      className="flex h-full flex-col rounded-card border border-line bg-surface shadow-card"
+    >
+      <div className="flex items-center gap-2 px-4 py-3">
+        <h2
+          id="pessoas-do-time"
+          className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
+        >
+          <UsersRound aria-hidden="true" className="size-4 text-accent-600" />
+          Pessoas do time
+        </h2>
+        {people.length > 0 ? (
+          <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">
+            {formatNumber(people.length)}
+          </span>
+        ) : null}
+      </div>
+
+      {people.length === 0 ? (
+        <p className="flex flex-1 items-center justify-center px-4 pb-5 text-center text-sm text-ink-500">
+          Nenhuma pessoa cadastrada neste time.
+        </p>
+      ) : (
+        <ul className="flex-1 divide-y divide-line px-4">
+          {visiveis.map((person) => (
+            <li key={person.id} className="flex items-center gap-2.5 py-2.5">
+              {person.photo ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={person.photo}
+                  alt={`Foto de ${person.name}`}
+                  className="size-9 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink-100 text-[0.625rem] font-semibold text-ink-500"
+                >
+                  {initials(person.name)}
+                </span>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink-900">{person.name}</p>
+                <p className="mt-0.5 truncate text-xs text-ink-500">{formatPhone(person.phone)}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {restantes > 0 ? (
+        <p className="px-4 pb-2 text-xs text-ink-500">
+          +{formatNumber(restantes)} {pluralize(restantes, 'pessoa', 'pessoas')}
+        </p>
+      ) : null}
+
+      {onManage ? (
+        <div className="p-4 pt-2">
+          <button
+            type="button"
+            onClick={onManage}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent-50 px-4 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-100"
+          >
+            Gerenciar pessoas
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

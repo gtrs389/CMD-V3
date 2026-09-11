@@ -6,16 +6,19 @@ import type {
   ClientSummary,
   CustomField,
   PublicInviteOwner,
+  TeamPersonInput,
 } from '@/lib/types';
 import { appConfig } from '@/config/app.config';
 import { createSystemFields } from '@/lib/domain/form-config';
 import { normalizeEmail } from '@/lib/utils/email';
+import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
   type ClientRow,
   type FormFieldRow,
   type InviteRow,
   type MemberRow,
+  type TeamPersonRow,
   type UserRow,
 } from '@/lib/supabase/tables';
 import {
@@ -103,6 +106,25 @@ async function insertDefaultFields(clientId: string): Promise<FormFieldRow[]> {
   );
 }
 
+/** Pessoas do time de um ou mais clientes, na ordem de cadastro. */
+async function loadTeamPeople(clientIds: string[]): Promise<Map<string, TeamPersonRow[]>> {
+  const grouped = new Map<string, TeamPersonRow[]>();
+  if (clientIds.length === 0) return grouped;
+
+  const rows = await selectRows<TeamPersonRow>(TABLES.teamPeople, {
+    select: '*',
+    filters: { client_id: inFilter(clientIds) },
+    order: 'position.asc',
+  });
+
+  for (const row of rows) {
+    const list = grouped.get(row.client_id) ?? [];
+    list.push(row);
+    grouped.set(row.client_id, list);
+  }
+  return grouped;
+}
+
 async function requireClientRow(id: string): Promise<ClientRow> {
   const row = await selectOne<ClientRow>(TABLES.clients, {
     select: CLIENT_COLUMNS,
@@ -113,17 +135,25 @@ async function requireClientRow(id: string): Promise<ClientRow> {
 }
 
 async function assemble(row: ClientRow, inviteToken?: string | null): Promise<Client> {
-  const [fields, invites, photo] = await Promise.all([
+  const [fields, invites, photo, people] = await Promise.all([
     loadFields([row.id]),
     loadInvites([row.id]),
     signedUrl(row.photo_path),
+    loadTeamPeople([row.id]),
   ]);
+
+  const peopleRows = people.get(row.id) ?? [];
+  const peoplePhotos = await signedUrls(peopleRows.map((person) => person.photo_path));
 
   return toClient(row, {
     fields: fields.get(row.id) ?? [],
     invite: invites.get(row.id) ?? null,
     photoUrl: photo,
     inviteToken: inviteToken ?? null,
+    people: peopleRows.map((personRow, index) => ({
+      row: personRow,
+      photoUrl: peoplePhotos[index] ?? null,
+    })),
   });
 }
 
@@ -135,7 +165,7 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
   if (rows.length === 0) return [];
 
   const ids = rows.map((row) => row.id);
-  const [fields, invites, photos, members] = await Promise.all([
+  const [fields, invites, photos, members, people] = await Promise.all([
     loadFields(ids),
     loadInvites(ids),
     signedUrls(rows.map((row) => row.photo_path)),
@@ -147,7 +177,23 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
         order: 'created_at.desc',
       },
     ),
+    loadTeamPeople(ids),
   ]);
+
+  // Pilha de fotos das pessoas do time: as primeiras da ordem de cadastro.
+  const peopleById = new Map(
+    [...people.entries()].map(([clientId, personRows]) => [
+      clientId,
+      { total: personRows.length, preview: personRows.slice(0, RECENT_MEMBERS) },
+    ]),
+  );
+  const peoplePreviewRows = [...peopleById.values()].flatMap((entry) => entry.preview);
+  const peoplePreviewPhotos = await signedUrls(
+    peoplePreviewRows.map((person) => person.photo_path),
+  );
+  const peoplePhotoById = new Map(
+    peoplePreviewRows.map((person, index) => [person.id, peoplePreviewPhotos[index] ?? null]),
+  );
 
   const monthStart = startOfMonthIso();
   const weekStart = daysAgoIso(7);
@@ -193,6 +239,12 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
         id: member.id,
         name: member.name,
         photo: photoById.get(member.id) ?? null,
+      })),
+      teamPeopleCount: peopleById.get(row.id)?.total ?? 0,
+      teamPeoplePreview: (peopleById.get(row.id)?.preview ?? []).map((person) => ({
+        id: person.id,
+        name: person.name,
+        photo: peoplePhotoById.get(person.id) ?? null,
       })),
     };
   });
@@ -289,6 +341,124 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
   };
 }
 
+function normalizeTeamPersonName(name: string): string {
+  return (name ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Insere as pessoas do time de um cliente recem-criado, na ordem recebida.
+ *
+ * Falha no meio da lista desfaz as fotos ja enviadas nesta chamada: nenhum
+ * arquivo fica orfao no bucket, mesmo que a pessoa correspondente nao tenha
+ * sido gravada.
+ */
+async function insertTeamPeople(clientId: string, people: TeamPersonInput[]): Promise<void> {
+  if (people.length === 0) return;
+
+  const uploadedPaths: string[] = [];
+  const rows: Record<string, string | number | null>[] = [];
+
+  try {
+    for (const [index, person] of people.entries()) {
+      const photo =
+        person.photo && isDataUrl(person.photo)
+          ? await uploadImage('team-people', person.photo)
+          : null;
+      if (photo) uploadedPaths.push(photo.path);
+
+      rows.push({
+        client_id: clientId,
+        name: normalizeTeamPersonName(person.name),
+        phone: normalizePhone(person.phone),
+        photo_path: photo?.path ?? null,
+        photo_mime: photo?.mime ?? null,
+        photo_size: photo?.size ?? null,
+        position: index,
+      });
+    }
+
+    await insertRows<TeamPersonRow>(TABLES.teamPeople, rows, 'id');
+  } catch (error) {
+    for (const path of uploadedPaths) await deleteImage(path).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * Sincroniza as pessoas do time de um cliente existente: atualiza quem ja
+ * existe (pelo `id` enviado), cria quem e novo e remove quem faltar na
+ * lista, sempre preservando a ordem recebida em `position`.
+ *
+ * A foto nova e enviada antes de qualquer gravacao trocar de dono; a antiga
+ * so e removida do bucket depois que a troca for salva com sucesso. Falha no
+ * meio do processo nao deixa nenhuma foto recem-enviada orfa.
+ */
+async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Promise<void> {
+  const existing = await selectRows<TeamPersonRow>(TABLES.teamPeople, {
+    select: '*',
+    filters: { client_id: `eq.${clientId}` },
+  });
+  const byId = new Map(existing.map((row) => [row.id, row]));
+  const keptIds = new Set<string>();
+  const uploadedPaths: string[] = [];
+
+  try {
+    for (const [index, person] of people.entries()) {
+      const current = person.id ? byId.get(person.id) : undefined;
+
+      let photo: { path: string; mime: string; size: number } | null = null;
+      if (person.photo && isDataUrl(person.photo)) {
+        photo = await uploadImage('team-people', person.photo);
+        uploadedPaths.push(photo.path);
+      }
+
+      const values: Record<string, string | number | null> = {
+        name: normalizeTeamPersonName(person.name),
+        phone: normalizePhone(person.phone),
+        position: index,
+      };
+
+      if (person.photo === null) {
+        values.photo_path = null;
+        values.photo_mime = null;
+        values.photo_size = null;
+      } else if (photo) {
+        values.photo_path = photo.path;
+        values.photo_mime = photo.mime;
+        values.photo_size = photo.size;
+      }
+      // Nenhum dos dois: a foto (URL assinada devolvida antes) continua a mesma.
+
+      if (current) {
+        keptIds.add(current.id);
+        await updateRows<TeamPersonRow>(TABLES.teamPeople, { id: `eq.${current.id}` }, values, 'id');
+        // So remove a foto antiga depois que a troca foi salva com sucesso.
+        if ((person.photo === null || photo) && current.photo_path) {
+          await deleteImage(current.photo_path);
+        }
+      } else {
+        const [inserted] = await insertRows<TeamPersonRow>(
+          TABLES.teamPeople,
+          [{ client_id: clientId, ...values }],
+          'id',
+        );
+        if (inserted) keptIds.add(inserted.id);
+      }
+    }
+  } catch (error) {
+    for (const path of uploadedPaths) await deleteImage(path).catch(() => undefined);
+    throw error;
+  }
+
+  // Pessoas removidas: fora da lista enviada por quem salvou. Remover uma
+  // pessoa nunca alcanca o time nem os integrantes recrutados.
+  const removable = existing.filter((row) => !keptIds.has(row.id));
+  for (const row of removable) await deleteImage(row.photo_path);
+  if (removable.length > 0) {
+    await deleteRows(TABLES.teamPeople, { id: inFilter(removable.map((row) => row.id)) });
+  }
+}
+
 export async function createClient(input: ClientInput): Promise<Client> {
   // O login do time usa o mesmo e-mail: conflito barra antes de gravar.
   await assertEmailAvailable(null, input.email);
@@ -309,6 +479,8 @@ export async function createClient(input: ClientInput): Promise<Client> {
   });
 
   await insertDefaultFields(row.id);
+
+  if (input.people?.length) await insertTeamPeople(row.id, input.people);
 
   // O link pessoal nasce junto com o acesso do time, em
   // `createCandidateAccess`: e o usuario que da nome ao link.
@@ -347,6 +519,8 @@ export async function updateClient(id: string, input: Partial<ClientInput>): Pro
     // Qualquer outro valor e a URL assinada devolvida antes: a foto nao mudou.
   }
 
+  if (input.people !== undefined) await syncTeamPeople(id, input.people);
+
   const [row] = await updateRows<ClientRow>(TABLES.clients, { id: `eq.${id}` }, patch);
   return assemble(row ?? current);
 }
@@ -364,6 +538,13 @@ export async function deleteClient(id: string): Promise<void> {
     filters: { client_id: `eq.${id}` },
   });
   for (const member of members) await deleteImage(member.photo_path);
+
+  const people = await selectRows<Pick<TeamPersonRow, 'photo_path'>>(TABLES.teamPeople, {
+    select: 'photo_path',
+    filters: { client_id: `eq.${id}` },
+  });
+  for (const person of people) await deleteImage(person.photo_path);
+
   await deleteImage(current.photo_path);
 
   await deleteRows(TABLES.clients, { id: `eq.${id}` });

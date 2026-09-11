@@ -6,7 +6,7 @@ import { ArrowRight, Clock3, Pencil, TrendingUp, Trash2, Users } from 'lucide-re
 import type { ClientSummary } from '@/lib/types';
 import { formatLastActivity } from '@/lib/utils/date';
 import { cn } from '@/lib/utils/cn';
-import { formatNumber, initials } from '@/lib/utils/text';
+import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { Avatar } from '@/components/ui/Avatar';
 import { Menu } from '@/components/ui/Menu';
 
@@ -148,6 +148,37 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
             </div>
           </div>
         </div>
+
+        {/* Pilha compacta das pessoas do time. Sem pessoas, a linha nem existe. */}
+        {client.teamPeopleCount > 0 ? (
+          <div className="flex items-center gap-1.5">
+            <ul className="flex -space-x-1.5">
+              {client.teamPeoplePreview.map((person) => (
+                <li key={person.id} title={person.name}>
+                  {person.photo ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={person.photo}
+                      alt={`Foto de ${person.name}`}
+                      className="size-5 rounded-full object-cover ring-2 ring-surface"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex size-5 items-center justify-center rounded-full bg-ink-100 text-[0.5625rem] font-semibold text-ink-500 ring-2 ring-surface"
+                    >
+                      {initials(person.name)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <span className="text-[0.6875rem] text-ink-500">
+              {formatNumber(client.teamPeopleCount)}{' '}
+              {pluralize(client.teamPeopleCount, 'pessoa do time', 'pessoas do time')}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-line py-1 pr-1 pl-4">

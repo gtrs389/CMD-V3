@@ -1,4 +1,12 @@
-import type { Client, ClientFormConfig, ClientInput, ClientSummary, Member } from '@/lib/types';
+import type {
+  Client,
+  ClientFormConfig,
+  ClientInput,
+  ClientSummary,
+  Member,
+  TeamPerson,
+  TeamPersonInput,
+} from '@/lib/types';
 import { createDefaultFormConfig } from '@/lib/domain/form-config';
 import { DEFAULT_INVITE_SECONDS } from '@/lib/domain/invite-expiration';
 import { createId, createInviteToken } from '@/lib/utils/id';
@@ -20,6 +28,16 @@ function readMembers(storage: StorageDriver): Member[] {
 function writeClients(storage: StorageDriver, clients: Client[]): void {
   storage.write(STORAGE_KEYS.clients, clients);
   notifyDataChanged();
+}
+
+/** Atribui um id definitivo as pessoas novas, preservando as existentes. */
+function toTeamPeople(people: TeamPersonInput[]): TeamPerson[] {
+  return people.map((person) => ({
+    id: person.id ?? createId('per'),
+    name: person.name.trim(),
+    phone: person.phone,
+    photo: person.photo ?? null,
+  }));
 }
 
 /**
@@ -79,6 +97,12 @@ export function createLocalClientRepository(
             name: member.name,
             photo: member.photo,
           })),
+          teamPeopleCount: client.people.length,
+          teamPeoplePreview: client.people.slice(0, 3).map((person) => ({
+            id: person.id,
+            name: person.name,
+            photo: person.photo,
+          })),
         };
       });
     },
@@ -116,6 +140,7 @@ export function createLocalClientRepository(
           expiresAt: new Date(Date.parse(timestamp) + DEFAULT_INVITE_SECONDS * 1000).toISOString(),
         },
         form: createDefaultFormConfig(),
+        people: toTeamPeople(input.people ?? []),
       };
 
       writeClients(storage, [client, ...clients]);
@@ -130,6 +155,7 @@ export function createLocalClientRepository(
         email: input.email?.trim().toLowerCase() ?? client.email,
         photo: input.photo === undefined ? client.photo : input.photo,
         notes: input.notes === undefined ? client.notes : input.notes.trim(),
+        people: input.people === undefined ? client.people : toTeamPeople(input.people),
         updatedAt: nowIso(),
       }));
     },
