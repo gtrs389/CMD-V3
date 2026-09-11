@@ -46,6 +46,11 @@ interface ClientOverviewPanelProps {
    * configuracao dos campos tambem nao chega do servidor.
    */
   onOpenForm?: () => void;
+  /**
+   * Exibe o cartao "Meu link de cadastro". No painel do candidato ele sai:
+   * o atalho do link fica no cabecalho, ao lado do nome.
+   */
+  showInviteCard?: boolean;
 }
 
 function startOfDay(date: Date): number {
@@ -64,6 +69,7 @@ export function ClientOverviewPanel({
   members,
   onOpenTab,
   onOpenForm,
+  showInviteCard = true,
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
@@ -143,7 +149,13 @@ export function ClientOverviewPanel({
         />
 
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* Sem o cartao do link, os dois indicadores esticam e ocupam a
+              coluna inteira: nao sobra vao vazio ao lado da equipe. */}
+          <div
+            className={
+              showInviteCard ? 'grid gap-3 sm:grid-cols-2' : 'grid flex-1 gap-3 sm:grid-cols-2'
+            }
+          >
             <StatCard
               icon={<BarChart3 aria-hidden="true" className="size-[1.125rem]" />}
               tone="accent"
@@ -169,11 +181,13 @@ export function ClientOverviewPanel({
             />
           </div>
 
-          <InviteCard
-            client={client}
-            canManage={podeGerenciarConvite}
-            onManage={() => onOpenTab('convite')}
-          />
+          {showInviteCard ? (
+            <InviteCard
+              client={client}
+              canManage={podeGerenciarConvite}
+              onManage={() => onOpenTab('convite')}
+            />
+          ) : null}
         </div>
       </div>
 

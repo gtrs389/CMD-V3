@@ -187,6 +187,19 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
             </p>
           </div>
 
+          {!podeGerenciarConvite ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTab('convite')}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
+              >
+                <Link2 aria-hidden="true" className="size-4" />
+                Gerar Link
+              </button>
+            </div>
+          ) : null}
+
           {podeEditar || podeExcluir ? (
             <div className="flex shrink-0 items-center gap-2">
               {podeEditar ? (
@@ -247,6 +260,9 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
           members={memberList}
           onOpenTab={setTab}
           onOpenForm={mostrarFormulario ? () => setTab('formulario') : undefined}
+          // O candidato acessa o link pelo botao do cabecalho: o cartao
+          // "Meu link de cadastro" sai da visao geral.
+          showInviteCard={podeGerenciarConvite}
         />
       </TabPanel>
 
