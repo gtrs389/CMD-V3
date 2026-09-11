@@ -10,6 +10,7 @@ import {
   Copy,
   FileText,
   Link2,
+  Trophy,
   TrendingUp,
   UsersRound,
 } from 'lucide-react';
@@ -20,6 +21,8 @@ import {
   relationshipLabel,
 } from '@/lib/domain/relationship';
 import { inviteIsLive } from '@/lib/domain/invite-expiration';
+import { recruiterKey } from '@/lib/domain/recruitment';
+import { ROLE_SHORT_LABELS } from '@/lib/permissions';
 import { copyText } from '@/lib/utils/clipboard';
 import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
@@ -57,8 +60,9 @@ interface ClientOverviewPanelProps {
   /** Abre o link de cadastro. Sem ele o cartao nao oferece a acao. */
   onManageInvite?: () => void;
   /**
-   * Exibe o cartao "Pessoas do time". Sai na pagina do integrante da
-   * equipe (EQUIPE): essa area e exclusiva de ADMIN e do proprio time.
+   * Exibe o cartao "Administradores do time". Cadastrar e conferir quem
+   * administra o time e trabalho do ADMIN geral: no painel do proprio
+   * Administrador do time e no do integrante da equipe o cartao nao aparece.
    */
   showPeopleCard?: boolean;
   /**
@@ -94,7 +98,7 @@ export function ClientOverviewPanel({
   const [now] = useState(() => new Date());
 
   // Perfil somente leitura apenas consulta: os atalhos mudam de rotulo.
-  const { can } = useSession();
+  const { can, user } = useSession();
   const podeGerenciarConvite = can('invite.manage');
   const podeVerMapa = can('map.view');
   // Area interna do formulario: exclusiva do ADMIN. Sem `form.view` o cartao
@@ -144,6 +148,43 @@ export function ClientOverviewPanel({
 
   const total = members.length;
   const restantes = total - stats.recentes.length;
+
+  /**
+   * Ranking de cadastros da equipe.
+   *
+   * Sai do snapshot de origem gravado em cada cadastro, entao continua certo
+   * mesmo depois que um acesso e removido. Quem nunca cadastrou ninguem nao
+   * aparece, e cadastro sem origem conhecida (anterior ao rastreamento) fica
+   * de fora em vez de ser atribuido a alguem.
+   */
+  const ranking = useMemo<RankingRow[]>(() => {
+    const map = new Map<string, RankingRow>();
+
+    for (const member of members) {
+      const recruiter = member.recruitedBy;
+      if (!recruiter) continue;
+
+      const key = recruiterKey(member);
+      const current = map.get(key);
+      if (current) {
+        current.count += 1;
+        continue;
+      }
+
+      map.set(key, {
+        key,
+        userId: recruiter.userId,
+        name: recruiter.name,
+        role: ROLE_SHORT_LABELS[recruiter.role],
+        photo: recruiter.photo,
+        count: 1,
+      });
+    }
+
+    return [...map.values()].sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'pt-BR'),
+    );
+  }, [members]);
 
   const relationshipOptions: FieldOption[] = useMemo(
     () => client.form.fields.find((field) => field.systemKey === 'relationship')?.options ?? [],
@@ -213,40 +254,37 @@ export function ClientOverviewPanel({
         </div>
       </div>
 
-      {/* Sem nenhum dos dois cartoes secundarios, a lista de integrantes
-          ocupa a linha inteira: nao sobra vao vazio ao lado dela. */}
-      <div
-        className={
-          (form && onOpenForm) || showPeopleCard
-            ? 'grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
-            : 'grid gap-3'
-        }
-      >
+      {/* Coluna da direita: ranking da equipe e, para o ADMIN, os cartoes de
+          administracao do time. Sem nenhum deles a lista ocupa a linha
+          inteira e nao sobra vao vazio ao lado dela. */}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <RecentMembersCard
           members={stats.recentes}
           options={relationshipOptions}
           onOpenTeam={() => onOpenTab('equipe')}
         />
 
-        {showPeopleCard || (form && onOpenForm) ? (
-          <div className="flex flex-col gap-3">
-            {showPeopleCard ? (
-              <TeamPeopleCard people={client.people} onManage={onManagePeople} />
-            ) : null}
+        <div className="flex flex-col gap-3">
+          {/* Quem mais cadastrou: a leitura que o responsavel pela operacao
+              abre primeiro. */}
+          <RankingCard rows={ranking} currentUserId={user?.id ?? null} />
 
-            {podeVerAcesso ? <TeamAccessCard clientId={client.id} /> : null}
+          {showPeopleCard ? (
+            <TeamPeopleCard people={client.people} onManage={onManagePeople} />
+          ) : null}
 
-            {form && onOpenForm ? (
-              <FormCard
-                ativos={form.ativos}
-                obrigatorios={form.obrigatorios}
-                percentual={form.percentual}
-                canEdit={podeEditarFormulario}
-                onEdit={onOpenForm}
-              />
-            ) : null}
-          </div>
-        ) : null}
+          {podeVerAcesso ? <TeamAccessCard clientId={client.id} /> : null}
+
+          {form && onOpenForm ? (
+            <FormCard
+              ativos={form.ativos}
+              obrigatorios={form.obrigatorios}
+              percentual={form.percentual}
+              canEdit={podeEditarFormulario}
+              onEdit={onOpenForm}
+            />
+          ) : null}
+        </div>
       </div>
 
       {podeVerMapa ? <MobilizationMap clientId={client.id} /> : null}
@@ -524,7 +562,7 @@ function InviteCard({
 }
 
 /* -------------------------------------------------------------------------
-   Ultimos integrantes
+   Ultimos cadastros
    ------------------------------------------------------------------------- */
 
 function memberPlace(member: Member): string {
@@ -568,7 +606,7 @@ function RecentMembersCard({
           className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
         >
           <UsersRound aria-hidden="true" className="size-4 text-accent-600" />
-          Últimos integrantes
+          Últimos Cadastros
         </h2>
 
         <button
@@ -681,7 +719,145 @@ function RecentMembersCard({
 }
 
 /* -------------------------------------------------------------------------
-   Pessoas do time
+   Ranking de cadastros
+   ------------------------------------------------------------------------- */
+
+/** Uma posicao do ranking, ja somada a partir do snapshot de origem. */
+interface RankingRow {
+  key: string;
+  /** Nulo quando o acesso daquela pessoa foi removido. */
+  userId: string | null;
+  name: string;
+  role: string;
+  photo: string | null;
+  count: number;
+}
+
+/** Quantas posicoes aparecem antes do resumo do restante. */
+const RANKING_LIMIT = 5;
+
+/** Medalhas das tres primeiras posicoes. Da quarta em diante, so o numero. */
+const MEDAL_CLASSES = [
+  'bg-[#e0a426] text-white',
+  'bg-ink-300 text-white',
+  'bg-[#b06a2c] text-white',
+];
+
+/**
+ * Ranking de cadastros da equipe.
+ *
+ * Responde a pergunta que o responsavel pela operacao faz primeiro: quem
+ * esta trazendo gente. A contagem sai do snapshot gravado em cada cadastro,
+ * entao ninguem perde o que ja fez se o acesso for removido depois.
+ */
+function RankingCard({
+  rows,
+  currentUserId,
+}: {
+  rows: RankingRow[];
+  /** Destaca a linha de quem esta olhando o painel. */
+  currentUserId: string | null;
+}) {
+  const visiveis = rows.slice(0, RANKING_LIMIT);
+  const restantes = rows.slice(RANKING_LIMIT);
+  const restanteTotal = restantes.reduce((soma, row) => soma + row.count, 0);
+  const maior = visiveis[0]?.count ?? 0;
+
+  return (
+    <section
+      aria-labelledby="ranking-de-cadastros"
+      className="flex h-full flex-col rounded-card border border-line bg-surface shadow-card"
+    >
+      <div className="flex items-center gap-2 px-4 py-3">
+        <h2
+          id="ranking-de-cadastros"
+          className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
+        >
+          <Trophy aria-hidden="true" className="size-4 text-accent-600" />
+          Ranking de cadastros
+        </h2>
+      </div>
+
+      {visiveis.length === 0 ? (
+        <p className="flex flex-1 items-center justify-center px-4 pb-5 text-center text-sm text-ink-500">
+          Ninguém cadastrou ninguém ainda. Compartilhe o link de cadastro para começar.
+        </p>
+      ) : (
+        <ul className="flex-1 divide-y divide-line px-4">
+          {visiveis.map((row, index) => (
+            <li key={row.key} className="flex items-center gap-2.5 py-2.5">
+              <span
+                aria-hidden="true"
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
+                  MEDAL_CLASSES[index] ?? 'bg-ink-100 text-ink-500'
+                }`}
+              >
+                {index + 1}
+              </span>
+
+              {row.photo ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={row.photo}
+                  alt={`Foto de ${row.name}`}
+                  className="size-9 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink-100 text-[0.625rem] font-semibold text-ink-500"
+                >
+                  {initials(row.name)}
+                </span>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink-900">
+                  {row.name}
+                  {row.userId && row.userId === currentUserId ? (
+                    <span className="ml-1.5 text-[0.6875rem] font-medium text-ink-500">(você)</span>
+                  ) : null}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-ink-500">{row.role}</p>
+
+                {/* Barra proporcional ao primeiro colocado: a diferenca
+                    entre as posicoes fica visivel sem ler os numeros. */}
+                <span
+                  aria-hidden="true"
+                  className="mt-1.5 block h-1 w-full overflow-hidden rounded-pill bg-ink-100"
+                >
+                  <span
+                    className="block h-full rounded-pill bg-accent-600"
+                    style={{ width: `${maior > 0 ? Math.round((row.count / maior) * 100) : 0}%` }}
+                  />
+                </span>
+              </div>
+
+              <span className="shrink-0 text-right">
+                <span className="block text-base leading-none font-bold text-ink-900 tabular-nums">
+                  {formatNumber(row.count)}
+                </span>
+                <span className="mt-0.5 block text-[0.6875rem] text-ink-500">
+                  {pluralize(row.count, 'cadastro', 'cadastros')}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {restantes.length > 0 ? (
+        <p className="px-4 pb-3 text-xs text-ink-500">
+          +{formatNumber(restantes.length)} {pluralize(restantes.length, 'pessoa', 'pessoas')} com{' '}
+          {formatNumber(restanteTotal)} {pluralize(restanteTotal, 'cadastro', 'cadastros')}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Administradores do time
    ------------------------------------------------------------------------- */
 
 /** Quantidade de pessoas exibidas no cartao antes do "+N". */

@@ -287,6 +287,10 @@ export function ClientDetailView({
           // O link de cadastro fica no botao do cabecalho: o cartao
           // "Meu link de cadastro" sai da visao geral.
           showInviteCard={false}
+          // Conferir e cadastrar quem administra o time e trabalho do ADMIN
+          // geral. No painel do proprio Administrador do time o cartao sai:
+          // ele ja sabe quem administra e nao gerencia os colegas.
+          showPeopleCard={podeEditar}
           onManagePeople={podeEditar ? () => setEditing(true) : undefined}
         />
       </TabPanel>
