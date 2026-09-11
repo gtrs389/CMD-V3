@@ -1,6 +1,7 @@
 import 'server-only';
 import {
   CACHE_SECONDS,
+  findCity,
   LOCATION_TIMEOUT_MS,
   LocationError,
   citiesUrl,
@@ -101,4 +102,20 @@ export function listCities(uf: string): Promise<CityOption[]> {
 /** Bairros do municipio, pelo identificador interno (`city.id`). */
 export function listDistricts(cityId: number): Promise<DistrictOption[]> {
   return load(districtsUrl(cityId), CACHE_SECONDS.districts, parseDistricts);
+}
+
+/**
+ * Bairros a partir da UF e do nome do municipio.
+ *
+ * O `id` vem sempre da lista de municipios lida agora no servidor, nunca de
+ * algo guardado no navegador. Municipio desconhecido devolve lista vazia: o
+ * valor ja gravado continua na tela.
+ */
+export async function listDistrictsOfCity(
+  uf: string,
+  cityName: string,
+): Promise<DistrictOption[]> {
+  const city = findCity(await listCities(uf), cityName);
+  if (!city) return [];
+  return listDistricts(city.id);
 }

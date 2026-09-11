@@ -3,6 +3,7 @@ import {
   LocationConfigError,
   listCities,
   listDistricts,
+  listDistrictsOfCity,
   listStates,
 } from '@/lib/server/location.service';
 import {
@@ -91,11 +92,13 @@ describe('montagem das URLs', () => {
     expect(districtsUrl(669)).toBe('https://api.brasilaberto.com/v1/districts/669');
   });
 
-  it('o caminho interno dos bairros leva o id do município, não o ibgeId', () => {
+  it('o caminho interno dos bairros leva UF e nome, nunca um identificador', () => {
     const [saoPaulo] = parseCities(CITIES).filter((city) => city.name === 'São Paulo');
-    const path = districtsPath(saoPaulo);
+    const path = districtsPath('SP', saoPaulo.name);
 
-    expect(path).toContain('/api/localidades/bairros/669');
+    expect(path).toContain('uf=SP');
+    expect(path).toContain('municipio=S%C3%A3o+Paulo');
+    expect(path).not.toContain(String(saoPaulo.id));
     expect(path).not.toContain(String(saoPaulo.ibgeId));
   });
 
@@ -259,8 +262,40 @@ describe('consulta no servidor', () => {
 
     expect(calls).toEqual(['https://api.brasilaberto.com/v1/districts/669']);
     expect(calls[0]).not.toContain(String(saoPaulo.ibgeId));
-    expect(calls[0]).not.toContain('districts-by-ibge-code');
     expect(districts.map((district) => district.name)).toEqual(['Bela Vista', 'Vila Mariana']);
+  });
+
+  it('resolve o id do município no servidor, a partir da UF e do nome', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return { ok: true, json: async () => (url.includes('/cities/') ? CITIES : DISTRICTS) };
+      }),
+    );
+
+    const districts = await listDistrictsOfCity('SP', 'sao paulo');
+
+    expect(calls).toEqual([
+      'https://api.brasilaberto.com/v1/cities/SP',
+      'https://api.brasilaberto.com/v1/districts/669',
+    ]);
+    expect(districts.map((district) => district.name)).toEqual(['Bela Vista', 'Vila Mariana']);
+  });
+
+  it('município desconhecido não consulta bairros e devolve lista vazia', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return { ok: true, json: async () => CITIES };
+      }),
+    );
+
+    await expect(listDistrictsOfCity('SP', 'Município Extinto')).resolves.toEqual([]);
+    expect(calls).toEqual(['https://api.brasilaberto.com/v1/cities/SP']);
   });
 
   it('falha da API vira erro previsto, sem detalhe interno', async () => {

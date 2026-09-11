@@ -13,7 +13,6 @@ import type { CustomField, SystemFieldKey } from '@/lib/types';
 import {
   citiesPath,
   districtsPath,
-  findCity,
   selectCity,
   selectState,
   statesPath,
@@ -21,6 +20,7 @@ import {
   type DistrictOption,
   type StateOption,
 } from '@/lib/domain/location';
+import type { LocationSelection } from '@/lib/domain/location';
 import type { DynamicFormValues, DynamicValue } from '@/lib/validation/dynamic-form';
 
 /**
@@ -135,42 +135,26 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
   const city = ids.city ? text(values[ids.city]) : '';
   const district = ids.district ? text(values[ids.district]) : '';
 
-  const [chosenCityId, setChosenCityId] = useState<number | null>(null);
-
   const states = useLocationList<StateOption>(ids.state ? statesPath() : null);
   const cities = useLocationList<CityOption>(ids.city && state ? citiesPath(state) : null);
-  /**
-   * Codigo IBGE do municipio escolhido, usado so para buscar os bairros.
-   *
-   * Cadastro antigo: o municipio ja gravado e reconhecido dentro da lista
-   * carregada, o que libera os bairros. Se a API nao o conhece mais, o valor
-   * segue guardado e apenas os bairros ficam indisponiveis.
-   */
-  /**
-   * Identificador interno do municipio escolhido. E ele, nunca o `ibgeId`,
-   * que busca os bairros.
-   *
-   * Cadastro antigo: o municipio ja gravado e reconhecido dentro da lista
-   * carregada, o que libera os bairros. Se a API nao o conhece mais, o valor
-   * segue guardado e apenas os bairros ficam indisponiveis.
-   */
-  const cityId = useMemo(
-    () => chosenCityId ?? (city ? (findCity(cities.items, city)?.id ?? null) : null),
-    [chosenCityId, city, cities.items],
-  );
 
+  /**
+   * Os bairros sao pedidos pela UF e pelo nome do municipio: o identificador
+   * da Brasil Aberto e resolvido no servidor. Municipio antigo que a API nao
+   * conhece mais simplesmente nao traz bairros, e o valor gravado permanece.
+   */
   const districts = useLocationList<DistrictOption>(
-    ids.district && cityId ? districtsPath({ id: cityId }) : null,
+    ids.district && state && city ? districtsPath(state, city) : null,
   );
 
   const value = useMemo<LocationContextValue>(() => {
-    const current = { state, city, cityId, district };
+    // O identificador nao e guardado aqui: quem resolve o municipio e o servidor.
+    const current: LocationSelection = { state, city, cityId: null, district };
 
-    const apply = (next: typeof current) => {
+    const apply = (next: LocationSelection) => {
       if (ids.state && next.state !== state) setValue(ids.state, next.state);
       if (ids.city && next.city !== city) setValue(ids.city, next.city);
       if (ids.district && next.district !== district) setValue(ids.district, next.district);
-      setChosenCityId(next.cityId);
     };
 
     return {
@@ -181,7 +165,7 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
       cities,
       districts,
       cityBlocked: !state,
-      districtBlocked: !city || cityId === null,
+      districtBlocked: !state || !city,
       selectState: (uf) => apply(selectState(current, uf)),
       selectCity: (name) => {
         const found = cities.items.find((option) => option.name === name) ?? null;
@@ -192,18 +176,7 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
         if (ids.district) setValue(ids.district, name);
       },
     };
-  }, [
-    state,
-    city,
-    district,
-    cityId,
-    states,
-    cities,
-    districts,
-    ids,
-    setValue,
-    setChosenCityId,
-  ]);
+  }, [state, city, district, states, cities, districts, ids, setValue]);
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
 }

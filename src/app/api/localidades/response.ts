@@ -15,7 +15,13 @@ export async function locationResponse<T>(
     const items = await load();
     return NextResponse.json(
       { items },
-      { headers: { 'Cache-Control': `public, max-age=${maxAge}, stale-while-revalidate=86400` } },
+      {
+        // O cache fica na borda, nao no navegador: assim uma mudanca de
+        // formato nunca continua sendo servida de dentro da maquina de quem usa.
+        headers: {
+          'Cache-Control': `public, max-age=0, s-maxage=${maxAge}, stale-while-revalidate=86400`,
+        },
+      },
     );
   } catch (error) {
     // Configuracao ausente e falha da API externa devolvem apenas o essencial:
