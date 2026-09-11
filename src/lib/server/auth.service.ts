@@ -163,10 +163,28 @@ interface SessionJoinRow extends SessionRow {
         Pick<UserRow, 'is_active'> & {
           /** Administrador do time correspondente, so para a foto do menu. */
           team_person: { photo_path: string | null } | null;
-          /** Integrante correspondente, so para a foto do menu. */
-          member: { photo_path: string | null } | null;
         })
     | null;
+}
+
+/**
+ * Foto do integrante, quando a sessao e do perfil EQUIPE.
+ *
+ * Lida em uma consulta propria, e nao embutida na consulta da sessao: entre
+ * `cmd_users` e `cmd_members` existem DOIS caminhos — o usuario aponta o
+ * integrante e o integrante aponta quem o cadastrou. Um vinculo embutido
+ * ficaria ambiguo, a consulta inteira falharia e NENHUMA sessao resolveria,
+ * em nenhum perfil. O Administrador do time nao tem esse problema: ate
+ * `cmd_team_people` existe um caminho so.
+ */
+async function memberPhoto(user: SessionColumns): Promise<string | null> {
+  if (user.role !== 'EQUIPE' || !user.member_id) return null;
+
+  const member = await selectOne<{ photo_path: string | null }>(TABLES.members, {
+    select: 'photo_path',
+    filters: { id: `eq.${user.member_id}` },
+  });
+  return signedUrl(member?.photo_path ?? null);
 }
 
 /**
@@ -189,8 +207,7 @@ export async function resolveSession(
     select:
       `id,expires_at,revoked_at,admin_device_id,` +
       `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
-      `team_person:${TABLES.teamPeople}(photo_path),` +
-      `member:${TABLES.members}(photo_path))`,
+      `team_person:${TABLES.teamPeople}(photo_path))`,
     filters: { token_hash: `eq.${hashToken(token)}` },
   });
 
@@ -206,11 +223,13 @@ export async function resolveSession(
     }
   }
 
-  // Foto do cadastro correspondente: do Administrador do time ou do proprio
-  // integrante. No ADMIN geral nenhuma assinatura e pedida ao Storage.
-  const photo = await signedUrl(
-    row.user.team_person?.photo_path ?? row.user.member?.photo_path ?? null,
-  );
+  // Foto do cadastro correspondente: do Administrador do time, que ja veio
+  // junto, ou do proprio integrante, lido a parte. No ADMIN geral nada e
+  // consultado e nenhuma assinatura e pedida ao Storage.
+  const photo = row.user.team_person
+    ? await signedUrl(row.user.team_person.photo_path)
+    : await memberPhoto(row.user);
+
   return toSessionUser(row.user, photo);
 }
 
