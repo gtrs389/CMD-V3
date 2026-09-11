@@ -1,12 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+  type FieldErrors,
+  type UseFormRegister,
+  type UseFormSetValue,
+} from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { clientSchema, type ClientFormValues } from '@/lib/validation/client.schema';
+import { Plus, Trash2 } from 'lucide-react';
+import { clientSchema, type ClientFormValues, type TeamPersonFormValues } from '@/lib/validation/client.schema';
 import { clientRepository } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories';
 import type { Client, GeneratedCredential } from '@/lib/types';
+import { maskPhone } from '@/lib/utils/phone';
 import { Button } from '@/components/ui/Button';
 import { Field, describedBy } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -24,7 +35,7 @@ interface ClientFormModalProps {
   onSaved?: (client: Client) => void;
 }
 
-const EMPTY: ClientFormValues = { name: '', email: '', photo: null, notes: '' };
+const EMPTY: ClientFormValues = { name: '', email: '', photo: null, notes: '', people: [] };
 
 /** Criacao e edicao de time. Mesma validacao nos dois modos. */
 export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormModalProps) {
@@ -57,15 +68,35 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
   // A foto vive no proprio formulario: nao ha estado duplicado para sincronizar.
   const photo = useWatch({ control, name: 'photo' });
 
+  const {
+    fields: peopleFields,
+    append: appendPerson,
+    remove: removePerson,
+  } = useFieldArray({ control, name: 'people', keyName: '_fieldKey' });
+
   useEffect(() => {
     if (!open) return;
     reset(
       client
-        ? { name: client.name, email: client.email, photo: client.photo, notes: client.notes }
+        ? {
+            name: client.name,
+            email: client.email,
+            photo: client.photo,
+            notes: client.notes,
+            people: client.people.map((person) => ({
+              id: person.id,
+              name: person.name,
+              phone: person.phone,
+              photo: person.photo,
+            })),
+          }
         : EMPTY,
     );
   }, [open, client, reset]);
 
+  // Duplo clique nao dispara um segundo envio: o proprio estado do
+  // react-hook-form ja bloqueia isso enquanto `isSubmitting` for verdadeiro,
+  // porque o botao de salvar fica desabilitado (ver `Button loading`).
   async function onSubmit(values: ClientFormValues) {
     try {
       if (client) {
@@ -102,6 +133,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
             ? 'Atualize os dados de identificação do time.'
             : 'Cadastre o time para gerar o formulário e o link de convite.'
         }
+        size="lg"
         footer={
           <>
             <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
@@ -125,7 +157,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="cliente-nome" label="Nome" required error={errors.name?.message}>
+            <Field id="cliente-nome" label="Nome do time" required error={errors.name?.message}>
               <Input
                 id="cliente-nome"
                 placeholder="Nome do time"
@@ -169,6 +201,45 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
               {...register('notes')}
             />
           </Field>
+
+          <div className="space-y-3 border-t border-line pt-5">
+            <div>
+              <h3 className="text-sm font-semibold text-ink-900">Pessoas do time</h3>
+              <p className="mt-0.5 text-xs text-ink-500">
+                Cadastre as pessoas que fazem parte deste time.
+              </p>
+            </div>
+
+            {peopleFields.length === 0 ? (
+              <p className="rounded-control border border-dashed border-line-strong bg-ink-50 p-4 text-center text-sm text-ink-500">
+                Nenhuma pessoa adicionada.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {peopleFields.map((field, index) => (
+                  <TeamPersonCard
+                    key={field._fieldKey}
+                    control={control}
+                    register={register}
+                    setValue={setValue}
+                    index={index}
+                    errors={errors.people?.[index]}
+                    onRemove={() => removePerson(index)}
+                    onImageError={(message) => toast.error(message)}
+                  />
+                ))}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => appendPerson({ name: '', phone: '', photo: null })}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              {peopleFields.length === 0 ? 'Adicionar pessoa' : 'Adicionar outra pessoa'}
+            </Button>
+          </div>
         </form>
       </Modal>
 
@@ -179,5 +250,90 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
         onClose={() => setAccess(null)}
       />
     </>
+  );
+}
+
+interface TeamPersonCardProps {
+  control: Control<ClientFormValues>;
+  register: UseFormRegister<ClientFormValues>;
+  setValue: UseFormSetValue<ClientFormValues>;
+  index: number;
+  errors?: FieldErrors<TeamPersonFormValues>;
+  onRemove: () => void;
+  onImageError: (message: string) => void;
+}
+
+/** Um card por pessoa: foto, nome, telefone e a acao de remover. */
+function TeamPersonCard({
+  control,
+  register,
+  setValue,
+  index,
+  errors,
+  onRemove,
+  onImageError,
+}: TeamPersonCardProps) {
+  const photo = useWatch({ control, name: `people.${index}.photo` });
+  const name = useWatch({ control, name: `people.${index}.name` });
+
+  const nomeId = `pessoa-${index}-nome`;
+  const telefoneId = `pessoa-${index}-telefone`;
+
+  return (
+    <div className="rounded-control border border-line bg-surface p-4 shadow-card">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PhotoUpload
+          value={photo}
+          onChange={(next) => setValue(`people.${index}.photo`, next, { shouldDirty: true })}
+          name={name}
+          onError={onImageError}
+        />
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onRemove}
+          className="shrink-0 self-start text-danger-600 hover:bg-danger-50"
+        >
+          <Trash2 aria-hidden="true" className="size-4" />
+          Remover pessoa
+        </Button>
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field id={nomeId} label="Nome completo" required error={errors?.name?.message}>
+          <Input
+            id={nomeId}
+            placeholder="Nome completo"
+            autoComplete="off"
+            invalid={Boolean(errors?.name)}
+            aria-describedby={describedBy(nomeId, undefined, errors?.name?.message)}
+            {...register(`people.${index}.name`)}
+          />
+        </Field>
+
+        <Field id={telefoneId} label="Telefone" required error={errors?.phone?.message}>
+          <Controller
+            control={control}
+            name={`people.${index}.phone`}
+            render={({ field }) => (
+              <Input
+                id={telefoneId}
+                type="tel"
+                inputMode="tel"
+                autoComplete="off"
+                placeholder="(00) 00000-0000"
+                invalid={Boolean(errors?.phone)}
+                aria-describedby={describedBy(telefoneId, undefined, errors?.phone?.message)}
+                value={maskPhone(field.value ?? '')}
+                onChange={(event) => field.onChange(maskPhone(event.target.value))}
+                onBlur={field.onBlur}
+              />
+            )}
+          />
+        </Field>
+      </div>
+    </div>
   );
 }

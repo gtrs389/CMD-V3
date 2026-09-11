@@ -252,6 +252,7 @@ export function ClientDetailView({
           // O link de cadastro fica no botao do cabecalho: o cartao
           // "Meu link de cadastro" sai da visao geral.
           showInviteCard={false}
+          onManagePeople={podeEditar ? () => setEditing(true) : undefined}
         />
       </TabPanel>
 

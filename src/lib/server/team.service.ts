@@ -93,6 +93,9 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       notes: '',
       createdAt: member.created_at,
       updatedAt: member.created_at,
+      // "Pessoas do time" e area exclusiva do ADMIN: nunca consultada nem
+      // enviada para o perfil EQUIPE.
+      people: [],
       invite: {
         // O link continua o mesmo depois de sair, entrar de novo, trocar de
         // aparelho ou recarregar: ele e lido do banco, nao do navegador.

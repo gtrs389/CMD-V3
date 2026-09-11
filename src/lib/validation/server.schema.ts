@@ -9,6 +9,7 @@ import {
   isValidCpf,
   isValidVoterId,
 } from '@/lib/utils/documents';
+import { isValidPhone } from '@/lib/utils/phone';
 
 /**
  * Validacao de tudo que chega ao servidor.
@@ -25,11 +26,27 @@ const photoValue = z
 
 const trimmed = (max: number) => z.string().trim().max(max);
 
+/**
+ * Pessoa do time: registro interno do ADMIN, sem relacao com integrantes
+ * recrutados nem com acesso ao sistema. `id` ausente indica pessoa nova.
+ */
+const MAX_TEAM_PEOPLE = 200;
+
+const teamPersonSchema = z.object({
+  id: z.string().trim().min(1).max(64).optional(),
+  name: trimmed(120).min(2, 'Informe o nome da pessoa.'),
+  phone: trimmed(30)
+    .min(1, 'Informe o telefone.')
+    .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+  photo: photoValue,
+});
+
 export const clientCreateSchema = z.object({
   name: trimmed(80).min(2, 'Informe o nome do time.'),
   email: z.string().trim().min(1, 'Informe o e-mail.').pipe(z.email('E-mail inválido.')),
   photo: photoValue.default(null),
   notes: trimmed(500).default(''),
+  people: z.array(teamPersonSchema).max(MAX_TEAM_PEOPLE).optional(),
 });
 
 export const clientUpdateSchema = clientCreateSchema.partial();

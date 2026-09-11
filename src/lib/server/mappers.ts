@@ -7,6 +7,7 @@ import type {
   FieldResponse,
   Member,
   Recruiter,
+  TeamPerson,
 } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
 import type {
@@ -15,6 +16,7 @@ import type {
   InviteRow,
   MemberResponseRow,
   MemberRow,
+  TeamPersonRow,
 } from '@/lib/supabase/tables';
 
 /**
@@ -55,6 +57,16 @@ export function toFormConfig(row: ClientRow, fields: FormFieldRow[]): ClientForm
   };
 }
 
+/** Pessoa do time: mesma logica de foto das demais entidades. */
+export function toTeamPerson(row: TeamPersonRow, photoUrl: string | null): TeamPerson {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    photo: photoUrl,
+  };
+}
+
 /** Somente o que a tela precisa saber do convite. */
 export type InviteSummary = Pick<InviteRow, 'active'> &
   Partial<
@@ -73,6 +85,11 @@ export interface ToClientOptions {
    * renovado, ou na rota publica (onde o visitante ja possui o token).
    */
   inviteToken?: string | null;
+  /**
+   * Pessoas do time, com a foto ja assinada. Ausente onde a tela nao precisa
+   * delas (ex.: contexto do link publico): o time nasce sem nenhuma.
+   */
+  people?: { row: TeamPersonRow; photoUrl: string | null }[];
 }
 
 export function toClient(row: ClientRow, options: ToClientOptions): Client {
@@ -84,6 +101,10 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    people: (options.people ?? [])
+      .slice()
+      .sort((a, b) => a.row.position - b.row.position)
+      .map((item) => toTeamPerson(item.row, item.photoUrl)),
     invite: {
       // O link exibido e o guardado no proprio convite; `inviteToken` cobre
       // o convite legado, cujo valor so existe no link que o visitante abriu.
