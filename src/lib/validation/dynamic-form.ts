@@ -71,6 +71,7 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
       );
     case 'city':
     case 'district':
+    case 'street':
       return texto((valor) =>
         valor.length < 2 ? 'Use pelo menos 2 caracteres.' : valor.length > 120 ? 'Use no máximo 120 caracteres.' : null,
       );
@@ -256,6 +257,8 @@ export function valuesFromMember(config: ClientFormConfig, member: Member): Dyna
       values[field.id] = member.city ?? '';
     } else if (field.systemKey === 'district') {
       values[field.id] = member.district ?? '';
+    } else if (field.systemKey === 'street') {
+      values[field.id] = member.street ?? '';
     } else if (field.systemKey === 'relationship') {
       values[field.id] = member.relationshipOptionId ?? '';
     } else if (byId.has(field.id)) {
@@ -303,6 +306,7 @@ export interface SubmissionPayload {
   state: string | null;
   city: string | null;
   district: string | null;
+  street: string | null;
   relationshipOptionId: string | null;
   /** Nome da opcao no momento do envio. Reserva do historico. */
   relationshipLabel: string | null;
@@ -328,6 +332,7 @@ export function toSubmission(
     state: null,
     city: null,
     district: null,
+    street: null,
     relationshipOptionId: null,
     relationshipLabel: null,
     responses: [],
@@ -374,6 +379,10 @@ export function toSubmission(
     }
     if (field.systemKey === 'district') {
       payload.district = normalizePlace(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'street') {
+      payload.street = normalizePlace(texto(value)) || null;
       continue;
     }
     if (field.systemKey === 'relationship') {

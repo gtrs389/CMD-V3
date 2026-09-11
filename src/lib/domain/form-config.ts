@@ -121,6 +121,14 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     required: false,
   },
   {
+    systemKey: 'street',
+    type: 'text',
+    label: 'Rua',
+    placeholder: 'Nome da rua',
+    helpText: '',
+    required: false,
+  },
+  {
     systemKey: 'relationship',
     type: 'select',
     label: 'Vínculo',

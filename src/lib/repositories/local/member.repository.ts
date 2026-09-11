@@ -62,6 +62,7 @@ export function createLocalMemberRepository(
         state: input.state ?? null,
         city: input.city ?? null,
         district: input.district ?? null,
+        street: input.street ?? null,
         relationshipOptionId: input.relationshipOptionId ?? null,
         relationshipLabel: input.relationshipLabel ?? null,
         responses: input.responses ?? [],

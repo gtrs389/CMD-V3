@@ -109,6 +109,28 @@ describe('conversao para persistencia', () => {
     expect(payload.responses).toEqual([{ fieldId: extra.id, value: 32 }]);
   });
 
+  it('salva o nome da localidade, nunca o marcador da opção "Outro"', () => {
+    const config = configWith([]);
+
+    const payload = toSubmission(config, {
+      ...emptyValues(config),
+      [systemField(config, 'name').id]: 'Ana',
+      [systemField(config, 'phone').id]: '11987654321',
+      [systemField(config, 'state').id]: 'sp',
+      [systemField(config, 'city').id]: '  Campinas  ',
+      [systemField(config, 'district').id]: 'Centro',
+      [systemField(config, 'street').id]: '  Rua   das   Flores  ',
+    });
+
+    expect(payload.state).toBe('SP');
+    expect(payload.city).toBe('Campinas');
+    expect(payload.district).toBe('Centro');
+    expect(payload.street).toBe('Rua das Flores');
+
+    // Nenhum identificador de API entra no que e salvo.
+    expect(JSON.stringify(payload)).not.toMatch(/__OTHER__|cityId|districtId|ibge/i);
+  });
+
   it('mantem a resposta ligada ao ID mesmo após renomear o campo', () => {
     const extra: CustomField = { ...createField('text'), label: 'Bairro', order: 3 };
     const config = configWith([extra]);
@@ -139,6 +161,7 @@ describe('conversao para persistencia', () => {
       state: null,
       city: null,
       district: null,
+  street: null,
       relationshipOptionId: null,
       relationshipLabel: null,
       responses: payload.responses,

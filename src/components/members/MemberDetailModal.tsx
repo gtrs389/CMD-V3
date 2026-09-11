@@ -94,6 +94,7 @@ function StandardFields({ member }: { member: Member }) {
     ['Estado (UF)', member.state],
     ['Município / Cidade', member.city],
     ['Bairro', member.district],
+    ['Rua', member.street],
   ];
 
   const preenchidas = linhas.filter(([, valor]) => Boolean(valor));
