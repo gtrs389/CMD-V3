@@ -29,7 +29,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <SessionProvider initialUser={user}>
-      <AppShell>{children}</AppShell>
+      {/* O candidato nao navega entre rotas: o painel dele nao tem menu. */}
+      <AppShell withSidebar={user.role !== 'CANDIDATE'}>{children}</AppShell>
     </SessionProvider>
   );
 }
