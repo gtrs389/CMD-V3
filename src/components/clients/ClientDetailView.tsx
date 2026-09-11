@@ -27,6 +27,7 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
+import { GenerateInviteButton } from './GenerateInviteButton';
 import { InviteLinkModal } from './InviteLinkModal';
 import type { TabId } from './client-tabs';
 
@@ -166,15 +167,21 @@ export function ClientDetailView({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {/* O link de cadastro vive aqui: nao ha mais aba "Convite". */}
-            <button
-              type="button"
-              onClick={() => setInvite(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
-            >
-              <Link2 aria-hidden="true" className="size-4" />
-              {podeGerenciarConvite ? 'Gerenciar link' : 'Gerar Link'}
-            </button>
+            {/* O link de cadastro vive aqui: nao ha mais aba "Convite". Quem
+                administra abre o painel completo; quem so tem o proprio link
+                gera e copia na hora, sem ver a tela nem o endereco. */}
+            {podeGerenciarConvite ? (
+              <button
+                type="button"
+                onClick={() => setInvite(true)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
+              >
+                <Link2 aria-hidden="true" className="size-4" />
+                Gerenciar link
+              </button>
+            ) : (
+              <GenerateInviteButton />
+            )}
 
             {podeEditar ? (
               <button
