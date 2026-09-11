@@ -44,7 +44,7 @@ describe('perfil Candidato', () => {
   });
 
   it('lê apenas o que é da própria equipe', () => {
-    for (const permissao of ['client.view', 'member.view', 'form.view', 'invite.view'] as const) {
+    for (const permissao of ['client.view', 'member.view', 'invite.view'] as const) {
       expect(can(CANDIDATO_A, permissao)).toBe(true);
     }
   });
@@ -57,6 +57,8 @@ describe('perfil Candidato', () => {
       'client.create',
       'client.update',
       'client.delete',
+      // Area interna do formulario: exclusiva do ADMIN.
+      'form.view',
       'form.manage',
       'invite.manage',
       'member.create',

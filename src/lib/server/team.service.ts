@@ -1,14 +1,9 @@
 import 'server-only';
 import type { Member, TeamOverview } from '@/lib/types';
-import {
-  TABLES,
-  type ClientRow,
-  type FormFieldRow,
-  type MemberRow,
-} from '@/lib/supabase/tables';
-import { selectOne, selectRows } from '@/lib/supabase/rest';
+import { TABLES, type ClientRow, type MemberRow } from '@/lib/supabase/tables';
+import { selectOne } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
-import { toFormConfig } from './mappers';
+import { hiddenFormConfig } from './form-visibility';
 import { listMembersRecruitedBy } from './member.service';
 import { findInviteByUser } from './invite.service';
 import { notFound } from './http';
@@ -43,8 +38,12 @@ function redactForEquipe(member: Member): Member {
  *
  * Tudo aqui sai da sessao: o integrante e a operacao vem de `cmd_users`,
  * nunca da URL ou do corpo da requisicao. A lista traz apenas os recrutados
- * diretos, o formulario vem somente para leitura e o unico link exibido e o
- * pessoal do proprio integrante.
+ * diretos e o unico link exibido e o pessoal do proprio integrante.
+ *
+ * A area interna do formulario e do ADMIN: a configuracao dos campos nao e
+ * consultada no banco nem enviada ao navegador. Trocar a URL, adicionar
+ * parametro ou montar a requisicao na mao nao muda isso, porque a resposta
+ * nunca carrega esses dados.
  */
 export async function getTeamOverview(session: TeamSession): Promise<TeamOverview> {
   const member = await selectOne<
@@ -65,13 +64,8 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
   });
   if (!client) throw notFound('Candidato não encontrado.');
 
-  const [members, fields, photo, invite] = await Promise.all([
+  const [members, photo, invite] = await Promise.all([
     listMembersRecruitedBy(session.id, session.candidateId),
-    selectRows<FormFieldRow>(TABLES.formFields, {
-      select: '*',
-      filters: { client_id: `eq.${session.candidateId}` },
-      order: 'position.asc',
-    }),
     signedUrl(member.photo_path),
     findInviteByUser(session.id),
   ]);
@@ -87,8 +81,7 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
     },
 
     // Mesmo formato da pagina do candidato, com o escopo do integrante: a
-    // identidade e a dele, o formulario e o da operacao (leitura) e o
-    // convite e o link PESSOAL dele.
+    // identidade e a dele e o convite e o link PESSOAL dele.
     client: {
       id: client.id,
       name: member.name,
@@ -107,7 +100,9 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
         createdAt: invite?.created_at ?? member.created_at,
         rotatedAt: invite?.rotated_at ?? null,
       },
-      form: toFormConfig(client, fields),
+      // Nenhuma configuracao de formulario: nem campos, nem opcoes, nem
+      // textos, nem contagem de campos ativos ou obrigatorios.
+      form: hiddenFormConfig(),
     },
 
     members: members.map(redactForEquipe),

@@ -12,8 +12,8 @@ import type { Member } from './member';
  * `client` tem exatamente o mesmo formato usado na pagina do candidato, para
  * que os mesmos quadros sejam reaproveitados sem nenhuma variante: a
  * diferenca esta no que o servidor coloca dentro dele. O convite e o link
- * PESSOAL do integrante, e o formulario e o configurado pelo candidato,
- * sempre em leitura.
+ * PESSOAL do integrante, e `form` vem vazio: a area interna do formulario e
+ * exclusiva do ADMIN.
  */
 export interface TeamOverview {
   /** Identificacao do proprio integrante, para o cabecalho. */
