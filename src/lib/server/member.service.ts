@@ -77,7 +77,19 @@ async function assembleOne(row: MemberRow): Promise<Member> {
  * acontece no esquema Zod da rota.
  */
 function standardColumns(
-  input: Partial<Pick<MemberInput, 'gender' | 'cpf' | 'voterId' | 'state' | 'city' | 'district'>>,
+  input: Partial<
+    Pick<
+      MemberInput,
+      | 'gender'
+      | 'cpf'
+      | 'voterId'
+      | 'state'
+      | 'city'
+      | 'district'
+      | 'relationshipOptionId'
+      | 'relationshipLabel'
+    >
+  >,
 ): Record<string, string | null> {
   const patch: Record<string, string | null> = {};
 
@@ -90,6 +102,15 @@ function standardColumns(
   if (input.state !== undefined) patch.state = normalizeState(input.state ?? '') || null;
   if (input.city !== undefined) patch.city = normalizePlace(input.city ?? '') || null;
   if (input.district !== undefined) patch.district = normalizePlace(input.district ?? '') || null;
+
+  // As duas colunas do vinculo andam juntas, como exige o check do banco.
+  if (input.relationshipOptionId !== undefined) {
+    const id = (input.relationshipOptionId ?? '').trim();
+    const label = (input.relationshipLabel ?? '').trim();
+    const valido = Boolean(id) && Boolean(label);
+    patch.relationship_option_id = valido ? id : null;
+    patch.relationship_label = valido ? label.slice(0, 80) : null;
+  }
 
   return patch;
 }

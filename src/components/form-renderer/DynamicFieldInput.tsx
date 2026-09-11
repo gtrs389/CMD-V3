@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PhotoUpload } from '@/components/common/PhotoUpload';
+import { RelationshipPicker } from './RelationshipPicker';
 
 interface DynamicFieldInputProps {
   field: CustomField;
@@ -117,6 +118,23 @@ export function DynamicFieldInput({
             />
           ))}
         </div>
+      </Field>
+    );
+  }
+
+  if (field.systemKey === 'relationship') {
+    return (
+      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+        <RelationshipPicker
+          idPrefix={id}
+          label={field.label}
+          options={field.options}
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          invalid={invalid}
+          describedBy={described}
+          onChange={(next) => onChange(next)}
+        />
       </Field>
     );
   }

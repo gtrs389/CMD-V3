@@ -62,6 +62,8 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           state: payload.state,
           city: payload.city,
           district: payload.district,
+        relationshipOptionId: payload.relationshipOptionId,
+          relationshipLabel: payload.relationshipLabel,
           responses: payload.responses,
           consentAt: payload.consentAt ?? member.consentAt,
         });
@@ -78,6 +80,8 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           state: payload.state,
           city: payload.city,
           district: payload.district,
+        relationshipOptionId: payload.relationshipOptionId,
+          relationshipLabel: payload.relationshipLabel,
           responses: payload.responses,
           consentAt: payload.consentAt,
           source: 'admin',

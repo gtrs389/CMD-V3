@@ -106,6 +106,8 @@ const standardMemberFields = {
   state: opcional(z.string().trim().toUpperCase().pipe(z.enum(UF_CODES))),
   city: opcional(z.string().trim().min(2, 'Município muito curto.').max(120)),
   district: opcional(z.string().trim().min(2, 'Bairro muito curto.').max(120)),
+  relationshipOptionId: opcional(z.string().trim().max(64).regex(/^[A-Za-z0-9_-]+$/)),
+  relationshipLabel: opcional(z.string().trim().min(1).max(80)),
 };
 
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */

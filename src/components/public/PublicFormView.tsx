@@ -105,6 +105,8 @@ export function PublicFormView({ client }: PublicFormViewProps) {
         state: payload.state,
         city: payload.city,
         district: payload.district,
+        relationshipOptionId: payload.relationshipOptionId,
+        relationshipLabel: payload.relationshipLabel,
         responses: payload.responses,
         consentAt: payload.consentAt,
       });

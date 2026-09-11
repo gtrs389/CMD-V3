@@ -103,6 +103,8 @@ export function toMember(
     state: row.state,
     city: row.city,
     district: row.district,
+    relationshipOptionId: row.relationship_option_id,
+    relationshipLabel: row.relationship_label,
     responses: responses.map(toResponse),
     consentAt: row.consent_at,
     source: row.source,

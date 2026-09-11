@@ -94,6 +94,8 @@ export interface MemberRow {
   state: string | null;
   city: string | null;
   district: string | null;
+  relationship_option_id: string | null;
+  relationship_label: string | null;
   consent_at: string | null;
   /** Evidencia do aceite, montada no servidor. Nunca vem do navegador. */
   consent_privacy_hash: string | null;

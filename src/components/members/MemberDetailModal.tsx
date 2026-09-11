@@ -2,11 +2,17 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { Pencil } from 'lucide-react';
-import type { Client, Member } from '@/lib/types';
+import type { Client, FieldOption, Member } from '@/lib/types';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatCpf, formatVoterId, genderLabel } from '@/lib/utils/documents';
+import {
+  RELATIONSHIP_COLOR_CLASSES,
+  relationshipColor,
+  relationshipIconElement,
+  relationshipLabel,
+} from '@/lib/domain/relationship';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +25,63 @@ interface MemberDetailModalProps {
   member: Member | null;
   onClose: () => void;
   onEdit: (member: Member) => void;
+}
+
+/** Circulo colorido com o icone da opcao. */
+function RelationshipIcon({ option }: { option: FieldOption }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-9 shrink-0 items-center justify-center rounded-full ${RELATIONSHIP_COLOR_CLASSES[relationshipColor(option)]}`}
+    >
+      {relationshipIconElement(option, 'size-[1.125rem]')}
+    </span>
+  );
+}
+
+/**
+ * Vinculo escolhido.
+ *
+ * Enquanto a opcao existir, mostra o nome atual: renomear se reflete aqui.
+ * Se a opcao tiver sido excluida, fica o nome registrado no cadastro.
+ */
+function RelationshipRow({ client, member }: { client: Client; member: Member }) {
+  const campo = client.form.fields.find((field) => field.systemKey === 'relationship');
+  if (!campo) return null;
+
+  const nome = relationshipLabel(
+    campo.options,
+    member.relationshipOptionId,
+    member.relationshipLabel,
+  );
+
+  if (!nome) {
+    return (
+      <section>
+        <h4 className="text-sm font-semibold text-ink-900">{campo.label}</h4>
+        <p className="mt-2 text-sm text-ink-500">Não informado.</p>
+      </section>
+    );
+  }
+
+  const opcao = campo.options.find((item) => item.id === member.relationshipOptionId);
+
+  return (
+    <section>
+      <h4 className="text-sm font-semibold text-ink-900">{campo.label}</h4>
+
+      <div className="mt-2 flex items-center gap-2.5">
+        {opcao ? <RelationshipIcon option={opcao} /> : null}
+
+        <div className="min-w-0">
+          <p className="text-sm font-medium break-words text-ink-900">{nome}</p>
+          {!opcao ? (
+            <p className="text-xs text-ink-500">Opção removida do formulário.</p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 /** Campos padrao com coluna propria, sempre na mesma ordem. */
@@ -131,6 +194,8 @@ export function MemberDetailModal({
         </dl>
 
         <StandardFields member={member} />
+
+        <RelationshipRow client={client} member={member} />
 
         <div>
           <h4 className="text-sm font-semibold text-ink-900">Respostas do formulário</h4>

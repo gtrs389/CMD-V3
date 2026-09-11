@@ -65,6 +65,10 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
       );
     case 'state':
       return texto((valor) => (normalizeState(valor) ? null : 'Selecione um estado.'));
+    case 'relationship':
+      return texto((valor) =>
+        field.options.some((opcao) => opcao.id === valor) ? null : 'Selecione uma opção.',
+      );
     case 'city':
     case 'district':
       return texto((valor) =>
@@ -252,6 +256,8 @@ export function valuesFromMember(config: ClientFormConfig, member: Member): Dyna
       values[field.id] = member.city ?? '';
     } else if (field.systemKey === 'district') {
       values[field.id] = member.district ?? '';
+    } else if (field.systemKey === 'relationship') {
+      values[field.id] = member.relationshipOptionId ?? '';
     } else if (byId.has(field.id)) {
       values[field.id] = toDynamic(field, byId.get(field.id) ?? null);
     }
@@ -297,6 +303,9 @@ export interface SubmissionPayload {
   state: string | null;
   city: string | null;
   district: string | null;
+  relationshipOptionId: string | null;
+  /** Nome da opcao no momento do envio. Reserva do historico. */
+  relationshipLabel: string | null;
   responses: FieldResponse[];
   consentAt: string | null;
 }
@@ -319,6 +328,8 @@ export function toSubmission(
     state: null,
     city: null,
     district: null,
+    relationshipOptionId: null,
+    relationshipLabel: null,
     responses: [],
     consentAt: null,
   };
@@ -363,6 +374,15 @@ export function toSubmission(
     }
     if (field.systemKey === 'district') {
       payload.district = normalizePlace(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'relationship') {
+      const escolhido = texto(value);
+      const opcao = field.options.find((item) => item.id === escolhido);
+      // Sem opcao correspondente o valor e descartado: o formulario so aceita
+      // o que esta na lista do cliente.
+      payload.relationshipOptionId = opcao ? opcao.id : null;
+      payload.relationshipLabel = opcao ? opcao.label : null;
       continue;
     }
 

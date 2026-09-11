@@ -27,6 +27,10 @@ export interface Member extends Timestamped {
   state: string | null;
   city: string | null;
   district: string | null;
+  /** Opcao de vinculo escolhida, pelo identificador estavel. */
+  relationshipOptionId: string | null;
+  /** Nome da opcao no momento do cadastro. Reserva do historico. */
+  relationshipLabel: string | null;
   responses: FieldResponse[];
   /** Preenchido quando o formulario exigiu consentimento. */
   consentAt: IsoDate | null;
@@ -46,6 +50,8 @@ export interface MemberInput {
   state?: string | null;
   city?: string | null;
   district?: string | null;
+  relationshipOptionId?: string | null;
+  relationshipLabel?: string | null;
   responses: FieldResponse[];
   consentAt: IsoDate | null;
   source: Member['source'];
