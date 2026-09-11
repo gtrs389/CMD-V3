@@ -9,6 +9,21 @@ import { NotFoundError, RepositoryError } from '../types';
 
 export class NetworkError extends RepositoryError {}
 
+/**
+ * Link de recrutamento que terminou: expirado, ja usado, revogado ou
+ * reservado por outra pessoa. O servidor responde 410 e nao diz o motivo.
+ */
+export class GoneError extends RepositoryError {
+  /** 'taken' (reservado por outra pessoa) ou 'expired'. Nada mais. */
+  readonly reason: 'taken' | 'expired';
+
+  constructor(message: string, reason: 'taken' | 'expired' = 'expired') {
+    super(message);
+    this.name = 'GoneError';
+    this.reason = reason;
+  }
+}
+
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -32,11 +47,16 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     throw new NetworkError('Falha de conexão. Verifique sua rede e tente novamente.');
   }
 
-  const data = (await response.json().catch(() => null)) as (T & { message?: string }) | null;
+  const data = (await response.json().catch(() => null)) as
+    | (T & { message?: string; reason?: string })
+    | null;
 
   if (!response.ok) {
     const message = data?.message ?? 'Não foi possível concluir a operação.';
     if (response.status === 404) throw new NotFoundError(message);
+    if (response.status === 410) {
+      throw new GoneError(message, data?.reason === 'taken' ? 'taken' : 'expired');
+    }
     throw new RepositoryError(message);
   }
 

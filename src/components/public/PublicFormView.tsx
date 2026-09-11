@@ -1,23 +1,10 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  CheckCircle2,
-  Copy,
-  KeyRound,
-  LogIn,
-  Send,
-  ShieldAlert,
-} from 'lucide-react';
-import Link from 'next/link';
+import { ArrowLeft, ArrowRight, CheckCircle2, Send } from 'lucide-react';
 import type { Client, PublicInviteOwner } from '@/lib/types';
-import { submitInvite, type CreatedAccess } from '@/lib/repositories';
-import { NetworkError } from '@/lib/repositories/http/api';
-import { copyText } from '@/lib/utils/clipboard';
-import { LOGIN_PATH } from '@/lib/auth/constants';
+import { submitInvite } from '@/lib/repositories';
+import { GoneError, NetworkError } from '@/lib/repositories/http/api';
 import { CONSENT_KEY, toSubmission, visibleFields } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -34,6 +21,7 @@ import {
   InviteStepChips,
 } from './InviteChrome';
 import { InviteReviewStep } from './InviteReviewStep';
+import { InviteExpired } from './PublicInviteView';
 import { buildInviteSteps, isWideField, stepValueKeys } from './invite-steps';
 
 /**
@@ -88,14 +76,8 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
-  /**
-   * Credencial recem-criada.
-   *
-   * Vive apenas neste estado, exibida uma unica vez. Fechar ou recarregar a
-   * tela a faz desaparecer: nada disso vai para armazenamento do navegador,
-   * URL ou log.
-   */
-  const [access, setAccess] = useState<CreatedAccess | null>(null);
+  /** Link encerrado durante o preenchimento: o envio nao acontece. */
+  const [expired, setExpired] = useState<'taken' | 'expired' | null>(null);
   const submittedRef = useRef(false);
   const stepRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -183,7 +165,7 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
     try {
       const payload = toSubmission(client.form, values);
       // O cliente de destino vem do token do link, conferido no servidor.
-      const outcome = await submitInvite(token, {
+      await submitInvite(token, {
         name: payload.name,
         email: payload.email,
         phone: payload.phone,
@@ -202,9 +184,16 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
       });
 
       setConfirming(false);
-      setAccess(outcome);
       setDone(true);
     } catch (error) {
+      // Prazo vencido no meio do caminho, link ja usado ou reservado por
+      // outra pessoa: o servidor recusou e nada foi gravado.
+      if (error instanceof GoneError) {
+        setConfirming(false);
+        setExpired(error.reason);
+        return;
+      }
+
       submittedRef.current = false;
       toast.error(
         error instanceof NetworkError
@@ -216,22 +205,10 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
     }
   }
 
-  if (done) {
-    return (
-      <SuccessScreen
-        client={client}
-        access={access}
-        onNew={() => {
-          submittedRef.current = false;
-          form.reset();
-          setIndex(0);
-          // A senha sai da memoria assim que a tela muda.
-          setAccess(null);
-          setDone(false);
-        }}
-      />
-    );
-  }
+  // O servidor encerrou o link: nenhum campo do formulario continua na tela.
+  if (expired) return <InviteExpired reason={expired} />;
+
+  if (done) return <SuccessScreen />;
 
   const nextLabel = isReview ? 'Confirmar cadastro' : 'Continuar';
 
@@ -372,14 +349,17 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
   );
 }
 
-interface SuccessScreenProps {
-  client: Client;
-  /** Credencial mostrada uma unica vez. Nula quando nao houve criacao. */
-  access: CreatedAccess | null;
-  onNew: () => void;
-}
-
-function SuccessScreen({ client, access, onNew }: SuccessScreenProps) {
+/**
+ * Tela final do cadastro.
+ *
+ * Somente o agradecimento: nenhuma senha, e-mail, botao de login, link
+ * pessoal ou instrucao. O integrante nasce com acesso pendente e o ADMIN
+ * gera a senha temporaria em Configuracoes quando quiser.
+ *
+ * Recarregar esta pagina ou abrir o mesmo link de novo mostra "Link
+ * expirado": o link foi consumido em definitivo.
+ */
+function SuccessScreen() {
   return (
     <InviteStateShell>
       <span
@@ -389,117 +369,7 @@ function SuccessScreen({ client, access, onNew }: SuccessScreenProps) {
         <CheckCircle2 className="size-7" />
       </span>
 
-      <h1 className="text-lg font-semibold text-ink-900">{client.form.successMessage}</h1>
-      <p className="mt-2 text-sm text-balance text-ink-500">
-        Seu cadastro foi registrado na equipe de {client.name}.
-      </p>
-
-      {access ? <AccessCreatedCard access={access} /> : null}
-
-      <Button variant="secondary" fullWidth className="mt-3" onClick={onNew}>
-        Cadastrar outra pessoa
-      </Button>
+      <h1 className="text-lg font-semibold text-ink-900">Obrigado por se cadastrar!</h1>
     </InviteStateShell>
-  );
-}
-
-/**
- * Acesso criado para quem acabou de se cadastrar.
- *
- * A senha temporaria aparece uma unica vez, aqui. Ela nao e gravada em
- * `localStorage`, `sessionStorage`, URL, log nem no banco em texto puro:
- * ao fechar ou recarregar a tela, some.
- */
-function AccessCreatedCard({ access }: { access: CreatedAccess }) {
-  const toast = useToast();
-  const [copied, setCopied] = useState<'email' | 'senha' | null>(null);
-
-  async function copy(label: 'email' | 'senha', value: string) {
-    const ok = await copyText(value);
-    if (!ok) {
-      toast.error('Não foi possível copiar. Selecione o texto manualmente.');
-      return;
-    }
-    setCopied(label);
-    toast.success(label === 'email' ? 'E-mail copiado.' : 'Senha copiada.');
-    window.setTimeout(() => setCopied((state) => (state === label ? null : state)), 2000);
-  }
-
-  return (
-    <section
-      aria-labelledby="acesso-criado"
-      className="mt-6 rounded-card border border-line bg-ink-50 p-4 text-left"
-    >
-      <h2
-        id="acesso-criado"
-        className="flex items-center gap-2 text-sm font-semibold text-ink-900"
-      >
-        <KeyRound aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
-        Seu acesso ao CMD foi criado
-      </h2>
-
-      <dl className="mt-3 space-y-2">
-        <CredentialLine
-          label="E-mail"
-          value={access.email}
-          copied={copied === 'email'}
-          onCopy={() => copy('email', access.email)}
-        />
-        <CredentialLine
-          label="Senha temporária"
-          value={access.password}
-          copied={copied === 'senha'}
-          onCopy={() => copy('senha', access.password)}
-        />
-      </dl>
-
-      <p className="mt-3 flex items-start gap-2 rounded-control border border-warning-50 bg-warning-50 px-3 py-2.5 text-xs text-warning-600">
-        <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-        <span className="min-w-0">
-          Copie agora: a senha aparece uma única vez. A troca é obrigatória no primeiro acesso.
-        </span>
-      </p>
-
-      <Link
-        href={LOGIN_PATH}
-        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
-      >
-        <LogIn aria-hidden="true" className="size-4" />
-        Acessar o sistema
-      </Link>
-    </section>
-  );
-}
-
-function CredentialLine({
-  label,
-  value,
-  copied,
-  onCopy,
-}: {
-  label: string;
-  value: string;
-  copied: boolean;
-  onCopy: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="min-w-0 flex-1">
-        <dt className="text-xs text-ink-500">{label}</dt>
-        <dd className="truncate font-mono text-sm text-ink-900">{value}</dd>
-      </div>
-      <button
-        type="button"
-        onClick={onCopy}
-        aria-label={`Copiar ${label.toLowerCase()}`}
-        className="flex size-11 shrink-0 items-center justify-center rounded-control border border-line bg-surface text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900"
-      >
-        {copied ? (
-          <Check aria-hidden="true" className="size-4 text-success-600" />
-        ) : (
-          <Copy aria-hidden="true" className="size-4" />
-        )}
-      </button>
-    </div>
   );
 }

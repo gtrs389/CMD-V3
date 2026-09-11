@@ -25,6 +25,8 @@ export const PERMISSIONS = [
   'form.manage',
   'invite.view',
   'invite.manage',
+  /** Gerar ou renovar o PROPRIO link. Quem escolhe a duracao e so o ADMIN. */
+  'invite.renew',
   'member.view',
   'member.create',
   'member.update',
@@ -64,6 +66,7 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
   'team.access',
   'member.view',
   'invite.view',
+  'invite.renew',
   'invite.submit',
 ];
 
@@ -81,6 +84,7 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'client.view',
   'member.view',
   'invite.view',
+  'invite.renew',
 ];
 
 const MATRIX: Record<Role, readonly Permission[]> = {

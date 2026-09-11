@@ -19,6 +19,7 @@ import {
   relationshipColor,
   relationshipLabel,
 } from '@/lib/domain/relationship';
+import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { copyText } from '@/lib/utils/clipboard';
 import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
@@ -39,7 +40,7 @@ interface ClientOverviewPanelProps {
   client: Client;
   members: Member[];
   /** Abre outra aba da propria pagina. */
-  onOpenTab: (tab: 'equipe' | 'convite') => void;
+  onOpenTab: (tab: 'equipe') => void;
   /**
    * Abre a area interna do formulario. So e passado a quem tem `form.view`
    * (ADMIN): sem ele o cartao "Formulário de cadastro" nao existe, e a
@@ -47,10 +48,12 @@ interface ClientOverviewPanelProps {
    */
   onOpenForm?: () => void;
   /**
-   * Exibe o cartao "Meu link de cadastro". No painel do candidato ele sai:
-   * o atalho do link fica no cabecalho, ao lado do nome.
+   * Exibe o cartao "Meu link de cadastro". Na pagina do candidato ele sai:
+   * o link fica no botao do cabecalho, ao lado do nome.
    */
   showInviteCard?: boolean;
+  /** Abre o link de cadastro. Sem ele o cartao nao oferece a acao. */
+  onManageInvite?: () => void;
 }
 
 function startOfDay(date: Date): number {
@@ -70,6 +73,7 @@ export function ClientOverviewPanel({
   onOpenTab,
   onOpenForm,
   showInviteCard = true,
+  onManageInvite,
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
@@ -185,7 +189,7 @@ export function ClientOverviewPanel({
             <InviteCard
               client={client}
               canManage={podeGerenciarConvite}
-              onManage={() => onOpenTab('convite')}
+              onManage={onManageInvite}
             />
           ) : null}
         </div>
@@ -384,16 +388,20 @@ function InviteCard({
 }: {
   client: Client;
   canManage: boolean;
-  onManage: () => void;
+  /** Ausente quando nao ha para onde ir: o cartao fica so com a copia. */
+  onManage?: () => void;
 }) {
   const toast = useToast();
   const origin = useOrigin();
   const [copied, setCopied] = useState(false);
 
+  // Link fora do prazo nunca aparece como ativo neste resumo.
+  const live = inviteIsLive(client.invite);
+
   // O endereco vem do banco a cada carregamento: o link continua disponivel
   // entre sessoes e aparelhos. Sem token (convite anterior ao link pessoal),
   // nada e exibido e nada e inventado.
-  const path = client.invite.token ? invitePath(client.invite.token) : null;
+  const path = client.invite.token && live ? invitePath(client.invite.token) : null;
   const url = path ? (origin ? `${origin}${path}` : path) : '';
 
   async function handleCopy() {
@@ -425,20 +433,16 @@ function InviteCard({
         </h2>
         <span
           className={
-            client.invite.active
+            live
               ? 'inline-flex items-center gap-1.5 rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-medium text-success-600'
               : 'inline-flex items-center gap-1.5 rounded-pill bg-danger-50 px-2 py-1 text-[0.6875rem] font-medium text-danger-600'
           }
         >
           <span
             aria-hidden="true"
-            className={
-              client.invite.active
-                ? 'size-1.5 rounded-full bg-success-600'
-                : 'size-1.5 rounded-full bg-danger-600'
-            }
+            className={live ? 'size-1.5 rounded-full bg-success-600' : 'size-1.5 rounded-full bg-danger-600'}
           />
-          {client.invite.active ? 'Ativo' : 'Inativo'}
+          {live ? 'Ativo' : 'Expirado'}
         </span>
       </div>
 
@@ -467,23 +471,25 @@ function InviteCard({
           </div>
         ) : (
           <p className="flex min-h-11 min-w-0 flex-1 items-center rounded-control border border-line bg-ink-50 px-3 text-xs text-ink-500">
-            Link ainda não disponível.
+            {live ? 'Link ainda não disponível.' : 'Link expirado. Gere um novo link.'}
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={onManage}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
-        >
-          {canManage ? 'Gerenciar link' : 'Ver link'}
-        </button>
+        {onManage ? (
+          <button
+            type="button"
+            onClick={onManage}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
+          >
+            {canManage ? 'Gerenciar link' : 'Ver link'}
+          </button>
+        ) : null}
       </div>
 
       <p className="mt-2 text-[0.6875rem] text-ink-500">
-        {client.invite.active
+        {live
           ? 'Quem se cadastrar por este link entra na sua equipe.'
-          : 'Recrutamento desativado: nenhum link aceita cadastros no momento.'}
+          : 'Este link não aceita mais cadastros. Gere um novo link.'}
       </p>
     </section>
   );

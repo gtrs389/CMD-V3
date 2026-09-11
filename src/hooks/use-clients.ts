@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react';
 import { clientRepository } from '@/lib/repositories';
-import { fetchPublicInvite, type PublicInvite } from '@/lib/repositories/http/public';
+import { fetchPublicInvite, type PublicInviteOutcome } from '@/lib/repositories/http/public';
 import type { Client, ClientSummary } from '@/lib/types';
 import { useRepositoryQuery } from './use-repository-query';
 
@@ -24,5 +24,5 @@ export function useClient(id: string) {
  */
 export function usePublicInvite(token: string) {
   const loader = useCallback(() => fetchPublicInvite(token), [token]);
-  return useRepositoryQuery<PublicInvite | null>(loader);
+  return useRepositoryQuery<PublicInviteOutcome>(loader);
 }

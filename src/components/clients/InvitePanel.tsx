@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Switch } from '@/components/ui/Switch';
 import { useToast } from '@/components/ui/Toast';
 import { CopyField } from '@/components/common/CopyField';
+import { InviteDeadline } from './InviteDeadline';
 
 interface InvitePanelProps {
   client: Client;
@@ -88,6 +89,10 @@ export function InvitePanel({ client }: InvitePanelProps) {
         </CardHeader>
 
         <CardBody className="space-y-4">
+          {/* Prazo do link: gerado com a duracao configurada em
+              Configuracoes > Expiracao dos links. */}
+          <InviteDeadline invite={client.invite} onRenew={() => setRotating(true)} />
+
           {path ? (
             <>
               <CopyField value={url} label="Link de convite" actionLabel="Copiar link" />

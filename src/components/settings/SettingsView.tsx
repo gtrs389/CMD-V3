@@ -37,6 +37,8 @@ import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { CredentialsModal } from './CredentialsModal';
+import { InviteExpirationCard } from './InviteExpirationCard';
+import { InviteHistoryCard } from './InviteHistoryCard';
 
 interface Payload {
   users: SystemUser[];
@@ -241,9 +243,13 @@ export function SettingsView() {
           Configurações
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Acessos do sistema: administradores, candidatos e integrantes da equipe.
+          Acessos do sistema, prazo dos links de recrutamento e histórico dos links.
         </p>
       </header>
+
+      {/* Duracao dos links e historico: exclusivos do ADMIN, como o resto
+          desta pagina. As rotas exigem `settings.view` e `settings.manage`. */}
+      <InviteExpirationCard />
 
       <section
         aria-labelledby="usuarios-do-sistema"
@@ -446,6 +452,8 @@ export function SettingsView() {
         Conectado como {user?.email ?? '--'}. Sua própria conta não pode ser desativada nem ter as
         sessões revogadas por aqui.
       </p>
+
+      <InviteHistoryCard />
 
       <CredentialsModal
         open={outcome !== null}

@@ -1,8 +1,21 @@
 import 'server-only';
 import type { Role } from '@/lib/types';
+import type { InviteState } from '@/lib/domain/invite-expiration';
 import { createInviteToken, hashToken } from '@/lib/auth/tokens';
-import { TABLES, type ClientRow, type InviteRow, type UserRow } from '@/lib/supabase/tables';
-import { inFilter, insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
+import {
+  TABLES,
+  type ClientRow,
+  type InviteRow,
+  type UserRow,
+} from '@/lib/supabase/tables';
+import {
+  callFunction,
+  inFilter,
+  insertOne,
+  selectOne,
+  selectRows,
+  updateRows,
+} from '@/lib/supabase/rest';
 
 /**
  * Links pessoais de recrutamento.
@@ -20,7 +33,9 @@ import { inFilter, insertOne, selectOne, selectRows, updateRows } from '@/lib/su
  * de login, e revogavel (`active`) e nunca e registrado em log.
  */
 
-const INVITE_COLUMNS = 'id,client_id,user_id,token,token_hash,active,created_at,rotated_at';
+const INVITE_COLUMNS =
+  'id,client_id,user_id,token,token_hash,active,created_at,rotated_at,' +
+  'issued_at,expires_at,status,claim_hash,claimed_at,consumed_at,revoked_at,generation';
 
 /** Dono do link, ja resolvido no servidor. */
 export interface InviteOwner {
@@ -39,6 +54,12 @@ export interface ResolvedInvite {
   active: boolean;
   /** Recrutamento da operacao ligado pelo ADMIN. */
   operationActive: boolean;
+  /** Ciclo de vida do link (migration 013). */
+  state: InviteState;
+  issuedAt: string;
+  expiresAt: string;
+  /** Prazo ainda valendo pelo horario do servidor. */
+  withinDeadline: boolean;
 }
 
 /**
@@ -61,6 +82,10 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
     filters: { id: `eq.${invite.client_id}` },
   });
   if (!client) return null;
+
+  // O prazo e conferido com o horario do servidor, nunca com o do navegador.
+  const state = invite.status as InviteState;
+  const withinDeadline = new Date(invite.expires_at).getTime() > Date.now();
 
   let owner: InviteOwner | null = null;
   if (invite.user_id) {
@@ -87,7 +112,16 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
       };
     } else {
       // Dono inativo ou incoerente: o link para de aceitar cadastros.
-      return { clientId: invite.client_id, owner: null, active: false, operationActive: false };
+      return {
+        clientId: invite.client_id,
+        owner: null,
+        active: false,
+        operationActive: false,
+        state,
+        issuedAt: invite.issued_at,
+        expiresAt: invite.expires_at,
+        withinDeadline: false,
+      };
     }
   }
 
@@ -96,12 +130,28 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
     owner,
     active: invite.active,
     operationActive: client.recruiting_active,
+    state,
+    issuedAt: invite.issued_at,
+    expiresAt: invite.expires_at,
+    withinDeadline,
   };
 }
 
-/** O link so aceita cadastro com a operacao ligada e o link individual ligado. */
+/**
+ * O link so aceita cadastro com a operacao ligada, o link individual ligado,
+ * o prazo valendo e o estado ainda aberto.
+ */
 export function inviteAccepts(invite: ResolvedInvite | null): boolean {
-  return Boolean(invite && invite.active && invite.operationActive);
+  if (!invite || !invite.active || !invite.operationActive) return false;
+  if (!invite.withinDeadline) return false;
+  return invite.state === 'ACTIVE' || invite.state === 'CLAIMED' || invite.state === 'SUBMITTING';
+}
+
+/** Link que terminou: prazo vencido, cadastro concluido ou token substituido. */
+export function inviteFinished(invite: ResolvedInvite | null): boolean {
+  if (!invite) return false;
+  if (!invite.withinDeadline) return true;
+  return invite.state === 'CONSUMED' || invite.state === 'EXPIRED' || invite.state === 'REVOKED';
 }
 
 export async function findInviteByUser(userId: string): Promise<InviteRow | null> {
@@ -109,6 +159,96 @@ export async function findInviteByUser(userId: string): Promise<InviteRow | null
     select: INVITE_COLUMNS,
     filters: { user_id: `eq.${userId}` },
   });
+}
+
+/**
+ * Geracao ou renovacao do link pessoal.
+ *
+ * Tudo acontece em uma transacao no banco: a geracao anterior e revogada na
+ * hora (o token antigo deixa de valer imediatamente), o prazo sai da
+ * configuracao do ADMIN conforme o PERFIL DO DONO — candidato usa o prazo de
+ * candidato, integrante usa o de equipe — e `issued_at`/`expires_at` usam o
+ * horario do banco. O navegador nao escolhe nada.
+ */
+export interface IssuedInvite {
+  inviteId: string;
+  token: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+interface IssueRow {
+  invite_id: string;
+  issued_at: string;
+  expires_at: string;
+}
+
+export async function issuePersonalInvite(userId: string): Promise<IssuedInvite> {
+  const token = createInviteToken();
+
+  const rows = await callFunction<IssueRow[]>('cmd_invite_issue', {
+    p_user_id: userId,
+    p_token: token,
+    p_token_hash: hashToken(token),
+  });
+
+  const row = Array.isArray(rows) ? rows[0] : (rows as unknown as IssueRow);
+  return {
+    inviteId: row.invite_id,
+    token,
+    issuedAt: row.issued_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Reserva do primeiro acesso e envio
+   ------------------------------------------------------------------------- */
+
+/** Resultado das transicoes atomicas feitas no banco. */
+export type ClaimOutcome = 'OK' | 'TAKEN' | 'GONE' | 'BUSY';
+
+/**
+ * Reserva o link para o primeiro navegador que o abriu.
+ *
+ * Recebe apenas o SHA-256 do segredo do cookie: o segredo nunca chega ao
+ * banco. Reabrir no mesmo navegador devolve `OK` sem criar novo evento;
+ * qualquer outro navegador recebe `TAKEN`.
+ */
+export async function claimInvite(token: string, claimHash: string): Promise<ClaimOutcome> {
+  return callFunction<ClaimOutcome>('cmd_invite_claim', {
+    p_token_hash: hashToken(token),
+    p_claim_hash: claimHash,
+  });
+}
+
+/** CLAIMED -> SUBMITTING. Impede dois envios ao mesmo tempo. */
+export async function beginInviteSubmit(
+  token: string,
+  claimHash: string,
+): Promise<ClaimOutcome> {
+  return callFunction<ClaimOutcome>('cmd_invite_begin_submit', {
+    p_token_hash: hashToken(token),
+    p_claim_hash: claimHash,
+  });
+}
+
+/** Volta para CLAIMED quando o cadastro falha antes de ser salvo. */
+export async function releaseInviteSubmit(token: string, claimHash: string): Promise<void> {
+  await callFunction<boolean>('cmd_invite_release_submit', {
+    p_token_hash: hashToken(token),
+    p_claim_hash: claimHash,
+  }).catch(() => undefined);
+}
+
+/** Fecha o link em definitivo, depois que o integrante foi salvo. */
+export async function consumeInvite(token: string): Promise<void> {
+  await callFunction<boolean>('cmd_invite_consume', { p_token_hash: hashToken(token) });
+}
+
+/** Marca como expirado o que passou do prazo. Sem cron: acontece na leitura. */
+export async function expireDueInvites(): Promise<void> {
+  await callFunction<number>('cmd_invite_expire_due', {}).catch(() => undefined);
 }
 
 /**
@@ -141,6 +281,12 @@ export async function ensurePersonalInvite(
     if (adopted) return adopted;
   }
 
+  // Primeiro link do usuario: nasce pela funcao SQL, ja com prazo e evento.
+  await issuePersonalInvite(userId);
+  const criado = await findInviteByUser(userId);
+  if (criado) return criado;
+
+  // Reserva teorica: se a leitura falhar, devolve o que foi possivel montar.
   const token = createInviteToken();
   return insertOne<InviteRow>(
     TABLES.invites,
@@ -185,19 +331,13 @@ export async function loadOperationInvites(
   return map;
 }
 
-/** Gera um token novo para o link pessoal. O anterior deixa de valer. */
-export async function rotatePersonalInvite(
-  userId: string,
-  clientId: string,
-): Promise<InviteRow> {
-  await ensurePersonalInvite(userId, clientId);
-  const token = createInviteToken();
-
-  const [row] = await updateRows<InviteRow>(
-    TABLES.invites,
-    { user_id: `eq.${userId}` },
-    { token, token_hash: hashToken(token), rotated_at: new Date().toISOString(), active: true },
-    INVITE_COLUMNS,
-  );
+/**
+ * Gera um token novo para o link pessoal. O anterior deixa de valer na hora,
+ * mesmo que ja estivesse reservado por alguem.
+ */
+export async function rotatePersonalInvite(userId: string): Promise<InviteRow> {
+  await issuePersonalInvite(userId);
+  const row = await findInviteByUser(userId);
+  if (!row) throw new Error('link nao encontrado depois da geracao');
   return row;
 }

@@ -22,9 +22,25 @@ export const unauthorized = (message = 'Sessão expirada. Entre novamente.') =>
 export const forbidden = (message = 'Você não tem permissão para esta ação.') =>
   new ApiError(403, message);
 export const badRequest = (message = 'Dados inválidos.') => new ApiError(400, message);
+/** Link expirado, consumido, revogado ou reservado por outra pessoa. */
+export const gone = (message = 'Este link não está mais disponível.') => new ApiError(410, message);
 
 export function jsonError(status: number, message: string): NextResponse {
   return NextResponse.json({ message }, { status, headers: { 'Cache-Control': 'no-store' } });
+}
+
+/**
+ * Link encerrado (410).
+ *
+ * `reason` distingue apenas os dois textos previstos na tela publica:
+ * 'taken' (reservado por outra pessoa) e 'expired' (vencido, consumido ou
+ * revogado). Nada mais do estado interno sai daqui.
+ */
+export function jsonGone(reason: 'taken' | 'expired'): NextResponse {
+  return NextResponse.json(
+    { message: 'Este link não está mais disponível.', reason },
+    { status: 410, headers: { 'Cache-Control': 'no-store' } },
+  );
 }
 
 export function jsonOk<T>(data: T, status = 200): NextResponse {

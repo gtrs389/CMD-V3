@@ -5,9 +5,12 @@ import type { Client } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils/date';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
+import { inviteIsLive } from '@/lib/domain/invite-expiration';
+import { useOwnInviteRenewal } from '@/hooks/use-own-invite';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { CopyField } from '@/components/common/CopyField';
+import { InviteDeadline } from './InviteDeadline';
 
 /**
  * Situacao do link em modo leitura, com a copia do proprio endereco.
@@ -23,7 +26,10 @@ import { CopyField } from '@/components/common/CopyField';
  */
 export function InviteStatusPanel({ client }: { client: Client }) {
   const origin = useOrigin();
+  const { renew, renewing } = useOwnInviteRenewal();
 
+  // Link fora do prazo nunca aparece como ativo, em nenhum lugar.
+  const live = inviteIsLive(client.invite);
   const path = client.invite.token ? invitePath(client.invite.token) : null;
   // A origem so existe no navegador; ate hidratar, mostramos o caminho relativo.
   const url = path ? (origin ? `${origin}${path}` : path) : '';
@@ -39,26 +45,28 @@ export function InviteStatusPanel({ client }: { client: Client }) {
             trocar de aparelho ou recarregar a página.
           </CardDescription>
         </div>
-        <Badge tone={client.invite.active ? 'success' : 'neutral'}>
-          {client.invite.active ? 'Link ativo' : 'Link desativado'}
-        </Badge>
+        <Badge tone={live ? 'success' : 'neutral'}>{live ? 'Link ativo' : 'Link expirado'}</Badge>
       </CardHeader>
 
       <CardBody className="space-y-3">
-        {path ? (
+        <InviteDeadline invite={client.invite} onRenew={renew} renewing={renewing} />
+
+        {path && live ? (
           <CopyField value={url} label="Meu link de cadastro" actionLabel="Copiar link" />
         ) : (
           <p className="rounded-control border border-line bg-ink-50 p-3 text-xs text-ink-500">
-            Link ainda não disponível. Peça à administração do CMD para gerá-lo.
+            {path
+              ? 'Link encerrado. Gere um novo link para compartilhar.'
+              : 'Link ainda não disponível. Gere um novo link para compartilhar.'}
           </p>
         )}
 
         <p className="flex items-start gap-2 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
           <Link2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-700" />
           <span className="min-w-0">
-            {client.invite.active
-              ? 'Quem se cadastrar por este link entra na sua equipe e recebe o próprio acesso ao sistema.'
-              : 'O recrutamento está desativado pela administração: nenhum link aceita cadastros no momento.'}
+            {live
+              ? 'Este link serve para cadastrar UMA pessoa. Depois do cadastro concluído, gere um novo link para a próxima.'
+              : 'Este link não aceita mais cadastros. Gere um novo link para continuar recrutando.'}
           </span>
         </p>
 

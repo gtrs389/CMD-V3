@@ -8,6 +8,7 @@ import type {
   Member,
   Recruiter,
 } from '@/lib/types';
+import type { InviteState } from '@/lib/domain/invite-expiration';
 import type {
   ClientRow,
   FormFieldRow,
@@ -56,7 +57,12 @@ export function toFormConfig(row: ClientRow, fields: FormFieldRow[]): ClientForm
 
 /** Somente o que a tela precisa saber do convite. */
 export type InviteSummary = Pick<InviteRow, 'active'> &
-  Partial<Pick<InviteRow, 'token' | 'created_at' | 'rotated_at'>>;
+  Partial<
+    Pick<
+      InviteRow,
+      'token' | 'created_at' | 'rotated_at' | 'issued_at' | 'expires_at' | 'status'
+    >
+  >;
 
 export interface ToClientOptions {
   fields: FormFieldRow[];
@@ -87,6 +93,11 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
       active: row.recruiting_active && (options.invite?.active ?? true),
       createdAt: options.invite?.created_at ?? row.created_at,
       rotatedAt: options.invite?.rotated_at ?? null,
+      // Prazo obrigatorio (migration 013). Link sem convite carregado
+      // aparece como expirado: nada fica eterno por omissao.
+      state: (options.invite?.status as InviteState) ?? 'EXPIRED',
+      issuedAt: options.invite?.issued_at ?? row.created_at,
+      expiresAt: options.invite?.expires_at ?? row.created_at,
     },
     form: toFormConfig(row, options.fields),
   };

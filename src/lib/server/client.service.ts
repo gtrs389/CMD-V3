@@ -32,6 +32,8 @@ import { daysAgoIso, startOfMonthIso } from '@/lib/utils/date';
 import { toClient } from './mappers';
 import {
   ensurePersonalInvite,
+  inviteAccepts,
+  inviteFinished,
   loadOperationInvites,
   resolveInvite,
   rotatePersonalInvite,
@@ -217,8 +219,10 @@ export interface PublicInviteContext {
   owner: InviteOwner | null;
   /** O mesmo dono, na forma que a pagina publica pode receber. */
   publicOwner: PublicInviteOwner | null;
-  /** O link aceita cadastro agora. */
+  /** O link aceita cadastro agora: ligado, no prazo e ainda aberto. */
   accepts: boolean;
+  /** Prazo vencido, cadastro concluido ou token substituido. */
+  finished: boolean;
 }
 
 /**
@@ -265,8 +269,13 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
   const client = toClient(row, {
     fields: fields.get(row.id) ?? [],
     // O estado exibido e o do proprio link, ja cruzado com o interruptor da
-    // operacao pelo mapeador.
-    invite: { active: resolved.active },
+    // operacao pelo mapeador. O prazo vem do banco, no horario do servidor.
+    invite: {
+      active: resolved.active,
+      status: resolved.state,
+      issued_at: resolved.issuedAt,
+      expires_at: resolved.expiresAt,
+    },
     photoUrl: photo,
     inviteToken: token,
   });
@@ -275,7 +284,8 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
     client,
     owner: resolved.owner,
     publicOwner: await publicOwner(resolved.owner, client.photo),
-    accepts: resolved.active && resolved.operationActive,
+    accepts: inviteAccepts(resolved),
+    finished: inviteFinished(resolved),
   };
 }
 
@@ -486,7 +496,7 @@ export async function regenerateInvite(id: string): Promise<Client> {
   const current = invites.get(id);
 
   if (current?.user_id) {
-    await rotatePersonalInvite(current.user_id, id);
+    await rotatePersonalInvite(current.user_id);
     return assemble(row);
   }
 
@@ -499,6 +509,6 @@ export async function regenerateInvite(id: string): Promise<Client> {
   if (!user) throw notFound('Gere o acesso do candidato antes de criar o link.');
 
   await ensurePersonalInvite(user.id, id);
-  await rotatePersonalInvite(user.id, id);
+  await rotatePersonalInvite(user.id);
   return assemble(row);
 }
