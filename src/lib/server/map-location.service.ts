@@ -3,9 +3,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   normalizeQuery,
   pollingPlaceQuery,
-  residenceQuery,
+  residenceLookup,
   type AddressParts,
   type LocationKind,
+  type LocationPrecision,
   type MapErrorCode,
   type MapPlace,
 } from '@/lib/domain/map-location';
@@ -170,7 +171,7 @@ function errorCodeOf(error: unknown): MapErrorCode {
 async function addressFor(
   memberId: string,
   kind: LocationKind,
-): Promise<{ query: string; expected: AddressParts } | null> {
+): Promise<{ query: string; expected: AddressParts; precision: LocationPrecision } | null> {
   const member = await selectOne<MemberRow>(TABLES.members, {
     select: 'id,client_id,street,district,city,state',
     filters: { id: `eq.${memberId}` },
@@ -178,8 +179,14 @@ async function addressFor(
   if (!member) return null;
 
   if (kind === 'RESIDENCE') {
-    const query = residenceQuery(member);
-    return query ? { query, expected: { city: member.city, state: member.state } } : null;
+    const lookup = residenceLookup(member);
+    return lookup
+      ? {
+          query: lookup.query,
+          expected: { city: member.city, state: member.state },
+          precision: lookup.precision,
+        }
+      : null;
   }
 
   const verification = await selectOne<MemberVerificationRow>(TABLES.memberVerifications, {
@@ -190,7 +197,9 @@ async function addressFor(
   if (!eleitoral) return null;
 
   const query = pollingPlaceQuery(eleitoral);
-  return query ? { query, expected: { city: eleitoral.municipio, state: eleitoral.uf } } : null;
+  return query
+    ? { query, expected: { city: eleitoral.municipio, state: eleitoral.uf }, precision: 'STREET' }
+    : null;
 }
 
 /**
@@ -225,6 +234,7 @@ export async function resolveLocation(memberId: string, kind: LocationKind): Pro
       status: 'SUCCESS',
       query_hash: hash,
       location_id: hit.id,
+      location_precision: address.precision,
       error_code: null,
       requested_at: locked.requested_at ?? new Date().toISOString(),
       resolved_at: new Date().toISOString(),
@@ -255,6 +265,7 @@ export async function resolveLocation(memberId: string, kind: LocationKind): Pro
       status: saved ? 'SUCCESS' : 'FAILED',
       query_hash: hash,
       location_id: saved?.id ?? null,
+      location_precision: saved ? address.precision : null,
       error_code: saved ? null : 'UNEXPECTED',
       attempts: locked.attempts + 1,
       requested_at: startedAt,
@@ -269,6 +280,35 @@ export async function resolveLocation(memberId: string, kind: LocationKind): Pro
       requested_at: startedAt,
       resolved_at: new Date().toISOString(),
     });
+  }
+}
+
+/**
+ * Garante o vinculo de moradia de quem ainda nao tem.
+ *
+ * Basta municipio e UF: rua e bairro apenas deixam o ponto mais preciso.
+ * Idempotente e sem consultar nada.
+ */
+export async function ensureResidenceLinks(limit = 200): Promise<void> {
+  const [members, links] = await Promise.all([
+    selectRows<MemberRow>(TABLES.members, {
+      select: 'id,client_id,city,state',
+      order: 'created_at.desc',
+      limit,
+    }),
+    selectRows<MemberLocationRow>(TABLES.memberLocations, {
+      select: 'member_id,location_kind',
+      filters: { location_kind: 'eq.RESIDENCE' },
+      limit: 2000,
+    }),
+  ]);
+
+  const existing = new Set(links.map((link) => link.member_id));
+
+  for (const member of members) {
+    if (existing.has(member.id)) continue;
+    if (!member.city?.trim() || !member.state?.trim()) continue;
+    await createPendingLocation(member.client_id, member.id, 'RESIDENCE');
   }
 }
 
@@ -395,6 +435,7 @@ export async function mapOverview(): Promise<MapOverviewPayload> {
       state: link.location_kind === 'RESIDENCE' ? member.state : (eleitoral?.uf ?? null),
       zone: eleitoral?.zona ?? null,
       section: eleitoral?.secao ?? null,
+      precision: link.location_precision ?? (link.location_kind === 'RESIDENCE' ? 'CITY' : 'STREET'),
     });
   }
 

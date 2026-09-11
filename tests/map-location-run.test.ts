@@ -56,6 +56,7 @@ vi.mock('@/lib/supabase/rest', () => ({
       return db.links.filter((row) => match(row as unknown as Record<string, unknown>, filters));
     }
     if (table === 'cmd_map_locations') return db.places;
+    if (table === 'cmd_members') return Object.values(db.members);
     return [];
   },
   insertOne: async (table: string, value: Record<string, unknown>) => {
@@ -123,6 +124,7 @@ vi.mock('@/lib/supabase/storage', () => ({ signedUrls: async (paths: unknown[]) 
 
 const {
   createPendingLocation,
+  ensureResidenceLinks,
   invalidateLocation,
   queryHash,
   resolveLocation,
@@ -219,8 +221,8 @@ describe('resolução das coordenadas', () => {
     expect(lookupPlace).toHaveBeenCalledTimes(2); // segunda so pelo estado FAILED
   });
 
-  it('endereço incompleto não consulta nada', async () => {
-    member('m1', { street: null });
+  it('sem município e UF nada é consultado', async () => {
+    member('m1', { street: null, district: null, city: null, state: null });
     await createPendingLocation('cli-1', 'm1', 'RESIDENCE');
     await resolveLocation('m1', 'RESIDENCE');
 
@@ -302,6 +304,41 @@ describe('os dois tipos convivem', () => {
 
     expect(db.links.find((link) => link.location_kind === 'RESIDENCE')?.status).toBe('SUCCESS');
     expect(db.links.find((link) => link.location_kind === 'POLLING_PLACE')?.status).toBe('PENDING');
+  });
+});
+
+describe('cadastros antigos sem rua', () => {
+  it('localiza pelo bairro quando não há rua', async () => {
+    member('m1', { street: null });
+    await createPendingLocation('cli-1', 'm1', 'RESIDENCE');
+    await resolveLocation('m1', 'RESIDENCE');
+
+    expect(lookupPlace).toHaveBeenCalledTimes(1);
+    expect(lookupPlace.mock.calls[0][0]).toBe('Centro, São Paulo - SP, Brasil');
+    expect(db.links[0].status).toBe('SUCCESS');
+    expect(db.links[0].location_precision).toBe('DISTRICT');
+  });
+
+  it('localiza pelo município quando só há município e UF', async () => {
+    member('m1', { street: null, district: null });
+    await createPendingLocation('cli-1', 'm1', 'RESIDENCE');
+    await resolveLocation('m1', 'RESIDENCE');
+
+    expect(lookupPlace.mock.calls[0][0]).toBe('São Paulo - SP, Brasil');
+    expect(db.links[0].location_precision).toBe('CITY');
+  });
+
+  it('garante o vínculo de quem tem município e UF, sem duplicar', async () => {
+    member('m1', { street: null, district: null });
+    member('m2');
+    member('m3', { city: null, state: null });
+
+    await ensureResidenceLinks();
+    await ensureResidenceLinks();
+
+    expect(db.links).toHaveLength(2);
+    expect(db.links.map((link) => link.member_id).sort()).toEqual(['m1', 'm2']);
+    expect(lookupPlace).not.toHaveBeenCalled();
   });
 });
 

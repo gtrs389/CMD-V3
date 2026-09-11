@@ -1,4 +1,4 @@
-import type { LocationKind } from './map-location';
+import { PRECISION_LABELS, type LocationKind, type LocationPrecision } from './map-location';
 
 /**
  * Pinos do mapa e agrupamento por proximidade.
@@ -23,6 +23,8 @@ export interface MapPin {
   state: string | null;
   zone: string | null;
   section: string | null;
+  /** Ate onde o endereco chegou: rua, bairro ou municipio. */
+  precision: LocationPrecision;
 }
 
 export interface MapTotals {
@@ -41,7 +43,8 @@ export interface MapOverviewPayload {
 export const MAP_FILTERS = ['RESIDENCE', 'POLLING_PLACE', 'BOTH'] as const;
 export type MapFilter = (typeof MAP_FILTERS)[number];
 
-export const DEFAULT_MAP_FILTER: MapFilter = 'RESIDENCE';
+/** A tela abre mostrando os dois tipos: nada fica escondido por padrao. */
+export const DEFAULT_MAP_FILTER: MapFilter = 'BOTH';
 
 export const MAP_FILTER_LABELS: Record<MapFilter, string> = {
   RESIDENCE: 'Moradia',
@@ -52,6 +55,11 @@ export const MAP_FILTER_LABELS: Record<MapFilter, string> = {
 export function filterPins(pins: MapPin[], filter: MapFilter): MapPin[] {
   if (filter === 'BOTH') return pins;
   return pins.filter((pin) => pin.locationKind === filter);
+}
+
+/** Aviso de precisao do ponto, para nunca sugerir a casa exata. */
+export function precisionLabel(pin: MapPin): string {
+  return PRECISION_LABELS[pin.precision] ?? PRECISION_LABELS.CITY;
 }
 
 /** Texto principal do popup, conforme o tipo do pino. */

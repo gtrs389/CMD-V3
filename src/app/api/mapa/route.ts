@@ -2,7 +2,12 @@ import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/server/guard';
 import { jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
-import { mapOverview, resolvePending, retryLocation } from '@/lib/server/map-location.service';
+import {
+  ensureResidenceLinks,
+  mapOverview,
+  resolvePending,
+  retryLocation,
+} from '@/lib/server/map-location.service';
 
 /**
  * Mapa da mobilizacao, somente para o ADMIN autenticado.
@@ -13,6 +18,12 @@ import { mapOverview, resolvePending, retryLocation } from '@/lib/server/map-loc
 export async function GET() {
   try {
     await requirePermission('map.view');
+
+    // Vinculos que faltam e pendentes ja resolvidos aqui, um de cada vez:
+    // assim o mapa abre com o que existe, sem consultas em paralelo.
+    await ensureResidenceLinks().catch(() => undefined);
+    await resolvePending(5).catch(() => undefined);
+
     return jsonOk(await mapOverview());
   } catch (error) {
     return toErrorResponse(error);

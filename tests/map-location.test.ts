@@ -5,7 +5,7 @@ import {
   parsePlace,
   pollingPlaceQuery,
   providerError,
-  residenceQuery,
+  residenceLookup,
 } from '@/lib/domain/map-location';
 import {
   cellSize,
@@ -13,6 +13,7 @@ import {
   DEFAULT_MAP_FILTER,
   filterPins,
   pinLabel,
+  precisionLabel,
   type MapPin,
 } from '@/lib/domain/map-pin';
 import { can } from '@/lib/permissions';
@@ -62,14 +63,16 @@ const LISTA = {
 
 describe('montagem da consulta', () => {
   it('moradia usa apenas rua, bairro, município e UF', () => {
-    const query = residenceQuery({
+    const lookup = residenceLookup({
       street: 'Rua das Flores',
       district: 'Centro',
       city: 'São Paulo',
       state: 'SP',
     });
+    const query = lookup?.query;
 
     expect(query).toBe('Rua das Flores, Centro, São Paulo - SP, Brasil');
+    expect(lookup?.precision).toBe('STREET');
 
     // Nenhum dado da pessoa entra na consulta.
     expect(query).not.toMatch(/\d{11}|cpf|telefone|nascimento|mae|titulo|zona|secao/i);
@@ -88,11 +91,22 @@ describe('montagem da consulta', () => {
   });
 
   it('sem município, UF ou endereço não há consulta', () => {
-    expect(residenceQuery({ street: 'Rua A', district: 'Centro', city: '', state: 'SP' })).toBeNull();
-    expect(residenceQuery({ street: 'Rua A', city: 'São Paulo', state: '' })).toBeNull();
-    expect(residenceQuery({ street: '', city: 'São Paulo', state: 'SP' })).toBeNull();
+    expect(residenceLookup({ street: 'Rua A', district: 'Centro', city: '', state: 'SP' })).toBeNull();
+    expect(residenceLookup({ street: 'Rua A', city: 'São Paulo', state: '' })).toBeNull();
     expect(pollingPlaceQuery({ local: '', municipio: 'São Paulo', uf: 'SP' })).toBeNull();
     expect(buildQuery({ city: 'São Paulo', state: 'SP' })).toBeNull();
+  });
+
+  it('sem rua usa o bairro; sem rua e bairro, o município', () => {
+    expect(residenceLookup({ district: 'Centro', city: 'São Paulo', state: 'SP' })).toEqual({
+      query: 'Centro, São Paulo - SP, Brasil',
+      precision: 'DISTRICT',
+    });
+
+    expect(residenceLookup({ city: 'São Paulo', state: 'SP' })).toEqual({
+      query: 'São Paulo - SP, Brasil',
+      precision: 'CITY',
+    });
   });
 
   it('a mesma consulta normaliza para o mesmo texto (cache por hash)', () => {
@@ -260,6 +274,7 @@ describe('pinos do mapa', () => {
     state: 'SP',
     zone: null,
     section: null,
+    precision: 'STREET',
   };
 
   const votacao: MapPin = {
@@ -270,8 +285,9 @@ describe('pinos do mapa', () => {
     section: '0123',
   };
 
-  it('o filtro começa em Moradia e separa os tipos', () => {
-    expect(DEFAULT_MAP_FILTER).toBe('RESIDENCE');
+  it('o filtro começa em Ambos e separa os tipos', () => {
+    expect(DEFAULT_MAP_FILTER).toBe('BOTH');
+    expect(filterPins([base, votacao], DEFAULT_MAP_FILTER)).toHaveLength(2);
     expect(filterPins([base, votacao], 'RESIDENCE')).toEqual([base]);
     expect(filterPins([base, votacao], 'POLLING_PLACE')).toEqual([votacao]);
     expect(filterPins([base, votacao], 'BOTH')).toHaveLength(2);
@@ -312,5 +328,35 @@ describe('acesso ao mapa', () => {
     expect(can({ role: 'EQUIPE' }, 'map.view')).toBe(false);
     expect(can({ role: 'EQUIPE' }, 'map.resolve')).toBe(false);
     expect(can(null, 'map.view')).toBe(false);
+  });
+});
+
+describe('aviso de precisão no popup', () => {
+  const pin = {
+    memberId: 'm1',
+    memberName: 'Ana Souza',
+    memberPhoto: null,
+    clientId: 'c1',
+    clientName: 'Comitê Exemplo',
+    locationKind: 'RESIDENCE' as const,
+    latitude: -23.55,
+    longitude: -46.63,
+    place: 'Rua das Flores',
+    district: 'Centro',
+    city: 'São Paulo',
+    state: 'SP',
+    zone: null,
+    section: null,
+    precision: 'STREET' as const,
+  };
+
+  it('diz rua, bairro ou município conforme a precisão', () => {
+    expect(precisionLabel(pin)).toBe('Localização aproximada da rua');
+    expect(precisionLabel({ ...pin, precision: 'DISTRICT' })).toBe(
+      'Localização aproximada do bairro',
+    );
+    expect(precisionLabel({ ...pin, precision: 'CITY' })).toBe(
+      'Localização aproximada do município',
+    );
   });
 });

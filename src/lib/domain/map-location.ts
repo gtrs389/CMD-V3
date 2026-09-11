@@ -55,6 +55,8 @@ export interface AddressParts {
   district?: string | null;
   city?: string | null;
   state?: string | null;
+  /** Aceita consultar somente pelo municipio, sem rua nem bairro. */
+  allowCityOnly?: boolean;
 }
 
 function clean(value: string | null | undefined): string {
@@ -74,25 +76,52 @@ export function buildQuery(parts: AddressParts): string | null {
   if (!city || state.length !== 2) return null;
 
   const head = [clean(parts.place), clean(parts.street), clean(parts.district)].filter(Boolean);
-  if (head.length === 0) return null;
+  if (head.length === 0) return parts.allowCityOnly ? `${city} - ${state}, Brasil` : null;
 
   return `${head.join(', ')}, ${city} - ${state}, Brasil`;
 }
 
-/** Consulta da moradia: apenas rua, bairro, municipio e UF declarados. */
-export function residenceQuery(parts: {
+export const LOCATION_PRECISIONS = ['STREET', 'DISTRICT', 'CITY'] as const;
+export type LocationPrecision = (typeof LOCATION_PRECISIONS)[number];
+
+/** Texto do popup conforme ate onde o endereco chegou. */
+export const PRECISION_LABELS: Record<LocationPrecision, string> = {
+  STREET: 'Localização aproximada da rua',
+  DISTRICT: 'Localização aproximada do bairro',
+  CITY: 'Localização aproximada do município',
+};
+
+export interface ResidenceLookup {
+  query: string;
+  precision: LocationPrecision;
+}
+
+/**
+ * Consulta da moradia, com o endereco mais completo que existir.
+ *
+ * Uma consulta so: com rua, senao com bairro, senao apenas o municipio. Sem
+ * municipio e UF nao ha consulta — e a precisao diz do que o ponto trata,
+ * para a tela nunca sugerir a casa exata.
+ */
+export function residenceLookup(parts: {
   street?: string | null;
   district?: string | null;
   city?: string | null;
   state?: string | null;
-}): string | null {
-  if (!clean(parts.street)) return null;
-  return buildQuery({
-    street: parts.street,
-    district: parts.district,
+}): ResidenceLookup | null {
+  const street = clean(parts.street);
+  const district = clean(parts.district);
+
+  const precision: LocationPrecision = street ? 'STREET' : district ? 'DISTRICT' : 'CITY';
+  const query = buildQuery({
+    street: street || null,
+    district: street || district ? district : null,
     city: parts.city,
     state: parts.state,
+    allowCityOnly: precision === 'CITY',
   });
+
+  return query ? { query, precision } : null;
 }
 
 /** Consulta do local de votacao, a partir do domicilio eleitoral. */
