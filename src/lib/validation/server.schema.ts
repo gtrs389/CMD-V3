@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
-import { FIELD_TYPES } from '@/lib/types';
+import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
 import { GENDER_VALUES, UF_OPTIONS, isValidCpf, isValidVoterId } from '@/lib/utils/documents';
 
 /**
@@ -34,7 +34,9 @@ const fieldOptionSchema = z.object({
 
 const customFieldSchema = z.object({
   id: z.string().min(1).max(64),
-  systemKey: z.enum(['photo', 'name', 'phone']).nullable(),
+  // O servidor preserva o `system_key` gravado: o valor enviado nunca troca
+  // um campo padrao de lugar. A lista completa fica em SYSTEM_FIELD_KEYS.
+  systemKey: z.enum(SYSTEM_FIELD_KEYS).nullable(),
   type: z.enum(FIELD_TYPES),
   label: trimmed(80),
   placeholder: trimmed(80),
@@ -111,10 +113,25 @@ const standardMemberFields = {
   relationshipLabel: opcional(z.string().trim().min(1).max(80)),
 };
 
+/**
+ * E-mail do integrante: campo padrao, obrigatorio e normalizado.
+ *
+ * Chega sempre em minusculas e sem espaco nas pontas, porque e ele que cria
+ * o acesso e precisa bater com o que esta gravado.
+ */
+const memberEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, 'Informe o e-mail.')
+  .max(254, 'E-mail muito longo.')
+  .pipe(z.email('E-mail inválido.'));
+
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */
 const memberBase = {
   ...standardMemberFields,
   name: trimmed(120).min(2, 'Informe o nome completo.'),
+  email: memberEmail,
   phone: trimmed(30).default(''),
   photo: photoValue.default(null),
   responses: responsesSchema.default([]),
@@ -130,6 +147,7 @@ export const memberUpdateSchema = z
   .object({
     ...standardMemberFields,
     name: trimmed(120).min(2, 'Informe o nome completo.'),
+    email: memberEmail,
     phone: trimmed(30),
     photo: photoValue,
     responses: responsesSchema,

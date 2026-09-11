@@ -29,8 +29,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <SessionProvider initialUser={user}>
-      {/* O candidato nao navega entre rotas: o painel dele nao tem menu. */}
-      <AppShell withSidebar={user.role !== 'CANDIDATE'}>{children}</AppShell>
+      {/* Candidato e equipe nao navegam entre rotas: cada um abre uma unica
+          pagina, entao a barra lateral some e fica so o cabecalho. */}
+      <AppShell withSidebar={user.role === 'ADMIN'}>{children}</AppShell>
     </SessionProvider>
   );
 }

@@ -4,9 +4,16 @@ import { useMemo, useState } from 'react';
 import { Eye, Pencil, SearchX, Trash2, UserPlus, Users } from 'lucide-react';
 import type { Client, Member } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
+import {
+  RECRUITED_BY_LABEL,
+  recruiterKey,
+  recruiterOptions,
+  recruiterText,
+} from '@/lib/domain/recruitment';
 import { byNewest, formatDate } from '@/lib/utils/date';
 import { formatPhone, normalizePhone } from '@/lib/utils/phone';
 import { matchesSearch } from '@/lib/utils/text';
+import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +26,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/components/layout/SessionProvider';
 import { MemberDetailModal } from './MemberDetailModal';
 import { MemberFormModal } from './MemberFormModal';
+import { RecruitedBy } from './RecruitedBy';
 
 interface MembersPanelProps {
   client: Client;
@@ -39,6 +47,9 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
   const podeEditar = can('member.update');
   const podeExcluir = can('member.delete');
   const [term, setTerm] = useState('');
+  // Filtro por responsavel pelo cadastro. Recorte de leitura apenas: o que
+  // chega da API ja vem limitado pela hierarquia, no servidor.
+  const [recruiter, setRecruiter] = useState('todos');
   const [viewing, setViewing] = useState<Member | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -46,13 +57,26 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
 
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
 
+  const responsaveis = useMemo(() => recruiterOptions(ordered), [ordered]);
+
   const filtered = useMemo(() => {
     const digits = normalizePhone(term);
     return ordered.filter((member) => {
-      if (matchesSearch(term, member.name)) return true;
+      if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
+
+      if (
+        matchesSearch(
+          term,
+          member.name,
+          member.email ?? '',
+          recruiterText(member.recruitedBy),
+        )
+      ) {
+        return true;
+      }
       return digits.length >= 2 && member.phone.includes(digits);
     });
-  }, [ordered, term]);
+  }, [ordered, term, recruiter]);
 
   async function handleRemove() {
     if (!removing) return;
@@ -105,16 +129,35 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SearchInput
-          id="busca-integrantes"
-          value={term}
-          onChange={setTerm}
-          label="Pesquisar integrantes por nome ou telefone"
-          placeholder="Pesquisar por nome ou telefone"
-          className="sm:max-w-sm"
-        />
-        <div className="flex items-center gap-3">
-          <p className="text-sm whitespace-nowrap text-ink-500">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <SearchInput
+            id="busca-integrantes"
+            value={term}
+            onChange={setTerm}
+            label="Pesquisar integrantes por nome, e-mail, telefone ou responsável"
+            placeholder="Pesquisar por nome, e-mail ou responsável"
+            className="sm:max-w-sm"
+          />
+
+          {responsaveis.length > 1 ? (
+            <Select
+              id="filtro-responsavel"
+              aria-label={`Filtrar por ${RECRUITED_BY_LABEL.toLowerCase()}`}
+              value={recruiter}
+              onChange={(event) => setRecruiter(event.target.value)}
+              className="sm:max-w-56"
+            >
+              <option value="todos">{RECRUITED_BY_LABEL}: todos</option>
+              {responsaveis.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label} ({option.count})
+                </option>
+              ))}
+            </Select>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="shrink-0 text-sm whitespace-nowrap text-ink-500">
             {filtered.length} de {ordered.length}
           </p>
           {podeCriar ? (
@@ -152,6 +195,18 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                       <p className="truncate text-sm text-ink-500">
                         {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
                       </p>
+                      {member.email ? (
+                        <p className="truncate text-xs text-ink-500">{member.email}</p>
+                      ) : null}
+
+                      {/* No celular a origem fica na propria coluna do cartao:
+                          nada de rolagem horizontal. */}
+                      <RecruitedBy
+                        recruiter={member.recruitedBy}
+                        withLabel
+                        className="mt-1.5"
+                      />
+
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                         <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
                         {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
@@ -193,16 +248,19 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
               <caption className="sr-only">Integrantes da equipe de {client.name}</caption>
               <thead className="bg-ink-50 text-xs tracking-wide text-ink-500 uppercase">
                 <tr>
-                  <th scope="col" className="w-[38%] px-4 py-3 font-medium">
+                  <th scope="col" className="w-[28%] px-4 py-3 font-medium">
                     Integrante
                   </th>
-                  <th scope="col" className="w-[22%] px-4 py-3 font-medium">
+                  <th scope="col" className="w-[18%] px-4 py-3 font-medium">
                     Telefone
                   </th>
-                  <th scope="col" className="w-[18%] px-4 py-3 font-medium">
+                  <th scope="col" className="w-[24%] px-4 py-3 font-medium">
+                    {RECRUITED_BY_LABEL}
+                  </th>
+                  <th scope="col" className="w-[14%] px-4 py-3 font-medium">
                     Cadastro
                   </th>
-                  <th scope="col" className="w-[22%] px-4 py-3 text-right font-medium">
+                  <th scope="col" className="w-[16%] px-4 py-3 text-right font-medium">
                     Ações
                   </th>
                 </tr>
@@ -217,14 +275,17 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                           <span className="block truncate font-medium text-ink-900">
                             {member.name}
                           </span>
-                          {member.source === 'invite' ? (
-                            <span className="block text-xs text-ink-500">Via link de convite</span>
-                          ) : null}
+                          <span className="block truncate text-xs text-ink-500">
+                            {member.email ?? (member.source === 'invite' ? 'Via link de convite' : '--')}
+                          </span>
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-ink-700 tabular-nums">
                       {member.phone ? formatPhone(member.phone) : '--'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <RecruitedBy recruiter={member.recruitedBy} />
                     </td>
                     <td className="px-4 py-3 text-ink-500">{formatDate(member.createdAt)}</td>
                     <td className="px-4 py-3">

@@ -3,6 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 import { Pencil } from 'lucide-react';
 import type { Client, FieldOption, Member } from '@/lib/types';
+import { ACCESS_STATUS_LABELS } from '@/lib/types';
+import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
@@ -20,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
+import { RecruitedBy } from './RecruitedBy';
 
 interface MemberDetailModalProps {
   open: boolean;
@@ -180,9 +183,13 @@ export function MemberDetailModal({
             <p className="text-sm text-ink-500">
               {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
             </p>
+            <p className="truncate text-sm text-ink-500">{member.email ?? 'Sem e-mail'}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
                 {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
+              </Badge>
+              <Badge tone={member.access === 'ACTIVE' ? 'success' : 'neutral'}>
+                {ACCESS_STATUS_LABELS[member.access]}
               </Badge>
               {member.consentAt ? <Badge tone="success">Consentimento registrado</Badge> : null}
             </div>
@@ -190,6 +197,13 @@ export function MemberDetailModal({
         </div>
 
         <dl className="grid grid-cols-1 gap-3 rounded-control bg-ink-50 p-3 text-sm sm:grid-cols-2">
+          {/* Origem do cadastro: o rotulo e o mesmo da lista. */}
+          <div className="min-w-0 sm:col-span-2">
+            <dt className="text-xs text-ink-500">{RECRUITED_BY_LABEL}</dt>
+            <dd className="mt-0.5">
+              <RecruitedBy recruiter={member.recruitedBy} />
+            </dd>
+          </div>
           <div className="min-w-0">
             <dt className="text-xs text-ink-500">Cadastrado em</dt>
             <dd className="font-medium break-words text-ink-900">

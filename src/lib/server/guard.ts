@@ -1,6 +1,6 @@
 import 'server-only';
 import type { SessionUser } from '@/lib/types';
-import { can, canReachClient, type Permission } from '@/lib/permissions';
+import { can, canReachClient, canReachMember, type Permission } from '@/lib/permissions';
 import { TABLES, type MemberRow } from '@/lib/supabase/tables';
 import { selectOne } from '@/lib/supabase/rest';
 import { currentUser } from './auth.service';
@@ -12,9 +12,9 @@ import { forbidden, notFound, unauthorized } from './http';
  * Cada rota chama uma destas funcoes antes de tocar no banco. O `proxy.ts`
  * apenas melhora a navegacao: a decisao de acesso acontece sempre aqui.
  *
- * Esconder botao nao protege nada. O candidato so alcanca o proprio registro
- * porque o vinculo da sessao e comparado com o identificador pedido, a cada
- * requisicao.
+ * Esconder botao nao protege nada. Trocar URL, `memberId`, `clientId`,
+ * filtro ou corpo da requisicao nunca amplia o acesso, porque o vinculo da
+ * sessao e comparado com a linha do banco a cada requisicao.
  */
 export async function requirePermission(permission: Permission): Promise<SessionUser> {
   const user = await currentUser();
@@ -37,8 +37,10 @@ export async function requireSession(): Promise<SessionUser> {
 }
 
 /**
- * Permissao e escopo do candidato na mesma conferencia.
- * ADMIN alcanca qualquer registro; CANDIDATE, somente o proprio.
+ * Permissao e escopo por operacao na mesma conferencia.
+ *
+ * ADMIN alcanca qualquer candidato; CANDIDATE, somente o proprio. EQUIPE
+ * nunca alcanca o registro do candidato: a area dela e "Minha mobilizacao".
  */
 export async function requireClientAccess(
   permission: Permission,
@@ -49,19 +51,49 @@ export async function requireClientAccess(
   return user;
 }
 
-/** Mesma regra, a partir do integrante: o vinculo vem do banco. */
+/**
+ * Sessao do perfil EQUIPE, com a operacao ja resolvida pelo banco.
+ *
+ * O identificador da operacao e do integrante vem sempre da sessao, nunca
+ * da URL ou do corpo da requisicao.
+ */
+export interface TeamSession extends SessionUser {
+  candidateId: string;
+  memberId: string;
+}
+
+export async function requireTeamSession(): Promise<TeamSession> {
+  const user = await requirePermission('team.access');
+  if (user.role !== 'EQUIPE' || !user.candidateId || !user.memberId) throw forbidden();
+  return { ...user, candidateId: user.candidateId, memberId: user.memberId };
+}
+
+/**
+ * Mesma regra, a partir do integrante: a hierarquia e aplicada sobre a
+ * linha do banco.
+ *
+ * ADMIN alcanca qualquer integrante. CANDIDATE alcanca toda a propria
+ * operacao, em qualquer nivel. EQUIPE alcanca somente quem se cadastrou
+ * pelo proprio link: irmaos, pessoas de outro recrutador e descendentes dos
+ * proprios recrutados ficam de fora.
+ */
 export async function requireMemberAccess(
   permission: Permission,
   memberId: string,
 ): Promise<SessionUser> {
   const user = await requirePermission(permission);
 
-  const row = await selectOne<Pick<MemberRow, 'id' | 'client_id'>>(TABLES.members, {
-    select: 'id,client_id',
-    filters: { id: `eq.${memberId}` },
-  });
+  const row = await selectOne<Pick<MemberRow, 'id' | 'client_id' | 'recruited_by_user_id'>>(
+    TABLES.members,
+    { select: 'id,client_id,recruited_by_user_id', filters: { id: `eq.${memberId}` } },
+  );
   if (!row) throw notFound('Integrante não encontrado.');
-  if (!canReachClient(user, row.client_id)) throw forbidden();
+
+  const allowed = canReachMember(user, {
+    clientId: row.client_id,
+    recruitedByUserId: row.recruited_by_user_id,
+  });
+  if (!allowed) throw forbidden();
 
   return user;
 }

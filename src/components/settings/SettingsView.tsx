@@ -16,11 +16,14 @@ import type {
   AccessStatus,
   CandidateWithoutAccess,
   GeneratedCredential,
+  MemberWithoutAccess,
+  Recruiter,
   Role,
   SystemUser,
 } from '@/lib/types';
 import { ACCESS_STATUS_LABELS } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/permissions';
+import { RECRUITED_BY_LABEL, recruiterText } from '@/lib/domain/recruitment';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { useSession } from '@/components/layout/SessionProvider';
@@ -38,6 +41,7 @@ import { CredentialsModal } from './CredentialsModal';
 interface Payload {
   users: SystemUser[];
   pendingCandidates: CandidateWithoutAccess[];
+  pendingMembers: MemberWithoutAccess[];
 }
 
 interface GrantOutcome {
@@ -45,16 +49,19 @@ interface GrantOutcome {
   conflicts: { clientId: string; name: string; email: string }[];
 }
 
-/** Linha da lista: usuario existente ou candidato ainda sem acesso. */
+/** Linha da lista: usuario existente, candidato ou integrante sem acesso. */
 interface Row {
   key: string;
   userId: string | null;
   clientId: string | null;
+  memberId: string | null;
   name: string;
   email: string;
   role: Role;
   status: AccessStatus;
   candidate: { id: string; name: string; photo: string | null } | null;
+  /** Responsavel pelo cadastro. Preenchido nos integrantes. */
+  recruitedBy: Recruiter | null;
   photo: string | null;
   lastLoginAt: string | null;
   self: boolean;
@@ -64,15 +71,16 @@ const STATUS_CLASSES: Record<AccessStatus, string> = {
   ACTIVE: 'bg-success-50 text-success-600',
   PENDING: 'bg-warning-50 text-warning-600',
   DISABLED: 'bg-danger-50 text-danger-600',
+  NO_EMAIL: 'bg-ink-100 text-ink-700',
 };
 
 /**
  * Configuracoes do sistema.
  *
- * Lista apenas ADMINs e candidatos com vinculo de acesso. Integrantes
- * cadastrados pelos links publicos nao tem login e nunca aparecem aqui.
- * Nenhum hash de senha chega ao navegador; a senha temporaria existe apenas
- * na resposta da acao e no modal, e some ao fechar.
+ * Lista ADMINs, candidatos e integrantes da equipe, com nome, e-mail,
+ * perfil, candidato, responsavel pelo cadastro e estado do acesso. Nenhum
+ * hash de senha chega ao navegador; a senha temporaria existe apenas na
+ * resposta da acao e no modal, e some ao fechar.
  */
 export function SettingsView() {
   const toast = useToast();
@@ -92,39 +100,76 @@ export function SettingsView() {
       key: `u-${item.id}`,
       userId: item.id,
       clientId: item.candidate?.id ?? null,
+      memberId: item.memberId,
       name: item.name,
       email: item.email,
       role: item.role,
       status: item.status,
       candidate: item.candidate,
+      recruitedBy: item.recruitedBy,
       photo: item.candidate?.photo ?? null,
       lastLoginAt: item.lastLoginAt,
       self: item.self,
     }));
 
-    const pendentes = (data?.pendingCandidates ?? []).map((item) => ({
+    const candidatos = (data?.pendingCandidates ?? []).map((item) => ({
       key: `c-${item.clientId}`,
       userId: null,
       clientId: item.clientId,
+      memberId: null,
       name: item.name,
       email: item.email,
       role: 'CANDIDATE' as Role,
       status: 'PENDING' as AccessStatus,
       candidate: { id: item.clientId, name: item.name, photo: item.photo },
+      recruitedBy: null,
       photo: item.photo,
       lastLoginAt: null,
       self: false,
     }));
 
-    return [...users, ...pendentes];
+    // Integrante sem usuario: com e-mail valido o acesso pode ser gerado;
+    // sem e-mail o estado fica em "E-mail necessário".
+    const integrantes = (data?.pendingMembers ?? []).map((item) => ({
+      key: `m-${item.memberId}`,
+      userId: null,
+      clientId: item.clientId,
+      memberId: item.memberId,
+      name: item.name,
+      email: item.email ?? '--',
+      role: 'EQUIPE' as Role,
+      status: (item.email ? 'PENDING' : 'NO_EMAIL') as AccessStatus,
+      candidate: { id: item.clientId, name: item.candidateName, photo: null },
+      recruitedBy: item.recruitedBy,
+      photo: item.photo,
+      lastLoginAt: null,
+      self: false,
+    }));
+
+    return [...users, ...candidatos, ...integrantes];
   }, [data]);
 
   const filtered = useMemo(
-    () => rows.filter((row) => matchesSearch(term, row.name, row.email, row.candidate?.name ?? '')),
+    () =>
+      rows.filter((row) =>
+        matchesSearch(
+          term,
+          row.name,
+          row.email,
+          row.candidate?.name ?? '',
+          ROLE_LABELS[row.role],
+          recruiterText(row.recruitedBy),
+        ),
+      ),
     [rows, term],
   );
 
-  const pendentes = useMemo(() => rows.filter((row) => row.status === 'PENDING').length, [rows]);
+  // Somente candidatos entram na geracao em lote: integrante e sempre
+  // individual, e sem e-mail nao ha acesso a gerar.
+  const pendentes = useMemo(
+    () => rows.filter((row) => row.role === 'CANDIDATE' && row.status === 'PENDING').length,
+    [rows],
+  );
 
   async function run(key: string, action: () => Promise<void>) {
     if (working) return;
@@ -155,24 +200,20 @@ export function SettingsView() {
 
   function gerarAcesso(row: Row) {
     void run(row.key, async () => {
-      const result = row.userId
-        ? {
-            credentials: [
-              (
-                await api<{ credential: GeneratedCredential }>(
-                  `/api/usuarios/${row.userId}/senha`,
-                  { method: 'POST' },
-                )
-              ).credential,
-            ],
-            conflicts: [],
-          }
-        : await api<GrantOutcome>('/api/usuarios', {
-            method: 'POST',
-            body: { action: 'grant', clientId: row.clientId },
-          });
+      if (row.userId) {
+        const { credential } = await api<{ credential: GeneratedCredential }>(
+          `/api/usuarios/${row.userId}/senha`,
+          { method: 'POST' },
+        );
+        setOutcome({ credentials: [credential], conflicts: [] });
+        return;
+      }
 
-      setOutcome(result);
+      const body = row.memberId
+        ? { action: 'grant-member', memberId: row.memberId }
+        : { action: 'grant', clientId: row.clientId };
+
+      setOutcome(await api<GrantOutcome>('/api/usuarios', { method: 'POST', body }));
     });
   }
 
@@ -200,7 +241,7 @@ export function SettingsView() {
           Configurações
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Acessos do sistema: administradores e candidatos vinculados.
+          Acessos do sistema: administradores, candidatos e integrantes da equipe.
         </p>
       </header>
 
@@ -218,8 +259,8 @@ export function SettingsView() {
               Usuários do sistema
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Integrantes cadastrados pelos links de convite não possuem acesso e não aparecem
-              aqui.
+              Todo integrante cadastrado por um link tem acesso próprio. Quem não tem e-mail fica
+              em &quot;{ACCESS_STATUS_LABELS.NO_EMAIL}&quot; e não recebe senha.
             </p>
           </div>
 
@@ -241,8 +282,8 @@ export function SettingsView() {
               id="busca-usuarios"
               type="search"
               value={term}
-              aria-label="Buscar usuários por nome, e-mail ou candidato"
-              placeholder="Buscar por nome, e-mail ou candidato"
+              aria-label="Buscar usuários por nome, e-mail, perfil, candidato ou responsável"
+              placeholder="Buscar por nome, e-mail, perfil, candidato ou responsável"
               onChange={(event) => setTerm(event.target.value)}
               className="min-h-11 w-full rounded-control border border-line bg-surface pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none"
             />
@@ -330,6 +371,11 @@ export function SettingsView() {
                     {ROLE_LABELS[row.role]}
                     {row.candidate ? ` · ${row.candidate.name}` : ''}
                   </p>
+                  {row.recruitedBy ? (
+                    <p className="mt-0.5 truncate text-xs text-ink-400">
+                      {RECRUITED_BY_LABEL}: {recruiterText(row.recruitedBy)}
+                    </p>
+                  ) : null}
                 </div>
 
                 {/* No celular o estado desce para a segunda linha, para o
@@ -353,9 +399,16 @@ export function SettingsView() {
                   actions={[
                     {
                       id: 'senha',
-                      label: row.status === 'PENDING' ? 'Gerar acesso' : 'Gerar nova senha temporária',
+                      label:
+                        row.status === 'NO_EMAIL'
+                          ? 'E-mail necessário'
+                          : row.status === 'PENDING'
+                            ? 'Gerar acesso'
+                            : 'Redefinir senha',
                       icon: <KeyRound className="size-4" />,
-                      disabled: row.self || working !== null,
+                      // Sem e-mail nao ha acesso a gerar: o integrante antigo
+                      // precisa do endereco antes.
+                      disabled: row.self || row.status === 'NO_EMAIL' || working !== null,
                       onSelect: () => gerarAcesso(row),
                     },
                     {

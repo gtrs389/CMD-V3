@@ -46,9 +46,13 @@ export function LoginForm({ next, configured }: LoginFormProps) {
     }
 
     // Senha temporaria leva ao primeiro acesso; candidato, ao proprio
-    // cadastro. O destino pedido na URL so vale para quem ja pode navegar.
+    // cadastro; equipe, a "Minha mobilizacao". O destino pedido na URL so
+    // vale para quem ja pode navegar livremente.
     const home = result.user ? homePathFor(result.user) : DEFAULT_AUTHENTICATED_PATH;
-    const blocked = result.user?.mustChangePassword || result.user?.role === 'CANDIDATE';
+    const blocked =
+      result.user?.mustChangePassword ||
+      result.user?.role === 'CANDIDATE' ||
+      result.user?.role === 'EQUIPE';
 
     router.replace(blocked ? home : (next ?? home));
     router.refresh();

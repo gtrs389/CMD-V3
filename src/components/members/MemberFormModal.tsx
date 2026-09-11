@@ -55,6 +55,7 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
       if (member) {
         await memberRepository.update(member.id, {
           name: payload.name,
+          email: payload.email,
           phone: payload.phone,
           photo: payload.photo,
           gender: payload.gender,
@@ -73,6 +74,7 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
         await memberRepository.create({
           clientId: client.id,
           name: payload.name,
+          email: payload.email,
           phone: payload.phone,
           photo: payload.photo,
           gender: payload.gender,

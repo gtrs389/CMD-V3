@@ -3,14 +3,15 @@ import type { Role, SessionUser } from '@/lib/types';
 /**
  * Camada central de permissoes.
  *
- * Toda verificacao de acesso do sistema passa por aqui. Para liberar o painel
- * ao perfil EQUIPE no futuro, basta acrescentar as permissoes na matriz abaixo
- * — nenhuma tela precisa ser alterada.
+ * Toda verificacao de acesso do sistema passa por aqui. Permissao sozinha
+ * nunca basta: as rotas que recebem um identificador conferem tambem o
+ * escopo da sessao (`canReachClient`, `canReachMemberRow`), porque esconder
+ * botao nao protege nada.
  */
 
 export const PERMISSIONS = [
   'admin.access',
-  /** Abre o painel: ADMIN e CANDIDATE. */
+  /** Abre o painel: ADMIN, CANDIDATE e EQUIPE. */
   'panel.access',
   'dashboard.view',
   /** Lista de todos os candidatos: exclusivo do ADMIN. */
@@ -27,6 +28,8 @@ export const PERMISSIONS = [
   'member.create',
   'member.update',
   'member.delete',
+  /** Pagina "Minha mobilizacao": exclusiva do perfil EQUIPE. */
+  'team.access',
   /** Resultado da verificacao cadastral: exclusivo do ADMIN. */
   'verification.view',
   'verification.retry',
@@ -47,17 +50,23 @@ export type Permission = (typeof PERMISSIONS)[number];
 const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS;
 
 /**
- * Nesta etapa o perfil EQUIPE ainda nao possui login nem painel.
- * Ele existe na estrutura e recebe apenas o envio pelo formulario publico.
+ * Integrante da equipe: leitura, e sempre restrita a quem ele mesmo
+ * cadastrou. Nao edita candidato, formulario, integrante nem convite, e nao
+ * ativa, desativa ou renova o proprio link.
  */
-const EQUIPE_PERMISSIONS: readonly Permission[] = ['invite.submit'];
+const EQUIPE_PERMISSIONS: readonly Permission[] = [
+  'panel.access',
+  'team.access',
+  'member.view',
+  'form.view',
+  'invite.view',
+  'invite.submit',
+];
 
 /**
- * Candidato: leitura apenas, e sempre do proprio registro.
+ * Candidato: leitura apenas, e sempre da propria operacao.
  *
- * A permissao nao basta. Toda rota que recebe um identificador confere
- * tambem o vinculo da sessao (`requireClientAccess`), entao um candidato
- * nunca alcanca o registro de outro.
+ * Enxerga toda a equipe, em qualquer nivel, porque o vinculo e o candidato.
  */
 const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
@@ -94,22 +103,61 @@ export function hasPanelAccess(user: Pick<SessionUser, 'role'> | null | undefine
 }
 
 /**
- * Conferencia de escopo do candidato.
+ * Conferencia de escopo por candidato (operacao).
  *
- * ADMIN alcanca qualquer registro; CANDIDATE somente o proprio. Regra unica,
- * usada tanto nas rotas de API quanto nas paginas.
+ * ADMIN alcanca qualquer registro. CANDIDATE alcanca somente a propria
+ * operacao. EQUIPE nunca alcanca o registro do candidato: a pagina dela e
+ * "Minha mobilizacao", montada a partir dos proprios recrutados.
  */
 export function canReachClient(
   user: Pick<SessionUser, 'role' | 'candidateId'> | null | undefined,
   clientId: string | null | undefined,
 ): boolean {
   if (!user) return false;
-  if (user.role !== 'CANDIDATE') return can(user, 'client.view');
-  return Boolean(clientId) && user.candidateId === clientId;
+  if (user.role === 'ADMIN') return can(user, 'client.view');
+  if (user.role === 'CANDIDATE') return Boolean(clientId) && user.candidateId === clientId;
+  return false;
+}
+
+/** Dados minimos do integrante necessarios para decidir o acesso. */
+export interface MemberScope {
+  clientId: string;
+  /** Dono do link usado no cadastro. */
+  recruitedByUserId: string | null;
+}
+
+/**
+ * Regra unica da hierarquia, aplicada em paginas, rotas, servicos e
+ * consultas.
+ *
+ * ADMIN      alcanca qualquer integrante.
+ * CANDIDATE  alcanca qualquer integrante da propria operacao, em qualquer
+ *            nivel: cadastrados por ele e por qualquer membro da equipe.
+ * EQUIPE     alcanca somente quem se cadastrou pelo proprio link. Irmaos,
+ *            pessoas de outro recrutador, descendentes dos proprios
+ *            recrutados e outra candidatura ficam de fora.
+ */
+export function canReachMember(
+  user: Pick<SessionUser, 'id' | 'role' | 'candidateId'> | null | undefined,
+  member: MemberScope | null | undefined,
+): boolean {
+  if (!user || !member) return false;
+  if (user.role === 'ADMIN') return true;
+  if (user.candidateId !== member.clientId) return false;
+  if (user.role === 'CANDIDATE') return true;
+  if (user.role === 'EQUIPE') return member.recruitedByUserId === user.id;
+  return false;
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Administrador',
+  EQUIPE: 'Equipe',
+  CANDIDATE: 'Candidato',
+};
+
+/** Rotulo curto usado ao lado do nome em "Cadastrado por". */
+export const ROLE_SHORT_LABELS: Record<Role, string> = {
+  ADMIN: 'Administração',
   EQUIPE: 'Equipe',
   CANDIDATE: 'Candidato',
 };

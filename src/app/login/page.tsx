@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { appConfig } from '@/config/app.config';
 import { isSupabaseConfigured } from '@/lib/supabase/env';
 import { getCurrentUser } from '@/lib/auth/server';
 import { homePathFor } from '@/lib/auth/constants';
@@ -41,9 +40,7 @@ export default async function LoginPage({
 
         <div className="animate-rise rounded-card border border-line bg-surface p-5 shadow-card sm:p-7">
           <h1 className="text-xl font-semibold tracking-tight text-ink-900">Entrar no CMD</h1>
-          <p className="mt-1 text-sm text-ink-500">
-            Acesso de administradores e candidatos. Use o e-mail e a senha recebidos.
-          </p>
+          <p className="mt-1 text-sm text-ink-500">Acesso ao sistema</p>
 
           {senhaAlterada ? (
             <p
@@ -58,7 +55,7 @@ export default async function LoginPage({
         </div>
 
         <p className="mt-6 text-center text-xs text-balance text-ink-500">
-          {appConfig.name} ({appConfig.shortName}) — acesso restrito.
+          Área exclusiva para usuários autorizados
         </p>
       </div>
     </main>

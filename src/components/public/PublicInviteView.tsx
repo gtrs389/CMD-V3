@@ -56,7 +56,7 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
     return <InviteUnavailable />;
   }
 
-  return <PublicFormView client={client} />;
+  return <PublicFormView client={client} token={token} />;
 }
 
 function InviteUnavailable() {

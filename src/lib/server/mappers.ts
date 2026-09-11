@@ -1,10 +1,12 @@
 import 'server-only';
 import type {
+  AccessStatus,
   Client,
   ClientFormConfig,
   CustomField,
   FieldResponse,
   Member,
+  Recruiter,
 } from '@/lib/types';
 import type {
   ClientRow,
@@ -52,9 +54,13 @@ export function toFormConfig(row: ClientRow, fields: FormFieldRow[]): ClientForm
   };
 }
 
+/** Somente o que a tela precisa saber do convite. */
+export type InviteSummary = Pick<InviteRow, 'active'> &
+  Partial<Pick<InviteRow, 'token' | 'created_at' | 'rotated_at'>>;
+
 export interface ToClientOptions {
   fields: FormFieldRow[];
-  invite: InviteRow | null;
+  invite: InviteSummary | null;
   photoUrl: string | null;
   /**
    * Token bruto do convite. So e preenchido no momento em que ele e criado ou
@@ -73,8 +79,12 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     invite: {
-      token: options.inviteToken ?? null,
-      active: options.invite?.active ?? false,
+      // O link exibido e o guardado no proprio convite; `inviteToken` cobre
+      // o convite legado, cujo valor so existe no link que o visitante abriu.
+      token: options.inviteToken ?? options.invite?.token ?? null,
+      // Quem manda no recrutamento e o interruptor da operacao: desligado
+      // pelo ADMIN, todos os links daquele candidato param de aceitar.
+      active: row.recruiting_active && (options.invite?.active ?? true),
       createdAt: options.invite?.created_at ?? row.created_at,
       rotatedAt: options.invite?.rotated_at ?? null,
     },
@@ -86,17 +96,23 @@ export function toResponse(row: MemberResponseRow): FieldResponse {
   return { fieldId: row.field_id, value: row.value };
 }
 
-export function toMember(
-  row: MemberRow,
-  responses: MemberResponseRow[],
-  photoUrl: string | null,
-): Member {
+export interface ToMemberOptions {
+  responses: MemberResponseRow[];
+  photoUrl: string | null;
+  /** Snapshot da origem, ja com a foto do responsavel resolvida. */
+  recruitedBy: Recruiter | null;
+  /** Estado do acesso do proprio integrante ao CMD. */
+  access: AccessStatus;
+}
+
+export function toMember(row: MemberRow, options: ToMemberOptions): Member {
   return {
     id: row.id,
     clientId: row.client_id,
     name: row.name,
     phone: row.phone,
-    photo: photoUrl,
+    email: row.email,
+    photo: options.photoUrl,
     gender: row.gender,
     cpf: row.cpf,
     voterId: row.voter_id,
@@ -106,10 +122,29 @@ export function toMember(
     street: row.street,
     relationshipOptionId: row.relationship_option_id,
     relationshipLabel: row.relationship_label,
-    responses: responses.map(toResponse),
+    responses: options.responses.map(toResponse),
     consentAt: row.consent_at,
     source: row.source,
+    recruitedBy: options.recruitedBy,
+    access: options.access,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Origem do cadastro a partir da linha do integrante.
+ *
+ * O nome e o perfil vem do snapshot: continuam valendo mesmo depois que o
+ * usuario responsavel e excluido, quando `recruited_by_user_id` fica nulo.
+ * Sem snapshot nao ha atribuicao nenhuma.
+ */
+export function toRecruiter(row: MemberRow, photoUrl: string | null): Recruiter | null {
+  if (!row.recruited_by_name || !row.recruited_by_role) return null;
+  return {
+    userId: row.recruited_by_user_id,
+    name: row.recruited_by_name,
+    role: row.recruited_by_role,
+    photo: photoUrl,
   };
 }

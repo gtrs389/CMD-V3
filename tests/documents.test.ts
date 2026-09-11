@@ -154,12 +154,13 @@ describe('gênero', () => {
 });
 
 describe('campos padrão do formulário', () => {
-  it('cria os onze campos padrão, todos visíveis', () => {
+  it('cria os doze campos padrão, todos visíveis', () => {
     const fields = createSystemFields();
 
     expect(fields.map((field) => field.systemKey)).toEqual([
       'photo',
       'name',
+      'email',
       'phone',
       'gender',
       'cpf',
@@ -175,11 +176,24 @@ describe('campos padrão do formulário', () => {
 
   it('deixa os oito campos novos opcionais por padrão', () => {
     const novos = createSystemFields().filter(
-      (field) => !['photo', 'name', 'phone'].includes(field.systemKey ?? ''),
+      (field) => !['photo', 'name', 'email', 'phone'].includes(field.systemKey ?? ''),
     );
 
     expect(novos).toHaveLength(8);
     expect(novos.every((field) => field.required === false)).toBe(true);
+  });
+
+  it('mantém o e-mail ativo e obrigatório: é o que cria o acesso', () => {
+    const email = createSystemFields().find((field) => field.systemKey === 'email');
+
+    expect(email).toBeDefined();
+    expect(email?.type).toBe('email');
+    expect(email?.required).toBe(true);
+    expect(email?.enabled).toBe(true);
+    // Nao pode ser excluido, desativado nem virar opcional.
+    expect(canDeleteField(email!)).toBe(false);
+    expect(canDisableField(email!)).toBe(false);
+    expect(isLockedRequired(email!)).toBe(true);
   });
 
   it('impede excluir e duplicar campo padrão, mas permite desativar', () => {

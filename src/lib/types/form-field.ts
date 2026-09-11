@@ -20,6 +20,7 @@ export const SYSTEM_FIELD_KEYS = [
   'photo',
   'name',
   'phone',
+  'email',
   'gender',
   'cpf',
   'voter_id',

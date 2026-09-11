@@ -57,6 +57,18 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
     }) as z.ZodType<DynamicValue>;
 
   switch (field.systemKey) {
+    case 'email':
+      // O e-mail padrao e sempre obrigatorio: e ele que cria o acesso.
+      return z.string().superRefine((value, ctx) => {
+        const trimmed = (value ?? '').trim();
+        if (!trimmed) {
+          ctx.addIssue({ code: 'custom', message: 'Informe o e-mail.' });
+          return;
+        }
+        if (!z.email().safeParse(trimmed.toLowerCase()).success) {
+          ctx.addIssue({ code: 'custom', message: 'E-mail inválido.' });
+        }
+      }) as z.ZodType<DynamicValue>;
     case 'cpf':
       return texto((valor) => (isValidCpf(valor) ? null : 'CPF inválido. Confira os números.'));
     case 'voter_id':
@@ -243,6 +255,8 @@ export function valuesFromMember(config: ClientFormConfig, member: Member): Dyna
       values[field.id] = member.name;
     } else if (field.systemKey === 'phone') {
       values[field.id] = member.phone;
+    } else if (field.systemKey === 'email') {
+      values[field.id] = member.email ?? '';
     } else if (field.systemKey === 'photo') {
       values[field.id] = member.photo;
     } else if (field.systemKey === 'gender') {
@@ -298,6 +312,8 @@ function toStored(field: CustomField, value: DynamicValue): FieldValue {
 
 export interface SubmissionPayload {
   name: string;
+  /** Campo padrao obrigatorio: e o login do integrante. */
+  email: string;
   phone: string;
   photo: string | null;
   gender: string | null;
@@ -324,6 +340,7 @@ export function toSubmission(
 ): SubmissionPayload {
   const payload: SubmissionPayload = {
     name: '',
+    email: '',
     phone: '',
     photo: null,
     gender: null,
@@ -351,6 +368,11 @@ export function toSubmission(
     }
     if (field.systemKey === 'phone') {
       payload.phone = typeof value === 'string' ? normalizePhone(value) : '';
+      continue;
+    }
+    if (field.systemKey === 'email') {
+      // Sempre em minusculas e sem espacos: e a forma gravada e comparada.
+      payload.email = texto(value).toLowerCase();
       continue;
     }
     if (field.systemKey === 'photo') {

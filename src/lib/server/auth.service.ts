@@ -33,7 +33,7 @@ export interface LoginOutcome {
 
 type SessionColumns = Pick<
   UserRow,
-  'id' | 'name' | 'email' | 'role' | 'client_id' | 'must_change_password'
+  'id' | 'name' | 'email' | 'role' | 'client_id' | 'member_id' | 'must_change_password'
 >;
 
 function toSessionUser(row: SessionColumns): SessionUser {
@@ -42,8 +42,10 @@ function toSessionUser(row: SessionColumns): SessionUser {
     name: row.name,
     email: row.email,
     role: row.role as Role,
-    // O vinculo vem sempre do banco: o navegador nunca escolhe o candidato.
-    candidateId: row.role === 'CANDIDATE' ? row.client_id : null,
+    // O vinculo vem sempre do banco: o navegador nunca escolhe a operacao
+    // nem o integrante. ADMIN nao pertence a nenhuma operacao.
+    candidateId: row.role === 'ADMIN' ? null : row.client_id,
+    memberId: row.role === 'EQUIPE' ? row.member_id : null,
     mustChangePassword: row.must_change_password === true,
   };
 }
@@ -135,7 +137,7 @@ export async function resolveSession(token: string | undefined): Promise<Session
   const row = await selectOne<SessionJoinRow>(TABLES.sessions, {
     select:
       `id,expires_at,revoked_at,` +
-      `user:${TABLES.users}(id,name,email,role,client_id,must_change_password,is_active)`,
+      `user:${TABLES.users}(id,name,email,role,client_id,member_id,must_change_password,is_active)`,
     filters: { token_hash: `eq.${hashToken(token)}` },
   });
 

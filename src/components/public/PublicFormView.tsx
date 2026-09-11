@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Send, ShieldCheck } from 'lucide-react';
+import { Check, CheckCircle2, Copy, KeyRound, LogIn, Send, ShieldAlert, ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
 import { appConfig } from '@/config/app.config';
 import type { Client } from '@/lib/types';
-import { submitInvite } from '@/lib/repositories';
+import { submitInvite, type CreatedAccess } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories/http/api';
+import { copyText } from '@/lib/utils/clipboard';
+import { LOGIN_PATH } from '@/lib/auth/constants';
 import {
   CONSENT_KEY,
   toSubmission,
@@ -31,6 +34,8 @@ const DEVICE_NOTICE =
 
 interface PublicFormViewProps {
   client: Client;
+  /** Token do link aberto. Identifica no servidor a operacao e o responsavel. */
+  token: string;
 }
 
 /**
@@ -39,12 +44,20 @@ interface PublicFormViewProps {
  * Pensado para o celular: uma coluna, campos grandes, foto pela camera ou
  * galeria, rascunho preservado e protecao contra envio duplicado.
  */
-export function PublicFormView({ client }: PublicFormViewProps) {
+export function PublicFormView({ client, token }: PublicFormViewProps) {
   const toast = useToast();
-  const draft = useFormDraft<DynamicFormValues>(`convite.${client.invite.token}`);
+  const draft = useFormDraft<DynamicFormValues>(`convite.${token}`);
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
+  /**
+   * Credencial recem-criada.
+   *
+   * Vive apenas neste estado, exibida uma unica vez. Fechar ou recarregar a
+   * tela a faz desaparecer: nada disso vai para armazenamento do navegador,
+   * URL ou log.
+   */
+  const [access, setAccess] = useState<CreatedAccess | null>(null);
   const submittedRef = useRef(false);
   const restoredRef = useRef(false);
 
@@ -115,8 +128,9 @@ export function PublicFormView({ client }: PublicFormViewProps) {
     try {
       const payload = toSubmission(client.form, values);
       // O cliente de destino vem do token do link, conferido no servidor.
-      await submitInvite(client.invite.token ?? '', {
+      const outcome = await submitInvite(token, {
         name: payload.name,
+        email: payload.email,
         phone: payload.phone,
         photo: payload.photo,
         gender: payload.gender,
@@ -125,6 +139,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
         state: payload.state,
         city: payload.city,
         district: payload.district,
+        street: payload.street,
         relationshipOptionId: payload.relationshipOptionId,
         relationshipLabel: payload.relationshipLabel,
         responses: payload.responses,
@@ -133,6 +148,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
 
       draft.clear();
       setConfirming(false);
+      setAccess(outcome);
       setDone(true);
     } catch (error) {
       submittedRef.current = false;
@@ -150,9 +166,12 @@ export function PublicFormView({ client }: PublicFormViewProps) {
     return (
       <SuccessScreen
         client={client}
+        access={access}
         onNew={() => {
           submittedRef.current = false;
           form.reset();
+          // A senha sai da memoria assim que a tela muda.
+          setAccess(null);
           setDone(false);
         }}
       />
@@ -263,10 +282,12 @@ export function PublicFormView({ client }: PublicFormViewProps) {
 
 interface SuccessScreenProps {
   client: Client;
+  /** Credencial mostrada uma unica vez. Nula quando nao houve criacao. */
+  access: CreatedAccess | null;
   onNew: () => void;
 }
 
-function SuccessScreen({ client, onNew }: SuccessScreenProps) {
+function SuccessScreen({ client, access, onNew }: SuccessScreenProps) {
   return (
     <main className="safe-x flex min-h-dvh items-center justify-center bg-surface-muted px-4 py-12">
       <div className="w-full max-w-md animate-rise rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
@@ -282,12 +303,115 @@ function SuccessScreen({ client, onNew }: SuccessScreenProps) {
           Seu cadastro foi registrado na equipe de {client.name}.
         </p>
 
-        <Button variant="secondary" fullWidth className="mt-6" onClick={onNew}>
+        {access ? <AccessCreatedCard access={access} /> : null}
+
+        <Button variant="secondary" fullWidth className="mt-3" onClick={onNew}>
           Cadastrar outra pessoa
         </Button>
 
         <p className="mt-6 text-xs text-ink-400">{appConfig.shortName}</p>
       </div>
     </main>
+  );
+}
+
+/**
+ * Acesso criado para quem acabou de se cadastrar.
+ *
+ * A senha temporaria aparece uma unica vez, aqui. Ela nao e gravada em
+ * `localStorage`, `sessionStorage`, URL, log nem no banco em texto puro:
+ * ao fechar ou recarregar a tela, some.
+ */
+function AccessCreatedCard({ access }: { access: CreatedAccess }) {
+  const toast = useToast();
+  const [copied, setCopied] = useState<'email' | 'senha' | null>(null);
+
+  async function copy(label: 'email' | 'senha', value: string) {
+    const ok = await copyText(value);
+    if (!ok) {
+      toast.error('Não foi possível copiar. Selecione o texto manualmente.');
+      return;
+    }
+    setCopied(label);
+    toast.success(label === 'email' ? 'E-mail copiado.' : 'Senha copiada.');
+    window.setTimeout(() => setCopied((state) => (state === label ? null : state)), 2000);
+  }
+
+  return (
+    <section
+      aria-labelledby="acesso-criado"
+      className="mt-6 rounded-card border border-line bg-ink-50 p-4 text-left"
+    >
+      <h2
+        id="acesso-criado"
+        className="flex items-center gap-2 text-sm font-semibold text-ink-900"
+      >
+        <KeyRound aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
+        Seu acesso ao CMD foi criado
+      </h2>
+
+      <dl className="mt-3 space-y-2">
+        <CredentialLine
+          label="E-mail"
+          value={access.email}
+          copied={copied === 'email'}
+          onCopy={() => copy('email', access.email)}
+        />
+        <CredentialLine
+          label="Senha temporária"
+          value={access.password}
+          copied={copied === 'senha'}
+          onCopy={() => copy('senha', access.password)}
+        />
+      </dl>
+
+      <p className="mt-3 flex items-start gap-2 rounded-control border border-warning-50 bg-warning-50 px-3 py-2.5 text-xs text-warning-600">
+        <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <span className="min-w-0">
+          Copie agora: a senha aparece uma única vez. A troca é obrigatória no primeiro acesso.
+        </span>
+      </p>
+
+      <Link
+        href={LOGIN_PATH}
+        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
+      >
+        <LogIn aria-hidden="true" className="size-4" />
+        Acessar o sistema
+      </Link>
+    </section>
+  );
+}
+
+function CredentialLine({
+  label,
+  value,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <dt className="text-xs text-ink-500">{label}</dt>
+        <dd className="truncate font-mono text-sm text-ink-900">{value}</dd>
+      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        aria-label={`Copiar ${label.toLowerCase()}`}
+        className="flex size-11 shrink-0 items-center justify-center rounded-control border border-line bg-surface text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-900"
+      >
+        {copied ? (
+          <Check aria-hidden="true" className="size-4 text-success-600" />
+        ) : (
+          <Copy aria-hidden="true" className="size-4" />
+        )}
+      </button>
+    </div>
   );
 }

@@ -8,13 +8,14 @@ import type {
 } from '@/lib/types';
 import { appConfig } from '@/config/app.config';
 import { createSystemFields } from '@/lib/domain/form-config';
-import { createInviteToken, hashToken } from '@/lib/auth/tokens';
+import { normalizeEmail } from '@/lib/utils/email';
 import {
   TABLES,
   type ClientRow,
   type FormFieldRow,
   type InviteRow,
   type MemberRow,
+  type UserRow,
 } from '@/lib/supabase/tables';
 import {
   deleteRows,
@@ -28,6 +29,12 @@ import {
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { daysAgoIso, startOfMonthIso } from '@/lib/utils/date';
 import { toClient } from './mappers';
+import {
+  ensurePersonalInvite,
+  loadOperationInvites,
+  resolveInvite,
+  rotatePersonalInvite,
+} from './invite.service';
 import { assertEmailAvailable, disableCandidateAccess, syncCandidateLogin } from './user.service';
 import { notFound } from './http';
 
@@ -62,16 +69,14 @@ async function loadFields(clientIds: string[]): Promise<Map<string, FormFieldRow
   return grouped;
 }
 
+/**
+ * Convite da operacao: o link pessoal do proprio candidato.
+ *
+ * Cada integrante tem o seu, mas o que aparece na tela do candidato e no
+ * painel do ADMIN e o link do candidato.
+ */
 async function loadInvites(clientIds: string[]): Promise<Map<string, InviteRow>> {
-  const map = new Map<string, InviteRow>();
-  if (clientIds.length === 0) return map;
-
-  const rows = await selectRows<InviteRow>(TABLES.invites, {
-    select: '*',
-    filters: { client_id: inFilter(clientIds) },
-  });
-  for (const row of rows) map.set(row.client_id, row);
-  return map;
+  return loadOperationInvites(clientIds);
 }
 
 /** Cria as linhas dos campos nativos de um cliente recem-criado. */
@@ -197,29 +202,53 @@ export async function getClient(id: string): Promise<Client | null> {
   return row ? assemble(row) : null;
 }
 
-/** Rota publica: resolve o cliente pelo token bruto do link. */
-export async function getClientByInviteToken(token: string): Promise<Client | null> {
-  if (!token) return null;
+/**
+ * Rota publica: resolve a operacao e o responsavel a partir do link.
+ *
+ * O formulario e sempre o configurado pelo candidato, o mesmo em todos os
+ * links daquela operacao. O responsavel vem do token, nunca do corpo da
+ * requisicao.
+ */
+export interface PublicInviteContext {
+  client: Client;
+  /** Dono do link. Nulo apenas em convite legado sem usuario. */
+  owner: { userId: string; name: string; role: 'CANDIDATE' | 'EQUIPE' } | null;
+  /** O link aceita cadastro agora. */
+  accepts: boolean;
+}
 
-  const invite = await selectOne<InviteRow>(TABLES.invites, {
-    select: '*',
-    filters: { token_hash: `eq.${hashToken(token)}` },
-  });
-  if (!invite) return null;
+export async function getInviteContext(token: string): Promise<PublicInviteContext | null> {
+  const resolved = await resolveInvite(token);
+  if (!resolved) return null;
 
   const row = await selectOne<ClientRow>(TABLES.clients, {
     select: CLIENT_COLUMNS,
-    filters: { id: `eq.${invite.client_id}` },
+    filters: { id: `eq.${resolved.clientId}` },
   });
   if (!row) return null;
 
   const [fields, photo] = await Promise.all([loadFields([row.id]), signedUrl(row.photo_path)]);
-  return toClient(row, {
+
+  const client = toClient(row, {
     fields: fields.get(row.id) ?? [],
-    invite,
+    // O estado exibido e o do proprio link, ja cruzado com o interruptor da
+    // operacao pelo mapeador.
+    invite: { active: resolved.active },
     photoUrl: photo,
     inviteToken: token,
   });
+
+  return {
+    client,
+    owner: resolved.owner,
+    accepts: resolved.active && resolved.operationActive,
+  };
+}
+
+/** Rota publica: apenas o cadastro do candidato dono do link. */
+export async function getClientByInviteToken(token: string): Promise<Client | null> {
+  const context = await getInviteContext(token);
+  return context?.client ?? null;
 }
 
 export async function createClient(input: ClientInput): Promise<Client> {
@@ -230,7 +259,7 @@ export async function createClient(input: ClientInput): Promise<Client> {
 
   const row = await insertOne<ClientRow>(TABLES.clients, {
     name: input.name.trim(),
-    email: input.email.trim().toLowerCase(),
+    email: normalizeEmail(input.email),
     notes: input.notes?.trim() ?? '',
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
@@ -242,14 +271,10 @@ export async function createClient(input: ClientInput): Promise<Client> {
   });
 
   await insertDefaultFields(row.id);
-  const token = createInviteToken();
-  await insertOne<InviteRow>(
-    TABLES.invites,
-    { client_id: row.id, token_hash: hashToken(token), active: true },
-    'id',
-  );
 
-  return assemble(row, token);
+  // O link pessoal nasce junto com o acesso do candidato, em
+  // `createCandidateAccess`: e o usuario que da nome ao link.
+  return assemble(row);
 }
 
 export async function updateClient(id: string, input: Partial<ClientInput>): Promise<Client> {
@@ -265,7 +290,7 @@ export async function updateClient(id: string, input: Partial<ClientInput>): Pro
   const patch: Record<string, string | number | null> = {};
 
   if (input.name !== undefined) patch.name = input.name.trim();
-  if (input.email !== undefined) patch.email = input.email.trim().toLowerCase();
+  if (input.email !== undefined) patch.email = normalizeEmail(input.email);
   if (input.notes !== undefined) patch.notes = input.notes.trim();
 
   if (input.photo !== undefined) {
@@ -306,6 +331,15 @@ export async function deleteClient(id: string): Promise<void> {
   await deleteRows(TABLES.clients, { id: `eq.${id}` });
 }
 
+/**
+ * Campos padrao que nao podem deixar de ser obrigatorios ou ativos.
+ *
+ * A mesma regra existe na tela, mas quem decide e o servidor: alterar o
+ * corpo da requisicao nao desativa nem torna opcional o e-mail.
+ */
+const LOCKED_REQUIRED: readonly string[] = ['name', 'email'];
+const LOCKED_ENABLED: readonly string[] = ['name', 'phone', 'email'];
+
 /** Sincroniza a lista de campos: atualiza, cria e remove conforme o enviado. */
 async function syncFields(clientId: string, fields: CustomField[]): Promise<void> {
   const existing = await selectRows<FormFieldRow>(TABLES.formFields, {
@@ -319,14 +353,21 @@ async function syncFields(clientId: string, fields: CustomField[]): Promise<void
 
   for (const [index, field] of fields.entries()) {
     const current = byId.get(field.id);
+    // O `system_key` e sempre o gravado: o navegador nao transforma um campo
+    // comum em campo padrao nem o contrario.
+    const systemKey = current?.system_key ?? null;
+
     const values = {
-      system_key: current?.system_key ?? null,
-      type: current?.system_key ? current.type : field.type,
+      system_key: systemKey,
+      type: systemKey ? current!.type : field.type,
       label: field.label,
       placeholder: field.placeholder,
       help_text: field.helpText,
-      required: field.required,
-      enabled: field.enabled,
+      // Nome, e-mail e telefone continuam ativos, e nome e e-mail continuam
+      // obrigatorios, venha o que vier no corpo da requisicao: o e-mail e o
+      // que cria o acesso do integrante.
+      required: LOCKED_REQUIRED.includes(systemKey ?? '') ? true : field.required,
+      enabled: LOCKED_ENABLED.includes(systemKey ?? '') ? true : field.enabled,
       position: index,
       options: field.options,
     };
@@ -381,31 +422,55 @@ export async function updateClientForm(
   return assemble(row ?? current);
 }
 
+/**
+ * Liga ou desliga o recrutamento da operacao inteira.
+ *
+ * Desligado, TODOS os links daquele candidato param de aceitar cadastros:
+ * o do proprio candidato e o de cada integrante.
+ */
 export async function setInviteActive(id: string, active: boolean): Promise<Client> {
-  const row = await requireClientRow(id);
-  await updateRows<InviteRow>(TABLES.invites, { client_id: `eq.${id}` }, { active }, 'id');
-  return assemble(row);
-}
+  await requireClientRow(id);
 
-/** Gera um novo token. O anterior deixa de existir: guardamos apenas o hash. */
-export async function regenerateInvite(id: string): Promise<Client> {
-  const row = await requireClientRow(id);
-  const token = createInviteToken();
-
-  const [updated] = await updateRows<InviteRow>(
-    TABLES.invites,
-    { client_id: `eq.${id}` },
-    { token_hash: hashToken(token), rotated_at: new Date().toISOString() },
-    'id',
+  const [row] = await updateRows<ClientRow>(
+    TABLES.clients,
+    { id: `eq.${id}` },
+    { recruiting_active: active },
   );
 
-  if (!updated) {
-    await insertOne<InviteRow>(
-      TABLES.invites,
-      { client_id: id, token_hash: hashToken(token), active: true },
-      'id',
-    );
+  // O link do proprio candidato acompanha o interruptor da operacao.
+  const invites = await loadOperationInvites([id]);
+  const invite = invites.get(id);
+  if (invite) {
+    await updateRows<InviteRow>(TABLES.invites, { id: `eq.${invite.id}` }, { active }, 'id');
   }
 
-  return assemble(row, token);
+  return assemble(row ?? (await requireClientRow(id)));
+}
+
+/**
+ * Gera um novo token para o link do candidato. O anterior deixa de valer;
+ * os links pessoais dos integrantes continuam como estao.
+ */
+export async function regenerateInvite(id: string): Promise<Client> {
+  const row = await requireClientRow(id);
+
+  const invites = await loadOperationInvites([id]);
+  const current = invites.get(id);
+
+  if (current?.user_id) {
+    await rotatePersonalInvite(current.user_id, id);
+    return assemble(row);
+  }
+
+  // Candidato ainda sem usuario: o link so existe depois que o acesso e
+  // criado em Configuracoes.
+  const user = await selectOne<Pick<UserRow, 'id'>>(TABLES.users, {
+    select: 'id',
+    filters: { client_id: `eq.${id}`, role: 'eq.CANDIDATE' },
+  });
+  if (!user) throw notFound('Gere o acesso do candidato antes de criar o link.');
+
+  await ensurePersonalInvite(user.id, id);
+  await rotatePersonalInvite(user.id, id);
+  return assemble(row);
 }

@@ -12,23 +12,28 @@ export const PROTECTED_PREFIXES = [
   '/configuracoes',
   '/primeiro-acesso',
   '/clientes',
+  '/minha-mobilizacao',
 ] as const;
 
 export const LOGIN_PATH = '/login';
 export const DEFAULT_AUTHENTICATED_PATH = '/dashboard';
 export const FIRST_ACCESS_PATH = '/primeiro-acesso';
+/** Pagina do integrante da equipe. */
+export const TEAM_HOME_PATH = '/minha-mobilizacao';
 
 /**
  * Pagina inicial de cada perfil.
  *
  * Com senha temporaria em uso, o unico destino e o primeiro acesso. O
- * candidato vai direto para o proprio registro; o ADMIN, para a visao geral.
+ * candidato vai direto para o proprio registro; a equipe, para "Minha
+ * mobilizacao"; o ADMIN, para a visao geral.
  */
 export function homePathFor(
   user: { role: string; candidateId: string | null; mustChangePassword: boolean } | null,
 ): string {
   if (!user) return LOGIN_PATH;
   if (user.mustChangePassword) return FIRST_ACCESS_PATH;
+  if (user.role === 'EQUIPE') return TEAM_HOME_PATH;
   if (user.role === 'CANDIDATE' && user.candidateId) return `/candidatos/${user.candidateId}`;
   return DEFAULT_AUTHENTICATED_PATH;
 }

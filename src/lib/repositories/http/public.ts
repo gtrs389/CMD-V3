@@ -5,11 +5,14 @@ import { api } from './api';
 /**
  * Envio do formulario publico.
  *
- * O cliente de destino vem do token do link, resolvido no servidor.
- * O navegador nunca escolhe para qual cliente o cadastro vai.
+ * A operacao de destino e o responsavel pelo cadastro vem do token do link,
+ * resolvidos no servidor. O navegador nunca escolhe para qual candidato o
+ * cadastro vai nem quem aparece como responsavel.
  */
 export interface PublicSubmission {
   name: string;
+  /** Campo padrao obrigatorio: vira o login do integrante. */
+  email: string;
   phone: string;
   photo: string | null;
   /** Campos padrao. Nulo quando a pessoa nao informou. */
@@ -19,19 +22,37 @@ export interface PublicSubmission {
   state: string | null;
   city: string | null;
   district: string | null;
+  street: string | null;
   relationshipOptionId: string | null;
   relationshipLabel: string | null;
   responses: FieldResponse[];
   consentAt: string | null;
 }
 
-export async function submitInvite(token: string, input: PublicSubmission): Promise<void> {
+/**
+ * Acesso recem-criado do integrante.
+ *
+ * Existe apenas nesta resposta e no estado da tela de sucesso. Fechar ou
+ * recarregar a pagina faz a senha desaparecer: ela nao e gravada em log,
+ * URL, banco em texto puro, `localStorage` nem `sessionStorage`.
+ */
+export interface CreatedAccess {
+  email: string;
+  password: string;
+}
+
+export async function submitInvite(
+  token: string,
+  input: PublicSubmission,
+): Promise<CreatedAccess | null> {
   // Sinais tecnicos do aparelho, apenas para seguranca. Se o navegador nao
   // expuser nada, o envio segue igual: `device` vai vazio.
   const device: DeviceSignals = collectDeviceSignals();
 
-  await api<{ ok: true }>(`/api/public/convite/${encodeURIComponent(token)}/membros`, {
-    method: 'POST',
-    body: { ...input, device },
-  });
+  const result = await api<{ ok: true; id: string; access: CreatedAccess | null }>(
+    `/api/public/convite/${encodeURIComponent(token)}/membros`,
+    { method: 'POST', body: { ...input, device } },
+  );
+
+  return result.access ?? null;
 }
