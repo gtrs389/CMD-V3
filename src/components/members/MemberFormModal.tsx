@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
+import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 
 interface MemberFormModalProps {
@@ -122,17 +123,19 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
       }
     >
       <div className="space-y-4">
-        {fields.map((field) => (
-          <DynamicFieldInput
-            key={field.id}
-            field={field}
-            idPrefix="integrante"
-            value={form.values[field.id] ?? null}
-            error={form.errors[field.id]}
-            onChange={(value) => form.setValue(field.id, value)}
-            onImageError={(message) => toast.error(message)}
-          />
-        ))}
+        <LocationProvider fields={fields} values={form.values} setValue={form.setValue}>
+          {fields.map((field) => (
+            <DynamicFieldInput
+              key={field.id}
+              field={field}
+              idPrefix="integrante"
+              value={form.values[field.id] ?? null}
+              error={form.errors[field.id]}
+              onChange={(value) => form.setValue(field.id, value)}
+              onImageError={(message) => toast.error(message)}
+            />
+          ))}
+        </LocationProvider>
 
         {privacy.enabled && privacy.requireConsent ? (
           <Checkbox

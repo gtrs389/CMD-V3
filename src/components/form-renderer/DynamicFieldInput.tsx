@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PhotoUpload } from '@/components/common/PhotoUpload';
+import { LocationField } from './LocationField';
+import { useLocationChain } from './location-context';
 import { RelationshipPicker } from './RelationshipPicker';
 
 interface DynamicFieldInputProps {
@@ -45,6 +47,26 @@ export function DynamicFieldInput({
   const help = field.helpText || undefined;
   const described = describedBy(id, help, error);
   const invalid = Boolean(error);
+  const chain = useLocationChain();
+
+  // Estado, municipio e bairro viram listas encadeadas quando o formulario
+  // esta dentro de `LocationProvider`. Sem ele, seguem os controles simples.
+  if (
+    chain &&
+    (field.systemKey === 'state' || field.systemKey === 'city' || field.systemKey === 'district')
+  ) {
+    return (
+      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+        <LocationField
+          field={field}
+          id={id}
+          describedBy={described}
+          invalid={invalid}
+          disabled={disabled}
+        />
+      </Field>
+    );
+  }
 
   if (field.type === 'photo') {
     return (
