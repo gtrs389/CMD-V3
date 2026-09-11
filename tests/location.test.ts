@@ -27,23 +27,30 @@ import {
  * Respostas simuladas da Brasil Aberto. Nenhum teste acessa a internet.
  */
 const STATES = {
+  meta: { currentPage: 1, itemsPerPage: 27, totalOfItems: 27, totalOfPages: 1 },
   result: [
-    { id: 26, name: 'São Paulo', acronym: 'SP' },
-    { id: 19, name: 'Rio de Janeiro', acronym: 'RJ' },
-    { id: 41, name: 'Ignorado', acronym: 'XX' },
+    { name: 'São Paulo', shortName: 'SP' },
+    { name: 'Rio de Janeiro', shortName: 'RJ' },
+    { name: 'Ignorado', shortName: 'XX' },
   ],
 };
 
 const CITIES = {
+  meta: { currentPage: 1, itemsPerPage: 92, totalOfItems: 92, totalOfPages: 1 },
   result: [
-    { id: 3550308, name: 'São Paulo' },
-    { id: 3509502, name: 'Campinas' },
-    { id: 0, name: 'Inválida' },
+    { id: 669, ibgeId: 3550308, name: 'São Paulo' },
+    { id: 646, ibgeId: 3304557, name: 'Campinas' },
+    { id: 0, ibgeId: 1, name: 'Inválida' },
   ],
 };
 
 const DISTRICTS = {
-  result: [{ name: 'Vila Mariana' }, { name: 'Bela Vista' }, { name: 'vila mariana' }],
+  meta: { currentPage: 1, itemsPerPage: 1910, totalOfItems: 1910, totalOfPages: 1 },
+  result: [
+    { id: 1, name: 'Vila Mariana' },
+    { id: 2, name: 'Bela Vista' },
+    { id: 3, name: 'vila mariana' },
+  ],
 };
 
 describe('leitura das respostas da API', () => {
@@ -54,11 +61,13 @@ describe('leitura das respostas da API', () => {
     expect(states[0].name).toBe('Rio de Janeiro');
   });
 
-  it('aceita lista sem envelope e descarta município sem identificador válido', () => {
+  it('usa o id da Brasil Aberto, nunca o ibgeId, e descarta id inválido', () => {
     const cities = parseCities(CITIES.result);
 
-    expect(cities.map((city) => city.name)).toEqual(['Campinas', 'São Paulo']);
-    expect(cities.every((city) => Number.isInteger(city.id) && city.id > 0)).toBe(true);
+    expect(cities).toEqual([
+      { id: 646, name: 'Campinas' },
+      { id: 669, name: 'São Paulo' },
+    ]);
   });
 
   it('remove bairros repetidos e ordena alfabeticamente', () => {
@@ -78,7 +87,7 @@ describe('montagem das URLs', () => {
   it('usa a base fixa e envia apenas UF ou identificador', () => {
     expect(statesUrl()).toBe('https://api.brasilaberto.com/v1/states');
     expect(citiesUrl('sp')).toBe('https://api.brasilaberto.com/v1/cities/SP');
-    expect(districtsUrl(3550308)).toBe('https://api.brasilaberto.com/v1/districts/3550308');
+    expect(districtsUrl(669)).toBe('https://api.brasilaberto.com/v1/districts/669');
   });
 
   it('recusa UF fora das 27 siglas e identificador inválido', () => {
@@ -92,8 +101,8 @@ describe('montagem das URLs', () => {
 
 describe('encadeamento estado, município e bairro', () => {
   const cities: CityOption[] = [
-    { id: 3550308, name: 'São Paulo' },
-    { id: 3509502, name: 'Campinas' },
+    { id: 669, name: 'São Paulo' },
+    { id: 646, name: 'Campinas' },
   ];
 
   const preenchido = selectDistrict(
@@ -105,7 +114,7 @@ describe('encadeamento estado, município e bairro', () => {
     expect(preenchido).toEqual({
       state: 'SP',
       city: 'São Paulo',
-      cityId: 3550308,
+      cityId: 669,
       district: 'Vila Mariana',
     });
   });
@@ -124,19 +133,19 @@ describe('encadeamento estado, município e bairro', () => {
 
     expect(trocado.state).toBe('SP');
     expect(trocado.city).toBe('Campinas');
-    expect(trocado.cityId).toBe(3509502);
+    expect(trocado.cityId).toBe(646);
     expect(trocado.district).toBe('');
   });
 });
 
 describe('cadastros antigos', () => {
   const cities: CityOption[] = [
-    { id: 3550308, name: 'São Paulo' },
-    { id: 3509502, name: 'Campinas' },
+    { id: 669, name: 'São Paulo' },
+    { id: 646, name: 'Campinas' },
   ];
 
   it('reconhece o município já salvo mesmo com acento ou caixa diferente', () => {
-    expect(findCity(cities, 'sao paulo')?.id).toBe(3550308);
+    expect(findCity(cities, 'sao paulo')?.id).toBe(669);
     expect(findCity(cities, 'Município Extinto')).toBeNull();
   });
 
@@ -186,12 +195,12 @@ describe('consulta no servidor', () => {
 
     await listStates();
     await listCities('SP');
-    await listDistricts(3550308);
+    await listDistricts(669);
 
     expect(calls.map(([url]) => url)).toEqual([
       'https://api.brasilaberto.com/v1/states',
       'https://api.brasilaberto.com/v1/cities/SP',
-      'https://api.brasilaberto.com/v1/districts/3550308',
+      'https://api.brasilaberto.com/v1/districts/669',
     ]);
 
     for (const [, init] of calls) {

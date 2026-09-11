@@ -53,13 +53,19 @@ export class LocationError extends Error {
 const listOf = <T extends z.ZodTypeAny>(item: T) =>
   z.union([z.array(item), z.object({ result: z.array(item) })]);
 
+/** A API devolve `shortName`; os demais nomes cobrem variacoes da resposta. */
 const stateSchema = z.object({
   name: z.string().min(1),
+  shortName: z.string().length(2).optional(),
   acronym: z.string().length(2).optional(),
   initials: z.string().length(2).optional(),
   uf: z.string().length(2).optional(),
 });
 
+/**
+ * `id` e o identificador da propria Brasil Aberto, exigido em
+ * `/districts/{cityId}`. O `ibgeId`, quando vem, e ignorado de proposito.
+ */
 const citySchema = z.object({
   id: z.union([z.number(), z.string()]),
   name: z.string().min(1),
@@ -80,7 +86,7 @@ export function parseStates(payload: unknown): StateOption[] {
   const states: StateOption[] = [];
 
   for (const row of rows) {
-    const uf = normalizeState(row.acronym ?? row.initials ?? row.uf ?? '');
+    const uf = normalizeState(row.shortName ?? row.acronym ?? row.initials ?? row.uf ?? '');
     if (!uf) continue;
     states.push({ uf, name: row.name.trim() });
   }
