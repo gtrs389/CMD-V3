@@ -1,5 +1,6 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { appConfig } from '@/config/app.config';
@@ -22,19 +23,16 @@ export function SidebarContent({ onNavigate }: SidebarProps) {
   return (
     <div className="flex h-full min-h-0 flex-col text-white">
       <div className="shrink-0 px-4 pt-5 pb-4">
-        <span
-          aria-hidden="true"
-          className="flex size-10 items-center justify-center rounded-control bg-white text-[0.6875rem] font-bold tracking-tight text-navy-900"
-        >
-          {appConfig.logo.kind === 'monogram' ? appConfig.logo.monogram : 'CMD'}
-        </span>
-        <p className="mt-3 text-[0.8125rem] leading-tight font-semibold text-white">
-          Cadastro
-          <br />
-          Mobilização
-          <br />
-          Digital
-        </p>
+        {appConfig.logo.kind === 'image' ? (
+          <img src={appConfig.logo.src} alt={appConfig.name} className="h-10 w-auto" />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex size-10 items-center justify-center rounded-control bg-white text-[0.6875rem] font-bold tracking-tight text-navy-900"
+          >
+            {appConfig.logo.monogram}
+          </span>
+        )}
       </div>
 
       <nav
