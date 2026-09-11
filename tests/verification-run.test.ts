@@ -301,6 +301,42 @@ describe('nova tentativa manual', () => {
     expect(db.verification?.tse_payload).toBeTruthy();
   });
 
+  it('data brasileira com horário: botão liberado e só o TSE é chamado', async () => {
+    // Estado gravado no cadastro: CPF com sucesso e eleitoral pulada porque a
+    // data veio como "DD/MM/AAAA HH:mm:ss".
+    const guardado = {
+      ...parseCpfResult(CADASTRO),
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '01/06/2003 00:00:00',
+    };
+
+    db.verification = {
+      ...(base() as MemberVerificationRow),
+      status: 'PARTIAL',
+      cpf_status: 'SUCCESS',
+      tse_status: 'SKIPPED_MISSING_DATA',
+      cpf_attempts: 1,
+      cpf_payload: encryptJson(guardado),
+    };
+
+    const antes = await getVerification('mem-1', 'user-1');
+    expect(antes?.canRetryTse).toBe(true);
+
+    const view = await retryVerificationStep('mem-1', 'tse');
+
+    expect(consultCpf).not.toHaveBeenCalled();
+    expect(consultTse).toHaveBeenCalledTimes(1);
+    expect(consultTse).toHaveBeenCalledWith({
+      cpf: '12345678901',
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '01/06/2003',
+    });
+
+    expect(view.steps.tse.status).toBe('SUCCESS');
+    expect(view.status).toBe('COMPLETED');
+    expect(db.verification?.tse_payload).toBeTruthy();
+  });
+
   it('etapa com sucesso não é repetida', async () => {
     await runVerification('mem-1');
     await retryVerificationStep('mem-1', 'cpf');
