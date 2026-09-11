@@ -37,7 +37,7 @@ begin
   alter table public.cmd_form_fields
     add constraint cmd_form_fields_system_key_valido check (
       system_key is null or system_key in (
-        'photo', 'name', 'phone',
+        'photo', 'name', 'phone', 'email',
         'gender', 'cpf', 'voter_id', 'zone', 'section', 'state', 'city', 'district', 'street',
         'relationship'
       )
