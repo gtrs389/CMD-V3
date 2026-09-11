@@ -1,8 +1,14 @@
+import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { badRequest, jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { publicSubmissionSchema } from '@/lib/validation/server.schema';
 import { getClientByInviteToken } from '@/lib/server/client.service';
 import { createMember } from '@/lib/server/member.service';
+import {
+  createPendingVerification,
+  recordConfirmation,
+  runVerification,
+} from '@/lib/server/verification.service';
 import {
   DEVICE_COOKIE,
   DEVICE_COOKIE_MAX_AGE,
@@ -38,6 +44,15 @@ export async function POST(
 
     const { device, ...submission } = input;
     const member = await createMember({ ...submission, clientId: client.id, source: 'invite' });
+
+    // Prova da confirmacao final e verificacao pendente. Nenhum dos dois pode
+    // impedir o cadastro, que ja esta salvo.
+    await recordConfirmation(client.id, member.id).catch(() => undefined);
+    await createPendingVerification(client.id, member.id).catch(() => undefined);
+
+    // As consultas acontecem depois da resposta, no servidor. A tela de
+    // sucesso nao espera pelo fornecedor e nunca recebe nada delas.
+    after(() => runVerification(member.id).catch(() => undefined));
 
     // Sinal de seguranca, gravado depois do cadastro: nunca o impede.
     // O token vive so no cookie; o banco guarda apenas o hash dele.

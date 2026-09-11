@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useToast } from '@/components/ui/Toast';
+import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
@@ -42,6 +43,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
   const toast = useToast();
   const draft = useFormDraft<DynamicFormValues>(`convite.${client.invite.token}`);
   const [submitting, setSubmitting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
   const submittedRef = useRef(false);
   const restoredRef = useRef(false);
@@ -76,10 +78,12 @@ export function PublicFormView({ client }: PublicFormViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSubmit(event: React.FormEvent) {
+  /**
+   * Primeiro passo: valida e abre a conferencia.
+   * Nada e salvo e nenhuma consulta acontece aqui.
+   */
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-
-    // Barra multiplos cliques antes mesmo do estado do React atualizar.
     if (submittedRef.current || submitting) return;
 
     const values = form.validate();
@@ -87,6 +91,21 @@ export function PublicFormView({ client }: PublicFormViewProps) {
       toast.error('Revise os campos destacados antes de enviar.');
       const firstError = document.querySelector('[aria-invalid="true"], [role="alert"]');
       firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    setConfirming(true);
+  }
+
+  /** Segundo passo: envio, apos a confirmacao explicita. */
+  async function handleConfirm() {
+    // Barra duplo clique e reenvio antes mesmo do estado do React atualizar.
+    if (submittedRef.current || submitting) return;
+
+    const values = form.validate();
+    if (!values) {
+      setConfirming(false);
+      toast.error('Revise os campos destacados antes de enviar.');
       return;
     }
 
@@ -113,6 +132,7 @@ export function PublicFormView({ client }: PublicFormViewProps) {
       });
 
       draft.clear();
+      setConfirming(false);
       setDone(true);
     } catch (error) {
       submittedRef.current = false;
@@ -225,6 +245,15 @@ export function PublicFormView({ client }: PublicFormViewProps) {
 
           <p className="text-center text-xs text-ink-500">{DEVICE_NOTICE}</p>
         </form>
+
+        <ConfirmSubmissionModal
+          open={confirming}
+          config={client.form}
+          values={form.values}
+          submitting={submitting}
+          onCancel={() => setConfirming(false)}
+          onConfirm={handleConfirm}
+        />
 
         <p className="mt-6 text-center text-xs text-ink-400">{appConfig.shortName}</p>
       </div>
