@@ -1,0 +1,795 @@
+.login-page {
+  color-scheme: light;
+  --navy-950: #041426;
+  --navy-900: #071b34;
+  --navy-800: #0b2748;
+  --blue: #0868ff;
+  --blue-strong: #004ee8;
+  --blue-soft: #dcecff;
+  --blue-grey: #dbe2e9;
+  --ink: #080a31;
+  --muted: #64789a;
+  --line: #bed0e8;
+  --success: #10b94e;
+  --white: #fff;
+  --shadow: 0 34px 80px rgba(13, 48, 85, .18), 0 8px 26px rgba(14, 72, 139, .10);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+.login-page,
+.login-page *,
+.login-page *::before,
+.login-page *::after { box-sizing: border-box; }
+
+/* O que era `body` no HTML original vale aqui para a tela inteira: a
+   altura minima e o `overflow-x` ja vem de `.login-page` e do globals.css.
+   `--font-app-sans` e o Inter que o layout raiz carrega com `next/font`. */
+.login-page {
+  color: var(--ink);
+  background: var(--blue-grey);
+  font-family: var(--font-app-sans), Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.login-page button, .login-page input { font: inherit; }
+.login-page button { -webkit-tap-highlight-color: transparent; }
+
+/* O arquivo original roda sem o preflight do Tailwind e conta com dois
+   padroes do navegador: a entrelinha `normal` (o preflight troca por 1.5, o
+   que estica rotulos e o olho-magico) e o preenchimento proprio do botao (o
+   preflight zera, o que encolhe o botao de entrar em 2px). Aqui os dois
+   voltam ao que a tela foi desenhada para ter, sem sair do login. */
+.login-page { line-height: normal; }
+.login-page button { padding: 1px 6px; }
+
+.login-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #dbe2e9;
+}
+
+/* Arte visual sem textos; toda a copy editável está estruturada no HTML. */
+.artwork {
+  position: absolute;
+  inset: 0;
+  z-index: -5;
+  background-image: url("/login/artwork.png");
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  animation: artwork-in 1.4s var(--ease) both, breathe 10s 1.5s ease-in-out infinite alternate;
+  will-change: filter, opacity;
+}
+
+.artwork::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 47% 51%, rgba(0, 112, 255, .16), transparent 25%),
+    linear-gradient(90deg, transparent 0 58%, rgba(219, 226, 233, .08) 65%, rgba(219, 226, 233, .22));
+  pointer-events: none;
+}
+
+.scan {
+  position: absolute;
+  z-index: -3;
+  top: -30%;
+  bottom: -30%;
+  left: 7%;
+  width: 42%;
+  opacity: .22;
+  background: linear-gradient(100deg, transparent 25%, rgba(52, 146, 255, .25) 49%, transparent 72%);
+  filter: blur(7px);
+  transform: translateX(-120%);
+  animation: scan 10s 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.route-layer {
+  position: absolute;
+  z-index: -2;
+  inset: 0 auto 0 0;
+  width: 64%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 7px rgba(25, 137, 255, .8));
+}
+
+.route {
+  fill: none;
+  stroke: rgba(101, 182, 255, .27);
+  stroke-width: 1.5;
+  stroke-dasharray: 7 11;
+  animation: dash 10s linear infinite;
+}
+
+.traveler { fill: #dff3ff; filter: drop-shadow(0 0 8px #168aff); }
+
+/*
+  TEXTOS EDITÁVEIS DA ÁREA VISUAL
+  Todo o conteúdo abaixo existe como HTML real, separado da imagem de fundo.
+*/
+.hero-copy {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 64%;
+  color: #fff;
+  pointer-events: none;
+  animation: hero-copy-in 1s .25s var(--ease) both;
+}
+
+.hero-micro {
+  position: absolute;
+  margin: 0;
+  color: rgba(174, 207, 249, .78);
+  font-size: clamp(9px, .66vw, 11px);
+  font-weight: 650;
+  line-height: 1.78;
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hero-micro::after {
+  content: "";
+  display: block;
+  width: 24px;
+  height: 2px;
+  margin-top: 14px;
+  background: #39a2ff;
+  box-shadow: 0 0 8px rgba(32, 143, 255, .65);
+}
+
+.hero-micro span { display: block; }
+
+.hero-micro--top-left { top: 5.9%; left: 5.6%; }
+.hero-micro--top-right { top: 9.2%; left: 77%; }
+.hero-micro--bottom-left { bottom: 7.3%; left: 5.6%; }
+.hero-micro--bottom-right { right: 20.8%; bottom: 4.8%; }
+
+.hero-coordinates {
+  position: absolute;
+  top: 3.5%;
+  right: 7.2%;
+  margin: 0;
+  color: rgba(170, 205, 247, .64);
+  font-size: clamp(8px, .58vw, 10px);
+  font-weight: 650;
+  line-height: 1.65;
+  letter-spacing: .34em;
+  text-transform: uppercase;
+}
+
+.hero-coordinates span { display: block; }
+
+.hero-brand {
+  position: absolute;
+  top: 25.9%;
+  left: 5.55%;
+}
+
+.hero-wordmark {
+  position: relative;
+  display: inline-block;
+  color: #fff;
+  font-size: clamp(76px, 6.25vw, 106px);
+  font-weight: 950;
+  line-height: .84;
+  letter-spacing: -.085em;
+  text-shadow: 0 12px 24px rgba(0, 0, 0, .24);
+}
+
+.hero-wordmark::after {
+  content: "";
+  position: absolute;
+  left: .62em;
+  top: .49em;
+  width: .24em;
+  height: .31em;
+  background: #0877ff;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  filter: drop-shadow(0 0 5px rgba(8, 119, 255, .6));
+}
+
+.hero-brand-name {
+  margin: 17px 0 0;
+  color: #b5cef5;
+  font-size: clamp(18px, 1.67vw, 28px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+  text-shadow: 0 4px 16px rgba(0, 20, 52, .38);
+}
+
+.hero-brand::after {
+  content: "";
+  display: block;
+  width: 60px;
+  height: 5px;
+  margin-top: 30px;
+  background: #0c71ff;
+  box-shadow: 0 0 12px rgba(9, 112, 255, .65);
+}
+
+.hero-title {
+  position: absolute;
+  top: 47.8%;
+  left: 5.55%;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(38px, 3.22vw, 54px);
+  font-weight: 850;
+  line-height: 1.02;
+  letter-spacing: -.035em;
+  text-shadow: 0 8px 24px rgba(0, 18, 48, .34);
+}
+
+.hero-title span { color: #0877ff; }
+
+.auth-column {
+  min-height: 100svh;
+  width: 42%;
+  margin-left: auto;
+  padding: clamp(34px, 6.6vh, 74px) clamp(28px, 4.2vw, 72px);
+  display: grid;
+  place-items: center;
+  position: relative;
+  z-index: 3;
+}
+
+.auth-column::before,
+.auth-column::after {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  pointer-events: none;
+}
+
+.auth-column::before {
+  inset: 0 0 0 -18%;
+  background:
+    linear-gradient(125deg, rgba(255,255,255,.08), rgba(255,255,255,.53) 47%, rgba(255,255,255,.15)),
+    radial-gradient(circle at 78% 16%, rgba(255,255,255,.78), transparent 34%),
+    #dbe5ed;
+  clip-path: polygon(21% 0, 100% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(-5px 0 10px rgba(8,104,255,.14));
+}
+
+.auth-column::after {
+  width: 440px;
+  height: 440px;
+  right: -210px;
+  bottom: -205px;
+  border: 1px solid rgba(255,255,255,.58);
+  transform: rotate(35deg);
+  opacity: .7;
+}
+
+.mobile-brand { display: none; }
+
+.login-card {
+  position: relative;
+  width: min(100%, 538px);
+  padding: clamp(76px, 8.2vh, 94px) clamp(36px, 3.55vw, 60px) clamp(38px, 5.5vh, 56px);
+  border: 1px solid rgba(255,255,255,.94);
+  border-radius: 18px;
+  background: linear-gradient(150deg, rgba(255,255,255,.96), rgba(252,254,255,.91));
+  box-shadow: var(--shadow), inset 0 1px 0 #fff;
+  backdrop-filter: blur(24px) saturate(118%);
+  animation: card-in 1.05s .2s var(--ease) both;
+}
+
+.login-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(145deg, rgba(255,255,255,.95), rgba(21,118,255,.42), rgba(255,255,255,.65));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.login-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 8% -22px;
+  height: 42px;
+  z-index: -2;
+  border-radius: 50%;
+  background: rgba(20, 93, 178, .22);
+  filter: blur(22px);
+}
+
+.brand-badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -36%);
+  border: 1px solid rgba(105, 197, 255, .95);
+  border-radius: 16px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 68% 20%, rgba(29,113,255,.45), transparent 35%),
+    linear-gradient(145deg, #0c315c, #061a36 72%);
+  box-shadow: 0 0 0 4px rgba(56,149,255,.08), 0 16px 32px rgba(0,70,164,.30), 0 0 24px rgba(20,142,255,.30);
+  animation: badge-in .9s .52s var(--ease) both, badge-glow 3.4s 1.5s ease-in-out infinite;
+}
+
+.badge-word {
+  position: relative;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -2.7px;
+  line-height: 1;
+}
+
+.badge-word::after {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 7px;
+  width: 16px;
+  height: 16px;
+  background: #0d76ff;
+  clip-path: polygon(0 50%, 100% 0, 100% 100%);
+  mix-blend-mode: screen;
+}
+
+.eyebrow {
+  margin: 0 0 20px;
+  color: #657ba1;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .23em;
+  text-transform: uppercase;
+  animation: content-in .8s .55s var(--ease) both;
+}
+
+.login-page h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(36px, 3vw, 49px);
+  line-height: 1.04;
+  letter-spacing: -.045em;
+  animation: content-in .8s .62s var(--ease) both;
+}
+
+.subtitle {
+  margin: 12px 0 clamp(34px, 4.3vh, 46px);
+  color: var(--muted);
+  font-size: clamp(17px, 1.35vw, 21px);
+  line-height: 1.5;
+  animation: content-in .8s .69s var(--ease) both;
+}
+
+.field {
+  margin-top: 22px;
+  animation: content-in .8s var(--delay) var(--ease) both;
+}
+
+.field label {
+  display: inline-block;
+  margin: 0 0 10px;
+  color: #0a1237;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.input-wrap {
+  position: relative;
+  height: 59px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,.63);
+  box-shadow: inset 0 1px 2px rgba(10,48,92,.02);
+  transition: border-color .22s ease, background .22s ease, box-shadow .22s ease, transform .22s ease;
+}
+
+.input-wrap:focus-within {
+  border-color: var(--blue);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(8,104,255,.12), 0 8px 20px rgba(8,104,255,.08);
+  transform: translateY(-1px);
+}
+
+.input-icon {
+  position: absolute;
+  left: 18px;
+  width: 24px;
+  height: 24px;
+  color: #60799f;
+  pointer-events: none;
+  transition: color .2s ease, transform .2s ease;
+}
+
+.input-wrap:focus-within .input-icon {
+  color: var(--blue);
+  transform: scale(1.05);
+}
+
+.login-page input {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0 52px 0 58px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 17px;
+}
+
+.login-page input::placeholder { color: #8495b3; opacity: 1; }
+
+.password-toggle {
+  position: absolute;
+  right: 7px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #5c739a;
+  background: transparent;
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.password-toggle:hover { color: var(--blue); background: var(--blue-soft); }
+.password-toggle:active { transform: scale(.94); }
+.password-toggle:focus-visible { outline: 3px solid rgba(8,104,255,.24); outline-offset: 1px; }
+
+.password-toggle svg { width: 23px; height: 23px; }
+.eye-off { display: none; }
+.password-toggle[aria-pressed="true"] .eye-on { display: none; }
+.password-toggle[aria-pressed="true"] .eye-off { display: block; }
+
+.submit-button {
+  position: relative;
+  width: 100%;
+  min-height: 64px;
+  margin-top: 31px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(105deg, #0878ff 0%, #075ff4 55%, #004bdd 100%);
+  box-shadow: 0 12px 25px rgba(4,85,226,.25), inset 0 1px 0 rgba(255,255,255,.28), 0 0 0 1px rgba(0,90,255,.15);
+  cursor: pointer;
+  transition: transform .22s ease, box-shadow .22s ease, filter .22s ease;
+  animation: content-in .8s .92s var(--ease) both;
+}
+
+.submit-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 15%, rgba(255,255,255,.28) 44%, transparent 70%);
+  transform: translateX(-120%);
+  animation: button-shine 4.8s 2s ease-in-out infinite;
+}
+
+.submit-button:hover {
+  transform: translateY(-2px);
+  filter: saturate(1.08);
+  box-shadow: 0 17px 31px rgba(4,85,226,.32), inset 0 1px 0 rgba(255,255,255,.32);
+}
+
+.submit-button:active { transform: translateY(0) scale(.993); }
+.submit-button:focus-visible { outline: 4px solid rgba(8,104,255,.22); outline-offset: 4px; }
+.submit-button:disabled { cursor: wait; filter: saturate(.8); }
+
+.button-inner {
+  position: relative;
+  z-index: 1;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: center;
+  padding: 0 22px;
+  font-size: 18px;
+  font-weight: 780;
+}
+
+.spinner { grid-column: 1; }
+.button-label { grid-column: 2; white-space: nowrap; }
+
+.button-arrow {
+  grid-column: 3;
+  justify-self: end;
+  width: 25px;
+  height: 25px;
+  transition: transform .22s var(--ease);
+}
+
+.submit-button:hover .button-arrow { transform: translateX(4px); }
+
+.spinner {
+  display: none;
+  width: 22px;
+  height: 22px;
+  justify-self: center;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+}
+
+.submit-button.is-loading .spinner { display: block; }
+.submit-button.is-loading .button-arrow { opacity: 0; }
+
+.security {
+  min-height: 58px;
+  margin-top: 31px;
+  padding-top: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  border-top: 1px solid #bfd0e8;
+  color: #566d91;
+  font-size: 15px;
+  animation: content-in .8s 1s var(--ease) both;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(16,185,78,.35);
+  animation: status-pulse 2.6s ease-out infinite;
+}
+
+.lock { width: 22px; height: 22px; color: #0ba344; flex: 0 0 auto; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes artwork-in {
+  from { opacity: 0; filter: brightness(.72) blur(5px); }
+  to { opacity: 1; filter: brightness(1) blur(0); }
+}
+
+@keyframes breathe {
+  from { filter: brightness(.98) saturate(1); }
+  to { filter: brightness(1.045) saturate(1.06); }
+}
+
+@keyframes scan {
+  0%, 10% { transform: translateX(-130%); opacity: 0; }
+  38% { opacity: .25; }
+  65%, 100% { transform: translateX(235%); opacity: 0; }
+}
+
+@keyframes dash { to { stroke-dashoffset: -180; } }
+
+@keyframes card-in {
+  from { opacity: 0; transform: translate3d(44px, 0, 0) scale(.97); filter: blur(6px); }
+  to { opacity: 1; transform: translate3d(0,0,0) scale(1); filter: blur(0); }
+}
+
+@keyframes badge-in {
+  from { opacity: 0; transform: translate(-50%, -52%) scale(.72) rotate(-6deg); }
+  to { opacity: 1; transform: translate(-50%, -36%) scale(1) rotate(0); }
+}
+
+@keyframes badge-glow {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(56,149,255,.08), 0 16px 32px rgba(0,70,164,.30), 0 0 20px rgba(20,142,255,.25); }
+  50% { box-shadow: 0 0 0 6px rgba(56,149,255,.10), 0 18px 36px rgba(0,70,164,.34), 0 0 35px rgba(20,142,255,.48); }
+}
+
+@keyframes content-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hero-copy-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes button-shine {
+  0%, 45% { transform: translateX(-130%); }
+  70%, 100% { transform: translateX(140%); }
+}
+
+@keyframes status-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(16,185,78,.38); }
+  55%, 100% { box-shadow: 0 0 0 10px rgba(16,185,78,0); }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1180px) {
+  .auth-column { width: 46%; padding-inline: 30px; }
+  .login-card { padding-inline: 40px; }
+  .route-layer { width: 58%; }
+  .hero-copy { width: 58%; }
+  .hero-micro--top-right,
+  .hero-coordinates,
+  .hero-micro--bottom-right { display: none; }
+  .hero-title { font-size: clamp(34px, 3.8vw, 48px); }
+  .hero-brand-name { font-size: clamp(17px, 1.85vw, 23px); }
+}
+
+/* Mantém o card inteiro visível em notebooks com pouca altura útil. */
+@media (min-width: 861px) and (max-height: 820px) {
+  .auth-column { padding-block: 24px; }
+  .login-card {
+    width: min(100%, 510px);
+    padding: 58px 38px 24px;
+  }
+  .brand-badge { width: 78px; height: 74px; border-radius: 13px; }
+  .badge-word { font-size: 24px; }
+  .eyebrow { margin-bottom: 12px; font-size: 10px; }
+  .login-page h1 { font-size: clamp(32px, 2.55vw, 41px); }
+  .subtitle { margin: 8px 0 22px; font-size: 17px; }
+  .field { margin-top: 13px; }
+  .field label { margin-bottom: 7px; font-size: 14px; }
+  .input-wrap { height: 51px; }
+  .login-page input { font-size: 15px; }
+  .submit-button { min-height: 54px; margin-top: 20px; }
+  .button-inner { min-height: 54px; font-size: 16px; }
+  .security { min-height: 42px; margin-top: 20px; padding-top: 16px; font-size: 13px; }
+  .lock { width: 19px; height: 19px; }
+  .status-dot { width: 10px; height: 10px; }
+}
+
+@media (min-width: 861px) and (max-height: 680px) {
+  .login-card { padding-top: 49px; padding-bottom: 18px; }
+  .subtitle { margin-bottom: 13px; }
+  .field { margin-top: 10px; }
+  .input-wrap { height: 47px; }
+  .submit-button, .button-inner { min-height: 49px; }
+  .submit-button { margin-top: 15px; }
+  .security { margin-top: 14px; padding-top: 12px; }
+}
+
+@media (max-width: 860px) {
+  .login-page {
+    min-height: 100svh;
+    overflow: auto;
+    background:
+      radial-gradient(circle at 50% 0, rgba(22,112,255,.15), transparent 34%),
+      linear-gradient(145deg, #eff6fb, var(--blue-grey));
+  }
+
+  .artwork {
+    inset: 0 0 auto;
+    height: 270px;
+    background-size: auto 760px;
+    background-position: left 37%;
+    animation: mobile-artwork-in 1.2s var(--ease) both;
+  }
+
+  .artwork::after {
+    background: linear-gradient(180deg, rgba(7,27,52,.04), rgba(7,27,52,.25) 60%, #dbe2e9 100%);
+  }
+
+  .scan, .route-layer, .hero-copy { display: none; }
+
+  .auth-column {
+    width: 100%;
+    min-height: 100svh;
+    padding: 150px 18px 28px;
+    align-items: start;
+  }
+
+  .auth-column::before,
+  .auth-column::after { display: none; }
+
+  .mobile-brand {
+    position: absolute;
+    z-index: 4;
+    top: max(24px, env(safe-area-inset-top));
+    left: 22px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+    text-shadow: 0 2px 14px rgba(0,0,0,.24);
+  }
+
+  .mobile-brand strong { font-size: 30px; letter-spacing: -2px; }
+  .mobile-brand span { max-width: 150px; font-size: 13px; line-height: 1.2; font-weight: 650; }
+
+  .login-card {
+    width: min(100%, 560px);
+    padding: 67px 26px 30px;
+    border-radius: 20px;
+  }
+
+  .login-page h1 { font-size: clamp(32px, 9.6vw, 43px); }
+  .subtitle { margin-bottom: 29px; }
+  .brand-badge { width: 84px; height: 80px; border-radius: 14px; }
+  .badge-word { font-size: 25px; }
+  .eyebrow { margin-bottom: 15px; font-size: 10px; }
+}
+
+@media (max-width: 390px) {
+  .auth-column { padding-inline: 12px; }
+  .login-card { padding-inline: 20px; }
+  .security { gap: 8px; font-size: 13px; }
+  .field { margin-top: 18px; }
+  .submit-button { margin-top: 25px; }
+}
+
+@keyframes mobile-artwork-in {
+  from { opacity: 0; transform: scale(1.08); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-page,
+  .login-page *,
+  .login-page *::before,
+  .login-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/*
+  ACRESCIMO AO HTML ORIGINAL
+  A tela precisa dizer quando o login falha. O bloco so entra no DOM quando ha
+  mensagem, entao o estado normal da pagina continua identico ao do arquivo.
+*/
+.form-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 2px;
+  padding: 13px 16px;
+  border: 1px solid #f0c3bd;
+  border-radius: 8px;
+  color: #96201a;
+  background: rgba(253, 240, 238, .94);
+  font-size: 15px;
+  line-height: 1.45;
+  animation: content-in .4s var(--ease) both;
+}
+
+.form-alert + .form-alert { margin-top: 12px; }
+
+.form-alert svg {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.form-alert strong { display: block; font-weight: 750; }
+
+.form-alert--success {
+  border-color: #b4e1c4;
+  color: #0b6b32;
+  background: rgba(234, 249, 239, .94);
+}
+
