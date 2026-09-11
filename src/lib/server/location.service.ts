@@ -1,7 +1,6 @@
 import 'server-only';
 import {
   CACHE_SECONDS,
-  districtsByCityUrl,
   LOCATION_TIMEOUT_MS,
   LocationError,
   citiesUrl,
@@ -99,32 +98,7 @@ export function listCities(uf: string): Promise<CityOption[]> {
   return load(citiesUrl(uf), CACHE_SECONDS.cities, parseCities);
 }
 
-/**
- * Bairros do municipio.
- *
- * O caminho oficial e por codigo IBGE. Quando ele nao responde (ou a resposta
- * nao vem no formato esperado) e conhecemos o identificador interno da Brasil
- * Aberto, o caminho antigo e tentado antes de desistir.
- */
-export async function listDistricts(
-  ibgeCode: number | null,
-  cityId: number | null = null,
-): Promise<DistrictOption[]> {
-  const attempts: string[] = [];
-  if (ibgeCode) attempts.push(districtsUrl(ibgeCode));
-  if (cityId && cityId !== ibgeCode) attempts.push(districtsByCityUrl(cityId));
-
-  if (attempts.length === 0) throw new LocationError('Município inválido.');
-
-  let last: unknown = new LocationError();
-  for (const url of attempts) {
-    try {
-      return await load(url, CACHE_SECONDS.districts, parseDistricts);
-    } catch (error) {
-      if (error instanceof LocationConfigError) throw error;
-      last = error;
-    }
-  }
-
-  throw last instanceof Error ? last : new LocationError();
+/** Bairros do municipio, pelo identificador interno (`city.id`). */
+export function listDistricts(cityId: number): Promise<DistrictOption[]> {
+  return load(districtsUrl(cityId), CACHE_SECONDS.districts, parseDistricts);
 }

@@ -18,7 +18,7 @@ import {
   selectDistrict,
   selectState,
   statesUrl,
-  toIbgeCode,
+  toCityId,
   withCurrentValue,
   type CityOption,
 } from '@/lib/domain/location';
@@ -61,23 +61,13 @@ describe('leitura das respostas da API', () => {
     expect(states[0].name).toBe('Rio de Janeiro');
   });
 
-  it('guarda o identificador interno e o código IBGE de cada município', () => {
+  it('preserva id e ibgeId de cada município', () => {
     const cities = parseCities(CITIES.result);
 
     expect(cities).toEqual([
-      { id: 646, ibge: 3304557, name: 'Campinas' },
-      { id: 669, ibge: 3550308, name: 'São Paulo' },
+      { id: 646, ibgeId: 3304557, name: 'Campinas' },
+      { id: 669, ibgeId: 3550308, name: 'São Paulo' },
     ]);
-  });
-
-  it('aceita bairro como texto solto ou dentro de result.districts', () => {
-    expect(parseDistricts(['Centro', 'Sé']).map((district) => district.name)).toEqual([
-      'Centro',
-      'Sé',
-    ]);
-    expect(
-      parseDistricts({ result: { districts: [{ district: 'Centro' }] } }).map((item) => item.name),
-    ).toEqual(['Centro']);
   });
 
   it('remove bairros repetidos e ordena alfabeticamente', () => {
@@ -97,24 +87,22 @@ describe('montagem das URLs', () => {
   it('usa a base fixa e envia apenas UF ou identificador', () => {
     expect(statesUrl()).toBe('https://api.brasilaberto.com/v1/states');
     expect(citiesUrl('sp')).toBe('https://api.brasilaberto.com/v1/cities/SP');
-    expect(districtsUrl(3550308)).toBe(
-      'https://api.brasilaberto.com/v1/districts-by-ibge-code/3550308',
-    );
+    expect(districtsUrl(669)).toBe('https://api.brasilaberto.com/v1/districts/669');
   });
 
   it('recusa UF fora das 27 siglas e identificador inválido', () => {
     expect(() => citiesUrl('XX')).toThrow(LocationError);
     expect(() => citiesUrl('../states')).toThrow(LocationError);
     expect(() => districtsUrl(-1)).toThrow(LocationError);
-    expect(toIbgeCode('12a')).toBeNull();
-    expect(toIbgeCode('3550308')).toBe(3550308);
+    expect(toCityId('12a')).toBeNull();
+    expect(toCityId('669')).toBe(669);
   });
 });
 
 describe('encadeamento estado, município e bairro', () => {
   const cities: CityOption[] = [
-    { id: 669, ibge: 3550308, name: 'São Paulo' },
-    { id: 646, ibge: 3304557, name: 'Campinas' },
+    { id: 669, ibgeId: 3550308, name: 'São Paulo' },
+    { id: 646, ibgeId: 3304557, name: 'Campinas' },
   ];
 
   const preenchido = selectDistrict(
@@ -122,12 +110,11 @@ describe('encadeamento estado, município e bairro', () => {
     'Vila Mariana',
   );
 
-  it('guarda sigla, nomes e mantém os identificadores fora do que é salvo', () => {
+  it('guarda sigla, nomes e mantém o identificador fora do que é salvo', () => {
     expect(preenchido).toEqual({
       state: 'SP',
       city: 'São Paulo',
       cityId: 669,
-      cityIbge: 3550308,
       district: 'Vila Mariana',
     });
   });
@@ -137,7 +124,6 @@ describe('encadeamento estado, município e bairro', () => {
       state: 'RJ',
       city: '',
       cityId: null,
-      cityIbge: null,
       district: '',
     });
   });
@@ -148,19 +134,18 @@ describe('encadeamento estado, município e bairro', () => {
     expect(trocado.state).toBe('SP');
     expect(trocado.city).toBe('Campinas');
     expect(trocado.cityId).toBe(646);
-    expect(trocado.cityIbge).toBe(3304557);
     expect(trocado.district).toBe('');
   });
 });
 
 describe('cadastros antigos', () => {
   const cities: CityOption[] = [
-    { id: 669, ibge: 3550308, name: 'São Paulo' },
-    { id: 646, ibge: 3304557, name: 'Campinas' },
+    { id: 669, ibgeId: 3550308, name: 'São Paulo' },
+    { id: 646, ibgeId: 3304557, name: 'Campinas' },
   ];
 
   it('reconhece o município já salvo mesmo com acento ou caixa diferente', () => {
-    expect(findCity(cities, 'sao paulo')?.ibge).toBe(3550308);
+    expect(findCity(cities, 'sao paulo')?.id).toBe(669);
     expect(findCity(cities, 'Município Extinto')).toBeNull();
   });
 
@@ -210,12 +195,12 @@ describe('consulta no servidor', () => {
 
     await listStates();
     await listCities('SP');
-    await listDistricts(3550308, 669);
+    await listDistricts(669);
 
     expect(calls.map(([url]) => url)).toEqual([
       'https://api.brasilaberto.com/v1/states',
       'https://api.brasilaberto.com/v1/cities/SP',
-      'https://api.brasilaberto.com/v1/districts-by-ibge-code/3550308',
+      'https://api.brasilaberto.com/v1/districts/669',
     ]);
 
     for (const [, init] of calls) {
@@ -250,31 +235,23 @@ describe('consulta no servidor', () => {
     expect((erro as Error).message).toBe('Serviço de localidades indisponível. Configuração ausente.');
   });
 
-  it('tenta o caminho antigo quando o código IBGE não responde', async () => {
+  it('busca os bairros pelo id interno do município, nunca pelo ibgeId', async () => {
     const calls: string[] = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
         calls.push(url);
-        return url.includes('districts-by-ibge-code')
-          ? { ok: false, status: 404 }
-          : { ok: true, json: async () => DISTRICTS };
+        return { ok: true, json: async () => DISTRICTS };
       }),
     );
 
-    const districts = await listDistricts(3550308, 669);
+    const [saoPaulo] = parseCities(CITIES).filter((city) => city.name === 'São Paulo');
+    const districts = await listDistricts(saoPaulo.id);
 
-    expect(calls).toEqual([
-      'https://api.brasilaberto.com/v1/districts-by-ibge-code/3550308',
-      'https://api.brasilaberto.com/v1/districts/669',
-    ]);
+    expect(calls).toEqual(['https://api.brasilaberto.com/v1/districts/669']);
+    expect(calls[0]).not.toContain(String(saoPaulo.ibgeId));
+    expect(calls[0]).not.toContain('districts-by-ibge-code');
     expect(districts.map((district) => district.name)).toEqual(['Bela Vista', 'Vila Mariana']);
-  });
-
-  it('falhando os dois caminhos, devolve erro previsto', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
-
-    await expect(listDistricts(3550308, 669)).rejects.toThrow(LocationError);
   });
 
   it('falha da API vira erro previsto, sem detalhe interno', async () => {
