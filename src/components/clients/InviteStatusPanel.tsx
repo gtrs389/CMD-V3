@@ -32,8 +32,8 @@ export function InviteStatusPanel({ client }: { client: Client }) {
           <Link2 aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand-700" />
           <span className="min-w-0">
             {client.invite.active
-              ? 'O formulário público está aceitando novos cadastros da sua equipe.'
-              : 'O formulário público não está aceitando novos cadastros no momento.'}
+              ? 'Os links da sua candidatura estão aceitando novos cadastros: o seu e o de cada integrante.'
+              : 'Nenhum link da sua candidatura está aceitando cadastros no momento.'}
           </span>
         </p>
 

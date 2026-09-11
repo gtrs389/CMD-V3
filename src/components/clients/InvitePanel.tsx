@@ -19,11 +19,15 @@ interface InvitePanelProps {
 }
 
 /**
- * Link individual de cadastro: copiar, prever, ativar/desativar e renovar.
+ * Link do candidato: copiar, prever, ativar/desativar e renovar.
  *
- * O banco guarda apenas o hash SHA-256 do token, entao o endereco completo
- * aparece uma unica vez: no momento em que e gerado. Depois disso, quem
- * precisar do link novamente gera outro por aqui.
+ * O endereco continua disponivel depois de sair, entrar de novo, trocar de
+ * aparelho ou recarregar: ele e lido do banco a cada carregamento. Abrir a
+ * pagina nao gera, renova nem invalida nada; a renovacao acontece somente no
+ * botao "Gerar novo token".
+ *
+ * Desativar aqui desliga o recrutamento da operacao inteira: os links
+ * pessoais de todos os integrantes tambem param de aceitar cadastros.
  */
 export function InvitePanel({ client }: InvitePanelProps) {
   const toast = useToast();
@@ -76,8 +80,9 @@ export function InvitePanel({ client }: InvitePanelProps) {
             <CardTitle>Link de convite</CardTitle>
             <CardDescription>
               Envie este endereço para a equipe preencher o cadastro. O link contém apenas um
-              token aleatório, sem nenhum dado pessoal. O banco guarda somente o hash do token,
-              por isso o endereço completo aparece apenas no momento em que é gerado.
+              identificador aleatório, sem nenhum dado pessoal, e continua o mesmo depois de sair,
+              entrar de novo, trocar de aparelho ou recarregar a página. Cada integrante
+              cadastrado recebe também um link pessoal.
             </CardDescription>
           </div>
         </CardHeader>
@@ -106,8 +111,9 @@ export function InvitePanel({ client }: InvitePanelProps) {
                 Link não visível
               </p>
               <p className="mt-1 text-xs text-ink-500">
-                O token fica guardado apenas como hash. Os links já enviados continuam
-                funcionando. Para obter um endereço visível de novo, gere um novo link abaixo.
+                Este convite foi criado antes do link pessoal e guarda apenas o hash do token. Os
+                links já enviados continuam funcionando. Para ter um endereço visível, gere um
+                novo link abaixo.
               </p>
             </div>
           )}
@@ -137,11 +143,11 @@ export function InvitePanel({ client }: InvitePanelProps) {
 
         <CardBody className="space-y-5">
           <Switch
-            label="Convite ativo"
+            label="Recrutamento ativo"
             description={
               client.invite.active
-                ? 'O formulário público está aceitando novos cadastros.'
-                : 'Quem acessar o link verá um aviso de convite indisponível.'
+                ? 'Todos os links desta candidatura aceitam novos cadastros.'
+                : 'Nenhum link desta candidatura aceita cadastros: nem o do candidato, nem os da equipe.'
             }
             checked={client.invite.active}
             onChange={toggleActive}
@@ -151,7 +157,8 @@ export function InvitePanel({ client }: InvitePanelProps) {
             <div className="min-w-0">
               <p className="text-sm font-medium text-ink-900">Gerar novo link</p>
               <p className="text-xs text-ink-500">
-                O endereço atual para de funcionar imediatamente.
+                O endereço atual do candidato para de funcionar imediatamente. Os links pessoais
+                dos integrantes continuam valendo.
               </p>
             </div>
             <Button

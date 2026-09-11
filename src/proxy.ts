@@ -39,5 +39,6 @@ export const config = {
     '/configuracoes/:path*',
     '/primeiro-acesso/:path*',
     '/clientes/:path*',
+    '/minha-mobilizacao/:path*',
   ],
 };

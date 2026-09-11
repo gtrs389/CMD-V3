@@ -4,3 +4,4 @@ export * from './form-field';
 export * from './invite';
 export * from './client';
 export * from './member';
+export * from './team';

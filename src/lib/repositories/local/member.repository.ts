@@ -1,5 +1,6 @@
 import type { Member, MemberInput } from '@/lib/types';
 import { createId } from '@/lib/utils/id';
+import { isValidEmail, normalizeEmail } from '@/lib/utils/email';
 import { nowIso } from '@/lib/utils/date';
 import { normalizePhone } from '@/lib/utils/phone';
 import { NotFoundError, type MemberRepository } from '../types';
@@ -55,6 +56,7 @@ export function createLocalMemberRepository(
         clientId: input.clientId,
         name: input.name.trim(),
         phone: normalizePhone(input.phone),
+        email: isValidEmail(input.email) ? normalizeEmail(input.email) : null,
         photo: input.photo ?? null,
         gender: input.gender ?? null,
         cpf: input.cpf ?? null,
@@ -68,6 +70,10 @@ export function createLocalMemberRepository(
         responses: input.responses ?? [],
         consentAt: input.consentAt ?? null,
         source: input.source,
+        // A origem do cadastro e sempre decidida no servidor, pelo dono do
+        // link: a implementacao local nao inventa responsavel.
+        recruitedBy: null,
+        access: isValidEmail(input.email) ? 'PENDING' : 'NO_EMAIL',
         createdAt: timestamp,
         updatedAt: timestamp,
       };
@@ -86,6 +92,12 @@ export function createLocalMemberRepository(
         ...current,
         name: input.name?.trim() ?? current.name,
         phone: input.phone === undefined ? current.phone : normalizePhone(input.phone),
+        email:
+          input.email === undefined
+            ? current.email
+            : isValidEmail(input.email)
+              ? normalizeEmail(input.email)
+              : null,
         photo: input.photo === undefined ? current.photo : input.photo,
         responses: input.responses ?? current.responses,
         consentAt: input.consentAt === undefined ? current.consentAt : input.consentAt,

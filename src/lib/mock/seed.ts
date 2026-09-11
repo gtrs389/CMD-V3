@@ -13,6 +13,8 @@ import type { Client, CustomField, FieldResponse } from '@/lib/types';
 interface SeedMember {
   name: string;
   phone: string;
+  /** E-mail de demonstracao: e o login que o integrante recebe. */
+  email: string;
   regiao: string;
   disponibilidade: string[];
   observacao: string;
@@ -34,6 +36,7 @@ const SEED: SeedClient[] = [
       {
         name: 'Ana Beatriz Moraes',
         phone: '11987650001',
+        email: 'ana.moraes@exemplo.test',
         regiao: 'Zona Norte',
         disponibilidade: ['Manhã', 'Tarde'],
         observacao: 'Tem veículo próprio.',
@@ -41,6 +44,7 @@ const SEED: SeedClient[] = [
       {
         name: 'Carlos Eduardo Lima',
         phone: '11987650002',
+        email: 'carlos.lima@exemplo.test',
         regiao: 'Centro',
         disponibilidade: ['Noite'],
         observacao: '',
@@ -48,6 +52,7 @@ const SEED: SeedClient[] = [
       {
         name: 'Juliana Prado',
         phone: '21987650003',
+        email: 'juliana.prado@exemplo.test',
         regiao: 'Zona Norte',
         disponibilidade: ['Manhã'],
         observacao: 'Prefere contato por mensagem.',
@@ -62,6 +67,7 @@ const SEED: SeedClient[] = [
       {
         name: 'Marcos Vinicius Tavares',
         phone: '11987650004',
+        email: 'marcos.tavares@exemplo.test',
         regiao: 'Zona Sul',
         disponibilidade: ['Tarde', 'Noite'],
         observacao: '',
@@ -146,6 +152,7 @@ export async function loadSampleData(): Promise<number> {
         clientId: client.id,
         name: member.name,
         phone: member.phone,
+        email: member.email,
         photo: null,
         consentAt: null,
         source: 'invite',

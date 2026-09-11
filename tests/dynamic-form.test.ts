@@ -52,10 +52,18 @@ describe('schema dinamico', () => {
     const values = {
       ...emptyValues(config),
       [systemField(config, 'name').id]: 'Ana Souza',
+      // O e-mail e campo padrao obrigatorio: sem ele o envio nao passa.
+      [systemField(config, 'email').id]: 'ana.souza@exemplo.test',
       [systemField(config, 'phone').id]: '(11) 98765-4321',
     };
 
     expect(buildDynamicSchema(config).safeParse(values).success).toBe(true);
+
+    const semEmail = { ...values, [systemField(config, 'email').id]: '' };
+    expect(buildDynamicSchema(config).safeParse(semEmail).success).toBe(false);
+
+    const emailInvalido = { ...values, [systemField(config, 'email').id]: 'ana@@exemplo' };
+    expect(buildDynamicSchema(config).safeParse(emailInvalido).success).toBe(false);
   });
 
   it('ignora campos desativados', () => {
@@ -67,6 +75,7 @@ describe('schema dinamico', () => {
     const values = {
       ...emptyValues(config),
       [systemField(config, 'name').id]: 'Ana',
+      [systemField(config, 'email').id]: 'ana@exemplo.test',
       [systemField(config, 'phone').id]: '11987654321',
     };
     expect(buildDynamicSchema(config).safeParse(values).success).toBe(true);
@@ -82,6 +91,7 @@ describe('schema dinamico', () => {
     const values = {
       ...emptyValues(config),
       [systemField(config, 'name').id]: 'Ana',
+      [systemField(config, 'email').id]: 'ana@exemplo.test',
       [systemField(config, 'phone').id]: '11987654321',
     };
 
@@ -167,6 +177,9 @@ describe('conversao para persistencia', () => {
       responses: payload.responses,
       consentAt: null,
       source: 'invite' as const,
+      email: null,
+      recruitedBy: null,
+      access: 'NO_EMAIL' as const,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
     };

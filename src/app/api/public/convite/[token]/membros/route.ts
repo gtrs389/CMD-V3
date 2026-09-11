@@ -2,8 +2,9 @@ import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { badRequest, jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { publicSubmissionSchema } from '@/lib/validation/server.schema';
-import { getClientByInviteToken } from '@/lib/server/client.service';
-import { createMember } from '@/lib/server/member.service';
+import { getInviteContext } from '@/lib/server/client.service';
+import { createMember, rollbackMember } from '@/lib/server/member.service';
+import { assertMemberEmailFree, createTeamAccess } from '@/lib/server/user.service';
 import {
   createPendingVerification,
   recordConfirmation,
@@ -23,8 +24,10 @@ import {
 /**
  * Envio do formulario publico.
  *
- * Nao exige sessao, mas exige um token de convite ativo. O cliente vem sempre
- * do token: o corpo da requisicao nao escolhe para quem o cadastro vai.
+ * Nao exige sessao, mas exige um link ativo. A operacao E o responsavel pelo
+ * cadastro vem sempre do token: nenhum `recruiterUserId`, `clientId` ou
+ * campo equivalente do corpo da requisicao e considerado. Forjar o
+ * responsavel no payload nao muda nada, porque o valor nem e lido.
  */
 export async function POST(
   request: NextRequest,
@@ -32,11 +35,12 @@ export async function POST(
 ) {
   try {
     const { token } = await ctx.params;
-    const client = await getClientByInviteToken(token);
-    if (!client || !client.invite.active) {
+    const context = await getInviteContext(token);
+    if (!context || !context.accepts) {
       throw badRequest('Este link não está ativo no momento.');
     }
 
+    const { client, owner } = context;
     const input = await readJson(request, publicSubmissionSchema);
 
     // O aviso vigente vem do banco. Se ele exige aceite, o envio sem aceite e
@@ -46,8 +50,31 @@ export async function POST(
       throw badRequest('E necessário aceitar o aviso de privacidade para enviar o cadastro.');
     }
 
+    // Conferencia do e-mail ANTES de gravar qualquer coisa: e-mail repetido
+    // interrompe o cadastro sem deixar integrante, usuario ou link orfao.
+    await assertMemberEmailFree(input.email);
+
     const { device, ...submission } = input;
-    const member = await createMember({ ...submission, clientId: client.id, source: 'invite' });
+    const member = await createMember(
+      { ...submission, clientId: client.id, source: 'invite' },
+      // Responsavel determinado no servidor, pelo dono do link utilizado.
+      owner ? { userId: owner.userId, name: owner.name, role: owner.role } : null,
+    );
+
+    // Acesso do integrante: usuario EQUIPE e link pessoal, criados juntos.
+    // Se falhar, o integrante recem-criado e desfeito: nada pela metade.
+    let access;
+    try {
+      access = await createTeamAccess({
+        clientId: client.id,
+        memberId: member.id,
+        name: member.name,
+        email: input.email,
+      });
+    } catch (error) {
+      await rollbackMember(member.id);
+      throw error;
+    }
 
     // Prova da confirmacao final e verificacao pendente. Nenhum dos dois pode
     // impedir o cadastro, que ja esta salvo.
@@ -75,8 +102,13 @@ export async function POST(
       signals: device,
     });
 
-    // O navegador nao precisa de nada do cadastro de volta.
-    const response = jsonOk({ ok: true, id: member.id }, 201);
+    // A senha temporaria existe apenas nesta resposta e no estado da tela de
+    // sucesso: nao vai para log, URL, banco em texto puro nem armazenamento
+    // do navegador.
+    const response = jsonOk(
+      { ok: true, id: member.id, access: { email: access.email, password: access.password } },
+      201,
+    );
 
     if (deviceCookie.isNew) {
       response.cookies.set({

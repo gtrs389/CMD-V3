@@ -65,6 +65,14 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     required: true,
   },
   {
+    systemKey: 'email',
+    type: 'email',
+    label: 'E-mail',
+    placeholder: 'voce@exemplo.com',
+    helpText: 'Usado para acessar o CMD.',
+    required: true,
+  },
+  {
     systemKey: 'phone',
     type: 'phone',
     label: 'Telefone',
@@ -204,9 +212,14 @@ export function isSystemField(field: CustomField): boolean {
   return field.systemKey !== null;
 }
 
-/** Nome sempre precisa estar ativo e obrigatorio: e a identificacao do integrante. */
+/**
+ * Campos que nao podem deixar de ser obrigatorios.
+ *
+ * Nome identifica a pessoa. E-mail e o que da acesso ao CMD e o que amarra
+ * o link pessoal dela: sem ele nao existe integrante com acesso.
+ */
 export function isLockedRequired(field: CustomField): boolean {
-  return field.systemKey === 'name';
+  return field.systemKey === 'name' || field.systemKey === 'email';
 }
 
 export function canDeleteField(field: CustomField): boolean {
@@ -218,8 +231,11 @@ export function canDuplicateField(field: CustomField): boolean {
   return !isSystemField(field);
 }
 
+/** E-mail nao pode ser desativado: e ele que cria o acesso do integrante. */
 export function canDisableField(field: CustomField): boolean {
-  return field.systemKey !== 'name' && field.systemKey !== 'phone';
+  return (
+    field.systemKey !== 'name' && field.systemKey !== 'phone' && field.systemKey !== 'email'
+  );
 }
 
 /** Reindexa a ordem apos qualquer operacao na lista. */

@@ -3,7 +3,8 @@ import type { NextRequest } from 'next/server';
 import { requireClientAccess, requirePermission } from '@/lib/server/guard';
 import { badRequest, jsonOk, notFound, readJson, toErrorResponse } from '@/lib/server/http';
 import { memberCreateSchema } from '@/lib/validation/server.schema';
-import { createMember, listAllMembers } from '@/lib/server/member.service';
+import { createMember, listAllMembers, rollbackMember } from '@/lib/server/member.service';
+import { assertMemberEmailFree, createPendingTeamAccess } from '@/lib/server/user.service';
 import { getClient } from '@/lib/server/client.service';
 import { resolveLocation } from '@/lib/server/map-location.service';
 
@@ -17,11 +18,17 @@ export async function GET() {
   }
 }
 
-/** Cadastro feito dentro do painel. O envio publico usa a rota do convite. */
+/**
+ * Cadastro feito dentro do painel. O envio publico usa a rota do convite.
+ *
+ * O responsavel pelo cadastro e a sessao autenticada, nunca um valor do
+ * corpo da requisicao. O integrante nasce com acesso pendente: o ADMIN gera
+ * a senha temporaria em Configuracoes quando quiser.
+ */
 export async function POST(request: NextRequest) {
   try {
     const input = await readJson(request, memberCreateSchema);
-    await requireClientAccess('member.create', input.clientId);
+    const user = await requireClientAccess('member.create', input.clientId);
 
     const client = await getClient(input.clientId);
     if (!client) throw notFound('Candidato não encontrado.');
@@ -31,7 +38,25 @@ export async function POST(request: NextRequest) {
       throw badRequest('E necessário registrar o aceite do aviso de privacidade.');
     }
 
-    const member = await createMember({ ...input, source: 'admin' });
+    // E-mail repetido interrompe antes de gravar: nada orfao e criado.
+    await assertMemberEmailFree(input.email);
+
+    const member = await createMember(
+      { ...input, source: 'admin' },
+      { userId: user.id, name: user.name, role: user.role },
+    );
+
+    try {
+      await createPendingTeamAccess({
+        clientId: client.id,
+        memberId: member.id,
+        name: member.name,
+        email: input.email,
+      });
+    } catch (error) {
+      await rollbackMember(member.id);
+      throw error;
+    }
 
     // Coordenada da moradia depois da resposta: nunca segura o cadastro.
     after(() => resolveLocation(member.id, 'RESIDENCE').catch(() => undefined));

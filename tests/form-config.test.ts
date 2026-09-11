@@ -16,6 +16,7 @@ describe('configuração padrão', () => {
     expect(config.fields.map((field) => field.systemKey)).toEqual([
       'photo',
       'name',
+      'email',
       'phone',
       'gender',
       'cpf',
@@ -27,7 +28,7 @@ describe('configuração padrão', () => {
       'relationship',
     ]);
     expect(config.fields.map((field) => field.order)).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
     ]);
   });
 
@@ -85,6 +86,9 @@ describe('contagem de respostas', () => {
     relationshipLabel: null,
     consentAt: null,
     source: 'invite' as const,
+    email: null,
+    recruitedBy: null,
+    access: 'NO_EMAIL' as const,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
   };

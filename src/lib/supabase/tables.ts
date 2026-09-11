@@ -33,8 +33,10 @@ export interface UserRow {
   /** Nulo enquanto o acesso esta pendente: nao existe senha utilizavel. */
   password_hash: string | null;
   role: 'ADMIN' | 'EQUIPE' | 'CANDIDATE';
-  /** Candidato vinculado. Sempre nulo fora do perfil CANDIDATE. */
+  /** Operacao do usuario. Nulo apenas no ADMIN. */
   client_id: string | null;
+  /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */
+  member_id: string | null;
   /** Senha temporaria em uso: obriga a troca no primeiro acesso. */
   must_change_password: boolean;
   is_active: boolean;
@@ -70,6 +72,8 @@ export interface ClientRow {
   privacy_text: string;
   privacy_require_consent: boolean;
   privacy_consent_label: string;
+  /** Interruptor da operacao: em false nenhum link daquele candidato aceita cadastro. */
+  recruiting_active: boolean;
   form_updated_at: string;
   created_at: string;
   updated_at: string;
@@ -96,6 +100,8 @@ export interface MemberRow {
   client_id: string;
   name: string;
   phone: string;
+  /** E-mail de acesso. Minusculo, sem espacos, unico no sistema. */
+  email: string | null;
   photo_path: string | null;
   photo_mime: string | null;
   photo_size: number | null;
@@ -115,6 +121,14 @@ export interface MemberRow {
   consent_privacy_snapshot: string | null;
   consent_privacy_version: string | null;
   source: 'invite' | 'admin';
+  /**
+   * Origem imutavel do cadastro (migration 012). O identificador vira nulo
+   * se o responsavel for excluido; o snapshot permanece, para o historico
+   * continuar existindo.
+   */
+  recruited_by_user_id: string | null;
+  recruited_by_name: string | null;
+  recruited_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
   created_at: string;
   updated_at: string;
 }
@@ -134,6 +148,14 @@ export interface MemberResponseRow {
 export interface InviteRow {
   id: string;
   client_id: string;
+  /** Dono do link pessoal. Nulo apenas nos convites anteriores a 012. */
+  user_id: string | null;
+  /**
+   * Identificador opaco do link. Guardado em claro de proposito: o link
+   * precisa sobreviver a logout, troca de aparelho e reload, e abrir a
+   * pagina publica nunca pode gerar, renovar nem invalidar token.
+   */
+  token: string | null;
   token_hash: string;
   active: boolean;
   created_at: string;

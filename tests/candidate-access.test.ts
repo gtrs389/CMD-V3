@@ -20,6 +20,7 @@ const ADMIN: SessionUser = {
   email: 'admin@exemplo.test',
   role: 'ADMIN',
   candidateId: null,
+  memberId: null,
   mustChangePassword: false,
 };
 
@@ -29,6 +30,7 @@ const CANDIDATO_A: SessionUser = {
   email: 'a@exemplo.test',
   role: 'CANDIDATE',
   candidateId: 'cli-a',
+  memberId: null,
   mustChangePassword: false,
 };
 
@@ -174,7 +176,9 @@ vi.mock('@/lib/supabase/rest', () => ({
   selectOne: async (_table: string, options: { filters?: Record<string, string> }) => {
     const id = (options.filters?.id ?? '').replace('eq.', '');
     const clientId = estado.membros[id];
-    return clientId ? { id, client_id: clientId } : null;
+    // Nenhum destes integrantes tem origem registrada: o candidato continua
+    // alcancando todos, e a EQUIPE, nenhum.
+    return clientId ? { id, client_id: clientId, recruited_by_user_id: null } : null;
   },
   selectRows: async () => [],
 }));

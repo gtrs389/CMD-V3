@@ -338,7 +338,9 @@ describe('acesso aos resultados', () => {
 
     // Visitante do link publico tambem nao alcanca nada disso.
     expect(can(null, 'verification.view')).toBe(false);
-    expect(permissionsOf('EQUIPE')).toEqual(['invite.submit']);
+    // A EQUIPE entra no painel, mas nunca alcanca verificacao cadastral.
+    expect(permissionsOf('EQUIPE')).not.toContain('verification.view');
+    expect(permissionsOf('EQUIPE')).not.toContain('verification.retry');
   });
 
   it('a rota pública devolve apenas a confirmação do envio', async () => {
