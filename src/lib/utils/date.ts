@@ -88,3 +88,17 @@ export function formatLastActivity(iso: string | null | undefined): string {
   if (days < 7) return `Há ${days} dias`;
   return formatDate(iso);
 }
+
+const longDateFormatter = new Intl.DateTimeFormat(appConfig.locale, {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+/** Data por extenso: "12 de agosto de 2026". */
+export function formatLongDate(iso: string | null | undefined): string {
+  if (!iso) return '--';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '--';
+  return longDateFormatter.format(date);
+}
