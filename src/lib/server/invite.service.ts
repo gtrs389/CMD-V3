@@ -308,11 +308,22 @@ export async function loadOperationInvites(
   if (clientIds.length === 0) return map;
 
   // Um time pode ter varios administradores, cada um com o proprio link.
-  // O link exibido como "link do time" e sempre o do administrador mais
-  // antigo: a ordem fixa evita que a tela troque de endereco sozinha.
+  // O link exibido como "link do time" e sempre o do administrador ATIVO
+  // mais antigo: a ordem fixa evita que a tela troque de endereco sozinha.
+  //
+  // O filtro por ativo e obrigatorio: o acesso antigo do time (e-mail e
+  // senha) virou um usuario CANDIDATE desativado na migration 016, e ele
+  // costuma ser o mais antigo da operacao. Sem o filtro, o link mostrado
+  // seria o dele — muitas vezes um convite anterior a migration 012, sem
+  // token legivel para copiar — e renova-lo falharia no banco, porque a
+  // emissao recusa usuario inativo.
   const candidates = await selectRows<Pick<UserRow, 'id' | 'client_id'>>(TABLES.users, {
     select: 'id,client_id',
-    filters: { client_id: inFilter(clientIds), role: 'eq.CANDIDATE' },
+    filters: {
+      client_id: inFilter(clientIds),
+      role: 'eq.CANDIDATE',
+      is_active: 'is.true',
+    },
     order: 'created_at.asc',
   });
 

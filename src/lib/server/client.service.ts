@@ -735,23 +735,20 @@ export async function setInviteActive(id: string, active: boolean): Promise<Clie
 export async function regenerateInvite(id: string): Promise<Client> {
   const row = await requireClientRow(id);
 
-  const invites = await loadOperationInvites([id]);
-  const current = invites.get(id);
-
-  if (current?.user_id) {
-    await rotatePersonalInvite(current.user_id);
-    return assemble(row);
-  }
-
-  // Time ainda sem administrador: o link so existe depois que a primeira
-  // pessoa e cadastrada em "Administradores do time".
+  // O link do time e sempre emitido por um administrador ATIVO, e nunca pelo
+  // dono do convite mais antigo: esse dono pode ser o acesso antigo do time
+  // (e-mail e senha), desativado na migration 016. Emitir por ele falha no
+  // banco com "usuario inativo", e era assim que a geracao parava sem dizer
+  // por que.
   const user = await selectOne<Pick<UserRow, 'id'>>(TABLES.users, {
     select: 'id',
-    filters: { client_id: `eq.${id}`, role: 'eq.CANDIDATE' },
+    filters: { client_id: `eq.${id}`, role: 'eq.CANDIDATE', is_active: 'is.true' },
     order: 'created_at.asc',
   });
   if (!user) throw notFound('Cadastre um administrador do time antes de criar o link.');
 
+  // Sem link proprio ainda, o administrador adota o convite sem dono da
+  // operacao: o endereco ja distribuido continua valendo ate a renovacao.
   await ensurePersonalInvite(user.id, id);
   await rotatePersonalInvite(user.id);
   return assemble(row);
