@@ -3,7 +3,7 @@ import { requirePermission } from '@/lib/server/guard';
 import { jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { clientCreateSchema } from '@/lib/validation/server.schema';
 import { createClient, listClientSummaries } from '@/lib/server/client.service';
-import { getTeamAccessLink } from '@/lib/server/team-access.service';
+import { getTeamAccessLinks } from '@/lib/server/team-access.service';
 
 /** Listagem e criacao de clientes. Somente para sessao com permissao. */
 export async function GET() {
@@ -21,12 +21,12 @@ export async function POST(request: NextRequest) {
     const input = await readJson(request, clientCreateSchema);
     const client = await createClient(input);
 
-    // O link de acesso dos administradores nasce com o time e volta aqui
-    // para o ADMIN geral copiar. Ele nunca expira sozinho e vale para todos
-    // os administradores ativos daquele time.
-    const accessLink = await getTeamAccessLink(client.id);
+    // Os dois enderecos de acesso nascem com o time e voltam aqui para o
+    // ADMIN geral copiar: um para os Administradores do time, outro para a
+    // equipe. Nenhum deles expira sozinho.
+    const accessLinks = await getTeamAccessLinks(client.id);
 
-    return jsonOk({ client, accessLink }, 201);
+    return jsonOk({ client, accessLinks }, 201);
   } catch (error) {
     return toErrorResponse(error);
   }

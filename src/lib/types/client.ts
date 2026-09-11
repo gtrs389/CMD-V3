@@ -35,12 +35,31 @@ export interface TeamPersonInput {
  * expira sozinho, nao e consumido e vale para todos os administradores
  * ativos daquele time, ate o ADMIN geral renovar.
  */
+/**
+ * Publico de um endereco de acesso do time.
+ *
+ * Cada publico tem o proprio endereco, e um endereco so aceita os telefones
+ * do seu publico: o link dos Administradores nunca deixa um membro entrar, e
+ * o da equipe nunca deixa um administrador entrar.
+ */
+export const TEAM_ACCESS_AUDIENCES = ['TEAM_ADMIN', 'EQUIPE'] as const;
+export type TeamAccessAudience = (typeof TEAM_ACCESS_AUDIENCES)[number];
+
+export const TEAM_ACCESS_AUDIENCE_LABELS: Record<TeamAccessAudience, string> = {
+  TEAM_ADMIN: 'Administradores do time',
+  EQUIPE: 'Equipe',
+};
+
 export interface TeamAccessLink {
+  audience: TeamAccessAudience;
   token: string;
   active: boolean;
   createdAt: IsoDate;
   rotatedAt: IsoDate | null;
 }
+
+/** Os dois enderecos de um time, como o ADMIN geral os ve. */
+export type TeamAccessLinks = Record<TeamAccessAudience, TeamAccessLink>;
 
 export interface Client extends Timestamped {
   id: string;

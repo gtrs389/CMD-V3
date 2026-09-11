@@ -548,8 +548,10 @@ export async function createClient(input: ClientInput): Promise<Client> {
   // de recrutamento.
   await insertTeamPeople(row.id, input.people);
 
-  // O link de acesso dos administradores nasce junto com o time.
-  await ensureTeamAccessLink(row.id);
+  // Os dois enderecos de acesso nascem junto com o time: um para os
+  // Administradores, outro para a equipe.
+  await ensureTeamAccessLink(row.id, 'TEAM_ADMIN');
+  await ensureTeamAccessLink(row.id, 'EQUIPE');
 
   return assemble(row);
 }

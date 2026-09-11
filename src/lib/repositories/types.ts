@@ -5,7 +5,7 @@ import type {
   ClientSummary,
   Member,
   MemberInput,
-  TeamAccessLink,
+  TeamAccessLinks,
 } from '@/lib/types';
 
 /**
@@ -20,13 +20,14 @@ import type {
 /**
  * Resultado do cadastro de um time.
  *
- * O link de acesso dos administradores nasce junto com o time e volta aqui
- * para o ADMIN geral copiar e enviar. Nao ha senha: quem entra no painel do
- * time usa este link mais o proprio telefone.
+ * Os dois enderecos de acesso nascem junto com o time e voltam aqui para o
+ * ADMIN geral copiar e enviar: um para os Administradores do time, outro
+ * para a equipe. Nao ha senha em nenhum dos dois — quem entra no painel usa
+ * o endereco do seu publico mais o proprio telefone.
  */
 export interface ClientCreation {
   client: Client;
-  accessLink: TeamAccessLink | null;
+  accessLinks: TeamAccessLinks | null;
 }
 
 export interface ClientRepository {

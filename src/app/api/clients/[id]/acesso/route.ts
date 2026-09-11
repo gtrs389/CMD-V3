@@ -1,15 +1,18 @@
 import type { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { TEAM_ACCESS_AUDIENCES } from '@/lib/types';
 import { requirePermission } from '@/lib/server/guard';
-import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
-import { getTeamAccessLink, rotateTeamAccessLink } from '@/lib/server/team-access.service';
+import { forbidden, jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
+import { getTeamAccessLinks, rotateTeamAccessLink } from '@/lib/server/team-access.service';
 
 /**
- * Link de acesso dos administradores do time.
+ * Enderecos de acesso do time: um para os Administradores, outro para a
+ * equipe.
  *
- * Exclusivo do ADMIN geral: o proprio administrador do time nao consulta,
- * nao copia e nao renova o link com que entra. `client.update` ja e uma
- * permissao so de ADMIN; o perfil e conferido de novo para o escopo nunca
- * depender apenas da matriz.
+ * Exclusivo do ADMIN geral: nem o administrador do time nem o membro
+ * consultam, copiam ou renovam o endereco com que entram. `client.update` ja
+ * e uma permissao so de ADMIN; o perfil e conferido de novo para o escopo
+ * nunca depender apenas da matriz.
  */
 async function requireGeneralAdmin() {
   const user = await requirePermission('client.update');
@@ -21,23 +24,27 @@ export async function GET(_request: NextRequest, ctx: RouteContext<'/api/clients
   try {
     const { id } = await ctx.params;
     await requireGeneralAdmin();
-    return jsonOk({ accessLink: await getTeamAccessLink(id) });
+    return jsonOk({ accessLinks: await getTeamAccessLinks(id) });
   } catch (error) {
     return toErrorResponse(error);
   }
 }
 
+const rotateSchema = z.object({ audience: z.enum(TEAM_ACCESS_AUDIENCES) });
+
 /**
- * Gera um endereco novo.
+ * Gera um endereco novo para UM dos publicos.
  *
- * O anterior para de funcionar na hora e todas as sessoes abertas dos
- * administradores daquele time caem junto.
+ * O anterior daquele publico para de funcionar na hora e as sessoes abertas
+ * dele caem junto. O outro endereco do time nao e tocado, e os aparelhos
+ * autorizados continuam valendo.
  */
-export async function POST(_request: NextRequest, ctx: RouteContext<'/api/clients/[id]/acesso'>) {
+export async function POST(request: NextRequest, ctx: RouteContext<'/api/clients/[id]/acesso'>) {
   try {
     const { id } = await ctx.params;
     await requireGeneralAdmin();
-    return jsonOk({ accessLink: await rotateTeamAccessLink(id) });
+    const { audience } = await readJson(request, rotateSchema);
+    return jsonOk({ accessLink: await rotateTeamAccessLink(id, audience) });
   } catch (error) {
     return toErrorResponse(error);
   }
