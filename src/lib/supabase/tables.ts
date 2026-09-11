@@ -1,5 +1,6 @@
 import 'server-only';
 import type { FieldType, FieldValue, SystemFieldKey } from '@/lib/types';
+import type { StepStatus, VerificationStatus } from '@/lib/domain/verification';
 
 /**
  * Nomes e formatos das tabelas do CMD.
@@ -17,6 +18,9 @@ export const TABLES = {
   memberResponses: 'cmd_member_responses',
   invites: 'cmd_invites',
   memberDevices: 'cmd_member_devices',
+  memberConfirmations: 'cmd_member_confirmations',
+  memberVerifications: 'cmd_member_verifications',
+  memberVerificationViews: 'cmd_member_verification_views',
 } as const;
 
 export interface UserRow {
@@ -155,4 +159,42 @@ export interface MemberDeviceRow {
   geo_region: string | null;
   first_seen_at: string;
   last_seen_at: string;
+}
+
+/** Prova da confirmacao final feita pela pessoa antes do envio. */
+export interface MemberConfirmationRow {
+  id: string;
+  client_id: string;
+  member_id: string;
+  notice_version: string;
+  notice_text: string;
+  notice_hash: string;
+  confirmed_at: string;
+}
+
+/**
+ * Verificacao cadastral. Os campos `*_payload` chegam cifrados
+ * (AES-256-GCM) e nunca sao gravados em claro.
+ */
+export interface MemberVerificationRow {
+  id: string;
+  client_id: string;
+  member_id: string;
+  status: VerificationStatus;
+  cpf_status: StepStatus;
+  tse_status: StepStatus;
+  cpf_requested_at: string | null;
+  cpf_completed_at: string | null;
+  tse_requested_at: string | null;
+  tse_completed_at: string | null;
+  cpf_attempts: number;
+  tse_attempts: number;
+  cpf_error_code: string | null;
+  tse_error_code: string | null;
+  cpf_payload: string | null;
+  tse_payload: string | null;
+  locked_at: string | null;
+  lock_token: string | null;
+  created_at: string;
+  updated_at: string;
 }

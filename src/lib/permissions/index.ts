@@ -23,6 +23,9 @@ export const PERMISSIONS = [
   'member.create',
   'member.update',
   'member.delete',
+  /** Resultado da verificacao cadastral: exclusivo do ADMIN. */
+  'verification.view',
+  'verification.retry',
   /** Envio pelo link publico: nao exige autenticacao. */
   'invite.submit',
 ] as const;

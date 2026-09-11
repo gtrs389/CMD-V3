@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { MemberDeviceSection } from './MemberDeviceSection';
+import { MemberVerificationSection } from './MemberVerificationSection';
 
 interface MemberDetailModalProps {
   open: boolean;
@@ -230,6 +231,8 @@ export function MemberDetailModal({
             </dl>
           )}
         </div>
+
+        <MemberVerificationSection member={member} />
 
         <MemberDeviceSection memberId={member.id} />
       </div>
