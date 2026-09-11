@@ -132,10 +132,13 @@ export function MemberDetailModal({
   onEdit,
 }: MemberDetailModalProps) {
   // Dados enriquecidos e sinais do aparelho sao exclusivos do ADMIN.
-  const { can } = useSession();
+  const { can, user } = useSession();
   const podeEditar = can('member.update');
   const podeVerificar = can('verification.view');
   const podeVerAparelho = can('device.view');
+  // O integrante da equipe ve apenas nome, foto e telefone: o resto da
+  // ficha (CPF, endereco, e-mail, respostas, origem) fica so com o ADMIN.
+  const somenteBasico = user?.role === 'EQUIPE';
 
   if (!member) return null;
 
@@ -183,78 +186,86 @@ export function MemberDetailModal({
             <p className="text-sm text-ink-500">
               {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
             </p>
-            <p className="truncate text-sm text-ink-500">{member.email ?? 'Sem e-mail'}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
-                {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
-              </Badge>
-              <Badge tone={member.access === 'ACTIVE' ? 'success' : 'neutral'}>
-                {ACCESS_STATUS_LABELS[member.access]}
-              </Badge>
-              {member.consentAt ? <Badge tone="success">Consentimento registrado</Badge> : null}
-            </div>
-          </div>
-        </div>
-
-        <dl className="grid grid-cols-1 gap-3 rounded-control bg-ink-50 p-3 text-sm sm:grid-cols-2">
-          {/* Origem do cadastro: o rotulo e o mesmo da lista. */}
-          <div className="min-w-0 sm:col-span-2">
-            <dt className="text-xs text-ink-500">{RECRUITED_BY_LABEL}</dt>
-            <dd className="mt-0.5">
-              <RecruitedBy recruiter={member.recruitedBy} />
-            </dd>
-          </div>
-          <div className="min-w-0">
-            <dt className="text-xs text-ink-500">Cadastrado em</dt>
-            <dd className="font-medium break-words text-ink-900">
-              {formatDateTime(member.createdAt)}
-            </dd>
-          </div>
-          <div className="min-w-0">
-            <dt className="text-xs text-ink-500">Última atualização</dt>
-            <dd className="font-medium break-words text-ink-900">
-              {formatDateTime(member.updatedAt)}
-            </dd>
-          </div>
-        </dl>
-
-        <StandardFields member={member} />
-
-        <RelationshipRow client={client} member={member} />
-
-        <div>
-          <h4 className="text-sm font-semibold text-ink-900">Respostas do formulário</h4>
-
-          {custom.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-500">
-              Este formulário ainda não possui campos personalizados.
-            </p>
-          ) : (
-            <dl className="mt-2 divide-y divide-line">
-              {custom.map((field) => (
-                <div key={field.id} className="grid gap-1 py-2.5 sm:grid-cols-3 sm:gap-3">
-                  <dt className="text-sm text-ink-500 sm:col-span-1">
-                    {field.label}
-                    {!field.enabled ? (
-                      <span className="ml-1 text-xs text-ink-400">(desativado)</span>
-                    ) : null}
-                  </dt>
-                  <dd className="text-sm break-words text-ink-900 sm:col-span-2">
-                    {field.type === 'photo' && typeof responses.get(field.id) === 'string' ? (
-                      <img
-                        src={String(responses.get(field.id))}
-                        alt={field.label}
-                        className="max-h-40 rounded-control border border-line object-cover"
-                      />
-                    ) : (
-                      formatResponse(field, responses.get(field.id) ?? null)
-                    )}
-                  </dd>
+            {!somenteBasico ? (
+              <>
+                <p className="truncate text-sm text-ink-500">{member.email ?? 'Sem e-mail'}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
+                    {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
+                  </Badge>
+                  <Badge tone={member.access === 'ACTIVE' ? 'success' : 'neutral'}>
+                    {ACCESS_STATUS_LABELS[member.access]}
+                  </Badge>
+                  {member.consentAt ? <Badge tone="success">Consentimento registrado</Badge> : null}
                 </div>
-              ))}
-            </dl>
-          )}
+              </>
+            ) : null}
+          </div>
         </div>
+
+        {!somenteBasico ? (
+          <>
+            <dl className="grid grid-cols-1 gap-3 rounded-control bg-ink-50 p-3 text-sm sm:grid-cols-2">
+              {/* Origem do cadastro: o rotulo e o mesmo da lista. */}
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-xs text-ink-500">{RECRUITED_BY_LABEL}</dt>
+                <dd className="mt-0.5">
+                  <RecruitedBy recruiter={member.recruitedBy} />
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-ink-500">Cadastrado em</dt>
+                <dd className="font-medium break-words text-ink-900">
+                  {formatDateTime(member.createdAt)}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-ink-500">Última atualização</dt>
+                <dd className="font-medium break-words text-ink-900">
+                  {formatDateTime(member.updatedAt)}
+                </dd>
+              </div>
+            </dl>
+
+            <StandardFields member={member} />
+
+            <RelationshipRow client={client} member={member} />
+
+            <div>
+              <h4 className="text-sm font-semibold text-ink-900">Respostas do formulário</h4>
+
+              {custom.length === 0 ? (
+                <p className="mt-2 text-sm text-ink-500">
+                  Este formulário ainda não possui campos personalizados.
+                </p>
+              ) : (
+                <dl className="mt-2 divide-y divide-line">
+                  {custom.map((field) => (
+                    <div key={field.id} className="grid gap-1 py-2.5 sm:grid-cols-3 sm:gap-3">
+                      <dt className="text-sm text-ink-500 sm:col-span-1">
+                        {field.label}
+                        {!field.enabled ? (
+                          <span className="ml-1 text-xs text-ink-400">(desativado)</span>
+                        ) : null}
+                      </dt>
+                      <dd className="text-sm break-words text-ink-900 sm:col-span-2">
+                        {field.type === 'photo' && typeof responses.get(field.id) === 'string' ? (
+                          <img
+                            src={String(responses.get(field.id))}
+                            alt={field.label}
+                            className="max-h-40 rounded-control border border-line object-cover"
+                          />
+                        ) : (
+                          formatResponse(field, responses.get(field.id) ?? null)
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
+          </>
+        ) : null}
 
         {podeVerificar ? <MemberVerificationSection member={member} /> : null}
 
