@@ -14,6 +14,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useClient } from '@/hooks/use-clients';
+import { useSession } from '@/components/layout/SessionProvider';
 import { useMembers } from '@/hooks/use-members';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
@@ -27,7 +28,9 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
+import { FormReadOnlyPanel } from './FormReadOnlyPanel';
 import { InvitePanel } from './InvitePanel';
+import { InviteStatusPanel } from './InviteStatusPanel';
 
 const TAB_IDS = ['visao-geral', 'equipe', 'formulario', 'convite'] as const;
 export type TabId = (typeof TAB_IDS)[number];
@@ -46,6 +49,7 @@ interface ClientDetailViewProps {
 /** Pagina individual do candidato, organizada em abas. */
 export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps) {
   const router = useRouter();
+  const { can } = useSession();
   const { data: client, loading, error, reload } = useClient(clientId);
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
@@ -54,6 +58,14 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
   const [deleting, setDeleting] = useState(false);
 
   const memberList = members ?? [];
+
+  // O candidato enxerga apenas o proprio cadastro, em leitura. As rotas de
+  // gravacao recusam o perfil no servidor: aqui so evitamos oferecer a acao.
+  const podeVoltar = can('client.list');
+  const podeEditar = can('client.update');
+  const podeExcluir = can('client.delete');
+  const podeEditarFormulario = can('form.manage');
+  const podeGerenciarConvite = can('invite.manage');
 
   if (loading) return <DetailSkeleton />;
 
@@ -108,13 +120,15 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
 
   return (
     <div className="space-y-3">
-      <Link
-        href="/candidatos"
-        className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-900"
-      >
-        <ArrowLeft aria-hidden="true" className="size-3.5" />
-        Voltar para candidatos
-      </Link>
+      {podeVoltar ? (
+        <Link
+          href="/candidatos"
+          className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-900"
+        >
+          <ArrowLeft aria-hidden="true" className="size-3.5" />
+          Voltar para candidatos
+        </Link>
+      ) : null}
 
       <header className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -164,37 +178,49 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
             </p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium text-accent-600 shadow-card transition-colors hover:bg-accent-50"
-            >
-              <Pencil aria-hidden="true" className="size-4" />
-              Editar candidato
-            </button>
+          {podeEditar || podeExcluir ? (
+            <div className="flex shrink-0 items-center gap-2">
+              {podeEditar ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium text-accent-600 shadow-card transition-colors hover:bg-accent-50"
+                >
+                  <Pencil aria-hidden="true" className="size-4" />
+                  Editar candidato
+                </button>
+              ) : null}
 
-            <div className="rounded-control border border-line bg-surface shadow-card">
-              <Menu
-                label={`Ações de ${client.name}`}
-                actions={[
-                  {
-                    id: 'editar',
-                    label: 'Editar candidato',
-                    icon: <Pencil className="size-4" />,
-                    onSelect: () => setEditing(true),
-                  },
-                  {
-                    id: 'excluir',
-                    label: 'Excluir candidato',
-                    icon: <Trash2 className="size-4" />,
-                    tone: 'danger',
-                    onSelect: () => setDeleting(true),
-                  },
-                ]}
-              />
+              <div className="rounded-control border border-line bg-surface shadow-card">
+                <Menu
+                  label={`Ações de ${client.name}`}
+                  actions={[
+                    ...(podeEditar
+                      ? [
+                          {
+                            id: 'editar',
+                            label: 'Editar candidato',
+                            icon: <Pencil className="size-4" />,
+                            onSelect: () => setEditing(true),
+                          },
+                        ]
+                      : []),
+                    ...(podeExcluir
+                      ? [
+                          {
+                            id: 'excluir',
+                            label: 'Excluir candidato',
+                            icon: <Trash2 className="size-4" />,
+                            tone: 'danger' as const,
+                            onSelect: () => setDeleting(true),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </header>
 
@@ -215,11 +241,19 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
       </TabPanel>
 
       <TabPanel id="formulario" active={tab}>
-        <FormBuilderPanel client={client} members={memberList} />
+        {podeEditarFormulario ? (
+          <FormBuilderPanel client={client} members={memberList} />
+        ) : (
+          <FormReadOnlyPanel client={client} />
+        )}
       </TabPanel>
 
       <TabPanel id="convite" active={tab}>
-        <InvitePanel client={client} />
+        {podeGerenciarConvite ? (
+          <InvitePanel client={client} />
+        ) : (
+          <InviteStatusPanel client={client} />
+        )}
       </TabPanel>
 
       <ClientFormModal open={editing} client={client} onClose={() => setEditing(false)} />

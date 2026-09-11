@@ -10,7 +10,11 @@ import type { Role, SessionUser } from '@/lib/types';
 
 export const PERMISSIONS = [
   'admin.access',
+  /** Abre o painel: ADMIN e CANDIDATE. */
+  'panel.access',
   'dashboard.view',
+  /** Lista de todos os candidatos: exclusivo do ADMIN. */
+  'client.list',
   'client.view',
   'client.create',
   'client.update',
@@ -29,6 +33,11 @@ export const PERMISSIONS = [
   /** Mapa da mobilizacao: exclusivo do ADMIN. */
   'map.view',
   'map.resolve',
+  /** Sinais tecnicos do aparelho: exclusivo do ADMIN. */
+  'device.view',
+  /** Configuracoes e usuarios do sistema: exclusivo do ADMIN. */
+  'settings.view',
+  'settings.manage',
   /** Envio pelo link publico: nao exige autenticacao. */
   'invite.submit',
 ] as const;
@@ -43,9 +52,25 @@ const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS;
  */
 const EQUIPE_PERMISSIONS: readonly Permission[] = ['invite.submit'];
 
+/**
+ * Candidato: leitura apenas, e sempre do proprio registro.
+ *
+ * A permissao nao basta. Toda rota que recebe um identificador confere
+ * tambem o vinculo da sessao (`requireClientAccess`), entao um candidato
+ * nunca alcanca o registro de outro.
+ */
+const CANDIDATE_PERMISSIONS: readonly Permission[] = [
+  'panel.access',
+  'client.view',
+  'member.view',
+  'form.view',
+  'invite.view',
+];
+
 const MATRIX: Record<Role, readonly Permission[]> = {
   ADMIN: ADMIN_PERMISSIONS,
   EQUIPE: EQUIPE_PERMISSIONS,
+  CANDIDATE: CANDIDATE_PERMISSIONS,
 };
 
 /** Permissoes disponiveis para quem nao esta autenticado (visitante do convite). */
@@ -63,12 +88,28 @@ export function can(
   return permissionsOf(user?.role).includes(permission);
 }
 
-/** Perfis que podem abrir qualquer rota administrativa. */
+/** Perfis que podem abrir o painel. Cada rota ainda confere o proprio escopo. */
 export function hasPanelAccess(user: Pick<SessionUser, 'role'> | null | undefined): boolean {
-  return can(user, 'admin.access');
+  return can(user, 'panel.access');
+}
+
+/**
+ * Conferencia de escopo do candidato.
+ *
+ * ADMIN alcanca qualquer registro; CANDIDATE somente o proprio. Regra unica,
+ * usada tanto nas rotas de API quanto nas paginas.
+ */
+export function canReachClient(
+  user: Pick<SessionUser, 'role' | 'candidateId'> | null | undefined,
+  clientId: string | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (user.role !== 'CANDIDATE') return can(user, 'client.view');
+  return Boolean(clientId) && user.candidateId === clientId;
 }
 
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Administrador',
   EQUIPE: 'Equipe',
+  CANDIDATE: 'Candidato',
 };

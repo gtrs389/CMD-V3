@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { appConfig } from '@/config/app.config';
 import { isSupabaseConfigured } from '@/lib/supabase/env';
 import { getCurrentUser } from '@/lib/auth/server';
-import { DEFAULT_AUTHENTICATED_PATH } from '@/lib/auth/constants';
+import { homePathFor } from '@/lib/auth/constants';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { Logo } from '@/components/layout/Logo';
 
@@ -19,7 +19,8 @@ export default async function LoginPage({
 }: PageProps<'/login'>) {
   // Sessao valida nao precisa ver o login. A conferencia e feita no banco,
   // nunca apenas pela presenca do cookie.
-  if (await getCurrentUser()) redirect(DEFAULT_AUTHENTICATED_PATH);
+  const current = await getCurrentUser();
+  if (current) redirect(homePathFor(current));
 
   const params = await searchParams;
   const raw = params?.proximo;
@@ -39,11 +40,9 @@ export default async function LoginPage({
         </div>
 
         <div className="animate-rise rounded-card border border-line bg-surface p-5 shadow-card sm:p-7">
-          <h1 className="text-xl font-semibold tracking-tight text-ink-900">
-            Acesso administrativo
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight text-ink-900">Entrar no CMD</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Entre com as credenciais de administrador para gerenciar candidatos e equipes.
+            Acesso de administradores e candidatos. Use o e-mail e a senha recebidos.
           </p>
 
           {senhaAlterada ? (
@@ -59,7 +58,7 @@ export default async function LoginPage({
         </div>
 
         <p className="mt-6 text-center text-xs text-balance text-ink-500">
-          {appConfig.name} ({appConfig.shortName}) — acesso restrito a administradores.
+          {appConfig.name} ({appConfig.shortName}) — acesso restrito.
         </p>
       </div>
     </main>

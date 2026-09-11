@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { appConfig } from '@/config/app.config';
 import { cn } from '@/lib/utils/cn';
 import { useSession } from './SessionProvider';
-import { NAV_ITEMS, isActive } from './navigation';
+import { isActive, navItemsFor } from './navigation';
 
 interface SidebarProps {
   /** Fecha o painel deslizante apos navegar (uso no celular). */
@@ -15,9 +15,9 @@ interface SidebarProps {
 /** Conteudo de navegacao. Reaproveitado pela barra flutuante e pelo menu deslizante. */
 export function SidebarContent({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const { can } = useSession();
+  const { user, can } = useSession();
 
-  const items = NAV_ITEMS.filter((item) => can(item.permission));
+  const items = navItemsFor(user, (item) => can(item.permission));
 
   return (
     <div className="flex h-full min-h-0 flex-col text-white">

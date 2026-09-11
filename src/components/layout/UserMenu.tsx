@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, KeyRound, LogOut } from 'lucide-react';
-import { ROLE_LABELS } from '@/lib/permissions';
+import Link from 'next/link';
+import { ChevronDown, KeyRound, LogOut, Settings } from 'lucide-react';
+import { can, ROLE_LABELS } from '@/lib/permissions';
 import { initials } from '@/lib/utils/text';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ChangePasswordModal } from './ChangePasswordModal';
@@ -73,6 +74,18 @@ export function UserMenu() {
             <p className="truncate text-xs text-ink-500">{user.email}</p>
             <p className="mt-1 text-xs font-medium text-ink-700">{ROLE_LABELS[user.role]}</p>
           </div>
+
+          {can(user, 'settings.view') ? (
+            <Link
+              href="/configuracoes"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm text-ink-700 transition-colors hover:bg-ink-100"
+            >
+              <Settings aria-hidden="true" className="size-4 shrink-0 text-ink-500" />
+              Configurações
+            </Link>
+          ) : null}
 
           <button
             type="button"

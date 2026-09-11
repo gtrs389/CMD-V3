@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { requirePermission } from '@/lib/server/guard';
+import { requireMemberAccess } from '@/lib/server/guard';
 import { jsonOk, toErrorResponse } from '@/lib/server/http';
 import { listMemberDevices } from '@/lib/server/device';
 
@@ -12,8 +12,9 @@ import { listMemberDevices } from '@/lib/server/device';
  */
 export async function GET(_request: NextRequest, ctx: RouteContext<'/api/members/[id]/devices'>) {
   try {
-    await requirePermission('member.view');
     const { id } = await ctx.params;
+    // Sinal do aparelho e exclusivo do ADMIN: o candidato nunca alcanca.
+    await requireMemberAccess('device.view', id);
     return jsonOk({ devices: await listMemberDevices(id) });
   } catch (error) {
     return toErrorResponse(error);

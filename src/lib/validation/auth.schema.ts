@@ -34,3 +34,24 @@ export const changePasswordSchema = z
   });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+/**
+ * Primeiro acesso: define a senha definitiva.
+ *
+ * Mesmas regras da troca comum, sem pedir a senha atual — quem chegou aqui
+ * ja entrou com a senha temporaria e a sessao identifica o usuario.
+ */
+export const firstAccessSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(PASSWORD_MIN, `A nova senha precisa ter pelo menos ${PASSWORD_MIN} caracteres.`)
+      .max(PASSWORD_MAX, `A nova senha precisa ter no máximo ${PASSWORD_MAX} caracteres.`),
+    confirmPassword: z.string().min(1, 'Confirme a nova senha.'),
+  })
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    path: ['confirmPassword'],
+    message: 'As senhas não conferem.',
+  });
+
+export type FirstAccessInput = z.infer<typeof firstAccessSchema>;

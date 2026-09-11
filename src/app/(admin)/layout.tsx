@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/server';
-import { LOGIN_PATH } from '@/lib/auth/constants';
+import { FIRST_ACCESS_PATH, LOGIN_PATH } from '@/lib/auth/constants';
 import { hasPanelAccess } from '@/lib/permissions';
 import { AppShell } from '@/components/layout/AppShell';
 import { SessionProvider } from '@/components/layout/SessionProvider';
@@ -20,6 +20,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!user || !hasPanelAccess(user)) {
     redirect(LOGIN_PATH);
+  }
+
+  // Senha temporaria em uso: nenhuma outra rota do painel abre antes da troca.
+  if (user.mustChangePassword) {
+    redirect(FIRST_ACCESS_PATH);
   }
 
   return (

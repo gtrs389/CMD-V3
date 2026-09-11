@@ -30,8 +30,13 @@ export interface UserRow {
   id: string;
   name: string;
   email: string;
-  password_hash: string;
-  role: 'ADMIN' | 'EQUIPE';
+  /** Nulo enquanto o acesso esta pendente: nao existe senha utilizavel. */
+  password_hash: string | null;
+  role: 'ADMIN' | 'EQUIPE' | 'CANDIDATE';
+  /** Candidato vinculado. Sempre nulo fora do perfil CANDIDATE. */
+  client_id: string | null;
+  /** Senha temporaria em uso: obriga a troca no primeiro acesso. */
+  must_change_password: boolean;
   is_active: boolean;
   failed_attempts: number;
   locked_until: string | null;

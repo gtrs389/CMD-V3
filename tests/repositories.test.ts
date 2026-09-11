@@ -22,7 +22,7 @@ beforeEach(() => {
 
 describe('repositorio de clientes', () => {
   it('cria com formulário padrão e convite ativo', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
 
     expect(client.email).toBe('contato@exemplo.com');
     expect(client.notes).toBe('anotacao');
@@ -32,7 +32,7 @@ describe('repositorio de clientes', () => {
   });
 
   it('não coloca dado pessoal no token do convite', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     const token = (client.invite.token ?? '').toLowerCase();
 
     expect(token).not.toContain('comite');
@@ -41,7 +41,7 @@ describe('repositorio de clientes', () => {
   });
 
   it('localiza pelo token e trata token inexistente', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
 
     expect(await clients.getByToken(client.invite.token ?? '')).not.toBeNull();
     expect(await clients.getByToken('token-invalido')).toBeNull();
@@ -49,7 +49,7 @@ describe('repositorio de clientes', () => {
   });
 
   it('gera novo token invalidando o anterior', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     const previous = client.invite.token ?? '';
 
     const rotated = await clients.regenerateInviteToken(client.id);
@@ -60,7 +60,7 @@ describe('repositorio de clientes', () => {
   });
 
   it('desativa o convite sem apagar o token', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     const updated = await clients.setInviteActive(client.id, false);
 
     expect(updated.invite.active).toBe(false);
@@ -68,7 +68,7 @@ describe('repositorio de clientes', () => {
   });
 
   it('atualiza apenas os campos informados', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     const updated = await clients.update(client.id, { name: 'Novo nome' });
 
     expect(updated.name).toBe('Novo nome');
@@ -76,7 +76,7 @@ describe('repositorio de clientes', () => {
   });
 
   it('conta integrantes no resumo', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     await members.create({
       clientId: client.id,
       name: 'Ana',
@@ -95,7 +95,7 @@ describe('repositorio de clientes', () => {
 
 describe('repositorio de integrantes', () => {
   it('normaliza o telefone ao salvar', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     const member = await members.create({
       clientId: client.id,
       name: '  Ana Souza ',
@@ -111,7 +111,7 @@ describe('repositorio de integrantes', () => {
   });
 
   it('remove toda a equipe ao excluir o cliente', async () => {
-    const client = await clients.create(clientInput);
+    const { client } = await clients.create(clientInput);
     for (const name of ['Ana', 'Bruno']) {
       await members.create({
         clientId: client.id,
@@ -135,8 +135,8 @@ describe('repositorio de integrantes', () => {
 
 describe('isolamento entre clientes', () => {
   it('lista apenas os integrantes do próprio cliente', async () => {
-    const primeiro = await clients.create(clientInput);
-    const segundo = await clients.create({ ...clientInput, email: 'outro@exemplo.com' });
+    const { client: primeiro } = await clients.create(clientInput);
+    const { client: segundo } = await clients.create({ ...clientInput, email: 'outro@exemplo.com' });
 
     await members.create({
       clientId: primeiro.id,
