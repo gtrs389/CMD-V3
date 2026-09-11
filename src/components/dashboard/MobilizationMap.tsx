@@ -32,11 +32,22 @@ const MapCanvas = dynamic(() => import('./MapCanvas'), {
   loading: () => <Skeleton className="h-full w-full rounded-none" />,
 });
 
-export function MobilizationMap() {
+interface MobilizationMapProps {
+  /** Restringe o mapa a equipe de um unico candidato. */
+  clientId?: string;
+}
+
+export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const [filter, setFilter] = useState<MapFilter>(DEFAULT_MAP_FILTER);
   const [resolving, setResolving] = useState(false);
 
-  const loader = useCallback(() => api<MapOverviewPayload>('/api/mapa'), []);
+  const loader = useCallback(
+    () =>
+      api<MapOverviewPayload>(
+        clientId ? `/api/mapa?clientId=${encodeURIComponent(clientId)}` : '/api/mapa',
+      ),
+    [clientId],
+  );
   const { data, loading, error, reload } = useRepositoryQuery<MapOverviewPayload>(loader);
 
   const [openPlace, setOpenPlace] = useState<PollingPlacePin | null>(null);

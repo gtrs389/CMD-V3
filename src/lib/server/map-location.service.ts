@@ -359,23 +359,41 @@ export async function retryLocation(memberId: string, kind: LocationKind): Promi
    Leitura pelo ADMIN
    ------------------------------------------------------------------------- */
 
+/** Restringe os vinculos aos integrantes de um unico candidato. */
+async function scopeLinksToClient(
+  links: MemberLocationRow[],
+  clientId: string,
+): Promise<MemberLocationRow[]> {
+  const clientMembers = await selectRows<{ id: string }>(TABLES.members, {
+    select: 'id',
+    filters: { client_id: clientId },
+  });
+  const memberIds = new Set(clientMembers.map((member) => member.id));
+  return links.filter((link) => memberIds.has(link.member_id));
+}
+
 /**
  * Monta o mapa para o painel.
  *
  * Nada sensivel sai daqui: sem CPF, telefone, endereco residencial completo,
  * numero, ou qualquer parte do retorno da consulta cadastral.
  */
-export async function mapOverview(): Promise<MapOverviewPayload> {
+export async function mapOverview(clientId?: string): Promise<MapOverviewPayload> {
   const links = await selectRows<MemberLocationRow>(TABLES.memberLocations, {
     select: '*',
     order: 'updated_at.desc',
     limit: 2000,
   });
 
-  const totals = { residence: 0, pollingPlace: 0, pending: 0, notFound: 0 };
-  const resolved = links.filter((link) => link.status === 'SUCCESS' && link.location_id);
+  // Com `clientId`, o mapa so considera a equipe daquele candidato: o
+  // recorte acontece antes de somar os totais, para nao contar vinculo de
+  // outra operacao.
+  const scopedLinks = clientId ? await scopeLinksToClient(links, clientId) : links;
 
-  for (const link of links) {
+  const totals = { residence: 0, pollingPlace: 0, pending: 0, notFound: 0 };
+  const resolved = scopedLinks.filter((link) => link.status === 'SUCCESS' && link.location_id);
+
+  for (const link of scopedLinks) {
     if (link.status === 'SUCCESS' && link.location_id) {
       if (link.location_kind === 'RESIDENCE') totals.residence += 1;
       else totals.pollingPlace += 1;

@@ -26,6 +26,7 @@ import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
+import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
 import { TeamChart, type TeamChartPoint } from './TeamChart';
 
 /** Abreviacao dos dias, na ordem devolvida por `getDay()`. */
@@ -59,6 +60,7 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
   const { can } = useSession();
   const podeGerenciarConvite = can('invite.manage');
   const podeEditarFormulario = can('form.manage');
+  const podeVerMapa = can('map.view');
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -173,6 +175,8 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
           onEdit={() => onOpenTab('formulario')}
         />
       </div>
+
+      {podeVerMapa ? <MobilizationMap clientId={client.id} /> : null}
     </div>
   );
 }

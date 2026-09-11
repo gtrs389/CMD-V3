@@ -15,7 +15,7 @@ import {
  * A resposta carrega apenas o necessario para desenhar o pino e abrir a
  * ficha: nenhum CPF, telefone, endereco completo ou retorno de consulta.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requirePermission('map.view');
 
@@ -24,7 +24,12 @@ export async function GET() {
     await ensureResidenceLinks().catch(() => undefined);
     await resolvePending(5).catch(() => undefined);
 
-    return jsonOk(await mapOverview());
+    // Sem `clientId`, o mapa mostra a mobilizacao inteira (uso no painel
+    // geral). Com `clientId`, mostra apenas a equipe daquele candidato
+    // (uso no painel individual do candidato).
+    const clientId = request.nextUrl.searchParams.get('clientId') ?? undefined;
+
+    return jsonOk(await mapOverview(clientId));
   } catch (error) {
     return toErrorResponse(error);
   }
