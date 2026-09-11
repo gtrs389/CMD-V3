@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { appConfig } from '@/config/app.config';
 import { cn } from '@/lib/utils/cn';
 import { useSession } from './SessionProvider';
-import { NAV_ITEMS, TEAM_NAV_ITEMS, isActive } from './navigation';
+import { NAV_ITEMS, isActive } from './navigation';
 
 interface SidebarProps {
   /** Fecha o painel deslizante apos navegar (uso no celular). */
@@ -15,12 +15,9 @@ interface SidebarProps {
 /** Conteudo de navegacao. Reaproveitado pela barra flutuante e pelo menu deslizante. */
 export function SidebarContent({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const { user, can } = useSession();
+  const { can } = useSession();
 
-  // O integrante da equipe tem um menu proprio: visao geral da propria
-  // mobilizacao e o link pessoal de recrutamento.
-  const source = user?.role === 'EQUIPE' ? TEAM_NAV_ITEMS : NAV_ITEMS;
-  const items = source.filter((item) => can(item.permission));
+  const items = NAV_ITEMS.filter((item) => can(item.permission));
 
   return (
     <div className="flex h-full min-h-0 flex-col text-white">
