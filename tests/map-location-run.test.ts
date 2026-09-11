@@ -155,6 +155,7 @@ const {
 } = await import('@/lib/server/map-location.service');
 
 const { encryptJson } = await import('@/lib/server/crypto');
+const { estimatedVotes } = await import('@/lib/domain/map-pin');
 
 function member(id: string, extra: Record<string, unknown> = {}) {
   db.members[id] = {
@@ -446,12 +447,17 @@ describe('mapa agrupado por local de votação', () => {
     expect(pins).toHaveLength(0); // moradia nao entra aqui
 
     const local = pollingPlaces[0];
+    // A estimativa de votos da escola: uma pessoa cadastrada, um voto.
     expect(local.total).toBe(3);
+    expect(estimatedVotes(local)).toBe(3);
     expect(local.men).toBe(1);
     expect(local.women).toBe(1);
     expect(local.others).toBe(1);
     expect(local.men + local.women + local.others).toBe(local.total);
-    expect(local.withPhone).toBe(2);
+
+    // Telefone nao vira contador da escola: o pino fala de voto, nao de
+    // qualidade de cadastro.
+    expect(Object.keys(local)).not.toContain('withPhone');
 
     // O resumo do pino nao carrega nome, telefone nem e-mail.
     const serializado = JSON.stringify(local);

@@ -45,12 +45,43 @@ export interface PollingPlacePin {
   city: string | null;
   state: string | null;
   imageUrl: string | null;
+  /** Cadastros com titulo confirmado que votam ali. Base da estimativa. */
   total: number;
   men: number;
   women: number;
   /** Outro, prefiro nao informar ou sem genero declarado. Fecha o total. */
   others: number;
-  withPhone: number;
+}
+
+/**
+ * Estimativa de votos da escola.
+ *
+ * Uma pessoa cadastrada que vota ali, um voto: o numero e a contagem de
+ * cadastros cujo titulo de eleitor aponta para aquele local. Nada e projetado,
+ * ponderado ou inferido — e "estimativa" porque cadastro nao e voto garantido,
+ * nao porque exista modelo por tras.
+ *
+ * A regra mora aqui: o popup do mapa e o painel lateral mostram o mesmo
+ * numero, com o mesmo nome, sempre.
+ */
+export const ESTIMATED_VOTES_LABEL = 'Estimativa de votos';
+
+/** Explica de que o numero e feito, para ninguem ler como projecao. */
+export const ESTIMATED_VOTES_HINT = 'Uma pessoa cadastrada que vota aqui, um voto';
+
+export function estimatedVotes(place: Pick<PollingPlacePin, 'total'>): number {
+  return place.total;
+}
+
+/** Composicao da estimativa por genero declarado. Sempre fecha o total. */
+export function voteBreakdown(
+  place: Pick<PollingPlacePin, 'men' | 'women' | 'others'>,
+): { label: string; value: number }[] {
+  return [
+    { label: 'Homens', value: place.men },
+    { label: 'Mulheres', value: place.women },
+    { label: 'Não informado', value: place.others },
+  ];
 }
 
 /** Chave de agrupamento: place_id, senao data_id, senao coordenada + titulo. */

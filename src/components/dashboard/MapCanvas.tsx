@@ -6,7 +6,15 @@ import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPin, PollingPlacePin } from '@/lib/domain/map-pin';
-import { clusterPins, precisionLabel, type PinCluster } from '@/lib/domain/map-pin';
+import {
+  clusterPins,
+  estimatedVotes,
+  precisionLabel,
+  voteBreakdown,
+  ESTIMATED_VOTES_HINT,
+  ESTIMATED_VOTES_LABEL,
+  type PinCluster,
+} from '@/lib/domain/map-pin';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber } from '@/lib/utils/text';
 import { initials } from '@/lib/utils/text';
@@ -181,6 +189,37 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
 }
 
 /**
+ * Estimativa de votos da escola.
+ *
+ * O numero que importa na escola e quantos votos ela representa, entao ele vem
+ * primeiro e grande; a divisao por genero fica embaixo, como composicao. O
+ * rodape diz de que o numero e feito para ninguem ler como projecao.
+ */
+function PlaceVotes({ place }: { place: PollingPlacePin }) {
+  return (
+    <section className="rounded-control border border-brand-100 bg-brand-50 px-2.5 py-2">
+      <p className="text-[0.6875rem] font-semibold tracking-wide text-brand-800 uppercase">
+        {ESTIMATED_VOTES_LABEL}
+      </p>
+      <p className="text-2xl leading-tight font-semibold text-brand-900">
+        {formatNumber(estimatedVotes(place))}
+      </p>
+
+      <dl className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-ink-500">
+        {voteBreakdown(place).map((item) => (
+          <div key={item.label} className="flex gap-1">
+            <dt>{item.label}:</dt>
+            <dd className="font-semibold text-ink-900">{formatNumber(item.value)}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <p className="mt-1 text-[0.625rem] text-ink-500 italic">{ESTIMATED_VOTES_HINT}</p>
+    </section>
+  );
+}
+
+/**
  * Pino do local de votacao.
  *
  * Representa a escola, nunca uma pessoa: o resumo traz apenas contagens, e os
@@ -223,28 +262,7 @@ function PlaceMarker({
             {[place.city, place.state].filter(Boolean).join('/') || '--'}
           </p>
 
-          <dl className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs text-ink-500">
-            <div className="col-span-2 flex gap-1">
-              <dt>Pessoas que votam aqui:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.total)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Homens:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.men)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Mulheres:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.women)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Não informado:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.others)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Com telefone:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(place.withPhone)}</dd>
-            </div>
-          </dl>
+          <PlaceVotes place={place} />
 
           <button
             type="button"
