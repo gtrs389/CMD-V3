@@ -71,7 +71,7 @@ export function ClientOverviewPanel({ client, members }: ClientOverviewPanelProp
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Dados do cliente</CardTitle>
+            <CardTitle>Dados do candidato</CardTitle>
           </CardHeader>
           <CardBody>
             <dl className="divide-y divide-line text-sm">

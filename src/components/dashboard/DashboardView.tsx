@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock3,
   Link2,
-  Plus,
   TrendingUp,
   UserPlus,
   Users,
@@ -23,7 +22,6 @@ import { cn } from '@/lib/utils/cn';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { ClientFormModal } from '@/components/clients/ClientFormModal';
 import { MobilizationMap } from './MobilizationMap';
 import { MembersChart, type ChartPoint } from './MembersChart';
 
@@ -64,7 +62,6 @@ function location(member: Member): string {
 }
 
 export function DashboardView() {
-  const [creating, setCreating] = useState(false);
   const { user } = useSession();
 
   const {
@@ -144,11 +141,6 @@ export function DashboardView() {
           </h1>
           <p className="mt-0.5 text-sm text-ink-500">Sua operação em movimento.</p>
         </div>
-
-        <Button className="shrink-0 rounded-pill px-5" onClick={() => setCreating(true)}>
-          <Plus aria-hidden="true" className="size-4" />
-          Novo cliente
-        </Button>
       </header>
 
       {error ? (
@@ -215,10 +207,10 @@ export function DashboardView() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
           <AtalhoCard
-            href="/clientes"
+            href="/candidatos"
             icon={<Users className="size-[1.125rem]" />}
             value={clientList.length}
-            label="Clientes"
+            label="Candidatos"
             hint={
               stats.clientesNoMes > 0
                 ? `${stats.clientesNoMes} ${stats.clientesNoMes === 1 ? 'adicionado' : 'adicionados'} este mês`
@@ -227,7 +219,7 @@ export function DashboardView() {
             loading={loading}
           />
           <AtalhoCard
-            href="/clientes"
+            href="/candidatos"
             icon={<Link2 className="size-[1.125rem]" />}
             value={stats.convitesAtivos}
             label="Convites ativos"
@@ -302,7 +294,7 @@ export function DashboardView() {
         </article>
       </section>
 
-      {/* Linha inferior: ultimos integrantes e ranking de clientes. */}
+      {/* Linha inferior: ultimos integrantes e ranking de candidatos. */}
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.72fr)_minmax(0,1fr)]">
         <article className="rounded-card border border-line bg-surface p-5 shadow-card">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -318,13 +310,13 @@ export function DashboardView() {
                   Últimos integrantes cadastrados
                 </h2>
                 <p className="text-xs text-ink-500">
-                  Pessoas que acabaram de entrar nas equipes dos seus clientes.
+                  Pessoas que acabaram de entrar nas equipes dos seus candidatos.
                 </p>
               </div>
             </div>
 
             <Link
-              href="/clientes"
+              href="/candidatos"
               className="shrink-0 text-xs font-semibold text-brand-700 hover:text-brand-800"
             >
               Ver todos
@@ -366,7 +358,7 @@ export function DashboardView() {
               <table className="mt-3 hidden w-full border-collapse text-left sm:table">
                 <thead>
                   <tr className="border-b border-line">
-                    {['Integrante', 'Cliente', 'Localização', 'Cadastrado em'].map((coluna) => (
+                    {['Integrante', 'Candidato', 'Localização', 'Cadastrado em'].map((coluna) => (
                       <th
                         key={coluna}
                         scope="col"
@@ -417,11 +409,11 @@ export function DashboardView() {
               >
                 <Users className="size-4" />
               </span>
-              <h2 className="text-sm font-semibold text-ink-900">Clientes</h2>
+              <h2 className="text-sm font-semibold text-ink-900">Candidatos</h2>
             </div>
 
             <Link
-              href="/clientes"
+              href="/candidatos"
               className="shrink-0 text-xs font-semibold text-brand-700 hover:text-brand-800"
             >
               Ver todos
@@ -436,14 +428,14 @@ export function DashboardView() {
             </div>
           ) : stats.topClientes.length === 0 ? (
             <p className="mt-6 text-sm text-ink-500">
-              Nenhum cliente cadastrado. Use o botão “Novo cliente” para começar.
+              Nenhum candidato cadastrado. Cadastre o primeiro na página Candidatos.
             </p>
           ) : (
             <ul className="mt-3 divide-y divide-line">
               {stats.topClientes.map((client) => (
                 <li key={client.id}>
                   <Link
-                    href={`/clientes/${client.id}`}
+                    href={`/candidatos/${client.id}`}
                     className="flex items-center gap-3 py-2.5 transition-colors hover:bg-ink-50"
                   >
                     <Avatar name={client.name} src={client.photo} size="sm" />
@@ -470,8 +462,6 @@ export function DashboardView() {
       </section>
 
       <MobilizationMap />
-
-      <ClientFormModal open={creating} onClose={() => setCreating(false)} />
     </div>
   );
 }
@@ -516,7 +506,7 @@ function AtalhoCard({ href, icon, value, label, hint, loading }: AtalhoCardProps
   );
 }
 
-/** Barra proporcional ao maior cliente exibido. */
+/** Barra proporcional ao maior candidato exibido. */
 function ClientBar({ value, max }: { value: number; max: number }) {
   const percent = max > 0 ? Math.round((value / max) * 100) : 0;
 

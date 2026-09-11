@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<'/api/clients
     await requirePermission('client.view');
     const { id } = await ctx.params;
     const client = await getClient(id);
-    if (!client) throw notFound('Cliente não encontrado.');
+    if (!client) throw notFound('Candidato não encontrado.');
     return jsonOk({ client });
   } catch (error) {
     return toErrorResponse(error);

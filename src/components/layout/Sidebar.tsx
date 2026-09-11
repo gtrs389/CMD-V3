@@ -6,7 +6,6 @@ import { appConfig } from '@/config/app.config';
 import { cn } from '@/lib/utils/cn';
 import { useSession } from './SessionProvider';
 import { NAV_ITEMS, isActive } from './navigation';
-import { UserMenu } from './UserMenu';
 
 interface SidebarProps {
   /** Fecha o painel deslizante apos navegar (uso no celular). */
@@ -38,7 +37,10 @@ export function SidebarContent({ onNavigate }: SidebarProps) {
         </p>
       </div>
 
-      <nav aria-label="Navegação principal" className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+      <nav
+        aria-label="Navegação principal"
+        className="safe-bottom min-h-0 flex-1 overflow-y-auto px-3 py-2 pb-4"
+      >
         <ul className="space-y-1.5">
           {items.map((item) => {
             const active = isActive(pathname, item.href);
@@ -64,10 +66,6 @@ export function SidebarContent({ onNavigate }: SidebarProps) {
           })}
         </ul>
       </nav>
-
-      <div className="safe-bottom shrink-0 px-3 pb-4">
-        <UserMenu />
-      </div>
     </div>
   );
 }

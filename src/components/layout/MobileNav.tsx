@@ -6,6 +6,7 @@ import { Menu as MenuIcon, X } from 'lucide-react';
 import { IconButton } from '@/components/ui/IconButton';
 import { Logo } from './Logo';
 import { SidebarContent } from './Sidebar';
+import { UserMenu } from './UserMenu';
 
 /**
  * Navegacao compacta do celular: cabecalho fixo com menu lateral deslizante.
@@ -50,6 +51,8 @@ export function MobileNav() {
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
             Central de mobilização
           </span>
+
+          <UserMenu />
         </div>
       </header>
 

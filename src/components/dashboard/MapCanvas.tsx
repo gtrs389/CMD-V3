@@ -132,7 +132,7 @@ function PinDetails({ pin }: { pin: MapPin }) {
         <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
 
         <Link
-          href={`/clientes/${pin.clientId}?integrante=${pin.memberId}`}
+          href={`/candidatos/${pin.clientId}?integrante=${pin.memberId}`}
           className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-brand-700 hover:text-brand-800"
         >
           Ver ficha completa

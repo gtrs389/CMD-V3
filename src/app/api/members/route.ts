@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const input = await readJson(request, memberCreateSchema);
 
     const client = await getClient(input.clientId);
-    if (!client) throw notFound('Cliente não encontrado.');
+    if (!client) throw notFound('Candidato não encontrado.');
 
     const { privacy } = client.form;
     if (privacy.enabled && privacy.requireConsent && !input.consentAt) {

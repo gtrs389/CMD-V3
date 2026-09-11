@@ -18,7 +18,7 @@ function countCustomFields(fields: CustomField[]): number {
   return fields.filter((field) => field.systemKey === null).length;
 }
 
-/** Exclusao de cliente com detalhamento do impacto antes de confirmar. */
+/** Exclusao de candidato com detalhamento do impacto antes de confirmar. */
 export function DeleteClientDialog({
   open,
   client,
@@ -37,17 +37,17 @@ export function DeleteClientDialog({
       // Integrantes, respostas, campos e convite saem junto: o banco remove
       // tudo em cascata e o servidor apaga as fotos do Storage privado.
       await clientRepository.remove(client.id);
-      toast.success(`Cliente "${client.name}" excluido.`);
+      toast.success(`Candidato "${client.name}" excluido.`);
       onDeleted?.();
     } catch {
-      toast.error('Não foi possível excluir o cliente.');
+      toast.error('Não foi possível excluir o candidato.');
     }
   }
 
   return (
     <ConfirmDialog
       open={open}
-      title="Excluir cliente"
+      title="Excluir candidato"
       description={`Esta ação remove definitivamente "${client.name}" e tudo o que está vinculado a ele. Não é possível desfazer.`}
       confirmLabel="Excluir definitivamente"
       onCancel={onCancel}

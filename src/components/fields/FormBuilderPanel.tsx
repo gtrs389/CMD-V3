@@ -31,7 +31,7 @@ interface FormBuilderPanelProps {
 
 type View = 'campos' | 'previa' | 'ajustes';
 
-/** Construtor do formulario do cliente: CRUD e reordenacao de campos. */
+/** Construtor do formulario do candidato: CRUD e reordenacao de campos. */
 export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
   const toast = useToast();
   const [view, setView] = useState<View>('campos');

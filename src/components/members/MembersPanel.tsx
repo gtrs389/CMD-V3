@@ -26,7 +26,7 @@ interface MembersPanelProps {
 }
 
 /**
- * Gestao da equipe do cliente.
+ * Gestao da equipe do candidato.
  * Tabela no desktop e cartoes no celular, sem rolagem horizontal.
  */
 export function MembersPanel({ client, members, loading }: MembersPanelProps) {

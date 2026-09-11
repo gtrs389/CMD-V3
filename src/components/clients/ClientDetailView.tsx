@@ -30,19 +30,27 @@ import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { InvitePanel } from './InvitePanel';
 
-type TabId = 'visao-geral' | 'equipe' | 'formulario' | 'convite';
+const TAB_IDS = ['visao-geral', 'equipe', 'formulario', 'convite'] as const;
+type TabId = (typeof TAB_IDS)[number];
+
+/** Confere o parametro `aba` da URL antes de escolher a aba inicial. */
+export function isTabId(value: string): value is TabId {
+  return (TAB_IDS as readonly string[]).includes(value);
+}
 
 interface ClientDetailViewProps {
   clientId: string;
+  /** Aba aberta ao entrar. Usada pelo atalho de recrutamento. */
+  initialTab?: TabId;
 }
 
-/** Pagina individual do cliente, organizada em abas. */
-export function ClientDetailView({ clientId }: ClientDetailViewProps) {
+/** Pagina individual do candidato, organizada em abas. */
+export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps) {
   const router = useRouter();
   const { data: client, loading, error, reload } = useClient(clientId);
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
-  const [tab, setTab] = useState<TabId>('visao-geral');
+  const [tab, setTab] = useState<TabId>(initialTab ?? 'visao-geral');
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -68,15 +76,15 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
     return (
       <EmptyState
         icon={<Building2 className="size-6" />}
-        title="Cliente não encontrado"
-        description="O cliente pode ter sido excluido por outra pessoa."
+        title="Candidato não encontrado"
+        description="O candidato pode ter sido excluido por outra pessoa."
         action={
           <Link
-            href="/clientes"
+            href="/candidatos"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
-            Voltar para clientes
+            Voltar para candidatos
           </Link>
         }
       />
@@ -102,11 +110,11 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
   return (
     <div className="space-y-6">
       <Link
-        href="/clientes"
+        href="/candidatos"
         className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-500 transition-colors hover:text-ink-900"
       >
         <ArrowLeft aria-hidden="true" className="size-4" />
-        Clientes
+        Candidatos
       </Link>
 
       <Card>
@@ -133,7 +141,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button variant="secondary" onClick={() => setEditing(true)}>
               <Pencil aria-hidden="true" className="size-4" />
-              Editar cliente
+              Editar candidato
             </Button>
             <Button
               variant="ghost"
@@ -148,7 +156,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
       </Card>
 
       <Tabs
-        label="Seções do cliente"
+        label="Seções do candidato"
         items={tabs}
         active={tab}
         onChange={(id) => setTab(id as TabId)}
@@ -179,7 +187,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
         onCancel={() => setDeleting(false)}
         onDeleted={() => {
           setDeleting(false);
-          router.replace('/clientes');
+          router.replace('/candidatos');
         }}
       />
     </div>
