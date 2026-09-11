@@ -145,6 +145,14 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
    * carregada, o que libera os bairros. Se a API nao o conhece mais, o valor
    * segue guardado e apenas os bairros ficam indisponiveis.
    */
+  /**
+   * Identificador interno do municipio escolhido. E ele, nunca o `ibgeId`,
+   * que busca os bairros.
+   *
+   * Cadastro antigo: o municipio ja gravado e reconhecido dentro da lista
+   * carregada, o que libera os bairros. Se a API nao o conhece mais, o valor
+   * segue guardado e apenas os bairros ficam indisponiveis.
+   */
   const cityId = useMemo(
     () => chosenCityId ?? (city ? (findCity(cities.items, city)?.id ?? null) : null),
     [chosenCityId, city, cities.items],

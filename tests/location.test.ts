@@ -18,7 +18,7 @@ import {
   selectDistrict,
   selectState,
   statesUrl,
-  toIbgeCode,
+  toCityId,
   withCurrentValue,
   type CityOption,
 } from '@/lib/domain/location';
@@ -40,7 +40,7 @@ const CITIES = {
   result: [
     { id: 669, ibgeId: 3550308, name: 'São Paulo' },
     { id: 646, ibgeId: 3304557, name: 'Campinas' },
-    { id: 700, ibgeId: 0, name: 'Sem código' },
+    { id: 0, ibgeId: 0, name: 'Sem identificador' },
   ],
 };
 
@@ -61,12 +61,12 @@ describe('leitura das respostas da API', () => {
     expect(states[0].name).toBe('Rio de Janeiro');
   });
 
-  it('usa o código IBGE do município e descarta registro sem código válido', () => {
+  it('preserva id e ibgeId de cada município', () => {
     const cities = parseCities(CITIES.result);
 
     expect(cities).toEqual([
-      { id: 3304557, name: 'Campinas' },
-      { id: 3550308, name: 'São Paulo' },
+      { id: 646, ibgeId: 3304557, name: 'Campinas' },
+      { id: 669, ibgeId: 3550308, name: 'São Paulo' },
     ]);
   });
 
@@ -87,24 +87,22 @@ describe('montagem das URLs', () => {
   it('usa a base fixa e envia apenas UF ou identificador', () => {
     expect(statesUrl()).toBe('https://api.brasilaberto.com/v1/states');
     expect(citiesUrl('sp')).toBe('https://api.brasilaberto.com/v1/cities/SP');
-    expect(districtsUrl(3550308)).toBe(
-      'https://api.brasilaberto.com/v1/districts-by-ibge-code/3550308',
-    );
+    expect(districtsUrl(669)).toBe('https://api.brasilaberto.com/v1/districts/669');
   });
 
   it('recusa UF fora das 27 siglas e identificador inválido', () => {
     expect(() => citiesUrl('XX')).toThrow(LocationError);
     expect(() => citiesUrl('../states')).toThrow(LocationError);
     expect(() => districtsUrl(-1)).toThrow(LocationError);
-    expect(toIbgeCode('12a')).toBeNull();
-    expect(toIbgeCode('3550308')).toBe(3550308);
+    expect(toCityId('12a')).toBeNull();
+    expect(toCityId('669')).toBe(669);
   });
 });
 
 describe('encadeamento estado, município e bairro', () => {
   const cities: CityOption[] = [
-    { id: 3550308, name: 'São Paulo' },
-    { id: 3304557, name: 'Campinas' },
+    { id: 669, ibgeId: 3550308, name: 'São Paulo' },
+    { id: 646, ibgeId: 3304557, name: 'Campinas' },
   ];
 
   const preenchido = selectDistrict(
@@ -116,7 +114,7 @@ describe('encadeamento estado, município e bairro', () => {
     expect(preenchido).toEqual({
       state: 'SP',
       city: 'São Paulo',
-      cityId: 3550308,
+      cityId: 669,
       district: 'Vila Mariana',
     });
   });
@@ -135,19 +133,19 @@ describe('encadeamento estado, município e bairro', () => {
 
     expect(trocado.state).toBe('SP');
     expect(trocado.city).toBe('Campinas');
-    expect(trocado.cityId).toBe(3304557);
+    expect(trocado.cityId).toBe(646);
     expect(trocado.district).toBe('');
   });
 });
 
 describe('cadastros antigos', () => {
   const cities: CityOption[] = [
-    { id: 3550308, name: 'São Paulo' },
-    { id: 3304557, name: 'Campinas' },
+    { id: 669, ibgeId: 3550308, name: 'São Paulo' },
+    { id: 646, ibgeId: 3304557, name: 'Campinas' },
   ];
 
   it('reconhece o município já salvo mesmo com acento ou caixa diferente', () => {
-    expect(findCity(cities, 'sao paulo')?.id).toBe(3550308);
+    expect(findCity(cities, 'sao paulo')?.id).toBe(669);
     expect(findCity(cities, 'Município Extinto')).toBeNull();
   });
 
@@ -197,12 +195,12 @@ describe('consulta no servidor', () => {
 
     await listStates();
     await listCities('SP');
-    await listDistricts(3550308);
+    await listDistricts(669);
 
     expect(calls.map(([url]) => url)).toEqual([
       'https://api.brasilaberto.com/v1/states',
       'https://api.brasilaberto.com/v1/cities/SP',
-      'https://api.brasilaberto.com/v1/districts-by-ibge-code/3550308',
+      'https://api.brasilaberto.com/v1/districts/669',
     ]);
 
     for (const [, init] of calls) {
@@ -235,6 +233,25 @@ describe('consulta no servidor', () => {
 
     expect(String(erro)).not.toContain(CHAVE);
     expect((erro as Error).message).toBe('Serviço de localidades indisponível. Configuração ausente.');
+  });
+
+  it('busca os bairros pelo id interno do município, nunca pelo ibgeId', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        calls.push(url);
+        return { ok: true, json: async () => DISTRICTS };
+      }),
+    );
+
+    const [saoPaulo] = parseCities(CITIES).filter((city) => city.name === 'São Paulo');
+    const districts = await listDistricts(saoPaulo.id);
+
+    expect(calls).toEqual(['https://api.brasilaberto.com/v1/districts/669']);
+    expect(calls[0]).not.toContain(String(saoPaulo.ibgeId));
+    expect(calls[0]).not.toContain('districts-by-ibge-code');
+    expect(districts.map((district) => district.name)).toEqual(['Bela Vista', 'Vila Mariana']);
   });
 
   it('falha da API vira erro previsto, sem detalhe interno', async () => {

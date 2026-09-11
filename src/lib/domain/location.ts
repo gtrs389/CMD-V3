@@ -29,8 +29,10 @@ export interface StateOption {
 }
 
 export interface CityOption {
-  /** Codigo IBGE: usado apenas para buscar os bairros. Nunca e gravado. */
+  /** Identificador da Brasil Aberto: e ele que busca os bairros. */
   id: number;
+  /** Codigo IBGE do municipio. Preservado, mas nao usado nos bairros. */
+  ibgeId: number | null;
   name: string;
 }
 
@@ -62,17 +64,14 @@ const stateSchema = z.object({
   uf: z.string().length(2).optional(),
 });
 
-/**
- * Os bairros sao consultados por codigo IBGE, entao e o `ibgeId` que
- * interessa; o `id` interno da Brasil Aberto so entra como reserva.
- */
+/** A resposta traz `id` e `ibgeId`; os dois sao preservados. */
 const citySchema = z.object({
   id: z.union([z.number(), z.string()]).optional(),
   ibgeId: z.union([z.number(), z.string()]).optional(),
   name: z.string().min(1),
 });
 
-const districtSchema = z.object({ name: z.string().min(1) });
+const districtSchema = z.object({ id: z.union([z.number(), z.string()]).optional(), name: z.string().min(1) });
 
 function items<T>(payload: unknown, schema: z.ZodType<T[] | { result: T[] }>): T[] {
   const parsed = schema.safeParse(payload);
@@ -101,9 +100,13 @@ export function parseCities(payload: unknown): CityOption[] {
   const cities: CityOption[] = [];
 
   for (const row of rows) {
-    const id = Number(row.ibgeId ?? row.id);
-    if (!isIbgeCode(id)) continue;
-    cities.push({ id, name: normalizePlace(row.name) || row.name.trim() });
+    const id = toCityId(row.id ?? null);
+    if (id === null) continue;
+    cities.push({
+      id,
+      ibgeId: toCityId(row.ibgeId ?? null),
+      name: normalizePlace(row.name) || row.name.trim(),
+    });
   }
 
   if (cities.length === 0) throw new LocationError();
@@ -130,15 +133,15 @@ export function parseDistricts(payload: unknown): DistrictOption[] {
    Entradas aceitas e montagem das URLs
    ------------------------------------------------------------------------- */
 
-/** Aceita apenas inteiro positivo. O codigo vem sempre da propria API. */
-export function isIbgeCode(value: unknown): value is number {
+/** Aceita apenas inteiro positivo. O identificador vem sempre da propria API. */
+export function isCityId(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
-export function toIbgeCode(value: string | number | null | undefined): number | null {
+export function toCityId(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === '') return null;
   const parsed = Number(value);
-  return isIbgeCode(parsed) ? parsed : null;
+  return isCityId(parsed) ? parsed : null;
 }
 
 /**
@@ -155,9 +158,10 @@ export function citiesUrl(uf: string): string {
   return `${BASE_URL}/cities/${encodeURIComponent(code)}`;
 }
 
-export function districtsUrl(ibgeCode: number): string {
-  if (!isIbgeCode(ibgeCode)) throw new LocationError('Município inválido.');
-  return `${BASE_URL}/districts-by-ibge-code/${ibgeCode}`;
+/** Bairros pelo identificador interno do municipio (`city.id`). */
+export function districtsUrl(cityId: number): string {
+  if (!isCityId(cityId)) throw new LocationError('Município inválido.');
+  return `${BASE_URL}/districts/${cityId}`;
 }
 
 export const UF_CODES: readonly string[] = UF_OPTIONS.map((option) => option.id);
@@ -171,7 +175,7 @@ export interface LocationSelection {
   state: string;
   /** Nome do municipio, como sera gravado. */
   city: string;
-  /** Codigo IBGE do municipio: vive apenas durante o preenchimento. */
+  /** Identificador da Brasil Aberto: vive apenas durante o preenchimento. */
   cityId: number | null;
   /** Nome do bairro, como sera gravado. */
   district: string;

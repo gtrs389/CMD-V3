@@ -54,13 +54,40 @@ async function load<T>(url: string, revalidate: number, parse: (payload: unknown
     });
   } catch {
     // A causa original fica fora da resposta e fora do log.
+    logFailure(url, 0);
     throw new LocationError();
   }
 
-  if (!response.ok) throw new LocationError();
+  if (!response.ok) {
+    logFailure(url, response.status);
+    throw new LocationError();
+  }
 
   const payload = await response.json().catch(() => null);
-  return parse(payload);
+
+  try {
+    return parse(payload);
+  } catch {
+    logFailure(url, response.status, 'formato inesperado');
+    throw new LocationError();
+  }
+}
+
+/**
+ * Registra apenas o caminho consultado e o codigo devolvido.
+ * Nunca entra aqui a chave da API nem qualquer dado da pessoa.
+ */
+function logFailure(url: string, status: number, detail = 'falha na consulta'): void {
+  console.warn('[cmd] localidades: %s (%s) em %s', detail, status || 'sem resposta', endpoint(url));
+}
+
+/** Caminho sem dominio e sem parametros de consulta, para o log. */
+function endpoint(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return 'desconhecido';
+  }
 }
 
 export function listStates(): Promise<StateOption[]> {
@@ -71,6 +98,7 @@ export function listCities(uf: string): Promise<CityOption[]> {
   return load(citiesUrl(uf), CACHE_SECONDS.cities, parseCities);
 }
 
-export function listDistricts(ibgeCode: number): Promise<DistrictOption[]> {
-  return load(districtsUrl(ibgeCode), CACHE_SECONDS.districts, parseDistricts);
+/** Bairros do municipio, pelo identificador interno (`city.id`). */
+export function listDistricts(cityId: number): Promise<DistrictOption[]> {
+  return load(districtsUrl(cityId), CACHE_SECONDS.districts, parseDistricts);
 }
