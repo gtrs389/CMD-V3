@@ -3,14 +3,17 @@ import { requireClientAccess } from '@/lib/server/guard';
 import { jsonOk, notFound, readJson, toErrorResponse } from '@/lib/server/http';
 import { clientUpdateSchema } from '@/lib/validation/server.schema';
 import { deleteClient, getClient, updateClient } from '@/lib/server/client.service';
+import { clientForSession } from '@/lib/server/form-visibility';
 
 export async function GET(_request: NextRequest, ctx: RouteContext<'/api/clients/[id]'>) {
   try {
     const { id } = await ctx.params;
-    await requireClientAccess('client.view', id);
+    const user = await requireClientAccess('client.view', id);
     const client = await getClient(id);
     if (!client) throw notFound('Candidato não encontrado.');
-    return jsonOk({ client });
+    // A area interna do formulario e do ADMIN: a configuracao dos campos nao
+    // vai na resposta de quem nao tem `form.view`.
+    return jsonOk({ client: clientForSession(user, client) });
   } catch (error) {
     return toErrorResponse(error);
   }

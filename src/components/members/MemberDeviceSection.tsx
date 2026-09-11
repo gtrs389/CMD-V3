@@ -1,6 +1,7 @@
 'use client';
 
-import { MonitorSmartphone } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, MonitorSmartphone } from 'lucide-react';
 import {
   browserName,
   byLastSeen,
@@ -27,38 +28,61 @@ const EMPTY_MESSAGE = 'Informações do aparelho não disponíveis.';
 /**
  * Sinais tecnicos do aparelho usado no cadastro.
  *
- * Os dados vem da rota protegida do ADMIN. Token, hash de IP e identificadores
- * tecnicos nunca sao enviados ao navegador, portanto nao aparecem aqui.
+ * Exclusivo do ADMIN: quem chama ja confere `device.view`, e a rota recusa
+ * qualquer outro perfil com 403. Token, hash de IP e identificadores tecnicos
+ * nunca sao enviados ao navegador, portanto nao aparecem aqui.
+ *
+ * A secao comeca fechada e a consulta so acontece quando ela e aberta: dado
+ * tecnico nao carrega sozinho em cima de cada ficha.
  */
 export function MemberDeviceSection({ memberId }: MemberDeviceSectionProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="overflow-hidden rounded-control border border-line">
+      <details
+        open={open}
+        onToggle={(event) => setOpen(event.currentTarget.open)}
+        className="group"
+      >
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm font-semibold text-ink-900 transition-colors hover:bg-ink-50 [&::-webkit-details-marker]:hidden">
+          <MonitorSmartphone aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
+          <span className="min-w-0 flex-1">Aparelho e segurança</span>
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 shrink-0 text-ink-500 transition-transform group-open:rotate-180"
+          />
+        </summary>
+
+        {/* Montado somente depois de abrir: e ai que a rota e consultada. */}
+        {open ? <DeviceList memberId={memberId} /> : null}
+      </details>
+    </section>
+  );
+}
+
+function DeviceList({ memberId }: MemberDeviceSectionProps) {
   const { data, loading, error } = useMemberDevices(memberId);
   const devices = [...(data ?? [])].sort(byLastSeen);
 
   return (
-    <section>
-      <h4 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-        <MonitorSmartphone aria-hidden="true" className="size-4 text-brand-700" />
-        Aparelho e segurança
-      </h4>
-
+    <div className="border-t border-line p-3">
       {loading ? (
-        <div className="mt-2 space-y-2">
-          <Skeleton className="h-24 w-full rounded-control" />
-        </div>
+        <Skeleton className="h-24 w-full rounded-control" />
       ) : error ? (
-        <p role="alert" className="mt-2 text-sm text-danger-700">
+        <p role="alert" className="text-sm text-danger-700">
           {error}
         </p>
       ) : devices.length === 0 ? (
-        <p className="mt-2 text-sm text-ink-500">{EMPTY_MESSAGE}</p>
+        <p className="text-sm text-ink-500">{EMPTY_MESSAGE}</p>
       ) : (
-        <div className="mt-2 space-y-3">
+        <div className="space-y-3">
           {devices.map((device, index) => (
             <DeviceCard key={`${device.firstSeenAt}-${index}`} device={device} />
           ))}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

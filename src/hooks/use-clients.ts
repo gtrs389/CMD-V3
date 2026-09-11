@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { clientRepository } from '@/lib/repositories';
+import { fetchPublicInvite, type PublicInvite } from '@/lib/repositories/http/public';
 import type { Client, ClientSummary } from '@/lib/types';
 import { useRepositoryQuery } from './use-repository-query';
 
@@ -15,7 +16,13 @@ export function useClient(id: string) {
   return useRepositoryQuery<Client | null>(loader);
 }
 
-export function useClientByToken(token: string) {
-  const loader = useCallback(() => clientRepository.getByToken(token), [token]);
-  return useRepositoryQuery<Client | null>(loader);
+/**
+ * Convite aberto pelo link publico: formulario e quem convidou.
+ *
+ * A resposta vem da rota publica, que resolve o token no servidor. Nada e
+ * guardado no navegador.
+ */
+export function usePublicInvite(token: string) {
+  const loader = useCallback(() => fetchPublicInvite(token), [token]);
+  return useRepositoryQuery<PublicInvite | null>(loader);
 }

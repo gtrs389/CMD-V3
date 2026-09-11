@@ -28,7 +28,6 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
-import { FormReadOnlyPanel } from './FormReadOnlyPanel';
 import { InvitePanel } from './InvitePanel';
 import { InviteStatusPanel } from './InviteStatusPanel';
 
@@ -64,8 +63,16 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
   const podeVoltar = can('client.list');
   const podeEditar = can('client.update');
   const podeExcluir = can('client.delete');
-  const podeEditarFormulario = can('form.manage');
   const podeGerenciarConvite = can('invite.manage');
+
+  // Area interna do formulario: exclusiva do ADMIN, e sempre completa. Sem
+  // as duas permissoes nao ha aba, cartao nem previa, a pagina recusa
+  // `?aba=formulario` e a configuracao dos campos nem chega nesta resposta.
+  const mostrarFormulario = can('form.view') && can('form.manage');
+
+  // Perfil sem acesso ao formulario nunca fica preso na aba: qualquer
+  // tentativa cai na visao geral.
+  const abaAtiva: TabId = tab === 'formulario' && !mostrarFormulario ? 'visao-geral' : tab;
 
   if (loading) return <DetailSkeleton />;
 
@@ -114,7 +121,9 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
         </span>
       ),
     },
-    { id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> },
+    ...(mostrarFormulario
+      ? [{ id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> }]
+      : []),
     { id: 'convite', label: 'Convite', icon: <Link2 className="size-4" /> },
   ];
 
@@ -178,6 +187,19 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
             </p>
           </div>
 
+          {!podeGerenciarConvite ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTab('convite')}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
+              >
+                <Link2 aria-hidden="true" className="size-4" />
+                Gerar Link
+              </button>
+            </div>
+          ) : null}
+
           {podeEditar || podeExcluir ? (
             <div className="flex shrink-0 items-center gap-2">
               {podeEditar ? (
@@ -228,27 +250,33 @@ export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps
         variant="underline"
         label="Seções do candidato"
         items={tabs}
-        active={tab}
+        active={abaAtiva}
         onChange={(id) => setTab(id as TabId)}
       />
 
-      <TabPanel id="visao-geral" active={tab}>
-        <ClientOverviewPanel client={client} members={memberList} onOpenTab={setTab} />
+      <TabPanel id="visao-geral" active={abaAtiva}>
+        <ClientOverviewPanel
+          client={client}
+          members={memberList}
+          onOpenTab={setTab}
+          onOpenForm={mostrarFormulario ? () => setTab('formulario') : undefined}
+          // O candidato acessa o link pelo botao do cabecalho: o cartao
+          // "Meu link de cadastro" sai da visao geral.
+          showInviteCard={podeGerenciarConvite}
+        />
       </TabPanel>
 
-      <TabPanel id="equipe" active={tab}>
+      <TabPanel id="equipe" active={abaAtiva}>
         <MembersPanel client={client} members={memberList} loading={loadingMembers} />
       </TabPanel>
 
-      <TabPanel id="formulario" active={tab}>
-        {podeEditarFormulario ? (
+      {mostrarFormulario ? (
+        <TabPanel id="formulario" active={abaAtiva}>
           <FormBuilderPanel client={client} members={memberList} />
-        ) : (
-          <FormReadOnlyPanel client={client} />
-        )}
-      </TabPanel>
+        </TabPanel>
+      ) : null}
 
-      <TabPanel id="convite" active={tab}>
+      <TabPanel id="convite" active={abaAtiva}>
         {podeGerenciarConvite ? (
           <InvitePanel client={client} />
         ) : (

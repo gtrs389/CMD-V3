@@ -175,6 +175,8 @@ describe('perfil EQUIPE', () => {
       'client.create',
       'client.update',
       'client.delete',
+      // Area interna do formulario: exclusiva do ADMIN.
+      'form.view',
       'form.manage',
       'invite.manage',
       'member.create',
@@ -195,8 +197,6 @@ describe('perfil EQUIPE', () => {
   it('copia o próprio link, mas não ativa, desativa nem renova', () => {
     expect(can(JOAO, 'invite.view')).toBe(true);
     expect(can(JOAO, 'invite.manage')).toBe(false);
-    expect(can(JOAO, 'form.view')).toBe(true);
-    expect(can(JOAO, 'form.manage')).toBe(false);
   });
 
   it('o candidato não herda a área da equipe', () => {

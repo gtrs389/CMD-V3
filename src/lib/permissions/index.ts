@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   'client.create',
   'client.update',
   'client.delete',
+  /** Area interna do formulario (ver e administrar): exclusiva do ADMIN. */
   'form.view',
   'form.manage',
   'invite.view',
@@ -51,14 +52,17 @@ const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS;
 
 /**
  * Integrante da equipe: leitura, e sempre restrita a quem ele mesmo
- * cadastrou. Nao edita candidato, formulario, integrante nem convite, e nao
- * ativa, desativa ou renova o proprio link.
+ * cadastrou. Nao edita candidato, integrante nem convite, e nao ativa,
+ * desativa ou renova o proprio link.
+ *
+ * A area interna do formulario fica inteiramente fora: sem `form.view` nao
+ * ha aba, cartao, previa nem configuracao de campos, e as rotas recusam com
+ * 403. O link pessoal continua disponivel para copiar e compartilhar.
  */
 const EQUIPE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
   'team.access',
   'member.view',
-  'form.view',
   'invite.view',
   'invite.submit',
 ];
@@ -67,12 +71,15 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
  * Candidato: leitura apenas, e sempre da propria operacao.
  *
  * Enxerga toda a equipe, em qualquer nivel, porque o vinculo e o candidato.
+ *
+ * A area interna do formulario e do ADMIN: sem `form.view` o candidato nao
+ * ve aba, cartao, contagem de campos nem previa, e a configuracao dos campos
+ * nao chega nem ao navegador.
  */
 const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
   'client.view',
   'member.view',
-  'form.view',
   'invite.view',
 ];
 

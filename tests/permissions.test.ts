@@ -15,7 +15,6 @@ describe('permissoes', () => {
     expect(hasPanelAccess(equipe)).toBe(true);
     expect(can(equipe, 'team.access')).toBe(true);
     expect(can(equipe, 'member.view')).toBe(true);
-    expect(can(equipe, 'form.view')).toBe(true);
     expect(can(equipe, 'invite.view')).toBe(true);
 
     // O registro do candidato, as escritas e a gestao do convite continuam fora.
@@ -24,6 +23,8 @@ describe('permissoes', () => {
     expect(can(equipe, 'member.create')).toBe(false);
     expect(can(equipe, 'member.update')).toBe(false);
     expect(can(equipe, 'member.delete')).toBe(false);
+    // A area interna do formulario e exclusiva do ADMIN: nem ver, nem mexer.
+    expect(can(equipe, 'form.view')).toBe(false);
     expect(can(equipe, 'form.manage')).toBe(false);
     expect(can(equipe, 'invite.manage')).toBe(false);
     expect(can(equipe, 'settings.view')).toBe(false);

@@ -39,7 +39,18 @@ interface ClientOverviewPanelProps {
   client: Client;
   members: Member[];
   /** Abre outra aba da propria pagina. */
-  onOpenTab: (tab: 'equipe' | 'formulario' | 'convite') => void;
+  onOpenTab: (tab: 'equipe' | 'convite') => void;
+  /**
+   * Abre a area interna do formulario. So e passado a quem tem `form.view`
+   * (ADMIN): sem ele o cartao "Formulário de cadastro" nao existe, e a
+   * configuracao dos campos tambem nao chega do servidor.
+   */
+  onOpenForm?: () => void;
+  /**
+   * Exibe o cartao "Meu link de cadastro". No painel do candidato ele sai:
+   * o atalho do link fica no cabecalho, ao lado do nome.
+   */
+  showInviteCard?: boolean;
 }
 
 function startOfDay(date: Date): number {
@@ -49,18 +60,29 @@ function startOfDay(date: Date): number {
 /**
  * Visao geral do candidato.
  *
- * Todos os numeros vem dos cadastros reais da equipe e da configuracao do
- * formulario: nada aqui e estimado.
+ * Todos os numeros vem dos cadastros reais da equipe: nada aqui e estimado.
+ * O cartao "Formulário de cadastro" e a unica parte exclusiva do ADMIN; sem
+ * ele os cartoes restantes se reorganizam e nao fica vao vazio.
  */
-export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOverviewPanelProps) {
+export function ClientOverviewPanel({
+  client,
+  members,
+  onOpenTab,
+  onOpenForm,
+  showInviteCard = true,
+}: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
 
   // Perfil somente leitura apenas consulta: os atalhos mudam de rotulo.
   const { can } = useSession();
   const podeGerenciarConvite = can('invite.manage');
-  const podeEditarFormulario = can('form.manage');
   const podeVerMapa = can('map.view');
+  // Area interna do formulario: exclusiva do ADMIN. Sem `form.view` o cartao
+  // nao aparece, e nenhuma contagem de campos ativos ou obrigatorios e
+  // calculada, porque a configuracao nem vem na resposta.
+  const podeVerFormulario = can('form.view') && onOpenForm !== undefined;
+  const podeEditarFormulario = can('form.manage');
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -107,12 +129,13 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
   );
 
   const form = useMemo(() => {
+    if (!podeVerFormulario) return null;
     const fields = client.form.fields;
     const ativos = fields.filter((field) => field.enabled);
     const obrigatorios = ativos.filter((field) => field.required).length;
     const percentual = fields.length === 0 ? 0 : Math.round((ativos.length / fields.length) * 100);
     return { ativos: ativos.length, obrigatorios, percentual };
-  }, [client.form.fields]);
+  }, [client.form.fields, podeVerFormulario]);
 
   return (
     <div className="space-y-3">
@@ -126,7 +149,13 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
         />
 
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* Sem o cartao do link, os dois indicadores esticam e ocupam a
+              coluna inteira: nao sobra vao vazio ao lado da equipe. */}
+          <div
+            className={
+              showInviteCard ? 'grid gap-3 sm:grid-cols-2' : 'grid flex-1 gap-3 sm:grid-cols-2'
+            }
+          >
             <StatCard
               icon={<BarChart3 aria-hidden="true" className="size-[1.125rem]" />}
               tone="accent"
@@ -152,28 +181,40 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
             />
           </div>
 
-          <InviteCard
-            client={client}
-            canManage={podeGerenciarConvite}
-            onManage={() => onOpenTab('convite')}
-          />
+          {showInviteCard ? (
+            <InviteCard
+              client={client}
+              canManage={podeGerenciarConvite}
+              onManage={() => onOpenTab('convite')}
+            />
+          ) : null}
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      {/* Sem o cartao do formulario a lista de integrantes ocupa a linha
+          inteira: nao sobra vao vazio ao lado dela. */}
+      <div
+        className={
+          form
+            ? 'grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+            : 'grid gap-3'
+        }
+      >
         <RecentMembersCard
           members={stats.recentes}
           options={relationshipOptions}
           onOpenTeam={() => onOpenTab('equipe')}
         />
 
-        <FormCard
-          ativos={form.ativos}
-          obrigatorios={form.obrigatorios}
-          percentual={form.percentual}
-          canEdit={podeEditarFormulario}
-          onEdit={() => onOpenTab('formulario')}
-        />
+        {form && onOpenForm ? (
+          <FormCard
+            ativos={form.ativos}
+            obrigatorios={form.obrigatorios}
+            percentual={form.percentual}
+            canEdit={podeEditarFormulario}
+            onEdit={onOpenForm}
+          />
+        ) : null}
       </div>
 
       {podeVerMapa ? <MobilizationMap clientId={client.id} /> : null}

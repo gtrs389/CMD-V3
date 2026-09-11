@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, LayoutList, Link2, Users } from 'lucide-react';
+import { LayoutList, Link2, Users } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
@@ -9,25 +9,29 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { ClientOverviewPanel } from '@/components/clients/ClientOverviewPanel';
-import { FormReadOnlyPanel } from '@/components/clients/FormReadOnlyPanel';
 import { InviteStatusPanel } from '@/components/clients/InviteStatusPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { useTeamOverview } from '@/hooks/use-team';
 
-/** As mesmas quatro abas da pagina do candidato. */
-type TabId = 'visao-geral' | 'equipe' | 'formulario' | 'convite';
+/** As abas do integrante: o formulario e area interna do ADMIN. */
+type TabId = 'visao-geral' | 'equipe' | 'convite';
 
 /**
  * Pagina do integrante da equipe.
  *
- * Mesma estrutura e mesmos quadros da pagina do candidato: cabecalho, as
- * quatro abas e os paineis de visao geral, equipe, formulario e convite sao
- * exatamente os mesmos componentes.
+ * Mesma estrutura e mesmos quadros da pagina do candidato: cabecalho, abas e
+ * os paineis de visao geral, equipe e convite sao exatamente os mesmos
+ * componentes.
  *
  * O que muda e o escopo, e ele vem do servidor: a lista traz somente quem se
- * cadastrou pelo link deste integrante, o convite e o link pessoal dele e o
- * formulario vem em leitura. Nenhuma acao de escrita aparece porque o perfil
- * nao tem as permissoes — e as rotas recusam do mesmo jeito.
+ * cadastrou pelo link deste integrante e o convite e o link pessoal dele.
+ * Nenhuma acao de escrita aparece porque o perfil nao tem as permissoes — e
+ * as rotas recusam do mesmo jeito.
+ *
+ * A area interna do formulario nao existe aqui: sem `form.view` nao ha aba,
+ * cartao nem previa, e `/api/equipe` nao devolve campo, opcao, texto ou
+ * contagem do formulario. Trocar a URL ou acrescentar parametro nao abre
+ * nada, porque a aba nao existe e os dados nunca sao carregados.
  */
 export function TeamDetailView() {
   const { data: overview, loading, error, reload } = useTeamOverview();
@@ -65,7 +69,6 @@ export function TeamDetailView() {
         </span>
       ),
     },
-    { id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> },
     { id: 'convite', label: 'Convite', icon: <Link2 className="size-4" /> },
   ];
 
@@ -138,10 +141,6 @@ export function TeamDetailView() {
 
       <TabPanel id="equipe" active={tab}>
         <MembersPanel client={client} members={members} loading={false} />
-      </TabPanel>
-
-      <TabPanel id="formulario" active={tab}>
-        <FormReadOnlyPanel client={client} />
       </TabPanel>
 
       <TabPanel id="convite" active={tab}>

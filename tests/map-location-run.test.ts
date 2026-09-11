@@ -26,11 +26,26 @@ interface DB {
 
 const db: DB = { members: {}, verifications: {}, links: [], places: [] };
 
+/**
+ * Filtro no formato do PostgREST.
+ *
+ * O banco real recusa filtro sem operador (`client_id=cli-1` em vez de
+ * `client_id=eq.cli-1`), entao aqui isso falha na hora: valor sem operador
+ * conhecido nao passa silenciosamente.
+ */
+const OPERATORS = ['eq.', 'in.', 'is.', 'neq.', 'gt.', 'gte.', 'lt.', 'lte.', 'like.', 'ilike.'];
+
 function match(row: Record<string, unknown>, filters: Record<string, string>): boolean {
   return Object.entries(filters).every(([key, value]) => {
     if (key === 'or') return true;
     if (value === 'is.null') return row[key] === null || row[key] === undefined;
     if (value.startsWith('eq.')) return String(row[key]) === value.slice(3);
+    if (value.startsWith('in.')) {
+      return value.slice(4, -1).split(',').includes(String(row[key]));
+    }
+    if (!OPERATORS.some((operator) => value.startsWith(operator))) {
+      throw new Error(`Filtro sem operador do PostgREST: ${key}=${value}`);
+    }
     return true;
   });
 }
@@ -56,7 +71,9 @@ vi.mock('@/lib/supabase/rest', () => ({
       return db.links.filter((row) => match(row as unknown as Record<string, unknown>, filters));
     }
     if (table === 'cmd_map_locations') return db.places;
-    if (table === 'cmd_members') return Object.values(db.members);
+    if (table === 'cmd_members') {
+      return Object.values(db.members).filter((row) => match(row, filters));
+    }
     if (table === 'cmd_clients') return [{ id: 'cli-1', name: 'Comitê Exemplo' }];
     if (table === 'cmd_member_verifications') {
       return Object.values(db.verifications);
@@ -399,6 +416,26 @@ describe('mapa agrupado por local de votação', () => {
       await resolveLocation(pessoa.id, 'POLLING_PLACE');
     }
   }
+
+  it('recorta o mapa pela equipe de um candidato', async () => {
+    // Duas operacoes, uma pessoa localizada em cada.
+    member('m-a', { client_id: 'cli-1' });
+    member('m-b', { client_id: 'cli-2' });
+    await createPendingLocation('cli-1', 'm-a', 'RESIDENCE');
+    await resolveLocation('m-a', 'RESIDENCE');
+    await createPendingLocation('cli-2', 'm-b', 'RESIDENCE');
+    await resolveLocation('m-b', 'RESIDENCE');
+
+    const geral = await mapOverview();
+    expect(geral.totals.residence).toBe(2);
+
+    // Com o candidato, so a equipe dele conta. O filtro vai ao banco no
+    // formato do PostgREST; sem operador, a consulta falharia.
+    const recortado = await mapOverview('cli-1');
+    expect(recortado.totals.residence).toBe(1);
+    expect(recortado.pins).toHaveLength(1);
+    expect(recortado.pins[0].memberId).toBe('m-a');
+  });
 
   it('três integrantes no mesmo local geram um pino só, com as contagens', async () => {
     await montarLocal();

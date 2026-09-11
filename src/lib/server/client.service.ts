@@ -5,6 +5,7 @@ import type {
   ClientInput,
   ClientSummary,
   CustomField,
+  PublicInviteOwner,
 } from '@/lib/types';
 import { appConfig } from '@/config/app.config';
 import { createSystemFields } from '@/lib/domain/form-config';
@@ -34,6 +35,7 @@ import {
   loadOperationInvites,
   resolveInvite,
   rotatePersonalInvite,
+  type InviteOwner,
 } from './invite.service';
 import { assertEmailAvailable, disableCandidateAccess, syncCandidateLogin } from './user.service';
 import { notFound } from './http';
@@ -212,9 +214,40 @@ export async function getClient(id: string): Promise<Client | null> {
 export interface PublicInviteContext {
   client: Client;
   /** Dono do link. Nulo apenas em convite legado sem usuario. */
-  owner: { userId: string; name: string; role: 'CANDIDATE' | 'EQUIPE' } | null;
+  owner: InviteOwner | null;
+  /** O mesmo dono, na forma que a pagina publica pode receber. */
+  publicOwner: PublicInviteOwner | null;
   /** O link aceita cadastro agora. */
   accepts: boolean;
+}
+
+/**
+ * Dono do link como a pagina publica o mostra.
+ *
+ * Sai daqui apenas nome, foto e perfil. A foto do candidato e a do proprio
+ * cadastro; a do integrante vem da linha dele. Identificador de usuario, de
+ * integrante e e-mail ficam no servidor.
+ */
+async function publicOwner(
+  owner: InviteOwner | null,
+  clientPhotoUrl: string | null,
+): Promise<PublicInviteOwner | null> {
+  if (!owner) return null;
+
+  if (owner.role === 'CANDIDATE') {
+    return { name: owner.name, photoUrl: clientPhotoUrl, role: 'CANDIDATE' };
+  }
+
+  let photoUrl: string | null = null;
+  if (owner.memberId) {
+    const member = await selectOne<Pick<MemberRow, 'photo_path'>>(TABLES.members, {
+      select: 'photo_path',
+      filters: { id: `eq.${owner.memberId}` },
+    });
+    photoUrl = await signedUrl(member?.photo_path ?? null);
+  }
+
+  return { name: owner.name, photoUrl, role: 'EQUIPE' };
 }
 
 export async function getInviteContext(token: string): Promise<PublicInviteContext | null> {
@@ -241,14 +274,9 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
   return {
     client,
     owner: resolved.owner,
+    publicOwner: await publicOwner(resolved.owner, client.photo),
     accepts: resolved.active && resolved.operationActive,
   };
-}
-
-/** Rota publica: apenas o cadastro do candidato dono do link. */
-export async function getClientByInviteToken(token: string): Promise<Client | null> {
-  const context = await getInviteContext(token);
-  return context?.client ?? null;
 }
 
 export async function createClient(input: ClientInput): Promise<Client> {
