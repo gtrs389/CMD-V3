@@ -19,6 +19,8 @@ export interface PublicSubmission {
   state: string | null;
   city: string | null;
   district: string | null;
+  relationshipOptionId: string | null;
+  relationshipLabel: string | null;
   responses: FieldResponse[];
   consentAt: string | null;
 }

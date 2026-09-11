@@ -26,6 +26,7 @@ export const SYSTEM_FIELD_KEYS = [
   'state',
   'city',
   'district',
+  'relationship',
 ] as const;
 export type SystemFieldKey = (typeof SYSTEM_FIELD_KEYS)[number];
 
@@ -33,6 +34,9 @@ export interface FieldOption {
   /** Identificador estavel: renomear o rotulo nao quebra respostas salvas. */
   id: string;
   label: string;
+  /** Usados apenas pelo campo padrao "Vinculo", que exibe cards. */
+  icon?: string;
+  color?: string;
 }
 
 export interface CustomField {

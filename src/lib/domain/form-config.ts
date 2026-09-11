@@ -7,6 +7,7 @@ import type {
   Member,
   SystemFieldKey,
 } from '@/lib/types';
+import { defaultRelationshipOptions } from './relationship';
 import { createId } from '@/lib/utils/id';
 import { nowIso } from '@/lib/utils/date';
 
@@ -119,6 +120,14 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     helpText: '',
     required: false,
   },
+  {
+    systemKey: 'relationship',
+    type: 'select',
+    label: 'Vínculo',
+    placeholder: '',
+    helpText: '',
+    required: false,
+  },
 ];
 
 /**
@@ -142,7 +151,8 @@ export function createSystemFields(): CustomField[] {
     required: defaults.required,
     enabled: true,
     order: index,
-    options: [],
+    // O vinculo nasce com as tres opcoes iniciais; os demais nao tem opcao.
+    options: defaults.systemKey === 'relationship' ? defaultRelationshipOptions() : [],
   }));
 }
 

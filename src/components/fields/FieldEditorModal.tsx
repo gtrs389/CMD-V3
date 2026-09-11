@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { FIELD_TYPES, type CustomField, type FieldOption, type FieldType } from '@/lib/types';
 import {
   FIELD_TYPE_HINTS,
@@ -18,8 +18,17 @@ import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
+import {
+  RELATIONSHIP_COLORS,
+  RELATIONSHIP_COLOR_CLASSES,
+  RELATIONSHIP_COLOR_LABELS,
+  RELATIONSHIP_ICONS,
+  RELATIONSHIP_ICON_LABELS,
+  relationshipColor,
+  relationshipIcon,
+} from '@/lib/domain/relationship';
+import { Modal } from '@/components/ui/Modal';
 import { Switch } from '@/components/ui/Switch';
 
 interface FieldEditorModalProps {
@@ -60,6 +69,25 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
   // Genero e Estado tem lista fixa do sistema: o ADMIN nao edita as opcoes.
   const fixedOptions = hasFixedOptions(draft);
   const needsOptions = requiresOptions(draft.type) && !fixedOptions;
+  // O vinculo edita tambem icone, cor e ordem de cada opcao.
+  const richOptions = draft.systemKey === 'relationship';
+
+  /** Altera uma propriedade da opcao mantendo o identificador estavel. */
+  function patchOption(id: string, changes: Partial<FieldOption>) {
+    patch({
+      options: draft.options.map((option) =>
+        option.id === id ? { ...option, ...changes } : option,
+      ),
+    });
+  }
+
+  function moveOption(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= draft.options.length) return;
+    const next = [...draft.options];
+    [next[index], next[target]] = [next[target], next[index]];
+    patch({ options: next });
+  }
 
   const typeOptions = useMemo(
     () => FIELD_TYPES.map((type) => ({ value: type, label: FIELD_TYPE_LABELS[type] })),
@@ -222,23 +250,90 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
             </div>
 
             <ul className="mt-2 space-y-2">
-              {draft.options.map((option, index) => (
-                <li key={option.id} className="flex items-center gap-2">
-                  <Input
-                    aria-label={`Opção ${index + 1}`}
-                    value={option.label}
-                    placeholder={`Opção ${index + 1}`}
-                    onChange={(event) => updateOption(option.id, event.target.value)}
-                  />
-                  <IconButton
-                    label={`Remover opção ${index + 1}`}
-                    icon={<Trash2 className="size-4" />}
-                    variant="danger"
-                    disabled={draft.options.length <= 1}
-                    onClick={() => removeOption(option.id)}
-                  />
-                </li>
-              ))}
+              {draft.options.map((option, index) => {
+                const Icone = relationshipIcon(option);
+                return (
+                  <li
+                    key={option.id}
+                    className={
+                      richOptions
+                        ? 'rounded-control border border-line p-3'
+                        : 'flex items-center gap-2'
+                    }
+                  >
+                    <div className="flex items-center gap-2">
+                      {richOptions ? (
+                        <span
+                          aria-hidden="true"
+                          className={`flex size-9 shrink-0 items-center justify-center rounded-full ${RELATIONSHIP_COLOR_CLASSES[relationshipColor(option)]}`}
+                        >
+                          <Icone className="size-[1.125rem]" />
+                        </span>
+                      ) : null}
+
+                      <Input
+                        aria-label={`Nome da opção ${index + 1}`}
+                        value={option.label}
+                        placeholder={`Opção ${index + 1}`}
+                        onChange={(event) => updateOption(option.id, event.target.value)}
+                      />
+
+                      {richOptions ? (
+                        <>
+                          <IconButton
+                            label={`Mover opção ${index + 1} para cima`}
+                            icon={<ArrowUp className="size-4" />}
+                            disabled={index === 0}
+                            onClick={() => moveOption(index, -1)}
+                          />
+                          <IconButton
+                            label={`Mover opção ${index + 1} para baixo`}
+                            icon={<ArrowDown className="size-4" />}
+                            disabled={index === draft.options.length - 1}
+                            onClick={() => moveOption(index, 1)}
+                          />
+                        </>
+                      ) : null}
+
+                      <IconButton
+                        label={`Remover opção ${index + 1}`}
+                        icon={<Trash2 className="size-4" />}
+                        variant="danger"
+                        disabled={draft.options.length <= 1}
+                        onClick={() => removeOption(option.id)}
+                      />
+                    </div>
+
+                    {richOptions ? (
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <Select
+                          aria-label={`Ícone da opção ${index + 1}`}
+                          value={relationshipIcon(option) ? (option.icon ?? 'heart') : 'heart'}
+                          onChange={(event) => patchOption(option.id, { icon: event.target.value })}
+                        >
+                          {RELATIONSHIP_ICONS.map((nome) => (
+                            <option key={nome} value={nome}>
+                              {RELATIONSHIP_ICON_LABELS[nome]}
+                            </option>
+                          ))}
+                        </Select>
+
+                        <Select
+                          aria-label={`Cor da opção ${index + 1}`}
+                          value={relationshipColor(option)}
+                          onChange={(event) => patchOption(option.id, { color: event.target.value })}
+                        >
+                          {RELATIONSHIP_COLORS.map((cor) => (
+                            <option key={cor} value={cor}>
+                              {RELATIONSHIP_COLOR_LABELS[cor]}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
 
             {errors.options ? (

@@ -139,6 +139,8 @@ describe('conversao para persistencia', () => {
       state: null,
       city: null,
       district: null,
+      relationshipOptionId: null,
+      relationshipLabel: null,
       responses: payload.responses,
       consentAt: null,
       source: 'invite' as const,
