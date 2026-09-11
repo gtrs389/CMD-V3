@@ -1,6 +1,7 @@
 import 'server-only';
 import type { FieldType, FieldValue, SystemFieldKey } from '@/lib/types';
 import type { StepStatus, VerificationStatus } from '@/lib/domain/verification';
+import type { LocationKind, LocationStatus } from '@/lib/domain/map-location';
 
 /**
  * Nomes e formatos das tabelas do CMD.
@@ -21,6 +22,8 @@ export const TABLES = {
   memberConfirmations: 'cmd_member_confirmations',
   memberVerifications: 'cmd_member_verifications',
   memberVerificationViews: 'cmd_member_verification_views',
+  mapLocations: 'cmd_map_locations',
+  memberLocations: 'cmd_member_locations',
 } as const;
 
 export interface UserRow {
@@ -194,6 +197,40 @@ export interface MemberVerificationRow {
   tse_error_code: string | null;
   cpf_payload: string | null;
   tse_payload: string | null;
+  locked_at: string | null;
+  lock_token: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Coordenada ja consultada, compartilhada por consulta normalizada. */
+export interface MapLocationRow {
+  id: string;
+  query_hash: string;
+  latitude: number;
+  longitude: number;
+  title: string | null;
+  address: string | null;
+  place_id: string | null;
+  data_id: string | null;
+  provider: string;
+  searched_at: string;
+  created_at: string;
+}
+
+/** Vinculo do integrante com a moradia aproximada e o local de votacao. */
+export interface MemberLocationRow {
+  id: string;
+  client_id: string;
+  member_id: string;
+  location_kind: LocationKind;
+  status: LocationStatus;
+  query_hash: string | null;
+  location_id: string | null;
+  attempts: number;
+  error_code: string | null;
+  requested_at: string | null;
+  resolved_at: string | null;
   locked_at: string | null;
   lock_token: string | null;
   created_at: string;

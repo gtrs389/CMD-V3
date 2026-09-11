@@ -26,6 +26,9 @@ export const PERMISSIONS = [
   /** Resultado da verificacao cadastral: exclusivo do ADMIN. */
   'verification.view',
   'verification.retry',
+  /** Mapa da mobilizacao: exclusivo do ADMIN. */
+  'map.view',
+  'map.resolve',
   /** Envio pelo link publico: nao exige autenticacao. */
   'invite.submit',
 ] as const;
