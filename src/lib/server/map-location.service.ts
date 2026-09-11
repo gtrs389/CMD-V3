@@ -528,10 +528,14 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
  * nome, cliente, zona/secao e, quando existirem, telefone e e-mail. CPF,
  * dados da consulta cadastral, renda, parentescos e sinais do aparelho nunca
  * entram nesta lista.
+ *
+ * Com `clientId`, a lista fica restrita a equipe daquele time: e assim que o
+ * Administrador do time enxerga um local de votacao sem ver quem e de outra
+ * operacao. O recorte vem da sessao, nunca da URL.
  */
 export async function placeMembers(
   locationId: string,
-  options: { search?: string; page?: number; pageSize?: number } = {},
+  options: { search?: string; page?: number; pageSize?: number; clientId?: string } = {},
 ): Promise<PlaceMembersPayload> {
   const page = Math.max(1, Math.trunc(options.page ?? 1));
   const pageSize = Math.min(50, Math.max(5, Math.trunc(options.pageSize ?? 20)));
@@ -551,7 +555,10 @@ export async function placeMembers(
 
   const members = await selectRows<MemberRow>(TABLES.members, {
     select: 'id,client_id,name,phone,photo_path',
-    filters: { id: inFilter(memberIds) },
+    filters: {
+      id: inFilter(memberIds),
+      ...(options.clientId ? { client_id: `eq.${options.clientId}` } : {}),
+    },
     order: 'name.asc',
   });
 
