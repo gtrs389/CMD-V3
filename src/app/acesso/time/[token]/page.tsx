@@ -24,10 +24,9 @@ export const dynamic = 'force-dynamic';
  * telefone.
  *
  * O token e opaco e nao carrega nenhum dado pessoal: quem o traduz para um
- * time e o servidor. A tela mostra apenas o nome do time — nenhum nome de
- * pessoa, nenhum telefone e nenhuma lista de quem tem acesso. Link
- * inexistente, revogado ou substituido recebe sempre a mesma mensagem
- * neutra.
+ * time e o servidor, e nada do time chega a tela — nem o nome dele, nem nome
+ * de pessoa, nem telefone, nem lista de quem tem acesso. Link inexistente,
+ * revogado ou substituido recebe sempre a mesma mensagem neutra.
  */
 export default async function TeamAccessPage({ params }: PageProps<'/acesso/time/[token]'>) {
   const { token } = await params;
@@ -126,8 +125,9 @@ export default async function TeamAccessPage({ params }: PageProps<'/acesso/time
 
           {context ? (
             <>
-              <h1 id="acesso-title">Acesse o seu time</h1>
-              <p className={styles.subtitle}>{context.clientName}</p>
+              {/* Nem o nome do time aparece aqui: a tela de entrada nao
+                  revela nada sobre quem esta do outro lado do link. */}
+              <h1 id="acesso-title">Bem-vindo de volta</h1>
 
               <TeamAccessForm token={token} />
             </>
