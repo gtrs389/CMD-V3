@@ -4,6 +4,13 @@ import { useCallback, useState } from 'react';
 import { notifyDataChanged } from '@/lib/repositories';
 import { api } from '@/lib/repositories/http/api';
 
+/** Resposta da rota ao gerar ou renovar o proprio link. */
+export interface IssuedOwnInvite {
+  token: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
 /**
  * Geracao do PROPRIO link de recrutamento.
  *
@@ -14,15 +21,15 @@ import { api } from '@/lib/repositories/http/api';
 export function useOwnInviteRenewal() {
   const [renewing, setRenewing] = useState(false);
 
-  const renew = useCallback(async (): Promise<boolean> => {
+  const renew = useCallback(async (): Promise<IssuedOwnInvite | null> => {
     setRenewing(true);
     try {
-      await api<{ token: string }>('/api/convite/renovar', { method: 'POST' });
+      const issued = await api<IssuedOwnInvite>('/api/convite/renovar', { method: 'POST' });
       // O painel recarrega e passa a mostrar o link e o prazo novos.
       notifyDataChanged();
-      return true;
+      return issued;
     } catch {
-      return false;
+      return null;
     } finally {
       setRenewing(false);
     }

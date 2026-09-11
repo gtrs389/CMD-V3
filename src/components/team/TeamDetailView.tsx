@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutList, Link2, Users } from 'lucide-react';
+import { LayoutList, Users } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { ClientOverviewPanel } from '@/components/clients/ClientOverviewPanel';
-import { InviteLinkModal } from '@/components/clients/InviteLinkModal';
+import { GenerateInviteButton } from '@/components/clients/GenerateInviteButton';
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { useTeamOverview } from '@/hooks/use-team';
 
@@ -36,7 +36,6 @@ type TabId = 'visao-geral' | 'equipe';
 export function TeamDetailView() {
   const { data: overview, loading, error, reload } = useTeamOverview();
   const [tab, setTab] = useState<TabId>('visao-geral');
-  const [invite, setInvite] = useState(false);
 
   if (loading) return <DetailSkeleton />;
 
@@ -109,16 +108,10 @@ export function TeamDetailView() {
           </div>
 
           {/* Mesma logica da pagina do time: o link de cadastro vive no
-              cabecalho, e o estado e o prazo aparecem dentro do dialogo. */}
+              cabecalho. Um clique gera e ja copia o link, sem mostrar o
+              endereco nem abrir outra tela. */}
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setInvite(true)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700"
-            >
-              <Link2 aria-hidden="true" className="size-4" />
-              Gerar Link
-            </button>
+            <GenerateInviteButton />
           </div>
         </div>
       </header>
@@ -145,13 +138,6 @@ export function TeamDetailView() {
       <TabPanel id="equipe" active={tab}>
         <MembersPanel client={client} members={members} loading={false} />
       </TabPanel>
-
-      <InviteLinkModal
-        open={invite}
-        client={client}
-        canManage={false}
-        onClose={() => setInvite(false)}
-      />
     </div>
   );
 }
