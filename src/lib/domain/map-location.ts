@@ -163,9 +163,13 @@ export interface MapPlace {
   address: string | null;
   placeId: string | null;
   dataId: string | null;
+  /** Miniatura do local, sempre HTTPS. Uma imagem so, ou nada. */
+  imageUrl: string | null;
 }
 
 interface RawPlace {
+  serpapi_thumbnail?: unknown;
+  thumbnail?: unknown;
   title?: unknown;
   place_id?: unknown;
   data_id?: unknown;
@@ -225,6 +229,18 @@ function coordinate(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** Somente URL HTTPS valida. Qualquer outra coisa e descartada. */
+function imageUrl(value: unknown): string | null {
+  const raw = text(value, 1000);
+  if (!raw || !raw.startsWith('https://')) return null;
+
+  try {
+    return new URL(raw).protocol === 'https:' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 function toPlace(raw: RawPlace | null, expected: AddressParts): MapPlace | null {
   if (!raw) return null;
   if (!brazilian(raw.country)) return null;
@@ -248,6 +264,8 @@ function toPlace(raw: RawPlace | null, expected: AddressParts): MapPlace | null 
     address,
     placeId: text(raw.place_id, 200),
     dataId: text(raw.data_id, 200),
+    // `serpapi_thumbnail` tem prioridade; sem ele, `thumbnail`; sem nenhum, nada.
+    imageUrl: imageUrl(raw.serpapi_thumbnail) ?? imageUrl(raw.thumbnail),
   };
 }
 

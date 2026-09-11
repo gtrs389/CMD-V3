@@ -10,7 +10,15 @@ import {
   type MapErrorCode,
   type MapPlace,
 } from '@/lib/domain/map-location';
-import type { MapOverviewPayload, MapPin } from '@/lib/domain/map-pin';
+import {
+  genderBucket,
+  pollingPlaceKey,
+  type MapOverviewPayload,
+  type MapPin,
+  type PlaceMember,
+  type PlaceMembersPayload,
+  type PollingPlacePin,
+} from '@/lib/domain/map-pin';
 import type { TseResult } from '@/lib/domain/verification';
 import {
   TABLES,
@@ -124,6 +132,7 @@ async function remember(hash: string, place: MapPlace): Promise<MapLocationRow |
     address: place.address,
     place_id: place.placeId,
     data_id: place.dataId,
+    image_url: place.imageUrl,
     provider: 'SERPAPI_GOOGLE_MAPS',
     searched_at: new Date().toISOString(),
   }).catch(() => null);
@@ -374,18 +383,18 @@ export async function mapOverview(): Promise<MapOverviewPayload> {
     else totals.pending += 1;
   }
 
-  if (resolved.length === 0) return { pins: [], totals };
+  if (resolved.length === 0) return { pins: [], pollingPlaces: [], totals };
 
   const locationIds = [...new Set(resolved.map((link) => link.location_id as string))];
   const memberIds = [...new Set(resolved.map((link) => link.member_id))];
 
   const [places, members] = await Promise.all([
     selectRows<MapLocationRow>(TABLES.mapLocations, {
-      select: 'id,latitude,longitude,title',
+      select: 'id,latitude,longitude,title,address,place_id,data_id,image_url',
       filters: { id: inFilter(locationIds) },
     }),
     selectRows<MemberRow>(TABLES.members, {
-      select: 'id,client_id,name,photo_path,street,district,city,state',
+      select: 'id,client_id,name,phone,gender,photo_path,street,district,city,state',
       filters: { id: inFilter(memberIds) },
     }),
   ]);
@@ -412,34 +421,192 @@ export async function mapOverview(): Promise<MapOverviewPayload> {
 
   const pins: MapPin[] = [];
 
+  /**
+   * Locais de votacao agrupados: um pino por escola. Nenhum nome entra aqui;
+   * as contagens vem dos integrantes cadastrados no CMD.
+   */
+  const grouped = new Map<string, PollingPlacePin>();
+
   for (const link of resolved) {
     const place = placeById.get(link.location_id as string);
     const entry = memberById.get(link.member_id);
     if (!place || !entry) continue;
 
     const { member, photo } = entry;
-    const eleitoral = link.location_kind === 'POLLING_PLACE' ? tseById.get(member.id) : null;
 
-    pins.push({
-      memberId: member.id,
-      memberName: member.name,
-      memberPhoto: photo,
-      clientId: member.client_id,
-      clientName: clientById.get(member.client_id) ?? 'Cliente',
-      locationKind: link.location_kind,
+    if (link.location_kind === 'RESIDENCE') {
+      pins.push({
+        memberId: member.id,
+        memberName: member.name,
+        memberPhoto: photo,
+        clientId: member.client_id,
+        clientName: clientById.get(member.client_id) ?? 'Cliente',
+        locationKind: 'RESIDENCE',
+        latitude: place.latitude,
+        longitude: place.longitude,
+        place: member.street,
+        district: member.district,
+        city: member.city,
+        state: member.state,
+        zone: null,
+        section: null,
+        precision: link.location_precision ?? 'CITY',
+      });
+      continue;
+    }
+
+    const eleitoral = tseById.get(member.id);
+    const key = pollingPlaceKey({
+      placeId: place.place_id,
+      dataId: place.data_id,
       latitude: place.latitude,
       longitude: place.longitude,
-      place: link.location_kind === 'RESIDENCE' ? member.street : (place.title ?? eleitoral?.local ?? null),
-      district: link.location_kind === 'RESIDENCE' ? member.district : (eleitoral?.bairro ?? null),
-      city: link.location_kind === 'RESIDENCE' ? member.city : (eleitoral?.municipio ?? null),
-      state: link.location_kind === 'RESIDENCE' ? member.state : (eleitoral?.uf ?? null),
-      zone: eleitoral?.zona ?? null,
-      section: eleitoral?.secao ?? null,
-      precision: link.location_precision ?? (link.location_kind === 'RESIDENCE' ? 'CITY' : 'STREET'),
+      title: place.title,
     });
+
+    const current =
+      grouped.get(key) ??
+      ({
+        locationId: place.id,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        title: place.title ?? eleitoral?.local ?? null,
+        address: place.address ?? eleitoral?.logradouro ?? null,
+        city: eleitoral?.municipio ?? null,
+        state: eleitoral?.uf ?? null,
+        imageUrl: place.image_url,
+        total: 0,
+        men: 0,
+        women: 0,
+        others: 0,
+        withPhone: 0,
+      } satisfies PollingPlacePin);
+
+    current.total += 1;
+    // Genero declarado no cadastro; o que a consulta externa devolveu nao entra.
+    current[genderBucket(member.gender)] += 1;
+    if (member.phone?.trim()) current.withPhone += 1;
+
+    grouped.set(key, current);
   }
 
-  return { pins, totals };
+  return { pins, pollingPlaces: [...grouped.values()], totals };
+}
+
+/* -------------------------------------------------------------------------
+   Pessoas de um local de votacao
+   ------------------------------------------------------------------------- */
+
+/**
+ * Lista as pessoas que votam em um local.
+ *
+ * Chamada somente depois do clique em "Ver pessoas". Devolve o minimo: foto,
+ * nome, cliente, zona/secao e, quando existirem, telefone e e-mail. CPF,
+ * dados da consulta cadastral, renda, parentescos e sinais do aparelho nunca
+ * entram nesta lista.
+ */
+export async function placeMembers(
+  locationId: string,
+  options: { search?: string; page?: number; pageSize?: number } = {},
+): Promise<PlaceMembersPayload> {
+  const page = Math.max(1, Math.trunc(options.page ?? 1));
+  const pageSize = Math.min(50, Math.max(5, Math.trunc(options.pageSize ?? 20)));
+
+  const links = await selectRows<MemberLocationRow>(TABLES.memberLocations, {
+    select: 'member_id,location_id,location_kind,status',
+    filters: {
+      location_id: `eq.${locationId}`,
+      location_kind: 'eq.POLLING_PLACE',
+      status: 'eq.SUCCESS',
+    },
+    limit: 2000,
+  });
+
+  const memberIds = [...new Set(links.map((link) => link.member_id))];
+  if (memberIds.length === 0) return { items: [], total: 0, page, pageSize };
+
+  const members = await selectRows<MemberRow>(TABLES.members, {
+    select: 'id,client_id,name,phone,photo_path',
+    filters: { id: inFilter(memberIds) },
+    order: 'name.asc',
+  });
+
+  const term = normalizeQuery(options.search ?? '');
+  const matched = term
+    ? members.filter((member) => normalizeQuery(member.name).includes(term))
+    : members;
+
+  const total = matched.length;
+  const slice = matched.slice((page - 1) * pageSize, page * pageSize);
+  if (slice.length === 0) return { items: [], total, page, pageSize };
+
+  const clientIds = [...new Set(slice.map((member) => member.client_id))];
+  const sliceIds = slice.map((member) => member.id);
+
+  const [clients, photos, verifications, emails] = await Promise.all([
+    selectRows<{ id: string; name: string }>(TABLES.clients, {
+      select: 'id,name',
+      filters: { id: inFilter(clientIds) },
+    }),
+    signedUrls(slice.map((member) => member.photo_path)),
+    selectRows<MemberVerificationRow>(TABLES.memberVerifications, {
+      select: 'member_id,tse_payload',
+      filters: { member_id: inFilter(sliceIds) },
+    }),
+    memberEmails(sliceIds, clientIds),
+  ]);
+
+  const clientById = new Map(clients.map((client) => [client.id, client.name]));
+  const tseById = new Map(
+    verifications.map((row) => [row.member_id, decryptJson<TseResult>(row.tse_payload)]),
+  );
+
+  const items: PlaceMember[] = slice.map((member, index) => {
+    const eleitoral = tseById.get(member.id);
+    return {
+      memberId: member.id,
+      name: member.name,
+      photo: photos[index] ?? null,
+      clientId: member.client_id,
+      clientName: clientById.get(member.client_id) ?? 'Cliente',
+      phone: member.phone?.trim() ? member.phone : null,
+      email: emails.get(member.id) ?? null,
+      zone: eleitoral?.zona ?? null,
+      section: eleitoral?.secao ?? null,
+    };
+  });
+
+  return { items, total, page, pageSize };
+}
+
+/** E-mail, quando o cliente tiver um campo desse tipo preenchido. */
+async function memberEmails(
+  memberIds: string[],
+  clientIds: string[],
+): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
+  if (memberIds.length === 0 || clientIds.length === 0) return found;
+
+  const fields = await selectRows<{ id: string }>(TABLES.formFields, {
+    select: 'id',
+    filters: { client_id: inFilter(clientIds), type: 'eq.email' },
+  });
+  if (fields.length === 0) return found;
+
+  const responses = await selectRows<{ member_id: string; field_id: string; value: unknown }>(
+    TABLES.memberResponses,
+    {
+      select: 'member_id,field_id,value',
+      filters: { member_id: inFilter(memberIds), field_id: inFilter(fields.map((f) => f.id)) },
+    },
+  );
+
+  for (const row of responses) {
+    const value = typeof row.value === 'string' ? row.value.trim() : '';
+    if (value && !found.has(row.member_id)) found.set(row.member_id, value.slice(0, 160));
+  }
+
+  return found;
 }
 
 /** Usado quando o integrante e removido: o lugar continua servindo aos demais. */

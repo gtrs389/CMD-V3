@@ -12,7 +12,9 @@ import {
   clusterPins,
   DEFAULT_MAP_FILTER,
   filterPins,
+  genderBucket,
   pinLabel,
+  pollingPlaceKey,
   precisionLabel,
   type MapPin,
 } from '@/lib/domain/map-pin';
@@ -127,7 +129,37 @@ describe('leitura da resposta', () => {
       address: 'Rua das Flores, 100 - Centro, São Paulo - SP',
       placeId: 'PL-1',
       dataId: 'DT-1',
+      imageUrl: null,
     });
+  });
+
+  it('guarda a miniatura, com prioridade para serpapi_thumbnail', () => {
+    const comAmbas = parsePlace(
+      {
+        place_results: {
+          ...UNICO.place_results,
+          serpapi_thumbnail: 'https://serpapi.example/escola.jpg',
+          thumbnail: 'https://outra.example/escola.jpg',
+        },
+      },
+      ESPERADO,
+    );
+    expect(comAmbas?.imageUrl).toBe('https://serpapi.example/escola.jpg');
+
+    const soThumb = parsePlace(
+      { place_results: { ...UNICO.place_results, thumbnail: 'https://outra.example/e.jpg' } },
+      ESPERADO,
+    );
+    expect(soThumb?.imageUrl).toBe('https://outra.example/e.jpg');
+
+    // Sem imagem ou fora de HTTPS: nulo, para a tela usar o fallback.
+    expect(parsePlace(UNICO, ESPERADO)?.imageUrl).toBeNull();
+    expect(
+      parsePlace(
+        { place_results: { ...UNICO.place_results, thumbnail: 'http://inseguro.example/e.jpg' } },
+        ESPERADO,
+      )?.imageUrl,
+    ).toBeNull();
   });
 
   it('cai para o primeiro item válido de local_results', () => {
@@ -358,5 +390,30 @@ describe('aviso de precisão no popup', () => {
     expect(precisionLabel({ ...pin, precision: 'CITY' })).toBe(
       'Localização aproximada do município',
     );
+  });
+});
+
+describe('agrupamento do local de votação', () => {
+  const coord = { latitude: -23.5505, longitude: -46.6333, title: 'Escola Municipal Exemplo' };
+
+  it('usa place_id, depois data_id, depois coordenada e título', () => {
+    expect(pollingPlaceKey({ ...coord, placeId: 'PL-1', dataId: 'DT-1' })).toBe('place:PL-1');
+    expect(pollingPlaceKey({ ...coord, placeId: null, dataId: 'DT-1' })).toBe('data:DT-1');
+
+    const porCoordenada = pollingPlaceKey({ ...coord, placeId: null, dataId: null });
+    expect(porCoordenada).toBe(
+      pollingPlaceKey({ ...coord, title: '  escola   municipal  exemplo ', placeId: '', dataId: '' }),
+    );
+    expect(porCoordenada).not.toBe(
+      pollingPlaceKey({ ...coord, latitude: -22.9, placeId: null, dataId: null }),
+    );
+  });
+
+  it('o gênero contado é o declarado, e o resto fecha o total', () => {
+    expect(genderBucket('HOMEM')).toBe('men');
+    expect(genderBucket('MULHER')).toBe('women');
+    expect(genderBucket('OUTRO')).toBe('others');
+    expect(genderBucket('NAO_INFORMAR')).toBe('others');
+    expect(genderBucket(null)).toBe('others');
   });
 });
