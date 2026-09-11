@@ -146,6 +146,13 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Telas que ocupam a viewport inteira e nao rolam (ex.: o login) nao podem
+   perder largura para a reserva da barra de rolagem: o desenho e calculado
+   em porcentagem da tela e qualquer reserva desloca tudo. */
+html:has([data-fullbleed]) {
+  scrollbar-gutter: auto;
+}
+
 body {
   background-color: var(--color-canvas);
   color: var(--color-ink-900);
