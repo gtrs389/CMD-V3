@@ -10,7 +10,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<'/api/clients
     const { id } = await ctx.params;
     const user = await requireClientAccess('client.view', id);
     const client = await getClient(id);
-    if (!client) throw notFound('Candidato não encontrado.');
+    if (!client) throw notFound('Time não encontrado.');
     // A area interna do formulario e do ADMIN: a configuracao dos campos nao
     // vai na resposta de quem nao tem `form.view`.
     return jsonOk({ client: clientForSession(user, client) });

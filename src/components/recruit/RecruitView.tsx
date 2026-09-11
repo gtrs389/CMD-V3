@@ -15,8 +15,8 @@ import { Skeleton } from '@/components/ui/Skeleton';
 /**
  * Recrutamento.
  *
- * Reune os candidatos e o estado do convite de cada um. Nenhum token e
- * gerado ou renovado aqui: a acao apenas abre a aba de convite do candidato,
+ * Reune os times e o estado do convite de cada um. Nenhum token e
+ * gerado ou renovado aqui: a acao apenas abre a aba de convite do time,
  * onde a regra de link ja existe — assim os links ja enviados continuam
  * funcionando.
  */
@@ -46,7 +46,7 @@ export function RecruitView() {
           Recrutar
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Acompanhe o convite de cada candidato e gerencie o recrutamento da equipe.
+          Acompanhe o convite de cada time e gerencie o recrutamento da equipe.
         </p>
       </header>
 
@@ -60,7 +60,7 @@ export function RecruitView() {
             id="busca-recrutamento"
             type="search"
             value={term}
-            aria-label="Buscar candidatos por nome ou e-mail"
+            aria-label="Buscar times por nome ou e-mail"
             placeholder="Buscar por nome ou e-mail"
             onChange={(event) => setTerm(event.target.value)}
             className="min-h-11 w-full rounded-control bg-transparent pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
@@ -104,14 +104,14 @@ export function RecruitView() {
       ) : clients.length === 0 ? (
         <EmptyState
           icon={<Megaphone className="size-6" />}
-          title="Nenhum candidato cadastrado"
-          description="Cadastre um candidato para gerar o formulário de equipe e começar o recrutamento."
+          title="Nenhum time cadastrado"
+          description="Cadastre um time para gerar o formulário de equipe e começar o recrutamento."
           action={
             <Link
               href="/candidatos"
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
             >
-              Ir para Candidatos
+              Ir para Times
               <ArrowRight aria-hidden="true" className="size-4" />
             </Link>
           }
@@ -165,7 +165,7 @@ export function RecruitView() {
                 {inviteIsLive(client.invite) ? 'Link ativo' : 'Link expirado'}
               </span>
 
-              {/* Abre a aba de convite do candidato. Nenhum token e gerado aqui. */}
+              {/* Abre a aba de convite do time. Nenhum token e gerado aqui. */}
               <Link
                 href={`/candidatos/${client.id}?aba=convite`}
                 className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control border border-line-strong bg-surface px-4 text-sm font-medium text-ink-900 shadow-card transition-colors hover:bg-ink-50"

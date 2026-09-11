@@ -67,7 +67,7 @@ export function LoginForm({ next, configured, senhaAlterada = false }: LoginForm
       return;
     }
 
-    // Senha temporaria leva ao primeiro acesso; candidato, ao proprio
+    // Senha temporaria leva ao primeiro acesso; time, ao proprio
     // cadastro; equipe, a "Minha mobilizacao". O destino pedido na URL so
     // vale para quem ja pode navegar livremente.
     const home = result.user ? homePathFor(result.user) : DEFAULT_AUTHENTICATED_PATH;

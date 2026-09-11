@@ -359,14 +359,14 @@ export async function retryLocation(memberId: string, kind: LocationKind): Promi
    Leitura pelo ADMIN
    ------------------------------------------------------------------------- */
 
-/** Restringe os vinculos aos integrantes de um unico candidato. */
+/** Restringe os vinculos aos integrantes de um unico time. */
 async function scopeLinksToClient(
   links: MemberLocationRow[],
   clientId: string,
 ): Promise<MemberLocationRow[]> {
   const clientMembers = await selectRows<{ id: string }>(TABLES.members, {
     // O filtro do PostgREST precisa do operador: sem o `eq.` o banco recusa a
-    // consulta e o mapa do candidato nao abre.
+    // consulta e o mapa do time nao abre.
     select: 'id',
     filters: { client_id: `eq.${clientId}` },
   });
@@ -387,7 +387,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
     limit: 2000,
   });
 
-  // Com `clientId`, o mapa so considera a equipe daquele candidato: o
+  // Com `clientId`, o mapa so considera a equipe daquele time: o
   // recorte acontece antes de somar os totais, para nao contar vinculo de
   // outra operacao.
   const scopedLinks = clientId ? await scopeLinksToClient(links, clientId) : links;
@@ -461,7 +461,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
         memberName: member.name,
         memberPhoto: photo,
         clientId: member.client_id,
-        clientName: clientById.get(member.client_id) ?? 'Candidato',
+        clientName: clientById.get(member.client_id) ?? 'Time',
         locationKind: 'RESIDENCE',
         latitude: place.latitude,
         longitude: place.longitude,
@@ -592,7 +592,7 @@ export async function placeMembers(
       name: member.name,
       photo: photos[index] ?? null,
       clientId: member.client_id,
-      clientName: clientById.get(member.client_id) ?? 'Candidato',
+      clientName: clientById.get(member.client_id) ?? 'Time',
       phone: member.phone?.trim() ? member.phone : null,
       email: emails.get(member.id) ?? null,
       zone: eleitoral?.zona ?? null,

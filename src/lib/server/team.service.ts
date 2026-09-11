@@ -63,7 +63,7 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
     select: '*',
     filters: { id: `eq.${session.candidateId}` },
   });
-  if (!client) throw notFound('Candidato não encontrado.');
+  if (!client) throw notFound('Time não encontrado.');
 
   const [members, photo, invite] = await Promise.all([
     listMembersRecruitedBy(session.id, session.candidateId),
@@ -81,7 +81,7 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       joinedAt: member.created_at,
     },
 
-    // Mesmo formato da pagina do candidato, com o escopo do integrante: a
+    // Mesmo formato da pagina do time, com o escopo do integrante: a
     // identidade e a dele e o convite e o link PESSOAL dele.
     client: {
       id: client.id,

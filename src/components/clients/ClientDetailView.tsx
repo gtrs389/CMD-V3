@@ -41,7 +41,7 @@ interface ClientDetailViewProps {
   initialInvite?: boolean;
 }
 
-/** Pagina individual do candidato, organizada em abas. */
+/** Pagina individual do time, organizada em abas. */
 export function ClientDetailView({
   clientId,
   initialTab,
@@ -59,7 +59,7 @@ export function ClientDetailView({
 
   const memberList = members ?? [];
 
-  // O candidato enxerga apenas o proprio cadastro, em leitura. As rotas de
+  // O time enxerga apenas o proprio cadastro, em leitura. As rotas de
   // gravacao recusam o perfil no servidor: aqui so evitamos oferecer a acao.
   const podeVoltar = can('client.list');
   const podeEditar = can('client.update');
@@ -95,15 +95,15 @@ export function ClientDetailView({
     return (
       <EmptyState
         icon={<Building2 className="size-6" />}
-        title="Candidato não encontrado"
-        description="O candidato pode ter sido excluido por outra pessoa."
+        title="Time não encontrado"
+        description="O time pode ter sido excluido por outra pessoa."
         action={
           <Link
             href="/candidatos"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
-            Voltar para candidatos
+            Voltar para times
           </Link>
         }
       />
@@ -135,7 +135,7 @@ export function ClientDetailView({
           className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-900"
         >
           <ArrowLeft aria-hidden="true" className="size-3.5" />
-          Voltar para candidatos
+          Voltar para times
         </Link>
       ) : null}
 
@@ -183,7 +183,7 @@ export function ClientDetailView({
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium text-accent-600 shadow-card transition-colors hover:bg-accent-50"
               >
                 <Pencil aria-hidden="true" className="size-4" />
-                Editar candidato
+                Editar time
               </button>
             ) : null}
 
@@ -196,7 +196,7 @@ export function ClientDetailView({
                       ? [
                           {
                             id: 'editar',
-                            label: 'Editar candidato',
+                            label: 'Editar time',
                             icon: <Pencil className="size-4" />,
                             onSelect: () => setEditing(true),
                           },
@@ -206,7 +206,7 @@ export function ClientDetailView({
                       ? [
                           {
                             id: 'excluir',
-                            label: 'Excluir candidato',
+                            label: 'Excluir time',
                             icon: <Trash2 className="size-4" />,
                             tone: 'danger' as const,
                             onSelect: () => setDeleting(true),
@@ -223,7 +223,7 @@ export function ClientDetailView({
 
       <Tabs
         variant="underline"
-        label="Seções do candidato"
+        label="Seções do time"
         items={tabs}
         active={abaAtiva}
         onChange={(id) => setTab(id as TabId)}

@@ -18,7 +18,7 @@ export const appConfig = {
   shortName: 'CMD',
   tagline: 'Cadastro e gestão de equipes',
   description:
-    'Painel administrativo para cadastro de candidatos, montagem de formulários e gestão de equipes.',
+    'Painel administrativo para cadastro de times, montagem de formulários e gestão de equipes.',
 
   /**
    * Logotipo. Troque para `{ kind: 'image', src: '/logo.svg' }`

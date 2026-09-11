@@ -42,7 +42,7 @@ const STATES: readonly InviteState[] = [
  * Somente o ADMIN: a rota exige `settings.view`. CANDIDATE e EQUIPE veem
  * apenas o estado e o prazo do proprio link atual, no painel deles.
  *
- * A tabela mostra responsavel, perfil, candidato, geracao, primeiro acesso,
+ * A tabela mostra responsavel, perfil, time, geracao, primeiro acesso,
  * prazo, conclusao e estado. Nenhum token, segredo da reserva, senha, CPF,
  * IP ou identificador interno chega aqui.
  */
@@ -102,7 +102,7 @@ export function InviteHistoryCard() {
               id="historico-responsavel"
               value={term}
               onChange={setTerm}
-              label="Filtrar por responsável ou candidato"
+              label="Filtrar por responsável ou time"
               placeholder="Nome do responsável"
             />
           </Field>
@@ -182,7 +182,7 @@ export function InviteHistoryCard() {
                     {[
                       'Responsável',
                       'Perfil',
-                      'Candidato',
+                      'Time',
                       'Gerado em',
                       'Primeiro acesso',
                       'Expira em',

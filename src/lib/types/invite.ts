@@ -14,7 +14,7 @@ export interface Invite {
   token: string | null;
   /**
    * Recrutamento da operacao ligado. Desligado pelo ADMIN, derruba de uma
-   * vez todos os links daquele candidato.
+   * vez todos os links daquele time.
    */
   active: boolean;
   createdAt: IsoDate;

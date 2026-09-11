@@ -19,7 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/candidatos',
-    label: 'Candidatos',
+    label: 'Times',
     icon: Users,
     permission: 'client.list',
   },

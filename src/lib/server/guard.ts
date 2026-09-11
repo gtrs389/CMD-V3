@@ -39,8 +39,8 @@ export async function requireSession(): Promise<SessionUser> {
 /**
  * Permissao e escopo por operacao na mesma conferencia.
  *
- * ADMIN alcanca qualquer candidato; CANDIDATE, somente o proprio. EQUIPE
- * nunca alcanca o registro do candidato: a area dela e "Minha mobilizacao".
+ * ADMIN alcanca qualquer time; CANDIDATE, somente o proprio. EQUIPE
+ * nunca alcanca o registro do time: a area dela e "Minha mobilizacao".
  */
 export async function requireClientAccess(
   permission: Permission,

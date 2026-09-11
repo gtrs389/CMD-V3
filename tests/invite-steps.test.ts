@@ -37,10 +37,12 @@ describe('etapas do cadastro público', () => {
       'vinculo',
       'revisao',
     ]);
+    // O rotulo da terceira etapa acompanha o que ela tem: com pergunta
+    // personalizada ativa, ela deixa de falar so de vinculo.
     expect(steps.map((step) => step.label)).toEqual([
       'Dados pessoais',
       'Localização',
-      'Vínculo',
+      'Vínculo e perguntas',
       'Revisão e confirmação',
     ]);
     // A revisao nunca tem campo proprio: e so o resumo.

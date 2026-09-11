@@ -7,7 +7,7 @@ import { api } from '@/lib/repositories/http/api';
 /**
  * Geracao do PROPRIO link de recrutamento.
  *
- * O candidato e o integrante podem gerar ou renovar o link deles, mas nunca
+ * O time e o integrante podem gerar ou renovar o link deles, mas nunca
  * escolhem a duracao: o prazo vem da configuracao do ADMIN e e aplicado no
  * servidor. Gerar um link novo revoga o anterior na hora.
  */

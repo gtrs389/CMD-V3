@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
     await resolvePending(5).catch(() => undefined);
 
     // Sem `clientId`, o mapa mostra a mobilizacao inteira (uso no painel
-    // geral). Com `clientId`, mostra apenas a equipe daquele candidato
-    // (uso no painel individual do candidato).
+    // geral). Com `clientId`, mostra apenas a equipe daquele time
+    // (uso no painel individual do time).
     const clientId = request.nextUrl.searchParams.get('clientId') ?? undefined;
 
     return jsonOk(await mapOverview(clientId));

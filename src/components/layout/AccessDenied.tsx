@@ -23,7 +23,7 @@ export function AccessDenied() {
       </p>
       <h1 className="mt-1 text-xl font-semibold tracking-tight text-ink-900">Acesso negado</h1>
       <p className="mt-1 max-w-sm text-sm text-balance text-ink-500">
-        Esta página pertence a outro candidato. Você só tem acesso ao seu próprio cadastro.
+        Esta página pertence a outro time. Você só tem acesso ao seu próprio cadastro.
       </p>
 
       <Link

@@ -26,7 +26,7 @@ import { ensurePersonalInvite } from './invite.service';
 import { ApiError, badRequest, notFound } from './http';
 
 /**
- * Usuarios do sistema: ADMINs, candidatos e integrantes da equipe.
+ * Usuarios do sistema: ADMINs, times e integrantes da equipe.
  *
  * Todo integrante cadastrado por um link passa a ter acesso proprio ao CMD,
  * com um link pessoal de recrutamento. Integrantes anteriores ao campo de
@@ -176,7 +176,7 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
 }
 
 /**
- * Candidatos que ainda nao possuem usuario.
+ * Times que ainda nao possuem usuario.
  *
  * Acontece quando o e-mail estava em uso por outra conta no momento do
  * cadastro. Eles aparecem em Configuracoes como acesso pendente.
@@ -270,7 +270,7 @@ interface CandidateSeed {
 }
 
 /**
- * Cria ou renova a senha temporaria de um candidato, junto do link pessoal.
+ * Cria ou renova a senha temporaria de um time, junto do link pessoal.
  *
  * Devolve `null` quando o e-mail ja pertence a outro usuario: nesse caso
  * nada e sobrescrito e quem chamou mostra a mensagem padrao.
@@ -309,13 +309,13 @@ async function grantForCandidate(client: CandidateSeed): Promise<GeneratedCreden
     'id,name,email',
   );
 
-  // O link pessoal do candidato nasce junto com o acesso dele.
+  // O link pessoal do time nasce junto com o acesso dele.
   await ensurePersonalInvite(row.id, client.id);
 
   return { userId: row.id, name: row.name, email: row.email, password };
 }
 
-/** Acesso de um candidato, criado logo apos o cadastro. */
+/** Acesso de um time, criado logo apos o cadastro. */
 export async function createCandidateAccess(
   client: CandidateSeed,
 ): Promise<GeneratedCredential | null> {
@@ -400,13 +400,13 @@ export interface GrantOutcome {
   conflicts: { clientId: string; name: string; email: string }[];
 }
 
-/** Gera o acesso de um candidato especifico, a pedido do ADMIN. */
+/** Gera o acesso de um time especifico, a pedido do ADMIN. */
 export async function grantAccess(clientId: string): Promise<GrantOutcome> {
   const client = await selectOne<Pick<ClientRow, 'id' | 'name' | 'email'>>(TABLES.clients, {
     select: 'id,name,email',
     filters: { id: `eq.${clientId}` },
   });
-  if (!client) throw notFound('Candidato não encontrado.');
+  if (!client) throw notFound('Time não encontrado.');
 
   const credential = await grantForCandidate(client);
   if (!credential) {
@@ -461,7 +461,7 @@ export async function grantMemberAccess(memberId: string): Promise<GrantOutcome>
 }
 
 /**
- * Gera de uma vez o acesso de todos os candidatos ainda pendentes.
+ * Gera de uma vez o acesso de todos os times ainda pendentes.
  *
  * Pendente e quem nao tem usuario ou esta sem senha utilizavel. Quem ja
  * definiu a senha nao e tocado: a senha atual continua valendo.
@@ -528,11 +528,11 @@ export async function revokeUserSessions(userId: string): Promise<number> {
 }
 
 /* -------------------------------------------------------------------------
-   Sincronizacao com o cadastro do candidato
+   Sincronizacao com o cadastro do time
    ------------------------------------------------------------------------- */
 
 /**
- * Mantem o login igual ao cadastro do candidato.
+ * Mantem o login igual ao cadastro do time.
  *
  * Se o novo e-mail ja for de outro usuario, nada e alterado e o erro sobe
  * com a mensagem padrao. Trocar o e-mail derruba as sessoes antigas.
@@ -589,7 +589,7 @@ export async function syncMemberLogin(
 }
 
 /**
- * Confere o conflito antes de qualquer gravacao no cadastro do candidato.
+ * Confere o conflito antes de qualquer gravacao no cadastro do time.
  * `clientId` nulo significa cadastro novo, que ainda nao tem vinculo.
  */
 export async function assertEmailAvailable(
@@ -609,7 +609,7 @@ export async function assertEmailAvailable(
 }
 
 /**
- * Encerra o acesso do candidato antes da exclusao do cadastro.
+ * Encerra o acesso do time antes da exclusao do cadastro.
  * A linha em `cmd_users` sai junto pela cascata do banco.
  */
 export async function disableCandidateAccess(clientId: string): Promise<void> {

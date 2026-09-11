@@ -59,7 +59,7 @@ async function loadResponses(memberIds: string[]): Promise<Map<string, MemberRes
 /**
  * Estado do acesso e foto do responsavel, resolvidos em bloco.
  *
- * A foto do responsavel vem do cadastro dele: do candidato quando o
+ * A foto do responsavel vem do cadastro dele: do time quando o
  * responsavel e o CANDIDATE, do proprio integrante quando e EQUIPE. Usuario
  * ja excluido nao tem foto, mas o nome e o perfil continuam no snapshot.
  */

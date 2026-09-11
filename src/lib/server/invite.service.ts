@@ -97,7 +97,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
     });
 
     // O dono precisa continuar ativo e pertencer a MESMA operacao do convite.
-    // Vinculo entre candidatos diferentes nao passa daqui, nem do banco.
+    // Vinculo entre times diferentes nao passa daqui, nem do banco.
     if (
       user &&
       user.is_active &&
@@ -166,8 +166,8 @@ export async function findInviteByUser(userId: string): Promise<InviteRow | null
  *
  * Tudo acontece em uma transacao no banco: a geracao anterior e revogada na
  * hora (o token antigo deixa de valer imediatamente), o prazo sai da
- * configuracao do ADMIN conforme o PERFIL DO DONO — candidato usa o prazo de
- * candidato, integrante usa o de equipe — e `issued_at`/`expires_at` usam o
+ * configuracao do ADMIN conforme o PERFIL DO DONO — time usa o prazo de
+ * time, integrante usa o de equipe — e `issued_at`/`expires_at` usam o
  * horario do banco. O navegador nao escolhe nada.
  */
 export interface IssuedInvite {
@@ -264,7 +264,7 @@ export async function ensurePersonalInvite(
   const current = await findInviteByUser(userId);
   if (current) return current;
 
-  // Convite legado da operacao (sem dono): passa a ser o link do candidato,
+  // Convite legado da operacao (sem dono): passa a ser o link do time,
   // preservando o token ja distribuido.
   const legacy = await selectOne<InviteRow>(TABLES.invites, {
     select: INVITE_COLUMNS,
@@ -296,9 +296,9 @@ export async function ensurePersonalInvite(
 }
 
 /**
- * Convite da operacao: o link do proprio candidato.
+ * Convite da operacao: o link do proprio time.
  *
- * Serve de referencia para a tela do candidato e para o ADMIN. Convite
+ * Serve de referencia para a tela do time e para o ADMIN. Convite
  * legado, ainda sem dono, e aceito como o link da operacao.
  */
 export async function loadOperationInvites(
@@ -326,7 +326,7 @@ export async function loadOperationInvites(
   ]);
 
   for (const row of legacy) map.set(row.client_id, row);
-  // O link do candidato tem precedencia sobre o convite legado.
+  // O link do time tem precedencia sobre o convite legado.
   for (const row of owned) map.set(row.client_id, row);
   return map;
 }

@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 interface CredentialsModalProps {
   open: boolean;
   credentials: GeneratedCredential[];
-  /** Candidatos ignorados porque o e-mail pertence a outro usuario. */
+  /** Times ignorados porque o e-mail pertence a outro usuario. */
   conflicts?: { name: string; email: string }[];
   /** Aviso quando nenhum acesso pode ser criado. */
   message?: string | null;

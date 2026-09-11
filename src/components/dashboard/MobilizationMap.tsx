@@ -33,7 +33,7 @@ const MapCanvas = dynamic(() => import('./MapCanvas'), {
 });
 
 interface MobilizationMapProps {
-  /** Restringe o mapa a equipe de um unico candidato. */
+  /** Restringe o mapa a equipe de um unico time. */
   clientId?: string;
 }
 

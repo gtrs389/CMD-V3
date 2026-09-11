@@ -37,12 +37,12 @@ function toDraft(seconds: number): Draft {
  * Expiracao dos links, em Configuracoes.
  *
  * Somente o ADMIN ve e altera: as rotas exigem `settings.view` e
- * `settings.manage`. Sao duas configuracoes independentes — link do candidato
+ * `settings.manage`. Sao duas configuracoes independentes — link do time
  * e link do membro da equipe — de 1 minuto a 365 dias. A conversao para
  * intervalo acontece no servidor, a partir do inteiro e da unidade escolhida
  * em uma lista fechada.
  *
- * O candidato e o integrante podem gerar ou renovar os proprios links, mas
+ * O time e o integrante podem gerar ou renovar os proprios links, mas
  * nunca escolhem a duracao.
  */
 export function InviteExpirationCard() {
@@ -125,7 +125,7 @@ export function InviteExpirationCard() {
           </CardTitle>
           <CardDescription>
             Duração dos links de recrutamento, de 1 minuto até 365 dias. Só a administração define
-            estes prazos; o candidato e o integrante podem gerar os próprios links, mas não a
+            estes prazos; o time e o integrante podem gerar os próprios links, mas não a
             duração.
           </CardDescription>
         </div>
@@ -146,7 +146,7 @@ export function InviteExpirationCard() {
             <div className="grid gap-4 sm:grid-cols-2">
               <DurationField
                 id="prazo-candidato"
-                label="Link do candidato"
+                label="Link do time"
                 value={valores.candidate}
                 disabled={saving}
                 onChange={(patch) => change('candidate', patch)}

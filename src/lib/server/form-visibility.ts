@@ -40,7 +40,7 @@ export function hiddenFormConfig(): ClientFormConfig {
 /**
  * Somente os rotulos necessarios para ler o que a equipe respondeu.
  *
- * O candidato ve a ficha dos proprios integrantes, e o vinculo e as
+ * O time ve a ficha dos proprios integrantes, e o vinculo e as
  * respostas personalizadas so tem nome por causa do campo que as originou.
  * Vao o rotulo, o tipo, a ordem e as opcoes; nenhuma configuracao vai.
  *
@@ -73,7 +73,7 @@ function readingLabels(form: ClientFormConfig): ClientFormConfig {
 }
 
 /**
- * Candidato devolvido ao navegador conforme o perfil da sessao.
+ * Time devolvido ao navegador conforme o perfil da sessao.
  *
  * ADMIN recebe o cadastro inteiro, com a area de formulario completa. Quem
  * nao tem `form.view` recebe apenas os rotulos usados para ler a ficha da

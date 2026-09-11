@@ -89,7 +89,7 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
       // o convite legado, cujo valor so existe no link que o visitante abriu.
       token: options.inviteToken ?? options.invite?.token ?? null,
       // Quem manda no recrutamento e o interruptor da operacao: desligado
-      // pelo ADMIN, todos os links daquele candidato param de aceitar.
+      // pelo ADMIN, todos os links daquele time param de aceitar.
       active: row.recruiting_active && (options.invite?.active ?? true),
       createdAt: options.invite?.created_at ?? row.created_at,
       rotatedAt: options.invite?.rotated_at ?? null,

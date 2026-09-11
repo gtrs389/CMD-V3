@@ -4,9 +4,9 @@ import { jsonOk, toErrorResponse } from '@/lib/server/http';
 import { listMembersForUser } from '@/lib/server/member.service';
 
 /**
- * Equipe de um candidato.
+ * Equipe de um time.
  *
- * ADMIN e o proprio candidato veem a operacao inteira, em todos os niveis.
+ * ADMIN e o proprio time veem a operacao inteira, em todos os niveis.
  * O perfil EQUIPE nao chega aqui: a area dele e "Minha mobilizacao", que so
  * devolve os recrutados diretos.
  */

@@ -9,7 +9,7 @@ import type { Member } from './member';
  * da operacao nunca vem da URL nem do corpo da requisicao. A lista traz
  * somente os recrutados diretos.
  *
- * `client` tem exatamente o mesmo formato usado na pagina do candidato, para
+ * `client` tem exatamente o mesmo formato usado na pagina do time, para
  * que os mesmos quadros sejam reaproveitados sem nenhuma variante: a
  * diferenca esta no que o servidor coloca dentro dele. O convite e o link
  * PESSOAL do integrante, e `form` vem vazio: a area interna do formulario e

@@ -25,7 +25,7 @@ export const TEAM_HOME_PATH = '/minha-mobilizacao';
  * Pagina inicial de cada perfil.
  *
  * Com senha temporaria em uso, o unico destino e o primeiro acesso. O
- * candidato vai direto para o proprio registro; a equipe, para "Minha
+ * time vai direto para o proprio registro; a equipe, para "Minha
  * mobilizacao"; o ADMIN, para a visao geral.
  */
 export function homePathFor(

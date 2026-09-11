@@ -210,7 +210,7 @@ export function DashboardView() {
             href="/candidatos"
             icon={<Users className="size-[1.125rem]" />}
             value={clientList.length}
-            label="Candidatos"
+            label="Times"
             hint={
               stats.clientesNoMes > 0
                 ? `${stats.clientesNoMes} ${stats.clientesNoMes === 1 ? 'adicionado' : 'adicionados'} este mês`
@@ -294,7 +294,7 @@ export function DashboardView() {
         </article>
       </section>
 
-      {/* Linha inferior: ultimos integrantes e ranking de candidatos. */}
+      {/* Linha inferior: ultimos integrantes e ranking de times. */}
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.72fr)_minmax(0,1fr)]">
         <article className="rounded-card border border-line bg-surface p-5 shadow-card">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -310,7 +310,7 @@ export function DashboardView() {
                   Últimos integrantes cadastrados
                 </h2>
                 <p className="text-xs text-ink-500">
-                  Pessoas que acabaram de entrar nas equipes dos seus candidatos.
+                  Pessoas que acabaram de entrar nas equipes dos seus times.
                 </p>
               </div>
             </div>
@@ -358,7 +358,7 @@ export function DashboardView() {
               <table className="mt-3 hidden w-full border-collapse text-left sm:table">
                 <thead>
                   <tr className="border-b border-line">
-                    {['Integrante', 'Candidato', 'Localização', 'Cadastrado em'].map((coluna) => (
+                    {['Integrante', 'Time', 'Localização', 'Cadastrado em'].map((coluna) => (
                       <th
                         key={coluna}
                         scope="col"
@@ -409,7 +409,7 @@ export function DashboardView() {
               >
                 <Users className="size-4" />
               </span>
-              <h2 className="text-sm font-semibold text-ink-900">Candidatos</h2>
+              <h2 className="text-sm font-semibold text-ink-900">Times</h2>
             </div>
 
             <Link
@@ -428,7 +428,7 @@ export function DashboardView() {
             </div>
           ) : stats.topClientes.length === 0 ? (
             <p className="mt-6 text-sm text-ink-500">
-              Nenhum candidato cadastrado. Cadastre o primeiro na página Candidatos.
+              Nenhum time cadastrado. Cadastre o primeiro na página Times.
             </p>
           ) : (
             <ul className="mt-3 divide-y divide-line">
@@ -506,7 +506,7 @@ function AtalhoCard({ href, icon, value, label, hint, loading }: AtalhoCardProps
   );
 }
 
-/** Barra proporcional ao maior candidato exibido. */
+/** Barra proporcional ao maior time exibido. */
 function ClientBar({ value, max }: { value: number; max: number }) {
   const percent = max > 0 ? Math.round((value / max) * 100) : 0;
 

@@ -18,7 +18,7 @@ import type {
  */
 
 /**
- * Resultado do cadastro de um candidato.
+ * Resultado do cadastro de um time.
  *
  * A credencial existe apenas nesta resposta: e mostrada uma unica vez ao
  * ADMIN e descartada quando o modal fecha.

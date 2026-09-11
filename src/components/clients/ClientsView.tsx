@@ -91,13 +91,13 @@ export function ClientsView() {
     <div className="space-y-5">
       <header>
         <p className="text-[0.6875rem] font-semibold tracking-[0.14em] text-ink-500 uppercase">
-          Gestão de candidatos
+          Gestão de times
         </p>
 
         <div className="mt-1.5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.75rem]">
-              Candidatos
+              Times
             </h1>
             <p className="mt-1 text-sm text-ink-500">
               Organize suas operações e acompanhe cada equipe.
@@ -110,7 +110,7 @@ export function ClientsView() {
             className={ACTION_BUTTON}
           >
             <UserPlus aria-hidden="true" className="size-4" />
-            Novo candidato
+            Novo time
           </button>
         </div>
       </header>
@@ -120,7 +120,7 @@ export function ClientsView() {
           href="#lista-candidatos"
           icon={<Users aria-hidden="true" className="size-5" />}
           value={totals.clients}
-          label={pluralize(totals.clients, 'candidato', 'candidatos')}
+          label={pluralize(totals.clients, 'time', 'times')}
           delta={totals.clientsThisMonth}
           deltaLabel="este mês"
         />
@@ -141,7 +141,7 @@ export function ClientsView() {
             id="busca-candidatos"
             type="search"
             value={term}
-            aria-label="Buscar candidatos por nome ou e-mail"
+            aria-label="Buscar times por nome ou e-mail"
             placeholder="Buscar por nome ou e-mail"
             onChange={(event) => setTerm(event.target.value)}
             className="min-h-11 w-full rounded-control bg-transparent pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
@@ -162,7 +162,7 @@ export function ClientsView() {
           <button
             type="button"
             onClick={() => setTerm('')}
-            aria-label={`Mostrar todos os candidatos (${totals.clients})`}
+            aria-label={`Mostrar todos os times (${totals.clients})`}
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
           >
             Todos
@@ -177,7 +177,7 @@ export function ClientsView() {
 
       <section id="lista-candidatos" className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight text-ink-900">Seus candidatos</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-ink-900">Seus times</h2>
           <p className="mt-0.5 text-sm text-ink-500">
             {formatNumber(filtered.length)} {pluralize(filtered.length, 'operação', 'operações')}{' '}
             {pluralize(filtered.length, 'cadastrada', 'cadastradas')}
@@ -192,7 +192,7 @@ export function ClientsView() {
             <AlertTriangle aria-hidden="true" className="size-6 text-danger-600" />
             <div>
               <p className="text-base font-semibold text-danger-700">
-                Não foi possível carregar os candidatos
+                Não foi possível carregar os times
               </p>
               <p className="mt-1 text-sm text-danger-700">{error}</p>
             </div>
@@ -209,13 +209,13 @@ export function ClientsView() {
         ) : clients.length === 0 ? (
           <EmptyState
             icon={<Building2 className="size-6" />}
-            title="Nenhum candidato cadastrado"
-            description="Cadastre o primeiro candidato para gerar o formulário de equipe e o link de convite."
+            title="Nenhum time cadastrado"
+            description="Cadastre o primeiro time para gerar o formulário de equipe e o link de convite."
             action={
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button type="button" onClick={() => setCreating(true)} className={ACTION_BUTTON}>
                   <UserPlus aria-hidden="true" className="size-4" />
-                  Cadastrar candidato
+                  Cadastrar time
                 </button>
                 <SampleDataButton />
               </div>
@@ -225,7 +225,7 @@ export function ClientsView() {
           <EmptyState
             icon={<SearchX className="size-6" />}
             title="Nenhum resultado"
-            description={`Nada encontrado para "${term}". Revise o termo buscado ou veja todos os candidatos.`}
+            description={`Nada encontrado para "${term}". Revise o termo buscado ou veja todos os times.`}
             action={
               <Button variant="secondary" onClick={() => setTerm('')}>
                 Limpar busca
@@ -341,7 +341,7 @@ function SortMenu({ value, onChange }: { value: SortId; onChange: (value: SortId
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Ordenar candidatos: ${current.label}`}
+        aria-label={`Ordenar times: ${current.label}`}
         onClick={() => setOpen((state) => !state)}
         className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-control border border-line bg-surface px-3 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50"
       >

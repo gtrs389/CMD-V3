@@ -15,7 +15,7 @@ import { InviteDeadline } from './InviteDeadline';
 /**
  * Situacao do link em modo leitura, com a copia do proprio endereco.
  *
- * Usado pelo candidato e pelo integrante da equipe: cada um copia e
+ * Usado pelo time e pelo integrante da equipe: cada um copia e
  * compartilha somente o link que o servidor devolveu para ele. Ativar,
  * desativar, renovar e editar o formulario continuam sendo da administracao,
  * e as rotas correspondentes recusam estes perfis.

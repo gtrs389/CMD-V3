@@ -7,14 +7,14 @@ import { ClientDetailView } from '@/components/clients/ClientDetailView';
 import { isTabId } from '@/components/clients/client-tabs';
 
 export const metadata: Metadata = {
-  title: 'Candidato',
+  title: 'Time',
 };
 
 export default async function CandidateDetailPage({ params, searchParams }: PageProps<'/candidatos/[id]'>) {
   const { id } = await params;
   const user = await requirePageUser();
 
-  // Candidato so abre o proprio registro. A mesma regra vale nas rotas de API.
+  // Time so abre o proprio registro. A mesma regra vale nas rotas de API.
   if (!canReachClient(user, id)) return <AccessDenied />;
 
   const { aba } = await searchParams;

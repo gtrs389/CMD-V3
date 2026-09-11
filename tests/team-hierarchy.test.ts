@@ -232,7 +232,7 @@ describe('rótulo "Cadastrado por"', () => {
   });
 
   it('mostra nome e perfil do responsável', () => {
-    expect(recruiterText(marinaRecruiter)).toBe('Marina Alves · Candidato');
+    expect(recruiterText(marinaRecruiter)).toBe('Marina Alves · Time');
     expect(recruiterText(joaoRecruiter)).toBe('João Silva · Equipe');
   });
 
