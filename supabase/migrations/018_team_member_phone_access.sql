@@ -225,40 +225,46 @@ $$;
 --
 -- Quem ja tinha usuario mantem a linha (e o e-mail historico dela): apenas
 -- recebe o telefone e deixa de exigir troca de senha.
+--
+-- A regra de elegibilidade e repetida como CTE em cada comando, de proposito:
+-- tabela temporaria nao sobrevive ao modo como o SQL Editor do Supabase
+-- executa o script. O resultado e o mesmo nos tres comandos porque a unica
+-- linha que cada um ignora na conferencia e a do PROPRIO integrante.
 -- ---------------------------------------------------------------------------
-create temporary table cmd_018_elegiveis on commit drop as
+
+-- 5a. Integrante que ja tinha usuario: telefone preenchido, acesso liberado.
+--     O e-mail antigo continua gravado, apenas nao autentica mais.
 with candidatos as (
-  select m.id       as member_id,
+  select m.id          as member_id,
          m.client_id,
          btrim(m.name) as name,
          m.phone
     from public.cmd_members m
    where m.phone ~ '^[0-9]{10,11}$'
+),
+elegiveis as (
+  select c.*
+    from candidatos c
+   where (
+           select count(*)
+             from candidatos d
+            where d.client_id = c.client_id
+              and d.phone = c.phone
+         ) = 1
+     and not exists (
+       select 1
+         from public.cmd_users u
+        where u.client_id = c.client_id
+          and u.phone = c.phone
+          and u.is_active
+          and (u.member_id is null or u.member_id <> c.member_id)
+     )
 )
-select c.*
-  from candidatos c
- where (
-         select count(*)
-           from candidatos d
-          where d.client_id = c.client_id
-            and d.phone = c.phone
-       ) = 1
-   and not exists (
-     select 1
-       from public.cmd_users u
-      where u.client_id = c.client_id
-        and u.phone = c.phone
-        and u.is_active
-        and (u.member_id is null or u.member_id <> c.member_id)
-   );
-
--- 5a. Integrante que ja tinha usuario: telefone preenchido, acesso liberado.
---     O e-mail antigo continua gravado, apenas nao autentica mais.
 update public.cmd_users u
    set phone                = e.phone,
        must_change_password = false,
        is_active            = true
-  from cmd_018_elegiveis e
+  from elegiveis e
  where u.member_id = e.member_id
    and u.role = 'EQUIPE'
    and (
@@ -268,6 +274,32 @@ update public.cmd_users u
    );
 
 -- 5b. Integrante ainda sem usuario: nasce o acesso, sem e-mail e sem senha.
+with candidatos as (
+  select m.id          as member_id,
+         m.client_id,
+         btrim(m.name) as name,
+         m.phone
+    from public.cmd_members m
+   where m.phone ~ '^[0-9]{10,11}$'
+),
+elegiveis as (
+  select c.*
+    from candidatos c
+   where (
+           select count(*)
+             from candidatos d
+            where d.client_id = c.client_id
+              and d.phone = c.phone
+         ) = 1
+     and not exists (
+       select 1
+         from public.cmd_users u
+        where u.client_id = c.client_id
+          and u.phone = c.phone
+          and u.is_active
+          and (u.member_id is null or u.member_id <> c.member_id)
+     )
+)
 insert into public.cmd_users
   (name, email, phone, role, client_id, member_id, password_hash,
    must_change_password, is_active)
@@ -280,7 +312,7 @@ select e.name,
        null,
        false,
        true
-  from cmd_018_elegiveis e
+  from elegiveis e
  where not exists (
    select 1 from public.cmd_users u where u.member_id = e.member_id
  );
@@ -333,6 +365,31 @@ on conflict (invite_id, generation, event) do nothing;
 -- inteiro. Em Configuracoes o ADMIN geral ve o estado e corrige o numero;
 -- depois disso o acesso e criado ou liberado normalmente pelo painel.
 -- ---------------------------------------------------------------------------
+with candidatos as (
+  select m.id          as member_id,
+         m.client_id,
+         m.phone
+    from public.cmd_members m
+   where m.phone ~ '^[0-9]{10,11}$'
+),
+elegiveis as (
+  select c.*
+    from candidatos c
+   where (
+           select count(*)
+             from candidatos d
+            where d.client_id = c.client_id
+              and d.phone = c.phone
+         ) = 1
+     and not exists (
+       select 1
+         from public.cmd_users u
+        where u.client_id = c.client_id
+          and u.phone = c.phone
+          and u.is_active
+          and (u.member_id is null or u.member_id <> c.member_id)
+     )
+)
 update public.cmd_users u
    set phone                = null,
        must_change_password = false,
@@ -340,7 +397,7 @@ update public.cmd_users u
  where u.role = 'EQUIPE'
    and u.member_id is not null
    and not exists (
-     select 1 from cmd_018_elegiveis e where e.member_id = u.member_id
+     select 1 from elegiveis e where e.member_id = u.member_id
    );
 
 -- ---------------------------------------------------------------------------
