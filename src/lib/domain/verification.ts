@@ -188,14 +188,19 @@ export function parseTseResult(payload: unknown): TseResult {
 
 /**
  * Normaliza a data de nascimento devolvida pela consulta de CPF para
- * DD/MM/AAAA. Aceita `DD/MM/AAAA`, `AAAA-MM-DD`, `AAAA-MM-DDTHH:mm:ss.sssZ` e
- * `AAAA-MM-DD HH:mm:ss`. Qualquer outro formato e tratado como ausente.
+ * DD/MM/AAAA.
+ *
+ * Aceita `DD/MM/AAAA` e qualquer valor que comece por `AAAA-MM-DD`: a data ISO
+ * completa, com `T` e fuso, com espaco e hora, e tambem o texto legado cortado
+ * no meio (`2003-12-10T00:00:00.`), gravado antes da correcao do tamanho do
+ * campo. Sao os dez primeiros caracteres que valem; o resto e descartado.
+ * O que nao comeca por uma data valida continua sendo tratado como ausente.
  */
 export function toBirthDate(value: string | null | undefined): string | null {
   const raw = (value ?? '').trim();
   if (!raw) return null;
 
-  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?$/.exec(raw);
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
   if (iso) return validDate(iso[3], iso[2], iso[1]);
 
   const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw);
@@ -209,6 +214,11 @@ function validDate(day: string, month: string, year: string): string | null {
   const y = Number(year);
 
   if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) return null;
+
+  // O dia precisa existir no mes informado.
+  const date = new Date(Date.UTC(y, m - 1, d));
+  if (date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null;
+
   return `${day}/${month}/${year}`;
 }
 
@@ -310,4 +320,27 @@ export interface VerificationView {
   steps: { cpf: StepView; tse: StepView };
   cadastro: CpfResult | null;
   eleitoral: TseResult | null;
+  /**
+   * Verdadeiro quando a etapa eleitoral ficou pulada mas ja existe tudo o que
+   * ela precisa. Quem decide e o servidor: a tela apenas obedece.
+   */
+  canRetryTse: boolean;
+}
+
+/**
+ * Decide se o ADMIN pode pedir a consulta eleitoral de um cadastro antigo.
+ *
+ * Exige consulta de CPF com sucesso, etapa eleitoral pulada e, no resultado
+ * ja guardado, nome da mae e uma data de nascimento que sobreviva a
+ * normalizacao (inclusive a legada, cortada).
+ */
+export function canRetryTse(
+  cpfStatus: StepStatus,
+  tseStatus: StepStatus,
+  cadastro: CpfResult | null,
+): boolean {
+  if (cpfStatus !== 'SUCCESS' || tseStatus !== 'SKIPPED_MISSING_DATA') return false;
+  if (!cadastro) return false;
+
+  return Boolean((cadastro.nomeMae ?? '').trim()) && toBirthDate(cadastro.dataNascimento) !== null;
 }

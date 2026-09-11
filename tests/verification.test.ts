@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  canRetryTse,
   compareGender,
   compareValues,
   overallStatus,
@@ -127,10 +128,39 @@ describe('consulta eleitoral', () => {
     expect(toBirthDate('2003-12-10 00:00:00')).toBe('10/12/2003');
     expect(toBirthDate('  2003-12-10  ')).toBe('10/12/2003');
 
+    // Valor legado, cortado quando o campo ainda tinha 20 caracteres.
+    expect(toBirthDate('2003-12-10T00:00:00.')).toBe('10/12/2003');
+
     expect(toBirthDate(null)).toBeNull();
     expect(toBirthDate('')).toBeNull();
     expect(toBirthDate('10-12-2003')).toBeNull();
     expect(toBirthDate('2003-13-10')).toBeNull();
+    expect(toBirthDate('2003-02-30')).toBeNull();
+    expect(toBirthDate('0000-00-00T00:00:00.')).toBeNull();
+  });
+
+  it('libera a consulta eleitoral de cadastro antigo com data truncada', () => {
+    const legado = parseCpfResult({
+      ...CADASTRO,
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '2003-12-10T00:00:00.',
+    });
+
+    expect(canRetryTse('SUCCESS', 'SKIPPED_MISSING_DATA', legado)).toBe(true);
+    expect(tseInputFrom('12345678901', legado)).toEqual({
+      cpf: '12345678901',
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '10/12/2003',
+    });
+
+    // Sem os requisitos, a acao continua indisponivel.
+    expect(canRetryTse('SUCCESS', 'SKIPPED_MISSING_DATA', { ...legado, nomeMae: null })).toBe(false);
+    expect(
+      canRetryTse('SUCCESS', 'SKIPPED_MISSING_DATA', { ...legado, dataNascimento: 'sem data' }),
+    ).toBe(false);
+    expect(canRetryTse('FAILED', 'SKIPPED_MISSING_DATA', legado)).toBe(false);
+    expect(canRetryTse('SUCCESS', 'SUCCESS', legado)).toBe(false);
+    expect(canRetryTse('SUCCESS', 'SKIPPED_MISSING_DATA', null)).toBe(false);
   });
 
   it('usa nome da mãe e nascimento vindos da consulta de CPF', () => {

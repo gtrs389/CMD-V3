@@ -1,6 +1,7 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
 import {
+  canRetryTse,
   ERROR_LABELS,
   overallStatus,
   tseInputFrom,
@@ -74,12 +75,17 @@ function stepView(row: MemberVerificationRow, step: VerificationStep): StepView 
 }
 
 function toView(row: MemberVerificationRow): VerificationView {
+  const cadastro = decryptJson<CpfResult>(row.cpf_payload);
+
   return {
     status: row.status,
     updatedAt: row.updated_at,
     steps: { cpf: stepView(row, 'cpf'), tse: stepView(row, 'tse') },
-    cadastro: decryptJson<CpfResult>(row.cpf_payload),
+    cadastro,
     eleitoral: decryptJson<TseResult>(row.tse_payload),
+    // Calculado aqui, sobre o resultado ja decifrado: o navegador nao
+    // reinterpreta nada para decidir se a acao aparece.
+    canRetryTse: canRetryTse(row.cpf_status, row.tse_status, cadastro),
   };
 }
 

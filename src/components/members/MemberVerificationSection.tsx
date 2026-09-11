@@ -224,13 +224,8 @@ export function MemberVerificationSection({ member }: { member: Member | null })
             status={data.steps.tse}
             retrying={retrying === 'tse'}
             onRetry={() => retry('tse')}
-            /* Cadastro antigo marcado como pulado: o ADMIN pode consultar
-               agora, reusando a consulta de CPF ja guardada. */
-            allowWhenSkipped={
-              data.steps.cpf.status === 'SUCCESS' &&
-              Boolean(data.cadastro?.nomeMae) &&
-              Boolean(data.cadastro?.dataNascimento)
-            }
+            /* Quem decide e o servidor: a tela nao reinterpreta os dados. */
+            allowWhenSkipped={data.canRetryTse}
             skippedLabel="Consultar dados eleitorais"
           >
             {data.eleitoral ? (

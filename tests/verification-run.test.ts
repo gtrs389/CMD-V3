@@ -262,6 +262,45 @@ describe('nova tentativa manual', () => {
     expect(db.verification?.tse_payload).not.toContain('REGULAR');
   });
 
+  it('cadastro antigo com data truncada: botão liberado e só o TSE é chamado', async () => {
+    // Estado gravado antes da correcao: CPF com sucesso, eleitoral pulada e a
+    // data guardada cortada em 20 caracteres.
+    const legado = {
+      ...parseCpfResult(CADASTRO),
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '2003-12-10T00:00:00.',
+    };
+
+    db.verification = {
+      ...(base() as MemberVerificationRow),
+      status: 'PARTIAL',
+      cpf_status: 'SUCCESS',
+      tse_status: 'SKIPPED_MISSING_DATA',
+      cpf_attempts: 1,
+      cpf_payload: encryptJson(legado),
+    };
+
+    const antes = await getVerification('mem-1', 'user-1');
+    expect(antes?.canRetryTse).toBe(true);
+
+    const view = await retryVerificationStep('mem-1', 'tse');
+
+    // `cadastro-pf-plus` nao e consultado de novo: nada e cobrado duas vezes.
+    expect(consultCpf).not.toHaveBeenCalled();
+    expect(consultTse).toHaveBeenCalledTimes(1);
+    expect(consultTse).toHaveBeenCalledWith({
+      cpf: '12345678901',
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '10/12/2003',
+    });
+
+    expect(view.steps.tse.status).toBe('SUCCESS');
+    expect(view.status).toBe('COMPLETED');
+    expect(view.canRetryTse).toBe(false);
+    expect(db.verification?.tse_completed_at).toBeTruthy();
+    expect(db.verification?.tse_payload).toBeTruthy();
+  });
+
   it('etapa com sucesso não é repetida', async () => {
     await runVerification('mem-1');
     await retryVerificationStep('mem-1', 'cpf');
