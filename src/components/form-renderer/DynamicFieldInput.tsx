@@ -3,7 +3,14 @@
 import type { CustomField } from '@/lib/types';
 import type { DynamicValue } from '@/lib/validation/dynamic-form';
 import { maskPhone } from '@/lib/utils/phone';
-import { GENDER_OPTIONS, UF_OPTIONS, maskCpf, maskVoterId } from '@/lib/utils/documents';
+import {
+  GENDER_OPTIONS,
+  UF_OPTIONS,
+  maskCpf,
+  maskVoterId,
+  normalizeSection,
+  normalizeZone,
+} from '@/lib/utils/documents';
 import { cn } from '@/lib/utils/cn';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Field, describedBy } from '@/components/ui/Field';
@@ -20,6 +27,8 @@ interface DynamicFieldInputProps {
   field: CustomField;
   value: DynamicValue;
   onChange: (value: DynamicValue) => void;
+  /** Disparado ao sair do campo. Usado hoje so por CPF e título de eleitor. */
+  onBlur?: (value: DynamicValue) => void;
   error?: string;
   disabled?: boolean;
   /** Diferencia os IDs quando o mesmo campo aparece em mais de um lugar. */
@@ -44,6 +53,7 @@ export function DynamicFieldInput({
   field,
   value,
   onChange,
+  onBlur,
   error,
   disabled = false,
   idPrefix = 'campo',
@@ -260,8 +270,20 @@ export function DynamicFieldInput({
     'aria-describedby': described,
   };
 
-  if (field.systemKey === 'cpf' || field.systemKey === 'voter_id') {
-    const mask = field.systemKey === 'cpf' ? maskCpf : maskVoterId;
+  if (
+    field.systemKey === 'cpf' ||
+    field.systemKey === 'voter_id' ||
+    field.systemKey === 'zone' ||
+    field.systemKey === 'section'
+  ) {
+    const mask =
+      field.systemKey === 'cpf'
+        ? maskCpf
+        : field.systemKey === 'voter_id'
+          ? maskVoterId
+          : field.systemKey === 'zone'
+            ? normalizeZone
+            : normalizeSection;
     return (
       <Field id={id} label={field.label} help={help} error={error} required={field.required}>
         <Input
@@ -271,6 +293,7 @@ export function DynamicFieldInput({
           autoComplete="off"
           value={mask(typeof value === 'string' ? value : '')}
           onChange={(event) => onChange(mask(event.target.value))}
+          onBlur={(event) => onBlur?.(mask(event.target.value))}
         />
       </Field>
     );

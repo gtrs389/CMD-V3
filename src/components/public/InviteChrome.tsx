@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import type { ReactNode } from 'react';
-import { Check, ShieldCheck } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { appConfig } from '@/config/app.config';
 import type { PublicInviteOwner } from '@/lib/types';
 import { cn } from '@/lib/utils/cn';
@@ -8,57 +8,14 @@ import { initials } from '@/lib/utils/text';
 import type { InviteStep } from './invite-steps';
 
 /**
- * Moldura da pagina publica de cadastro.
+ * Moldura da pagina publica de cadastro. Sem cabecalho de marca: a
+ * identidade da tela vem so do cartao azul-marinho.
  *
- * Desktop: cabecalho da marca, cartao azul-marinho a esquerda (quem convidou
- * e as etapas verticais) e o cartao branco do formulario a direita.
- * Celular: cabecalho compacto, cartao azul-marinho horizontal, progresso em
- * cartao proprio e formulario em uma coluna.
+ * Desktop: coluna azul-marinho fixa a esquerda (quem convidou e as etapas
+ * verticais) e o formulario a direita, com rolagem propria.
+ * Celular: cartao azul-marinho horizontal no topo, progresso em cartao
+ * proprio e formulario em uma coluna, tudo rolando junto.
  */
-
-const PROTECTION_NOTICE = 'Seus dados são protegidos e usados somente nesta operação.';
-
-/** Cabecalho: marca a esquerda, selo de ambiente seguro a direita. */
-export function InviteBrandBar() {
-  return (
-    <header className="safe-top border-b border-line bg-surface">
-      <div className="mx-auto flex w-full max-w-[76rem] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:py-4">
-        <span className="flex min-w-0 items-center gap-2.5">
-          {appConfig.logo.kind === 'image' ? (
-            <img
-              src={appConfig.logo.src}
-              alt=""
-              aria-hidden="true"
-              className="size-8 shrink-0 rounded-control object-contain lg:size-9"
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex size-8 shrink-0 items-center justify-center rounded-control bg-brand-700 text-xs font-semibold text-white lg:size-9"
-            >
-              {appConfig.logo.monogram}
-            </span>
-          )}
-
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-bold tracking-tight text-ink-900">
-              {appConfig.shortName}
-            </span>
-            {/* No celular o cabecalho fica compacto: so a marca. */}
-            <span className="hidden truncate text-xs text-ink-500 sm:block">
-              {appConfig.name}
-            </span>
-          </span>
-        </span>
-
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-success-50 px-2.5 py-1.5 text-[0.6875rem] font-semibold text-success-600 sm:text-xs">
-          <ShieldCheck aria-hidden="true" className="size-3.5 shrink-0 sm:size-4" />
-          Ambiente seguro
-        </span>
-      </div>
-    </header>
-  );
-}
 
 function OwnerAvatar({
   owner,
@@ -127,7 +84,13 @@ export function InviteOwnerBanner({ owner, fallbackName, className }: OwnerProps
   );
 }
 
-/** Cartao azul-marinho lateral do desktop, com as etapas verticais. */
+/**
+ * Cartao azul-marinho lateral do desktop, com as etapas verticais.
+ *
+ * Fixo em toda a altura da tela: quem preenche o formulario nunca perde de
+ * vista quem convidou nem em que etapa esta. Apenas a coluna do formulario,
+ * ao lado, tem rolagem propria.
+ */
 export function InviteOwnerAside({
   owner,
   fallbackName,
@@ -138,7 +101,7 @@ export function InviteOwnerAside({
   const name = owner?.name ?? fallbackName;
 
   return (
-    <aside className={cn('flex-col gap-6 rounded-card bg-navy-900 p-6 shadow-overlay', className)}>
+    <aside className={cn('flex-col gap-8 bg-navy-900 p-8 lg:p-10', className)}>
       <div>
         <p className="text-[0.625rem] font-semibold tracking-[0.14em] text-navy-300 uppercase">
           Convite de mobilização
@@ -159,11 +122,6 @@ export function InviteOwnerAside({
       </div>
 
       <InviteStepTrail steps={steps} current={current} />
-
-      <p className="mt-auto flex items-start gap-2.5 rounded-control bg-navy-800 p-3 text-[0.6875rem] leading-relaxed text-navy-200">
-        <ShieldCheck aria-hidden="true" className="mt-px size-4 shrink-0 text-emerald-400" />
-        <span className="min-w-0">{PROTECTION_NOTICE}</span>
-      </p>
     </aside>
   );
 }
@@ -308,13 +266,13 @@ export function InviteStepChips({ steps, current }: { steps: InviteStep[]; curre
 
 /**
  * Moldura das telas de estado (carregando, erro, convite indisponivel e
- * cadastro enviado): o mesmo cabecalho e um cartao centralizado.
+ * cadastro enviado): um cartao centralizado, sem cabecalho — mesmo
+ * tratamento da tela do formulario, para nao piscar uma faixa que some
+ * assim que o convite carrega.
  */
 export function InviteStateShell({ children }: { children: ReactNode }) {
   return (
-    <main className="safe-x flex min-h-dvh flex-col bg-surface-muted">
-      <InviteBrandBar />
-
+    <main className="safe-x safe-top flex min-h-dvh flex-col bg-surface-muted">
       <div className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-md animate-rise rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
           {children}
@@ -325,5 +283,3 @@ export function InviteStateShell({ children }: { children: ReactNode }) {
     </main>
   );
 }
-
-export { PROTECTION_NOTICE };

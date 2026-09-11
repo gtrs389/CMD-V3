@@ -168,6 +168,8 @@ describe('conversao para persistencia', () => {
       gender: null,
       cpf: null,
       voterId: null,
+      zone: null,
+      section: null,
       state: null,
       city: null,
       district: null,

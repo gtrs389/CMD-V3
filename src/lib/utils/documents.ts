@@ -183,3 +183,20 @@ export function formatVoterId(input: string): string {
   const digits = normalizeVoterId(input);
   return digits.length === VOTER_ID_LENGTH ? maskVoterId(digits) : (input ?? '');
 }
+
+// ---------------------------------------------------------------------------
+// Zona e secao eleitorais
+// ---------------------------------------------------------------------------
+
+export const ZONE_MAX_LENGTH = 3;
+export const SECTION_MAX_LENGTH = 4;
+
+/** Somente digitos, no maximo 3. Sem separador: nao ha mascara a aplicar. */
+export function normalizeZone(input: string): string {
+  return onlyDigits(input, ZONE_MAX_LENGTH);
+}
+
+/** Somente digitos, no maximo 4. Sem separador: nao ha mascara a aplicar. */
+export function normalizeSection(input: string): string {
+  return onlyDigits(input, SECTION_MAX_LENGTH);
+}

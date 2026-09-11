@@ -9,8 +9,12 @@ import {
   isValidVoterId,
   normalizeCpf,
   normalizePlace,
+  normalizeSection,
   normalizeState,
   normalizeVoterId,
+  normalizeZone,
+  SECTION_MAX_LENGTH,
+  ZONE_MAX_LENGTH,
 } from '@/lib/utils/documents';
 
 /**
@@ -77,6 +81,16 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
     case 'voter_id':
       return texto((valor) =>
         isValidVoterId(valor) ? null : 'Título de eleitor inválido. Confira os números.',
+      );
+    case 'zone':
+      return texto((valor) =>
+        /^\d+$/.test(valor) && valor.length <= ZONE_MAX_LENGTH ? null : 'Zona eleitoral inválida.',
+      );
+    case 'section':
+      return texto((valor) =>
+        /^\d+$/.test(valor) && valor.length <= SECTION_MAX_LENGTH
+          ? null
+          : 'Seção eleitoral inválida.',
       );
     case 'state':
       return texto((valor) => (normalizeState(valor) ? null : 'Selecione um estado.'));
@@ -268,6 +282,10 @@ export function valuesFromMember(config: ClientFormConfig, member: Member): Dyna
       values[field.id] = member.cpf ?? '';
     } else if (field.systemKey === 'voter_id') {
       values[field.id] = member.voterId ?? '';
+    } else if (field.systemKey === 'zone') {
+      values[field.id] = member.zone ?? '';
+    } else if (field.systemKey === 'section') {
+      values[field.id] = member.section ?? '';
     } else if (field.systemKey === 'state') {
       values[field.id] = member.state ?? '';
     } else if (field.systemKey === 'city') {
@@ -322,6 +340,8 @@ export interface SubmissionPayload {
   gender: string | null;
   cpf: string | null;
   voterId: string | null;
+  zone: string | null;
+  section: string | null;
   state: string | null;
   city: string | null;
   district: string | null;
@@ -349,6 +369,8 @@ export function toSubmission(
     gender: null,
     cpf: null,
     voterId: null,
+    zone: null,
+    section: null,
     state: null,
     city: null,
     district: null,
@@ -392,6 +414,14 @@ export function toSubmission(
     }
     if (field.systemKey === 'voter_id') {
       payload.voterId = normalizeVoterId(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'zone') {
+      payload.zone = normalizeZone(texto(value)) || null;
+      continue;
+    }
+    if (field.systemKey === 'section') {
+      payload.section = normalizeSection(texto(value)) || null;
       continue;
     }
     if (field.systemKey === 'state') {

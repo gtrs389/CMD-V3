@@ -24,6 +24,8 @@ export const SYSTEM_FIELD_KEYS = [
   'gender',
   'cpf',
   'voter_id',
+  'zone',
+  'section',
   'state',
   'city',
   'district',

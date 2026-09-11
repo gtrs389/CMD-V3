@@ -15,5 +15,12 @@ export const memberRepository: MemberRepository = createHttpMemberRepository();
 
 export * from './types';
 export { NetworkError } from './http/api';
-export { submitInvite, type PublicSubmission } from './http/public';
+export {
+  submitInvite,
+  lookupInviteCpf,
+  lookupInviteTitulo,
+  type PublicSubmission,
+  type InviteCpfLookup,
+  type InviteTituloLookup,
+} from './http/public';
 export { subscribeToData, notifyDataChanged } from './events';

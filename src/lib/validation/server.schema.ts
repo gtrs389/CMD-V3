@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
 import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
-import { GENDER_VALUES, UF_OPTIONS, isValidCpf, isValidVoterId } from '@/lib/utils/documents';
+import {
+  GENDER_VALUES,
+  SECTION_MAX_LENGTH,
+  UF_OPTIONS,
+  ZONE_MAX_LENGTH,
+  isValidCpf,
+  isValidVoterId,
+} from '@/lib/utils/documents';
 
 /**
  * Validacao de tudo que chega ao servidor.
@@ -105,6 +112,20 @@ const standardMemberFields = {
       .max(20)
       .refine((value) => isValidVoterId(value), 'Título de eleitor inválido.'),
   ),
+  zone: opcional(
+    z
+      .string()
+      .trim()
+      .regex(/^\d+$/, 'Zona eleitoral inválida.')
+      .max(ZONE_MAX_LENGTH, 'Zona eleitoral inválida.'),
+  ),
+  section: opcional(
+    z
+      .string()
+      .trim()
+      .regex(/^\d+$/, 'Seção eleitoral inválida.')
+      .max(SECTION_MAX_LENGTH, 'Seção eleitoral inválida.'),
+  ),
   state: opcional(z.string().trim().toUpperCase().pipe(z.enum(UF_CODES))),
   city: opcional(z.string().trim().min(2, 'Município muito curto.').max(120)),
   district: opcional(z.string().trim().min(2, 'Bairro muito curto.').max(120)),
@@ -175,10 +196,32 @@ export const deviceSignalsSchema = z
   })
   .partial();
 
+/**
+ * Comprovantes cifrados da confirmacao de CPF e titulo, feita durante o
+ * preenchimento. Opacos para o navegador: ele so devolve o que recebeu.
+ */
+const verificationTokenSchema = z.string().min(1).max(4000).nullable().optional();
+
+/** Confirmacao do CPF, durante o preenchimento do link publico. */
+export const inviteCpfLookupSchema = z.object({
+  cpf: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((value) => isValidCpf(value), 'CPF inválido.'),
+});
+
+/** Confirmacao do titulo de eleitor: usa o token da confirmacao do CPF. */
+export const inviteTseLookupSchema = z.object({
+  cpfToken: z.string().min(1).max(4000).nullable(),
+});
+
 /** Envio pelo link publico: o cliente vem do token, nunca do corpo. */
 export const publicSubmissionSchema = z.object({
   ...memberBase,
   device: deviceSignalsSchema.optional(),
+  cpfToken: verificationTokenSchema,
+  tseToken: verificationTokenSchema,
 });
 
 /**

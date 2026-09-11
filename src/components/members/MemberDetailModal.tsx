@@ -95,6 +95,8 @@ function StandardFields({ member }: { member: Member }) {
     ['Gênero', genderLabel(member.gender)],
     ['CPF', member.cpf ? formatCpf(member.cpf) : null],
     ['Título de eleitor', member.voterId ? formatVoterId(member.voterId) : null],
+    ['Zona eleitoral', member.zone],
+    ['Seção eleitoral', member.section],
     ['Estado (UF)', member.state],
     ['Município / Cidade', member.city],
     ['Bairro', member.district],
