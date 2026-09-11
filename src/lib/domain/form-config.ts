@@ -105,6 +105,22 @@ const SYSTEM_FIELD_DEFAULTS: Array<{
     required: false,
   },
   {
+    systemKey: 'zone',
+    type: 'text',
+    label: 'Zona eleitoral',
+    placeholder: '000',
+    helpText: 'Preenchida automaticamente a partir do título de eleitor.',
+    required: false,
+  },
+  {
+    systemKey: 'section',
+    type: 'text',
+    label: 'Seção eleitoral',
+    placeholder: '0000',
+    helpText: 'Preenchida automaticamente a partir do título de eleitor.',
+    required: false,
+  },
+  {
     systemKey: 'state',
     type: 'select',
     label: 'Estado (UF)',

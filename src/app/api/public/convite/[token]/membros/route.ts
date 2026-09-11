@@ -16,9 +16,11 @@ import {
   createPendingVerification,
   recordConfirmation,
   runVerification,
+  seedVerificationFromForm,
 } from '@/lib/server/verification.service';
 import {
   createPendingLocation,
+  invalidateLocation,
   resolveLocation,
 } from '@/lib/server/map-location.service';
 import {
@@ -124,10 +126,22 @@ export async function POST(
       // cadastro em duplicidade.
       await consumeInvite(token);
 
-      // Prova da confirmacao final e verificacao pendente. Nenhum dos dois pode
-      // impedir o cadastro, que ja esta salvo.
+      // Prova da confirmacao final. Nunca pode impedir o cadastro, que ja
+      // esta salvo.
       await recordConfirmation(client.id, member.id).catch(() => undefined);
-      await createPendingVerification(client.id, member.id).catch(() => undefined);
+
+      // A verificacao pode ja ter acontecido no proprio formulario, se a
+      // pessoa confirmou CPF e/ou titulo durante o preenchimento: nesse caso
+      // o resultado so e gravado, sem consultar o fornecedor de novo (cada
+      // consulta e cobrada). Sem token valido, cai no fluxo de sempre.
+      const seed = await seedVerificationFromForm(client.id, member.id, member.cpf, {
+        cpfToken: input.cpfToken ?? null,
+        tseToken: input.tseToken ?? null,
+      }).catch(() => ({ seeded: false, tseSucceeded: false }));
+
+      if (!seed.seeded) {
+        await createPendingVerification(client.id, member.id).catch(() => undefined);
+      }
 
       // As consultas acontecem depois da resposta, no servidor. A tela de
       // sucesso nao espera pelo fornecedor e nunca recebe nada delas.
@@ -136,7 +150,19 @@ export async function POST(
 
       after(async () => {
         await resolveLocation(member.id, 'RESIDENCE').catch(() => undefined);
-        await runVerification(member.id).catch(() => undefined);
+
+        if (!seed.seeded) {
+          await runVerification(member.id).catch(() => undefined);
+          return;
+        }
+
+        // Etapa eleitoral ja resolvida no formulario: o local de votacao
+        // nasce e e resolvido aqui, igual ao que `runVerification` faria.
+        if (seed.tseSucceeded) {
+          await createPendingLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
+          await invalidateLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
+          await resolveLocation(member.id, 'POLLING_PLACE').catch(() => undefined);
+        }
       });
 
       // Sinal de seguranca, gravado depois do cadastro: nunca o impede.

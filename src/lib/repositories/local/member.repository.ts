@@ -61,6 +61,8 @@ export function createLocalMemberRepository(
         gender: input.gender ?? null,
         cpf: input.cpf ?? null,
         voterId: input.voterId ?? null,
+        zone: input.zone ?? null,
+        section: input.section ?? null,
         state: input.state ?? null,
         city: input.city ?? null,
         district: input.district ?? null,

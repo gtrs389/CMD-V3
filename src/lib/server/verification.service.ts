@@ -364,6 +364,91 @@ async function execute(
 }
 
 /* -------------------------------------------------------------------------
+   Verificacao ja resolvida no formulario publico
+   ------------------------------------------------------------------------- */
+
+interface CpfToken {
+  cpf: string;
+  result: CpfResult;
+}
+
+interface TseToken {
+  cpf: string;
+  result: TseResult;
+}
+
+export interface SeedOutcome {
+  /** Verdadeiro quando a linha foi gravada a partir dos tokens do formulario. */
+  seeded: boolean;
+  /** Verdadeiro quando a etapa eleitoral tambem veio resolvida. */
+  tseSucceeded: boolean;
+}
+
+const EMPTY_SEED: SeedOutcome = { seeded: false, tseSucceeded: false };
+
+/**
+ * Grava a verificacao a partir do que ja foi confirmado durante o
+ * preenchimento do link publico, sem consultar o fornecedor de novo: a
+ * consulta ja aconteceu (e ja foi cobrada) no proprio formulario, antes do
+ * envio.
+ *
+ * O token do CPF so vale se o CPF que ele carrega for exatamente o CPF
+ * gravado no integrante: qualquer token de outro CPF, ou qualquer coisa que
+ * nao decifre, e tratado como ausente. Sem um token de CPF valido, nada e
+ * gravado aqui e a verificacao cai no fluxo de sempre — PENDING seguido de
+ * `runVerification` depois do cadastro.
+ */
+export async function seedVerificationFromForm(
+  clientId: string,
+  memberId: string,
+  memberCpf: string | null,
+  tokens: { cpfToken?: string | null; tseToken?: string | null },
+): Promise<SeedOutcome> {
+  if (!hasEncryptionKey()) return EMPTY_SEED;
+
+  const cpfData = tokens.cpfToken ? decryptJson<CpfToken>(tokens.cpfToken) : null;
+  if (!cpfData || cpfData.cpf !== (memberCpf ?? '')) return EMPTY_SEED;
+
+  const tseData = tokens.tseToken ? decryptJson<TseToken>(tokens.tseToken) : null;
+  const tse = tseData && tseData.cpf === cpfData.cpf ? tseData : null;
+
+  const now = new Date().toISOString();
+  const patch: Record<string, string | number | null> = {
+    cpf_status: 'SUCCESS',
+    cpf_requested_at: now,
+    cpf_completed_at: now,
+    cpf_attempts: 1,
+    cpf_error_code: null,
+    cpf_payload: encryptJson(cpfData.result),
+  };
+
+  if (tse) {
+    patch.tse_status = 'SUCCESS';
+    patch.tse_requested_at = now;
+    patch.tse_completed_at = now;
+    patch.tse_attempts = 1;
+    patch.tse_error_code = null;
+    patch.tse_payload = encryptJson(tse.result);
+  } else {
+    // Titulo nao confirmado no formulario: fica pulada, mas retentavel pelo
+    // ADMIN (mesma regra de `canRetryTse`), nunca reconsultada sozinha.
+    patch.tse_status = 'SKIPPED_MISSING_DATA';
+    patch.tse_completed_at = now;
+    patch.tse_attempts = 0;
+  }
+
+  patch.status = overallStatus(patch.cpf_status as StepStatus, patch.tse_status as StepStatus);
+
+  await insertOne(
+    TABLES.memberVerifications,
+    { client_id: clientId, member_id: memberId, ...patch },
+    'id',
+  ).catch(() => undefined);
+
+  return { seeded: true, tseSucceeded: Boolean(tse) };
+}
+
+/* -------------------------------------------------------------------------
    Leitura pelo ADMIN
    ------------------------------------------------------------------------- */
 

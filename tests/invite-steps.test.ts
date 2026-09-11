@@ -61,6 +61,8 @@ describe('etapas do cadastro público', () => {
       'gender',
       'cpf',
       'voter_id',
+      'zone',
+      'section',
     ]);
     expect(byKey(steps[1].fields)).toEqual(['state', 'city', 'district', 'street']);
     // Vinculo leva tambem os campos personalizados ativos.
@@ -79,7 +81,17 @@ describe('etapas do cadastro público', () => {
     };
 
     const nomes = byKey(buildInviteSteps(invertido)[0].fields);
-    expect(nomes).toEqual(['voter_id', 'cpf', 'gender', 'phone', 'email', 'name', 'photo']);
+    expect(nomes).toEqual([
+      'section',
+      'zone',
+      'voter_id',
+      'cpf',
+      'gender',
+      'phone',
+      'email',
+      'name',
+      'photo',
+    ]);
   });
 
   it('não mostra campo desativado', () => {

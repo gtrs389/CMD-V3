@@ -33,6 +33,8 @@ const PERSONAL_KEYS: readonly SystemFieldKey[] = [
   'gender',
   'cpf',
   'voter_id',
+  'zone',
+  'section',
 ];
 
 /** Localizacao: o encadeamento Estado -> Municipio -> Bairro -> Rua. */

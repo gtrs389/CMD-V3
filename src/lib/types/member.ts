@@ -29,6 +29,10 @@ export interface Member extends Timestamped {
   cpf: string | null;
   /** Doze digitos. Unico dentro do mesmo cliente. */
   voterId: string | null;
+  /** Zona eleitoral. Preenchida pela consulta do titulo de eleitor. */
+  zone: string | null;
+  /** Secao eleitoral. Preenchida pela consulta do titulo de eleitor. */
+  section: string | null;
   /** Sigla da UF em maiusculas. */
   state: string | null;
   city: string | null;
@@ -64,6 +68,8 @@ export interface MemberInput {
   gender?: string | null;
   cpf?: string | null;
   voterId?: string | null;
+  zone?: string | null;
+  section?: string | null;
   state?: string | null;
   city?: string | null;
   district?: string | null;

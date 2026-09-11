@@ -5,6 +5,14 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Send } from 'lucide-react';
 import type { Client, PublicInviteOwner } from '@/lib/types';
 import { submitInvite } from '@/lib/repositories';
 import { GoneError, NetworkError } from '@/lib/repositories/http/api';
+import {
+  formatCpf,
+  formatVoterId,
+  isValidCpf,
+  isValidVoterId,
+  normalizeCpf,
+  normalizeVoterId,
+} from '@/lib/utils/documents';
 import { CONSENT_KEY, toSubmission, visibleFields } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -19,9 +27,12 @@ import {
   InviteStateShell,
   InviteStepChips,
 } from './InviteChrome';
+import { InviteConfirmValueModal } from './InviteConfirmValueModal';
 import { InviteReviewStep } from './InviteReviewStep';
+import { InviteVerifyingModal } from './InviteVerifyingModal';
 import { InviteExpired } from './PublicInviteView';
 import { buildInviteSteps, isWideField, stepValueKeys } from './invite-steps';
+import { useInviteVerification } from './use-invite-verification';
 
 /**
  * Aviso curto sobre os sinais tecnicos registrados no envio.
@@ -84,6 +95,22 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
   const form = useDynamicForm(client.form);
   const steps = useMemo(() => buildInviteSteps(client.form), [client.form]);
   const allFields = useMemo(() => visibleFields(client.form), [client.form]);
+
+  const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
+  const zoneFieldId = allFields.find((field) => field.systemKey === 'zone')?.id;
+  const sectionFieldId = allFields.find((field) => field.systemKey === 'section')?.id;
+
+  const { setValue } = form;
+  const verification = useInviteVerification({
+    token,
+    onNameCorrection: (nome) => {
+      if (nameFieldId) setValue(nameFieldId, nome);
+    },
+    onZonaSecaoFilled: (zona, secao) => {
+      if (zoneFieldId) setValue(zoneFieldId, zona ?? '');
+      if (sectionFieldId) setValue(sectionFieldId, secao ?? '');
+    },
+  });
 
   const [index, setIndex] = useState(0);
   const position = Math.min(index, steps.length - 1);
@@ -163,6 +190,7 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
 
     try {
       const payload = toSubmission(client.form, values);
+      const { cpfToken, tseToken } = verification.getTokens();
       // O cliente de destino vem do token do link, conferido no servidor.
       await submitInvite(token, {
         name: payload.name,
@@ -172,6 +200,8 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
         gender: payload.gender,
         cpf: payload.cpf,
         voterId: payload.voterId,
+        zone: payload.zone,
+        section: payload.section,
         state: payload.state,
         city: payload.city,
         district: payload.district,
@@ -180,6 +210,8 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
         relationshipLabel: payload.relationshipLabel,
         responses: payload.responses,
         consentAt: payload.consentAt,
+        cpfToken,
+        tseToken,
       });
 
       setConfirming(false);
@@ -314,6 +346,25 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
                             value={form.values[field.id] ?? null}
                             error={form.errors[field.id]}
                             onChange={(value) => form.setValue(field.id, value)}
+                            onBlur={
+                              field.systemKey === 'cpf'
+                                ? (value) => {
+                                    const digits = normalizeCpf(
+                                      typeof value === 'string' ? value : '',
+                                    );
+                                    if (isValidCpf(digits)) verification.requestCpfConfirmation(digits);
+                                  }
+                                : field.systemKey === 'voter_id'
+                                  ? (value) => {
+                                      const digits = normalizeVoterId(
+                                        typeof value === 'string' ? value : '',
+                                      );
+                                      if (isValidVoterId(digits)) {
+                                        verification.requestTituloConfirmation(digits);
+                                      }
+                                    }
+                                  : undefined
+                            }
                             onImageError={(message) => toast.error(message)}
                           />
                         </div>
@@ -351,6 +402,28 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
         onCancel={() => setConfirming(false)}
         onConfirm={handleConfirm}
       />
+
+      <InviteConfirmValueModal
+        open={verification.pending?.kind === 'cpf'}
+        title="Confirme seu CPF"
+        description={`Você digitou ${
+          verification.pending ? formatCpf(verification.pending.value) : ''
+        }. Está correto?`}
+        onCancel={verification.cancel}
+        onConfirm={verification.confirm}
+      />
+
+      <InviteConfirmValueModal
+        open={verification.pending?.kind === 'titulo'}
+        title="Confirme seu título de eleitor"
+        description={`Você digitou ${
+          verification.pending ? formatVoterId(verification.pending.value) : ''
+        }. Está correto?`}
+        onCancel={verification.cancel}
+        onConfirm={verification.confirm}
+      />
+
+      <InviteVerifyingModal open={verification.loading} />
     </main>
   );
 }

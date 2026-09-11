@@ -127,6 +127,8 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
     gender: row.gender,
     cpf: row.cpf,
     voterId: row.voter_id,
+    zone: row.zone,
+    section: row.section,
     state: row.state,
     city: row.city,
     district: row.district,

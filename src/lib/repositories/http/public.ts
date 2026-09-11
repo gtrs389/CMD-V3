@@ -60,6 +60,8 @@ export interface PublicSubmission {
   gender: string | null;
   cpf: string | null;
   voterId: string | null;
+  zone: string | null;
+  section: string | null;
   state: string | null;
   city: string | null;
   district: string | null;
@@ -68,6 +70,13 @@ export interface PublicSubmission {
   relationshipLabel: string | null;
   responses: FieldResponse[];
   consentAt: string | null;
+  /**
+   * Comprovantes cifrados da confirmacao de CPF e titulo de eleitor, feita
+   * durante o preenchimento. Opacos aqui: o navegador so guarda e devolve o
+   * que a rota de confirmacao lhe deu, nunca le nem gera nada disso sozinho.
+   */
+  cpfToken?: string | null;
+  tseToken?: string | null;
 }
 
 /**
@@ -86,4 +95,39 @@ export async function submitInvite(token: string, input: PublicSubmission): Prom
     `/api/public/convite/${encodeURIComponent(token)}/membros`,
     { method: 'POST', body: { ...input, device } },
   );
+}
+
+/**
+ * Confirmacao de CPF e titulo de eleitor, durante o preenchimento.
+ *
+ * O resultado nunca aparece na tela: `nome` so serve para corrigir o campo
+ * silenciosamente, e os tokens sao opacos, guardados so para devolver na
+ * proxima etapa e no envio final.
+ */
+export interface InviteCpfLookup {
+  nome: string | null;
+  token: string | null;
+}
+
+export async function lookupInviteCpf(token: string, cpf: string): Promise<InviteCpfLookup> {
+  return api<InviteCpfLookup>(`/api/public/convite/${encodeURIComponent(token)}/cpf`, {
+    method: 'POST',
+    body: { cpf },
+  });
+}
+
+export interface InviteTituloLookup {
+  zona: string | null;
+  secao: string | null;
+  token: string | null;
+}
+
+export async function lookupInviteTitulo(
+  token: string,
+  cpfToken: string | null,
+): Promise<InviteTituloLookup> {
+  return api<InviteTituloLookup>(`/api/public/convite/${encodeURIComponent(token)}/titulo`, {
+    method: 'POST',
+    body: { cpfToken },
+  });
 }

@@ -21,6 +21,8 @@ describe('configuração padrão', () => {
       'gender',
       'cpf',
       'voter_id',
+      'zone',
+      'section',
       'state',
       'city',
       'district',
@@ -28,7 +30,7 @@ describe('configuração padrão', () => {
       'relationship',
     ]);
     expect(config.fields.map((field) => field.order)).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
     ]);
   });
 
@@ -78,6 +80,8 @@ describe('contagem de respostas', () => {
     gender: null,
     cpf: null,
     voterId: null,
+    zone: null,
+    section: null,
     state: null,
     city: null,
     district: null,

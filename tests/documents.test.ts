@@ -154,7 +154,7 @@ describe('gênero', () => {
 });
 
 describe('campos padrão do formulário', () => {
-  it('cria os doze campos padrão, todos visíveis', () => {
+  it('cria os catorze campos padrão, todos visíveis', () => {
     const fields = createSystemFields();
 
     expect(fields.map((field) => field.systemKey)).toEqual([
@@ -165,6 +165,8 @@ describe('campos padrão do formulário', () => {
       'gender',
       'cpf',
       'voter_id',
+      'zone',
+      'section',
       'state',
       'city',
       'district',
@@ -174,12 +176,12 @@ describe('campos padrão do formulário', () => {
     expect(fields.every((field) => field.enabled)).toBe(true);
   });
 
-  it('deixa os oito campos novos opcionais por padrão', () => {
+  it('deixa os dez campos novos opcionais por padrão', () => {
     const novos = createSystemFields().filter(
       (field) => !['photo', 'name', 'email', 'phone'].includes(field.systemKey ?? ''),
     );
 
-    expect(novos).toHaveLength(8);
+    expect(novos).toHaveLength(10);
     expect(novos.every((field) => field.required === false)).toBe(true);
   });
 

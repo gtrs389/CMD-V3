@@ -7,8 +7,10 @@ import {
   isGenderValue,
   normalizeCpf,
   normalizePlace,
+  normalizeSection,
   normalizeState,
   normalizeVoterId,
+  normalizeZone,
 } from '@/lib/utils/documents';
 import { OTHER_OPTION } from '@/lib/domain/location';
 import {
@@ -196,6 +198,8 @@ function standardColumns(
       | 'gender'
       | 'cpf'
       | 'voterId'
+      | 'zone'
+      | 'section'
       | 'state'
       | 'city'
       | 'district'
@@ -213,6 +217,8 @@ function standardColumns(
   }
   if (input.cpf !== undefined) patch.cpf = normalizeCpf(input.cpf ?? '') || null;
   if (input.voterId !== undefined) patch.voter_id = normalizeVoterId(input.voterId ?? '') || null;
+  if (input.zone !== undefined) patch.zone = normalizeZone(input.zone ?? '') || null;
+  if (input.section !== undefined) patch.section = normalizeSection(input.section ?? '') || null;
   if (input.state !== undefined) patch.state = normalizeState(input.state ?? '') || null;
   if (input.city !== undefined) patch.city = place(input.city);
   if (input.district !== undefined) patch.district = place(input.district);

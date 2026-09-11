@@ -111,6 +111,8 @@ export interface MemberRow {
   gender: string | null;
   cpf: string | null;
   voter_id: string | null;
+  zone: string | null;
+  section: string | null;
   state: string | null;
   city: string | null;
   district: string | null;
