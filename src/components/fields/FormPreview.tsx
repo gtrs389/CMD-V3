@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
+import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 
 interface FormPreviewProps {
@@ -44,16 +45,18 @@ export function FormPreview({ client }: FormPreviewProps) {
           ) : null}
 
           <div className="mt-4 space-y-4">
-            {fields.map((field) => (
-              <DynamicFieldInput
-                key={field.id}
-                field={field}
-                idPrefix="previa"
-                value={form.values[field.id] ?? null}
-                error={form.errors[field.id]}
-                onChange={(value) => form.setValue(field.id, value)}
-              />
-            ))}
+            <LocationProvider fields={fields} values={form.values} setValue={form.setValue}>
+              {fields.map((field) => (
+                <DynamicFieldInput
+                  key={field.id}
+                  field={field}
+                  idPrefix="previa"
+                  value={form.values[field.id] ?? null}
+                  error={form.errors[field.id]}
+                  onChange={(value) => form.setValue(field.id, value)}
+                />
+              ))}
+            </LocationProvider>
 
             {privacy.enabled ? (
               <div className="rounded-control bg-ink-50 p-3">

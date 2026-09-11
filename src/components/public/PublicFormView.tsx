@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { useToast } from '@/components/ui/Toast';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
+import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 
 /**
@@ -162,19 +163,21 @@ export function PublicFormView({ client }: PublicFormViewProps) {
           noValidate
           className="animate-rise space-y-5 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5"
         >
-          {fields.map((field) => (
-            <DynamicFieldInput
-              key={field.id}
-              field={field}
-              idPrefix="publico"
-              allowCamera
-              disabled={submitting}
-              value={form.values[field.id] ?? null}
-              error={form.errors[field.id]}
-              onChange={(value) => form.setValue(field.id, value)}
-              onImageError={(message) => toast.error(message)}
-            />
-          ))}
+          <LocationProvider fields={fields} values={form.values} setValue={form.setValue}>
+            {fields.map((field) => (
+              <DynamicFieldInput
+                key={field.id}
+                field={field}
+                idPrefix="publico"
+                allowCamera
+                disabled={submitting}
+                value={form.values[field.id] ?? null}
+                error={form.errors[field.id]}
+                onChange={(value) => form.setValue(field.id, value)}
+                onImageError={(message) => toast.error(message)}
+              />
+            ))}
+          </LocationProvider>
 
           {privacy.enabled ? (
             <section
