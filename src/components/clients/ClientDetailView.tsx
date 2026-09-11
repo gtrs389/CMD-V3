@@ -30,14 +30,7 @@ import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { InviteLinkModal } from './InviteLinkModal';
-
-const TAB_IDS = ['visao-geral', 'equipe', 'formulario'] as const;
-export type TabId = (typeof TAB_IDS)[number];
-
-/** Confere o parametro `aba` da URL antes de escolher a aba inicial. */
-export function isTabId(value: string): value is TabId {
-  return (TAB_IDS as readonly string[]).includes(value);
-}
+import type { TabId } from './client-tabs';
 
 interface ClientDetailViewProps {
   clientId: string;

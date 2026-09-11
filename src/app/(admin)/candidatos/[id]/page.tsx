@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 import { can, canReachClient } from '@/lib/permissions';
 import { requirePageUser } from '@/lib/auth/server';
 import { AccessDenied } from '@/components/layout/AccessDenied';
-import { ClientDetailView, isTabId } from '@/components/clients/ClientDetailView';
+import { ClientDetailView } from '@/components/clients/ClientDetailView';
+import { isTabId } from '@/components/clients/client-tabs';
 
 export const metadata: Metadata = {
   title: 'Candidato',
