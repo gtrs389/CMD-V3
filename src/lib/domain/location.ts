@@ -52,8 +52,43 @@ export class LocationError extends Error {
    Formato das respostas
    ------------------------------------------------------------------------- */
 
-const listOf = <T extends z.ZodTypeAny>(item: T) =>
-  z.union([z.array(item), z.object({ result: z.array(item) })]);
+/**
+ * Extrai a lista de uma resposta da API.
+ *
+ * A lista pode vir direta ou dentro de `result`/`data`. Devolve `null` quando
+ * nao ha lista nenhuma: so isso e tratado como resposta fora do formato.
+ */
+function rawList(payload: unknown): unknown[] | null {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return null;
+
+  const record = payload as Record<string, unknown>;
+  for (const key of ['result', 'data', 'items']) {
+    const value = record[key];
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') {
+      const nested = rawList(value);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+/**
+ * Le linha a linha, ignorando o que nao encaixa.
+ * Um registro estranho no meio da lista nao derruba a lista inteira.
+ */
+function rows<T>(payload: unknown, schema: z.ZodType<T>): T[] {
+  const list = rawList(payload);
+  if (!list) throw new LocationError();
+
+  const parsed: T[] = [];
+  for (const item of list) {
+    const result = schema.safeParse(item);
+    if (result.success) parsed.push(result.data);
+  }
+  return parsed;
+}
 
 /** A API devolve `shortName`; os demais nomes cobrem variacoes da resposta. */
 const stateSchema = z.object({
@@ -71,21 +106,23 @@ const citySchema = z.object({
   name: z.string().min(1),
 });
 
-const districtSchema = z.object({ id: z.union([z.number(), z.string()]).optional(), name: z.string().min(1) });
-
-function items<T>(payload: unknown, schema: z.ZodType<T[] | { result: T[] }>): T[] {
-  const parsed = schema.safeParse(payload);
-  if (!parsed.success) throw new LocationError();
-  return Array.isArray(parsed.data) ? parsed.data : parsed.data.result;
-}
+/** O bairro pode chegar como objeto com nome ou como texto solto. */
+const districtSchema = z.union([
+  z.string().min(1),
+  z.object({
+    name: z.string().min(1).optional(),
+    district: z.string().min(1).optional(),
+    districtName: z.string().min(1).optional(),
+    bairro: z.string().min(1).optional(),
+  }),
+]);
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR');
 
 export function parseStates(payload: unknown): StateOption[] {
-  const rows = items(payload, listOf(stateSchema));
   const states: StateOption[] = [];
 
-  for (const row of rows) {
+  for (const row of rows(payload, stateSchema)) {
     const uf = normalizeState(row.shortName ?? row.acronym ?? row.initials ?? row.uf ?? '');
     if (!uf) continue;
     states.push({ uf, name: row.name.trim() });
@@ -96,10 +133,9 @@ export function parseStates(payload: unknown): StateOption[] {
 }
 
 export function parseCities(payload: unknown): CityOption[] {
-  const rows = items(payload, listOf(citySchema));
   const cities: CityOption[] = [];
 
-  for (const row of rows) {
+  for (const row of rows(payload, citySchema)) {
     const id = toCityId(row.id ?? null);
     if (id === null) continue;
     cities.push({
@@ -114,12 +150,13 @@ export function parseCities(payload: unknown): CityOption[] {
 }
 
 export function parseDistricts(payload: unknown): DistrictOption[] {
-  const rows = items(payload, listOf(districtSchema));
   const seen = new Set<string>();
   const districts: DistrictOption[] = [];
 
-  for (const row of rows) {
-    const name = normalizePlace(row.name) || row.name.trim();
+  for (const row of rows(payload, districtSchema)) {
+    const raw =
+      typeof row === 'string' ? row : (row.name ?? row.district ?? row.districtName ?? row.bairro ?? '');
+    const name = normalizePlace(raw) || raw.trim();
     const key = normalizeSearch(name);
     if (!name || seen.has(key)) continue;
     seen.add(key);

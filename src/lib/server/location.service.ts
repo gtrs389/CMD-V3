@@ -69,7 +69,7 @@ async function load<T>(url: string, revalidate: number, parse: (payload: unknown
   try {
     return parse(payload);
   } catch {
-    logFailure(url, response.status, 'formato inesperado');
+    logFailure(url, response.status, `formato inesperado (${shape(payload)})`);
     throw new LocationError();
   }
 }
@@ -80,6 +80,25 @@ async function load<T>(url: string, revalidate: number, parse: (payload: unknown
  */
 function logFailure(url: string, status: number, detail = 'falha na consulta'): void {
   console.warn('[cmd] localidades: %s (%s) em %s', detail, status || 'sem resposta', endpoint(url));
+}
+
+/**
+ * Descreve a resposta apenas pelos nomes dos campos, para o log.
+ * Nenhum valor e registrado: so a forma do que chegou.
+ */
+function shape(payload: unknown): string {
+  if (Array.isArray(payload)) return `lista de ${payload.length}`;
+  if (!payload || typeof payload !== 'object') return typeof payload;
+
+  const keys = Object.keys(payload as Record<string, unknown>).slice(0, 5);
+  const result = (payload as { result?: unknown }).result;
+  const first = Array.isArray(result) ? result[0] : null;
+  const inner =
+    first && typeof first === 'object'
+      ? `; item: ${Object.keys(first as Record<string, unknown>).slice(0, 5).join(',')}`
+      : '';
+
+  return `${keys.join(',')}${inner}`;
 }
 
 /** Caminho sem dominio e sem parametros de consulta, para o log. */

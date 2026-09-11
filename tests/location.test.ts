@@ -82,6 +82,30 @@ describe('leitura das respostas da API', () => {
   it('recusa resposta fora do formato esperado', () => {
     expect(() => parseStates({ result: [{ nome: 'São Paulo' }] })).toThrow(LocationError);
     expect(() => parseCities('erro interno do servidor')).toThrow(LocationError);
+    expect(() => parseDistricts({ meta: {} })).toThrow(LocationError);
+  });
+
+  it('ignora registros estranhos sem perder o resto da lista', () => {
+    const payload = {
+      meta: {},
+      result: [
+        { id: 1, name: 'Sé' },
+        { id: 2, name: null },
+        { id: 3 },
+        'Centro',
+        { id: 4, name: 'Bela Vista', extra: true },
+      ],
+    };
+
+    expect(parseDistricts(payload).map((district) => district.name)).toEqual([
+      'Bela Vista',
+      'Centro',
+      'Sé',
+    ]);
+  });
+
+  it('lista vazia de bairros não é erro', () => {
+    expect(parseDistricts({ meta: {}, result: [] })).toEqual([]);
   });
 });
 
