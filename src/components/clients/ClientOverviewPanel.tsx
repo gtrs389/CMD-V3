@@ -703,7 +703,7 @@ function TeamPeopleCard({
           className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
         >
           <UsersRound aria-hidden="true" className="size-4 text-accent-600" />
-          Pessoas do time
+          Administradores do time
         </h2>
         {people.length > 0 ? (
           <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">

@@ -204,7 +204,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
 
           <div className="space-y-3 border-t border-line pt-5">
             <div>
-              <h3 className="text-sm font-semibold text-ink-900">Pessoas do time</h3>
+              <h3 className="text-sm font-semibold text-ink-900">Administradores do time</h3>
               <p className="mt-0.5 text-xs text-ink-500">
                 Cadastre as pessoas que fazem parte deste time.
               </p>
