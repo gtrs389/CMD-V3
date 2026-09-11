@@ -82,7 +82,7 @@ export function MobilizationMap() {
               Mapa da mobilização
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Distribuição dos integrantes por local de votação
+              Distribuição dos integrantes por localização cadastrada e local de votação
             </p>
           </div>
 
@@ -116,11 +116,11 @@ export function MobilizationMap() {
         {totals ? (
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
             <div className="flex gap-1">
-              <dt>Moradia localizada:</dt>
+              <dt>Pessoas localizadas:</dt>
               <dd className="font-semibold text-ink-900">{formatNumber(totals.residence)}</dd>
             </div>
             <div className="flex gap-1">
-              <dt>Local de votação:</dt>
+              <dt>Locais de votação:</dt>
               <dd className="font-semibold text-ink-900">{formatNumber(totals.pollingPlace)}</dd>
             </div>
             <div className="flex gap-1">

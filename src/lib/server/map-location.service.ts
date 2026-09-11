@@ -400,7 +400,7 @@ export async function mapOverview(): Promise<MapOverviewPayload> {
   ]);
 
   const clientIds = [...new Set(members.map((member) => member.client_id))];
-  const [clients, photos, verifications] = await Promise.all([
+  const [clients, photos, verifications, emails] = await Promise.all([
     selectRows<{ id: string; name: string }>(TABLES.clients, {
       select: 'id,name',
       filters: { id: inFilter(clientIds) },
@@ -410,6 +410,7 @@ export async function mapOverview(): Promise<MapOverviewPayload> {
       select: 'member_id,tse_payload',
       filters: { member_id: inFilter(memberIds) },
     }),
+    memberEmails(memberIds, clientIds),
   ]);
 
   const placeById = new Map(places.map((place) => [place.id, place]));
@@ -451,6 +452,9 @@ export async function mapOverview(): Promise<MapOverviewPayload> {
         zone: null,
         section: null,
         precision: link.location_precision ?? 'CITY',
+        // Somente para o ADMIN autenticado, que e quem alcanca esta rota.
+        phone: member.phone?.trim() ? member.phone : null,
+        email: emails.get(member.id) ?? null,
       });
       continue;
     }

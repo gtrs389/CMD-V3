@@ -6,7 +6,8 @@ import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPin, PollingPlacePin } from '@/lib/domain/map-pin';
-import { clusterPins, pinLabel, precisionLabel, type PinCluster } from '@/lib/domain/map-pin';
+import { clusterPins, precisionLabel, type PinCluster } from '@/lib/domain/map-pin';
+import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber } from '@/lib/utils/text';
 import { initials } from '@/lib/utils/text';
 
@@ -107,8 +108,10 @@ function PinPhoto({ pin }: { pin: MapPin }) {
   );
 }
 
+/** Cartao da pessoa. Telefone e e-mail so aparecem quando existem. */
 function PinDetails({ pin }: { pin: MapPin }) {
-  const residence = pin.locationKind === 'RESIDENCE';
+  const local = [pin.place, pin.district].filter(Boolean).join(' - ');
+  const municipio = [pin.city, pin.state].filter(Boolean).join('/');
 
   return (
     <div className="flex min-w-52 gap-2.5">
@@ -118,25 +121,21 @@ function PinDetails({ pin }: { pin: MapPin }) {
         <p className="text-sm font-semibold text-ink-900">{pin.memberName}</p>
         <p className="text-xs text-ink-500">{pin.clientName}</p>
 
-        <p className="text-xs text-ink-700">{pinLabel(pin)}</p>
-        {pin.district ? <p className="text-xs text-ink-500">{pin.district}</p> : null}
-        <p className="text-xs text-ink-500">
-          {[pin.city, pin.state].filter(Boolean).join('/') || '--'}
-        </p>
+        {pin.phone ? (
+          <p className="text-xs text-ink-500">{formatPhone(pin.phone)}</p>
+        ) : null}
+        {pin.email ? <p className="truncate text-xs text-ink-500">{pin.email}</p> : null}
 
-        {residence ? (
-          <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
-        ) : (
-          <p className="text-xs text-ink-500">
-            Zona {pin.zone ?? '--'} · Seção {pin.section ?? '--'}
-          </p>
-        )}
+        {local ? <p className="text-xs text-ink-700">{local}</p> : null}
+        {municipio ? <p className="text-xs text-ink-500">{municipio}</p> : null}
+
+        <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
 
         <Link
           href={`/clientes/${pin.clientId}?integrante=${pin.memberId}`}
           className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-brand-700 hover:text-brand-800"
         >
-          Abrir ficha
+          Ver ficha completa
         </Link>
       </div>
     </div>
@@ -280,10 +279,13 @@ export default function MapCanvas({
       zoom={4}
       scrollWheelZoom
       preferCanvas
-      attributionControl={false}
       className="h-full w-full"
     >
-      <TileLayer url={TILE_URL} maxZoom={19} />
+      <TileLayer
+        url={TILE_URL}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        maxZoom={19}
+      />
 
       <FitBounds pins={focus} />
       <ZoomWatcher onChange={setZoom} />

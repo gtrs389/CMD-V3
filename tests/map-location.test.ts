@@ -13,6 +13,7 @@ import {
   DEFAULT_MAP_FILTER,
   filterPins,
   genderBucket,
+  MAP_FILTER_LABELS,
   pinLabel,
   pollingPlaceKey,
   precisionLabel,
@@ -307,6 +308,8 @@ describe('pinos do mapa', () => {
     zone: null,
     section: null,
     precision: 'STREET',
+    phone: '11999999999',
+    email: null,
   };
 
   const votacao: MapPin = {
@@ -316,6 +319,12 @@ describe('pinos do mapa', () => {
     zone: '005',
     section: '0123',
   };
+
+  it('os filtros são Pessoas, Locais de votação e Ambos', () => {
+    expect(MAP_FILTER_LABELS.RESIDENCE).toBe('Pessoas');
+    expect(MAP_FILTER_LABELS.POLLING_PLACE).toBe('Locais de votação');
+    expect(MAP_FILTER_LABELS.BOTH).toBe('Ambos');
+  });
 
   it('o filtro começa em Ambos e separa os tipos', () => {
     expect(DEFAULT_MAP_FILTER).toBe('BOTH');
@@ -380,15 +389,17 @@ describe('aviso de precisão no popup', () => {
     zone: null,
     section: null,
     precision: 'STREET' as const,
+    phone: null,
+    email: null,
   };
 
   it('diz rua, bairro ou município conforme a precisão', () => {
-    expect(precisionLabel(pin)).toBe('Localização aproximada da rua');
+    expect(precisionLabel(pin)).toBe('Localização cadastrada aproximada da rua');
     expect(precisionLabel({ ...pin, precision: 'DISTRICT' })).toBe(
-      'Localização aproximada do bairro',
+      'Localização cadastrada aproximada do bairro',
     );
     expect(precisionLabel({ ...pin, precision: 'CITY' })).toBe(
-      'Localização aproximada do município',
+      'Localização cadastrada aproximada do município',
     );
   });
 });

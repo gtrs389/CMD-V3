@@ -25,6 +25,9 @@ export interface MapPin {
   section: string | null;
   /** Ate onde o endereco chegou: rua, bairro ou municipio. */
   precision: LocationPrecision;
+  /** Somente quando cadastrados. Ausentes nao viram linha vazia na tela. */
+  phone: string | null;
+  email: string | null;
 }
 
 /**
@@ -121,8 +124,8 @@ export type MapFilter = (typeof MAP_FILTERS)[number];
 export const DEFAULT_MAP_FILTER: MapFilter = 'BOTH';
 
 export const MAP_FILTER_LABELS: Record<MapFilter, string> = {
-  RESIDENCE: 'Moradia',
-  POLLING_PLACE: 'Local de votação',
+  RESIDENCE: 'Pessoas',
+  POLLING_PLACE: 'Locais de votação',
   BOTH: 'Ambos',
 };
 

@@ -86,9 +86,9 @@ export type LocationPrecision = (typeof LOCATION_PRECISIONS)[number];
 
 /** Texto do popup conforme ate onde o endereco chegou. */
 export const PRECISION_LABELS: Record<LocationPrecision, string> = {
-  STREET: 'Localização aproximada da rua',
-  DISTRICT: 'Localização aproximada do bairro',
-  CITY: 'Localização aproximada do município',
+  STREET: 'Localização cadastrada aproximada da rua',
+  DISTRICT: 'Localização cadastrada aproximada do bairro',
+  CITY: 'Localização cadastrada aproximada do município',
 };
 
 export interface ResidenceLookup {
