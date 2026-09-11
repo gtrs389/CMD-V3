@@ -16,8 +16,6 @@ import type { InviteStep } from './invite-steps';
  * cartao proprio e formulario em uma coluna.
  */
 
-const PROTECTION_NOTICE = 'Seus dados são protegidos e usados somente nesta operação.';
-
 /** Cabecalho: marca a esquerda, selo de ambiente seguro a direita. */
 export function InviteBrandBar() {
   return (
@@ -127,7 +125,13 @@ export function InviteOwnerBanner({ owner, fallbackName, className }: OwnerProps
   );
 }
 
-/** Cartao azul-marinho lateral do desktop, com as etapas verticais. */
+/**
+ * Cartao azul-marinho lateral do desktop, com as etapas verticais.
+ *
+ * Fixo em toda a altura da tela: quem preenche o formulario nunca perde de
+ * vista quem convidou nem em que etapa esta. Apenas a coluna do formulario,
+ * ao lado, tem rolagem propria.
+ */
 export function InviteOwnerAside({
   owner,
   fallbackName,
@@ -138,7 +142,7 @@ export function InviteOwnerAside({
   const name = owner?.name ?? fallbackName;
 
   return (
-    <aside className={cn('flex-col gap-6 rounded-card bg-navy-900 p-6 shadow-overlay', className)}>
+    <aside className={cn('flex-col gap-8 bg-navy-900 p-8 lg:p-10', className)}>
       <div>
         <p className="text-[0.625rem] font-semibold tracking-[0.14em] text-navy-300 uppercase">
           Convite de mobilização
@@ -159,11 +163,6 @@ export function InviteOwnerAside({
       </div>
 
       <InviteStepTrail steps={steps} current={current} />
-
-      <p className="mt-auto flex items-start gap-2.5 rounded-control bg-navy-800 p-3 text-[0.6875rem] leading-relaxed text-navy-200">
-        <ShieldCheck aria-hidden="true" className="mt-px size-4 shrink-0 text-emerald-400" />
-        <span className="min-w-0">{PROTECTION_NOTICE}</span>
-      </p>
     </aside>
   );
 }
@@ -325,5 +324,3 @@ export function InviteStateShell({ children }: { children: ReactNode }) {
     </main>
   );
 }
-
-export { PROTECTION_NOTICE };

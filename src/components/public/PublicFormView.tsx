@@ -13,7 +13,6 @@ import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput'
 import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 import {
-  InviteBrandBar,
   InviteOwnerAside,
   InviteOwnerBanner,
   InviteProgress,
@@ -241,98 +240,105 @@ export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
   );
 
   return (
-    <main className="safe-x min-h-dvh bg-surface-muted">
-      <InviteBrandBar />
+    <main className="safe-x min-h-dvh bg-surface-muted lg:flex lg:h-dvh lg:overflow-hidden">
+      {/* Desktop: coluna azul-marinho fixa, com as etapas verticais. Nunca
+          rola — so a coluna do formulario, ao lado, tem rolagem propria. */}
+      <InviteOwnerAside
+        owner={owner}
+        fallbackName={client.name}
+        steps={steps}
+        current={position}
+        className="hidden lg:flex lg:h-dvh lg:w-[22rem] lg:shrink-0 lg:overflow-y-auto"
+      />
 
-      <LocationProvider fields={allFields} values={form.values} setValue={form.setValue}>
-        <div className="mx-auto grid w-full max-w-[76rem] grid-cols-1 gap-3 px-4 pt-4 pb-32 sm:px-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-6 lg:py-8 lg:pb-10">
-          {/* Celular: cartao azul-marinho horizontal. */}
-          <InviteOwnerBanner owner={owner} fallbackName={client.name} className="lg:hidden" />
+      {/* Unica coluna que rola no desktop; no celular e a pagina inteira. */}
+      <div className="lg:h-dvh lg:flex-1 lg:overflow-y-auto">
+        {/* Celular: cartao azul-marinho horizontal, no topo. */}
+        <div className="safe-top px-4 pt-4 sm:px-6 lg:hidden">
+          <InviteOwnerBanner owner={owner} fallbackName={client.name} />
+        </div>
 
-          {/* Desktop: cartao azul-marinho lateral, com as etapas verticais. */}
-          <InviteOwnerAside
-            owner={owner}
-            fallbackName={client.name}
-            steps={steps}
-            current={position}
-            className="hidden lg:flex"
-          />
-
-          {/* Celular: progresso em cartao proprio. */}
-          <div className="rounded-card border border-line bg-surface p-3.5 shadow-card lg:hidden">
-            <InviteProgress steps={steps} current={position} />
-            <InviteStepChips steps={steps} current={position} />
-          </div>
-
-          <section
-            ref={cardRef}
-            className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:flex lg:flex-col lg:p-7"
-          >
-            <InviteProgress steps={steps} current={position} className="hidden lg:block" />
-
-            <div className="lg:mt-7">
-              <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
-                {current.title}
-              </h1>
-              <p className="mt-1.5 text-sm text-ink-500">{current.description}</p>
+        <LocationProvider fields={allFields} values={form.values} setValue={form.setValue}>
+          <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-32 sm:px-6 lg:px-14 lg:py-12 lg:pb-16">
+            {/* Celular: progresso em cartao proprio. */}
+            <div className="rounded-card border border-line bg-surface p-3.5 shadow-card lg:hidden">
+              <InviteProgress steps={steps} current={position} />
+              <InviteStepChips steps={steps} current={position} />
             </div>
 
-            <form id="cadastro-publico" onSubmit={handleAdvance} noValidate className="contents">
-              <div key={current.id} ref={stepRef} className="mt-5 animate-rise lg:mt-6 lg:flex-1">
-                {position === 0 && client.form.introText ? (
-                  <p className="mb-4 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
-                    {client.form.introText}
-                  </p>
-                ) : null}
+            <section
+              ref={cardRef}
+              className="mt-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:mt-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+            >
+              <InviteProgress steps={steps} current={position} className="hidden lg:block" />
 
-                {isReview ? (
-                  <InviteReviewStep
-                    config={client.form}
-                    values={form.values}
-                    steps={fillSteps}
-                    disabled={submitting}
-                    consentError={form.errors[CONSENT_KEY]}
-                    deviceNotice={DEVICE_NOTICE}
-                    onEditStep={goTo}
-                    onConsentChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
-                  />
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-5">
-                    {current.fields.map((field) => (
-                      <div key={field.id} className={isWideField(field) ? 'sm:col-span-2' : undefined}>
-                        <DynamicFieldInput
-                          field={field}
-                          idPrefix="publico"
-                          variant="invite"
-                          allowCamera
-                          disabled={submitting}
-                          value={form.values[field.id] ?? null}
-                          error={form.errors[field.id]}
-                          onChange={(value) => form.setValue(field.id, value)}
-                          onImageError={(message) => toast.error(message)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="lg:mt-8">
+                <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
+                  {current.title}
+                </h1>
+                <p className="mt-1.5 text-sm text-ink-500">{current.description}</p>
               </div>
 
-              {/* Desktop: acoes no proprio cartao. */}
-              <div className="mt-7 hidden items-center justify-between gap-4 lg:flex">
-                <p className="text-xs text-ink-500">{REQUIRED_HINT}</p>
-                <div className="flex shrink-0 items-center gap-2">{actions}</div>
-              </div>
-            </form>
+              <form id="cadastro-publico" onSubmit={handleAdvance} noValidate className="contents">
+                <div key={current.id} ref={stepRef} className="mt-5 animate-rise lg:mt-6">
+                  {position === 0 && client.form.introText ? (
+                    <p className="mb-4 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
+                      {client.form.introText}
+                    </p>
+                  ) : null}
 
-            <p className="mt-5 text-xs text-ink-500 lg:hidden">{REQUIRED_HINT}</p>
-          </section>
-        </div>
-      </LocationProvider>
+                  {isReview ? (
+                    <InviteReviewStep
+                      config={client.form}
+                      values={form.values}
+                      steps={fillSteps}
+                      disabled={submitting}
+                      consentError={form.errors[CONSENT_KEY]}
+                      deviceNotice={DEVICE_NOTICE}
+                      onEditStep={goTo}
+                      onConsentChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-5">
+                      {current.fields.map((field) => (
+                        <div
+                          key={field.id}
+                          className={isWideField(field) ? 'sm:col-span-2' : undefined}
+                        >
+                          <DynamicFieldInput
+                            field={field}
+                            idPrefix="publico"
+                            variant="invite"
+                            allowCamera
+                            disabled={submitting}
+                            value={form.values[field.id] ?? null}
+                            error={form.errors[field.id]}
+                            onChange={(value) => form.setValue(field.id, value)}
+                            onImageError={(message) => toast.error(message)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop: acoes abaixo do formulario. */}
+                <div className="mt-7 hidden items-center justify-between gap-4 lg:flex">
+                  <p className="text-xs text-ink-500">{REQUIRED_HINT}</p>
+                  <div className="flex shrink-0 items-center gap-2">{actions}</div>
+                </div>
+              </form>
+
+              <p className="mt-5 text-xs text-ink-500 lg:hidden">{REQUIRED_HINT}</p>
+            </section>
+          </div>
+        </LocationProvider>
+      </div>
 
       {/* Celular: "Continuar" fixo no rodape, com area segura. O conteudo
           reserva espaco equivalente para nunca ficar encoberto. */}
       <div className="safe-bottom safe-x fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
-        <div className="mx-auto flex w-full max-w-[76rem] items-center gap-2 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-3 sm:px-6">
           {actions}
         </div>
       </div>
