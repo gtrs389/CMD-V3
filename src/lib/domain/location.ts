@@ -188,9 +188,16 @@ export function citiesPath(uf: string): string {
   return `/api/localidades/municipios/${encodeURIComponent(uf)}?v=${LOCATION_FORMAT}`;
 }
 
-/** Sempre o `id` interno do municipio, nunca o `ibgeId`. */
-export function districtsPath(city: Pick<CityOption, 'id'>): string {
-  return `/api/localidades/bairros/${city.id}?v=${LOCATION_FORMAT}`;
+/**
+ * Bairros: o navegador manda apenas a UF e o nome do municipio.
+ *
+ * O identificador da Brasil Aberto e resolvido no servidor, a partir da lista
+ * de municipios daquela UF. Assim nenhuma lista guardada no navegador pode
+ * levar um identificador errado ate a API.
+ */
+export function districtsPath(uf: string, cityName: string): string {
+  const params = new URLSearchParams({ uf, municipio: cityName, v: String(LOCATION_FORMAT) });
+  return `/api/localidades/bairros?${params.toString()}`;
 }
 
 /* -------------------------------------------------------------------------
