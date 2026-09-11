@@ -10,11 +10,12 @@ import { useHydrated } from '@/hooks/use-hydrated';
 import styles from '@/components/auth/login.module.css';
 
 /**
- * Entrada do Administrador do time: somente o telefone.
+ * Entrada pelo link do time: somente o telefone.
  *
  * Mesma estrutura do formulario de login — so o campo muda. O telefone nao e
  * senha: sozinho ele nao autentica ninguem. Quem diz de qual time se trata e
- * o link, e a conferencia acontece inteira no servidor. A tela nunca revela
+ * o link, que aqui vive no cookie do contexto: nem a URL nem o corpo da
+ * requisicao carregam o codigo, e a conferencia acontece inteira no servidor. A tela nunca revela
  * se o telefone existe, se esta inativo ou se pertence a outro time: a
  * resposta e sempre a mesma.
  */
@@ -29,7 +30,7 @@ function AlertIcon() {
   );
 }
 
-export function TeamAccessForm({ token }: { token: string }) {
+export function TeamAccessForm() {
   const router = useRouter();
   const hydrated = useHydrated();
   const [phone, setPhone] = useState('');
@@ -46,7 +47,7 @@ export function TeamAccessForm({ token }: { token: string }) {
     setStatus('Validando acesso.');
 
     try {
-      const response = await fetch(`/api/acesso-time/${encodeURIComponent(token)}`, {
+      const response = await fetch('/api/acesso-time', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Os sinais do aparelho vao junto apenas como auditoria do vinculo:

@@ -344,7 +344,7 @@ describe('acesso aos resultados', () => {
   });
 
   it('a rota pública devolve apenas a confirmação do envio', async () => {
-    const rota = await import('@/app/api/public/convite/[token]/membros/route');
+    const rota = await import('@/app/api/public/convite/membros/route');
     const fonte = (rota.POST as { toString(): string }).toString();
 
     // Nenhuma leitura de verificacao acontece na rota publica.

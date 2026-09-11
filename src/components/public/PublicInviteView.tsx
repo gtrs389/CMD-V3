@@ -8,15 +8,15 @@ import { Spinner } from '@/components/ui/Spinner';
 import { InviteStateShell } from './InviteChrome';
 import { PublicFormView } from './PublicFormView';
 
-interface PublicInviteViewProps {
-  token: string;
-}
-
 /** Mesmo texto para todos os casos de link encerrado. */
 const GONE_TEXT = 'Este link não está mais disponível. Solicite um novo link à pessoa que o enviou.';
 
 /**
- * Porta de entrada do convite.
+ * Porta de entrada do convite, desenhada em `/`.
+ *
+ * A tela nao recebe nem conhece o codigo do link: ele ficou no cookie
+ * `HttpOnly` que a rota de entrada gravou, e toda leitura ou envio o resolve
+ * no servidor.
  *
  * Link expirado, ja usado, revogado ou reservado por outro navegador mostra
  * sempre a MESMA tela, sem revelar o motivo, sem data tecnica e sem nenhum
@@ -24,8 +24,8 @@ const GONE_TEXT = 'Este link não está mais disponível. Solicite um novo link 
  * mostra o aviso neutro de indisponibilidade. Carregamento e falha de rede
  * usam a mesma moldura da pagina, entao nenhum estado quebra o desenho.
  */
-export function PublicInviteView({ token }: PublicInviteViewProps) {
-  const { data, loading, error, reload } = usePublicInvite(token);
+export function PublicInviteView() {
+  const { data, loading, error, reload } = usePublicInvite();
 
   if (loading) {
     return (
@@ -75,9 +75,7 @@ export function PublicInviteView({ token }: PublicInviteViewProps) {
     );
   }
 
-  return (
-    <PublicFormView client={data.invite.client} owner={data.invite.owner} token={token} />
-  );
+  return <PublicFormView client={data.invite.client} owner={data.invite.owner} />;
 }
 
 /**
@@ -104,7 +102,7 @@ export function InviteExpired({ reason = 'expired' }: { reason?: 'taken' | 'expi
   );
 }
 
-function InviteUnavailable({ description }: { description: string }) {
+export function InviteUnavailable({ description }: { description: string }) {
   return (
     <InviteStateShell>
       <span

@@ -7,13 +7,16 @@ import {
   readOrCreateAdminDeviceToken,
 } from '@/lib/server/admin-device';
 import { GENERIC_LINK_ERROR, loginWithTeamPhone } from '@/lib/server/team-access.service';
+import { clearTeamAccessContext, readTeamAccessContext } from '@/lib/server/public-context';
 import { teamPhoneLoginSchema } from '@/lib/validation/server.schema';
 
 /**
- * Entrada do Administrador do time: link do time + telefone + aparelho.
+ * Entrada pelo link do time: contexto do link + telefone + aparelho.
  *
- * O token vem do endereco e nunca do corpo. O telefone e comparado apenas na
- * forma normalizada e somente dentro do time que o link identificou.
+ * O codigo do link vem do cookie `HttpOnly` gravado pela rota de entrada:
+ * nem a URL nem o corpo da requisicao carregam token. O telefone e
+ * comparado apenas na forma normalizada, dentro do time que o link
+ * identificou e apenas entre as pessoas do publico daquele endereco.
  *
  * O terceiro fator e a credencial secreta do aparelho: ela nasce aqui, no
  * servidor, no primeiro acesso valido, vai somente no cookie HttpOnly e o
@@ -24,9 +27,11 @@ import { teamPhoneLoginSchema } from '@/lib/validation/server.schema';
  * MESMA resposta: dizer qual foi o caso ja entregaria informacao. Nem
  * telefone, nem token, nem credencial, nem URL completa aparecem em log.
  */
-export async function POST(request: NextRequest, ctx: RouteContext<'/api/acesso-time/[token]'>) {
+export async function POST(request: NextRequest) {
   try {
-    const { token } = await ctx.params;
+    const token = readTeamAccessContext(request);
+    if (!token) return jsonError(410, GENERIC_LINK_ERROR);
+
     const { phone, device } = await readJson(request, teamPhoneLoginSchema);
 
     // Lido do cookie quando ja existe; sorteado aqui quando e o primeiro
@@ -42,11 +47,24 @@ export async function POST(request: NextRequest, ctx: RouteContext<'/api/acesso-
     });
 
     if (!result.user || !result.sessionToken) {
-      const status = result.throttled ? 429 : result.message === GENERIC_LINK_ERROR ? 410 : 401;
-      return jsonError(status, result.message ?? GENERIC_LINK_ERROR);
+      const linkMorto = result.message === GENERIC_LINK_ERROR;
+      const status = result.throttled ? 429 : linkMorto ? 410 : 401;
+
+      const recusa = jsonError(status, result.message ?? GENERIC_LINK_ERROR);
+
+      // Link revogado ou substituido: o contexto guardado nao serve mais e
+      // sai junto, para a tela nao insistir em um endereco morto. Telefone
+      // errado nao apaga nada: a pessoa continua na mesma tela e tenta de
+      // novo.
+      if (linkMorto) clearTeamAccessContext(recusa);
+      return recusa;
     }
 
     const response = jsonOk({ user: result.user });
+
+    // O contexto temporario do acesso morre aqui: ele existia apenas para a
+    // pessoa digitar o telefone.
+    clearTeamAccessContext(response);
 
     response.cookies.set({
       name: SESSION_COOKIE,

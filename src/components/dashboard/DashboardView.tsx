@@ -358,7 +358,7 @@ export function DashboardView() {
               <table className="mt-3 hidden w-full border-collapse text-left sm:table">
                 <thead>
                   <tr className="border-b border-line">
-                    {['Integrante', 'Time', 'Localização', 'Cadastrado em'].map((coluna) => (
+                    {['Integrante', 'Time', 'Endereço', 'Cadastrado em'].map((coluna) => (
                       <th
                         key={coluna}
                         scope="col"
