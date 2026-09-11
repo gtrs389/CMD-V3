@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { listCities, listStates } from '@/lib/server/location.service';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  LocationConfigError,
+  listCities,
+  listDistricts,
+  listStates,
+} from '@/lib/server/location.service';
 import {
   EMPTY_SELECTION,
   LocationError,
@@ -148,22 +153,81 @@ describe('cadastros antigos', () => {
 });
 
 describe('consulta no servidor', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  const CHAVE = 'chave-simulada-1234';
 
-  it('envia somente a UF, sem dado pessoal, e devolve a lista', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => CITIES });
+  beforeEach(() => {
+    vi.stubEnv('BRASIL_ABERTO_API_KEY', CHAVE);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function stubFetch(payload: unknown) {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
     vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('envia a chave nas três consultas, sem dado pessoal junto', async () => {
+    const calls: [string, RequestInit][] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push([url, init]);
+        return {
+          ok: true,
+          json: async () =>
+            url.includes('/states') ? STATES : url.includes('/cities') ? CITIES : DISTRICTS,
+        };
+      }),
+    );
+
+    await listStates();
+    await listCities('SP');
+    await listDistricts(3550308);
+
+    expect(calls.map(([url]) => url)).toEqual([
+      'https://api.brasilaberto.com/v1/states',
+      'https://api.brasilaberto.com/v1/cities/SP',
+      'https://api.brasilaberto.com/v1/districts/3550308',
+    ]);
+
+    for (const [, init] of calls) {
+      expect(init.headers).toMatchObject({ Authorization: `Bearer ${CHAVE}` });
+      expect(JSON.stringify(init)).not.toMatch(/cpf|telefone|nome/i);
+    }
+  });
+
+  it('não devolve a chave junto com a lista', async () => {
+    stubFetch(CITIES);
 
     const cities = await listCities('SP');
 
     expect(cities.map((city) => city.name)).toEqual(['Campinas', 'São Paulo']);
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://api.brasilaberto.com/v1/cities/SP');
-    expect(JSON.stringify(options)).not.toMatch(/cpf|telefone|nome/i);
+    expect(JSON.stringify(cities)).not.toContain(CHAVE);
+  });
+
+  it('sem a variável configurada, nenhuma consulta é feita', async () => {
+    const fetchMock = stubFetch(STATES);
+    vi.stubEnv('BRASIL_ABERTO_API_KEY', '');
+
+    await expect(listStates()).rejects.toThrow(LocationConfigError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('erro de configuração não mostra a chave', async () => {
+    vi.stubEnv('BRASIL_ABERTO_API_KEY', '');
+
+    const erro = await listCities('SP').catch((cause: Error) => cause);
+
+    expect(String(erro)).not.toContain(CHAVE);
+    expect((erro as Error).message).toBe('Serviço de localidades indisponível. Configuração ausente.');
   });
 
   it('falha da API vira erro previsto, sem detalhe interno', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
     await expect(listCities('SP')).rejects.toThrow(LocationError);
   });

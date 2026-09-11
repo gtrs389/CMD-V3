@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { LocationConfigError } from '@/lib/server/location.service';
 
 /**
  * Respostas comuns das rotas de localidade.
@@ -16,7 +17,12 @@ export async function locationResponse<T>(
       { items },
       { headers: { 'Cache-Control': `public, max-age=${maxAge}, stale-while-revalidate=86400` } },
     );
-  } catch {
+  } catch (error) {
+    // Configuracao ausente e falha da API externa devolvem apenas o essencial:
+    // nem a chave nem o detalhe interno chegam ao navegador.
+    if (error instanceof LocationConfigError) {
+      return locationFailure(503, 'Serviço de localidades indisponível.');
+    }
     return locationFailure(502, 'Não foi possível carregar as localidades.');
   }
 }
