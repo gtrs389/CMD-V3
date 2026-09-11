@@ -1,12 +1,22 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clock3, MinusCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  EyeOff,
+  MinusCircle,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 import type { Member } from '@/lib/types';
 import type { VerificationStep } from '@/lib/domain/verification';
 import {
   compareGender,
   compareValues,
+  toBirthDate,
   type MatchState,
   type VerificationView,
 } from '@/lib/domain/verification';
@@ -43,6 +53,15 @@ const STATUS_TONE: Record<string, 'neutral' | 'info' | 'success' | 'warning' | '
   FAILED: 'danger',
 };
 
+/** Data sem o horario: o fornecedor devolve "DD/MM/AAAA 00:00:00". */
+function onlyDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return toBirthDate(value) ?? value;
+}
+
+/** Marca usada no lugar do valor enquanto os dados estao ocultos. */
+const MASK = '••••••••';
+
 function MatchIcon({ state }: { state: MatchState }) {
   if (state === 'MATCH') {
     return <CheckCircle2 aria-label="Confere" className="size-4 shrink-0 text-success-600" />;
@@ -53,11 +72,29 @@ function MatchIcon({ state }: { state: MatchState }) {
   return <MinusCircle aria-label="Sem comparação" className="size-4 shrink-0 text-ink-400" />;
 }
 
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
+function Row({
+  label,
+  value,
+  hidden = false,
+}: {
+  label: string;
+  value: string | null | undefined;
+  /** Campo que identifica a pessoa: fica coberto ate o ADMIN revelar. */
+  hidden?: boolean;
+}) {
+  const shown = value ? (hidden ? MASK : value) : '--';
+
   return (
     <div className="flex flex-col gap-0.5 py-1.5 sm:flex-row sm:gap-3">
       <dt className="text-xs text-ink-500 sm:w-2/5">{label}</dt>
-      <dd className="text-sm break-words text-ink-900 sm:flex-1">{value || '--'}</dd>
+      <dd
+        className={cn(
+          'text-sm break-words sm:flex-1',
+          hidden && value ? 'tracking-widest text-ink-500 select-none' : 'text-ink-900',
+        )}
+      >
+        {shown}
+      </dd>
     </div>
   );
 }
@@ -67,25 +104,36 @@ function Comparison({
   declared,
   found,
   state,
+  hidden = false,
 }: {
   label: string;
   declared: string | null;
   found: string | null;
   state: MatchState;
+  hidden?: boolean;
 }) {
+  const cover = (value: string | null) => (value ? (hidden ? MASK : value) : '--');
+
   return (
     <div className="flex items-start gap-2 py-1.5">
       <MatchIcon state={state} />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-ink-500">{label}</p>
-        <p className="text-sm break-words text-ink-900">{declared || '--'}</p>
+        <p
+          className={cn(
+            'text-sm break-words',
+            hidden && declared ? 'tracking-widest text-ink-500 select-none' : 'text-ink-900',
+          )}
+        >
+          {cover(declared)}
+        </p>
         <p
           className={cn(
             'text-xs break-words',
             state === 'DIFFERENT' ? 'font-medium text-warning-600' : 'text-ink-500',
           )}
         >
-          Consultado: {found || '--'}
+          Consultado: {cover(found)}
         </p>
       </div>
     </div>
@@ -95,6 +143,8 @@ function Comparison({
 export function MemberVerificationSection({ member }: { member: Member | null }) {
   const memberId = member?.id ?? null;
   const [retrying, setRetrying] = useState<VerificationStep | null>(null);
+  // Os dados nascem cobertos: revelar e uma escolha de quem esta olhando.
+  const [revealed, setRevealed] = useState(false);
 
   const loader = useCallback(async (): Promise<VerificationView | null> => {
     if (!memberId) return null;
@@ -134,6 +184,22 @@ export function MemberVerificationSection({ member }: { member: Member | null })
 
         {data ? (
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRevealed((state) => !state)}
+              aria-pressed={revealed}
+              title={revealed ? 'Ocultar dados da pessoa' : 'Mostrar dados da pessoa'}
+              aria-label={revealed ? 'Ocultar dados da pessoa' : 'Mostrar dados da pessoa'}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-line px-2.5 text-xs font-medium text-ink-700 transition-colors hover:bg-ink-50"
+            >
+              {revealed ? (
+                <EyeOff aria-hidden="true" className="size-3.5" />
+              ) : (
+                <Eye aria-hidden="true" className="size-3.5" />
+              )}
+              {revealed ? 'Ocultar' : 'Mostrar'}
+            </button>
+
             <Badge tone={STATUS_TONE[data.status] ?? 'neutral'}>
               {STATUS_LABEL[data.status] ?? data.status}
             </Badge>
@@ -167,12 +233,14 @@ export function MemberVerificationSection({ member }: { member: Member | null })
               declared={member.name}
               found={data.cadastro?.nome ?? null}
               state={compareValues(member.name, data.cadastro?.nome)}
+              hidden={!revealed}
             />
             <Comparison
               label="CPF"
               declared={member.cpf ? formatCpf(member.cpf) : null}
               found={data.cadastro?.cpf ? formatCpf(data.cadastro.cpf) : null}
               state={compareValues(member.cpf, data.cadastro?.cpf)}
+              hidden={!revealed}
             />
             <Comparison
               label="Gênero"
@@ -202,14 +270,18 @@ export function MemberVerificationSection({ member }: { member: Member | null })
           >
             {data.cadastro ? (
               <dl className="divide-y divide-line">
-                <Row label="Nome" value={data.cadastro.nome} />
-                <Row label="Nascimento" value={data.cadastro.dataNascimento} />
+                <Row label="Nome" value={data.cadastro.nome} hidden={!revealed} />
+                <Row
+                  label="Nascimento"
+                  value={onlyDate(data.cadastro.dataNascimento)}
+                  hidden={!revealed}
+                />
                 <Row label="Idade" value={data.cadastro.idade ? String(data.cadastro.idade) : null} />
                 <Row label="Sexo" value={data.cadastro.sexo} />
-                <Row label="Nome da mãe" value={data.cadastro.nomeMae} />
-                <Row label="Nome do pai" value={data.cadastro.nomePai} />
+                <Row label="Nome da mãe" value={data.cadastro.nomeMae} hidden={!revealed} />
+                <Row label="Nome do pai" value={data.cadastro.nomePai} hidden={!revealed} />
                 <Row label="Situação cadastral" value={data.cadastro.situacaoCadastral} />
-                <Row label="Data da situação" value={data.cadastro.dataSituacaoCadastral} />
+                <Row label="Data da situação" value={onlyDate(data.cadastro.dataSituacaoCadastral)} />
                 <Row
                   label="Óbito"
                   value={data.cadastro.obito === null ? null : data.cadastro.obito ? 'Sim' : 'Não'}
@@ -231,8 +303,12 @@ export function MemberVerificationSection({ member }: { member: Member | null })
             {data.eleitoral ? (
               <dl className="divide-y divide-line">
                 <Row label="Situação" value={data.eleitoral.status} />
-                <Row label="Eleitor" value={data.eleitoral.eleitor} />
-                <Row label="Inscrição" value={data.eleitoral.inscricao} />
+                <Row label="Eleitor" value={data.eleitoral.eleitor} hidden={!revealed} />
+                <Row
+                  label="Título de eleitor"
+                  value={data.eleitoral.inscricao}
+                  hidden={!revealed}
+                />
                 <Row
                   label="Biometria"
                   value={
@@ -245,7 +321,7 @@ export function MemberVerificationSection({ member }: { member: Member | null })
                 />
                 <Row label="Zona" value={data.eleitoral.zona} />
                 <Row label="Seção" value={data.eleitoral.secao} />
-                <Row label="Local de votação" value={data.eleitoral.local} />
+                <Row label="Local de votação" value={data.eleitoral.local} hidden={!revealed} />
                 <Row
                   label="Endereço"
                   value={
@@ -253,6 +329,7 @@ export function MemberVerificationSection({ member }: { member: Member | null })
                       .filter(Boolean)
                       .join(', ') || null
                   }
+                  hidden={!revealed}
                 />
                 <Row
                   label="Município"
