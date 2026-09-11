@@ -13,11 +13,9 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { useClient } from '@/hooks/use-clients';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useMembers } from '@/hooks/use-members';
-import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -160,33 +158,11 @@ export function ClientDetailView({
           )}
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl leading-tight font-bold tracking-tight break-words text-ink-900 sm:text-[1.375rem]">
-                {client.name}
-              </h1>
-              <span
-                className={
-                  inviteIsLive(client.invite)
-                    ? 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-success-600'
-                    : 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-danger-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-danger-600'
-                }
-              >
-                <span
-                  aria-hidden="true"
-                  className={
-                    inviteIsLive(client.invite)
-                      ? 'size-1.5 rounded-full bg-success-600'
-                      : 'size-1.5 rounded-full bg-danger-600'
-                  }
-                />
-                {inviteIsLive(client.invite) ? 'Link ativo' : 'Link expirado'}
-              </span>
-            </div>
+            <h1 className="text-xl leading-tight font-bold tracking-tight break-words text-ink-900 sm:text-[1.375rem]">
+              {client.name}
+            </h1>
 
             <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{client.email}</p>
-            <p className="mt-0.5 text-xs text-ink-400">
-              Candidato desde {formatLongDate(client.createdAt)}
-            </p>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">

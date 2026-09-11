@@ -15,8 +15,10 @@ import { initials } from '@/lib/utils/text';
  * Desenho do mapa.
  *
  * Carregado apenas no navegador (o Leaflet depende de `window`), por isso
- * vive separado do cartao. Os tiles vem do OpenStreetMap, com a atribuicao
- * sempre visivel; nenhuma regiao ou nivel de zoom e pre-carregado.
+ * vive separado do cartao. Nenhuma regiao ou nivel de zoom e pre-carregado.
+ *
+ * O rodape de credito do Leaflet fica desligado: o mapa nao mostra nenhuma
+ * barra sobre os tiles.
  */
 
 const TILE_URL =
@@ -279,13 +281,11 @@ export default function MapCanvas({
       zoom={4}
       scrollWheelZoom
       preferCanvas
+      // Sem a faixa de credito no canto do mapa.
+      attributionControl={false}
       className="h-full w-full"
     >
-      <TileLayer
-        url={TILE_URL}
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        maxZoom={19}
-      />
+      <TileLayer url={TILE_URL} maxZoom={19} />
 
       <FitBounds pins={focus} />
       <ZoomWatcher onChange={setZoom} />
