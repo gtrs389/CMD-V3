@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 -30 840 520" role="img" aria-label="CMD">
+  <defs>
+    <mask id="cmd-gap-c">
+      <rect x="-20" y="-30" width="840" height="520" fill="white" />
+      <rect x="285" y="200" width="120" height="80" fill="black" />
+    </mask>
+    <mask id="cmd-gap-d">
+      <rect x="-20" y="-30" width="840" height="520" fill="white" />
+      <rect x="395" y="200" width="120" height="80" fill="black" />
+    </mask>
+  </defs>
+
+  <!-- C -->
+  <circle cx="175" cy="240" r="155" fill="none" stroke="#ffffff" stroke-width="70" mask="url(#cmd-gap-c)" />
+
+  <!-- D -->
+  <circle cx="625" cy="240" r="155" fill="none" stroke="#ffffff" stroke-width="70" mask="url(#cmd-gap-d)" />
+
+  <!-- Arco azul que emenda no topo do D -->
+  <path
+    d="M 470 155 A 155 155 0 0 1 702 108"
+    fill="none"
+    stroke="#0868ff"
+    stroke-width="70"
+    stroke-linecap="butt"
+  />
+
+  <!-- M -->
+  <path
+    d="M 330 240 L 365 25 L 400 268 L 435 25 L 470 240"
+    fill="none"
+    stroke="#0868ff"
+    stroke-width="70"
+    stroke-linejoin="miter"
+    stroke-linecap="butt"
+  />
+
+  <!-- Dobra sutil no braço esquerdo do M -->
+  <polygon points="345,205 366,95 384,225" fill="#054fce" opacity="0.55" />
+</svg>

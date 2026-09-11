@@ -24,7 +24,7 @@ export const appConfig = {
    * Logotipo. Troque para `{ kind: 'image', src: '/logo.svg' }`
    * quando existir um arquivo de marca em `public/`.
    */
-  logo: { kind: 'monogram', monogram: 'CMD' } as LogoConfig,
+  logo: { kind: 'image', src: '/brand/logo-mark.svg' } as LogoConfig,
 
   locale: 'pt-BR',
 
