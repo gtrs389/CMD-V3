@@ -42,6 +42,41 @@ function isKeyOf(field: CustomField, keys: readonly SystemFieldKey[]): boolean {
   return field.systemKey !== null && keys.includes(field.systemKey);
 }
 
+/**
+ * Etapa do vinculo e das perguntas do ADMIN.
+ *
+ * Os campos personalizados ativos vivem aqui, junto do vinculo. O titulo
+ * acompanha o que a etapa realmente tem: so vinculo, so as perguntas do
+ * cadastro, ou os dois. Assim as perguntas configuradas pelo ADMIN nunca
+ * ficam escondidas atras de um titulo que nao fala delas.
+ */
+function bondStep(fields: CustomField[]): InviteStep {
+  const relationship = fields.filter((field) => field.systemKey === 'relationship');
+  const custom = fields.filter((field) => field.systemKey === null);
+
+  const temVinculo = relationship.length > 0;
+  const temPerguntas = custom.length > 0;
+
+  const label = temVinculo ? (temPerguntas ? 'Vínculo e perguntas' : 'Vínculo') : 'Perguntas';
+
+  return {
+    id: 'vinculo',
+    label,
+    shortLabel: temVinculo ? 'Vínculo' : 'Perguntas',
+    title: temVinculo
+      ? temPerguntas
+        ? 'Seu vínculo e mais algumas perguntas'
+        : 'Seu vínculo com a mobilização'
+      : 'Mais algumas perguntas',
+    description: temVinculo
+      ? temPerguntas
+        ? 'Conte como você se conecta e responda as perguntas do cadastro.'
+        : 'Conte como você se conecta a esta mobilização.'
+      : 'Responda as perguntas definidas para este cadastro.',
+    fields: [...relationship, ...custom].sort((a, b) => a.order - b.order),
+  };
+}
+
 export function buildInviteSteps(config: ClientFormConfig): InviteStep[] {
   const fields = visibleFields(config);
 
@@ -62,17 +97,7 @@ export function buildInviteSteps(config: ClientFormConfig): InviteStep[] {
       description: 'Escolha na lista ou digite, se a sua localidade não aparecer.',
       fields: fields.filter((field) => isKeyOf(field, LOCATION_KEYS)),
     },
-    {
-      id: 'vinculo',
-      label: 'Vínculo',
-      shortLabel: 'Vínculo',
-      title: 'Seu vínculo com a mobilização',
-      description: 'Conte como você se conecta a esta mobilização.',
-      // O campo de vinculo e todos os campos personalizados ativos.
-      fields: fields.filter(
-        (field) => field.systemKey === 'relationship' || field.systemKey === null,
-      ),
-    },
+    bondStep(fields),
   ];
 
   return [

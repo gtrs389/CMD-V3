@@ -16,11 +16,6 @@ import type { InviteStep } from './invite-steps';
  * cartao proprio e formulario em uma coluna.
  */
 
-const OWNER_ROLE_LABELS: Record<PublicInviteOwner['role'], string> = {
-  CANDIDATE: 'Candidato(a)',
-  EQUIPE: 'Equipe',
-};
-
 const PROTECTION_NOTICE = 'Seus dados são protegidos e usados somente nesta operação.';
 
 /** Cabecalho: marca a esquerda, selo de ambiente seguro a direita. */
@@ -100,15 +95,6 @@ function OwnerAvatar({
   );
 }
 
-function RoleBadge({ owner }: { owner: PublicInviteOwner | null }) {
-  if (!owner) return null;
-  return (
-    <span className="mt-1.5 inline-flex items-center rounded-pill bg-navy-700 px-2.5 py-1 text-[0.6875rem] font-semibold text-navy-200">
-      {OWNER_ROLE_LABELS[owner.role]}
-    </span>
-  );
-}
-
 interface OwnerProps {
   owner: PublicInviteOwner | null;
   /** Nome da operacao, usado quando o convite nao tem dono registrado. */
@@ -135,7 +121,6 @@ export function InviteOwnerBanner({ owner, fallbackName, className }: OwnerProps
           <p className="mt-1 text-[0.9375rem] leading-snug font-bold text-white">
             Faça parte desta mobilização.
           </p>
-          <RoleBadge owner={owner} />
         </div>
       </div>
     </section>
@@ -167,7 +152,6 @@ export function InviteOwnerAside({
         <h2 className="mt-3 text-xl leading-tight font-bold tracking-tight break-words text-white">
           {name}
         </h2>
-        <RoleBadge owner={owner} />
 
         <p className="mt-3 text-[0.8125rem] leading-relaxed text-navy-300">
           Faça parte desta mobilização e ajude a construir uma equipe mais próxima das pessoas.
@@ -342,4 +326,4 @@ export function InviteStateShell({ children }: { children: ReactNode }) {
   );
 }
 
-export { PROTECTION_NOTICE, OWNER_ROLE_LABELS };
+export { PROTECTION_NOTICE };
