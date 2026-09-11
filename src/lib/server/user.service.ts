@@ -29,6 +29,7 @@ import {
   updateRows,
 } from '@/lib/supabase/rest';
 import { signedUrls } from '@/lib/supabase/storage';
+import { activeAdminDevices, releaseAdminDevice } from './admin-device';
 import { ensurePersonalInvite } from './invite.service';
 import { ApiError, badRequest, notFound } from './http';
 
@@ -176,9 +177,12 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
       : Promise.resolve([]),
   ]);
 
-  const [photos, personPhotos] = await Promise.all([
+  const [photos, personPhotos, devices] = await Promise.all([
     signedUrls(clients.map((client) => client.photo_path)),
     signedUrls(people.map((person) => person.photo_path)),
+    // Aparelho autorizado de cada Administrador do time. Somente auditoria:
+    // nenhum hash de credencial ou de IP sai daqui.
+    activeAdminDevices(rows.filter((row) => row.team_person_id).map((row) => row.id)),
   ]);
   const byId = new Map(
     clients.map((client, index) => [
@@ -204,6 +208,7 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
       candidate: row.client_id ? (byId.get(row.client_id) ?? null) : null,
       memberId: row.member_id,
       teamPersonId: row.team_person_id,
+      device: row.team_person_id ? (devices.get(row.id) ?? null) : null,
       recruitedBy: member ? recruiterOf(member) : null,
       lastLoginAt: row.last_login_at,
       mustChangePassword: row.must_change_password,
@@ -397,7 +402,10 @@ export async function syncTeamPersonUser(person: {
   if (Object.keys(changes).length === 0) return;
 
   await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, changes, 'id');
-  if (changes.phone) await revokeUserSessions(user.id);
+
+  // Telefone novo, aparelho novo: o vinculo atual e revogado junto das
+  // sessoes, e o proximo acesso com o novo numero autoriza outro navegador.
+  if (changes.phone) await releaseAdminDevice(user.id);
 }
 
 /**
@@ -412,7 +420,9 @@ export async function revokeTeamPersonUser(personId: string): Promise<void> {
   if (!user) return;
 
   await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, { is_active: false }, 'id');
-  await revokeUserSessions(user.id);
+  // Aparelho autorizado e sessoes caem juntos: o navegador daquela pessoa
+  // deixa de valer na hora.
+  await releaseAdminDevice(user.id);
 }
 
 /* -------------------------------------------------------------------------
@@ -561,7 +571,27 @@ export async function setUserActive(userId: string, active: boolean): Promise<vo
   const user = await requireUser(userId);
 
   await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, { is_active: active }, 'id');
-  if (!active) await revokeUserSessions(user.id);
+  if (active) return;
+
+  // Desativar o Administrador do time tambem desfaz o vinculo do aparelho:
+  // reativado, ele autoriza um navegador novo no proximo acesso valido.
+  if (user.team_person_id) await releaseAdminDevice(user.id);
+  else await revokeUserSessions(user.id);
+}
+
+/**
+ * Libera um novo aparelho para o Administrador do time.
+ *
+ * Revoga o aparelho atual e derruba as sessoes daquele usuario. Telefone,
+ * nome, foto, time e link continuam como estao. Exclusivo do ADMIN geral: a
+ * rota confere `settings.manage` antes de chegar aqui.
+ */
+export async function releaseUserDevice(userId: string): Promise<number> {
+  const user = await requireUser(userId);
+  if (!user.team_person_id) {
+    throw badRequest('Este perfil não usa vínculo de aparelho.');
+  }
+  return releaseAdminDevice(user.id);
 }
 
 export async function revokeUserSessions(userId: string): Promise<number> {

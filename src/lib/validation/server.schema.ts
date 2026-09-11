@@ -59,16 +59,6 @@ export const clientCreateSchema = z.object({
 
 export const clientUpdateSchema = clientCreateSchema.partial();
 
-/**
- * Acesso do administrador do time: apenas o telefone.
- *
- * O token vem da propria URL e nunca do corpo; o telefone e normalizado no
- * servidor antes de qualquer comparacao.
- */
-export const teamPhoneLoginSchema = z.object({
-  phone: trimmed(30).min(1, 'Informe o telefone.'),
-});
-
 const fieldOptionSchema = z.object({
   id: z.string().min(1).max(64),
   label: trimmed(80),
@@ -230,6 +220,22 @@ export const deviceSignalsSchema = z
     maxTouchPoints: z.number().int().min(0).max(64),
   })
   .partial();
+
+/**
+ * Acesso do administrador do time: apenas o telefone.
+ *
+ * O token vem da propria URL e nunca do corpo; o telefone e normalizado no
+ * servidor antes de qualquer comparacao.
+ */
+export const teamPhoneLoginSchema = z.object({
+  phone: trimmed(30).min(1, 'Informe o telefone.'),
+  /**
+   * Sinais do aparelho, apenas para auditoria do vinculo. Quem autoriza o
+   * acesso e a credencial secreta do cookie: nada daqui decide nada, e
+   * qualquer campo fora desta lista e descartado.
+   */
+  device: deviceSignalsSchema.optional(),
+});
 
 /**
  * Comprovantes cifrados da confirmacao de CPF e titulo, feita durante o

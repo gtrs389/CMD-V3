@@ -18,6 +18,7 @@ export const TABLES = {
   members: 'cmd_members',
   teamPeople: 'cmd_team_people',
   teamAccessLinks: 'cmd_team_access_links',
+  adminDevices: 'cmd_admin_devices',
   memberResponses: 'cmd_member_responses',
   invites: 'cmd_invites',
   memberDevices: 'cmd_member_devices',
@@ -64,6 +65,38 @@ export interface SessionRow {
   revoked_at: string | null;
   last_used_at: string;
   created_at: string;
+  /** Aparelho que abriu a sessao do Administrador do time (migration 017). */
+  admin_device_id: string | null;
+}
+
+/**
+ * Aparelho autorizado de um usuario administrativo (migration 017).
+ *
+ * Tabela propria, separada de `cmd_member_devices`: la o registro apenas
+ * observa; aqui ele DECIDE o acesso. Somente o hash da credencial e
+ * guardado; as demais colunas sao auditoria.
+ */
+export interface AdminDeviceRow {
+  id: string;
+  user_id: string;
+  /** SHA-256 da credencial do cookie. O valor puro nunca chega ao banco. */
+  device_token_hash: string;
+  active: boolean;
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+  user_agent: string | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  timezone: string | null;
+  languages: string | null;
+  max_touch_points: number | null;
+  /** HMAC do IP publico. O endereco puro nunca e gravado. */
+  ip_hash: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  revoked_at: string | null;
 }
 
 export interface ClientRow {

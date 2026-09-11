@@ -1,4 +1,5 @@
 import 'server-only';
+import type { NextRequest } from 'next/server';
 import type { SessionUser, TeamAccessLink } from '@/lib/types';
 import { createToken, hashToken } from '@/lib/auth/tokens';
 import { SESSION_MAX_AGE } from '@/lib/auth/constants';
@@ -12,6 +13,8 @@ import {
 } from '@/lib/supabase/tables';
 import { insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
+import type { DeviceSignalsInput } from '@/lib/validation/server.schema';
+import { bindAdminDevice } from './admin-device';
 import { revokeUserSessions } from './user.service';
 
 /**
@@ -150,8 +153,15 @@ export interface TeamLoginOutcome {
   throttled: boolean;
 }
 
-/** Mesma resposta para telefone inexistente, inativo ou de outro time. */
-const GENERIC_PHONE_ERROR = 'Telefone não autorizado para este time.';
+/**
+ * Resposta unica de recusa.
+ *
+ * Vale para telefone inexistente, telefone de outro time, acesso inativo e
+ * aparelho diferente do autorizado. A tela nunca fica sabendo qual dos casos
+ * aconteceu: dizer "aparelho nao autorizado" ja confirmaria que o telefone
+ * existe.
+ */
+const GENERIC_ACCESS_ERROR = 'Não foi possível acessar com os dados informados.';
 
 /** Link inexistente, revogado ou substituido. */
 export const GENERIC_LINK_ERROR = 'Este link de acesso não está disponível.';
@@ -182,10 +192,17 @@ async function registerAccessFailure(link: TeamAccessLinkRow): Promise<void> {
  * time que o link identificou. Nenhum telefone, token ou URL vai para log, e
  * a resposta e sempre a mesma para qualquer telefone que nao sirva.
  */
-export async function loginWithTeamPhone(
-  token: string,
-  rawPhone: string,
-): Promise<TeamLoginOutcome> {
+export interface TeamLoginInput {
+  token: string;
+  phone: string;
+  /** Credencial do aparelho, lida do cookie ou recem-sorteada no servidor. */
+  deviceToken: string;
+  request: NextRequest;
+  signals?: DeviceSignalsInput;
+}
+
+export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLoginOutcome> {
+  const { token, phone: rawPhone } = input;
   const link = token
     ? await selectOne<TeamAccessLinkRow>(TABLES.teamAccessLinks, {
         select: '*',
@@ -209,7 +226,7 @@ export async function loginWithTeamPhone(
   const phone = normalizePhone(rawPhone);
   if (phone.length < 10) {
     await registerAccessFailure(link);
-    return { user: null, sessionToken: null, message: GENERIC_PHONE_ERROR, throttled: false };
+    return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
   }
 
   const user = await selectOne<UserRow>(TABLES.users, {
@@ -223,7 +240,22 @@ export async function loginWithTeamPhone(
 
   if (!user || !user.is_active || !user.team_person_id) {
     await registerAccessFailure(link);
-    return { user: null, sessionToken: null, message: GENERIC_PHONE_ERROR, throttled: false };
+    return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
+  }
+
+  // Vinculo do aparelho, atomico no banco: sem aparelho ativo o navegador
+  // atual vira o autorizado; com aparelho ativo so passa quem apresentar a
+  // mesma credencial. Recusa devolve a MESMA mensagem do telefone errado.
+  const deviceId = await bindAdminDevice({
+    request: input.request,
+    userId: user.id,
+    token: input.deviceToken,
+    signals: input.signals,
+  });
+
+  if (!deviceId) {
+    await registerAccessFailure(link);
+    return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
   }
 
   const sessionToken = createToken();
@@ -233,6 +265,9 @@ export async function loginWithTeamPhone(
       user_id: user.id,
       token_hash: hashToken(sessionToken),
       expires_at: new Date(Date.now() + SESSION_MAX_AGE * 1000).toISOString(),
+      // A sessao nasce presa ao aparelho: a conferencia continua valendo em
+      // toda requisicao, nao so aqui no login.
+      admin_device_id: deviceId,
     },
     'id',
   );
