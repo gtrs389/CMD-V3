@@ -5,30 +5,44 @@ import { useRouter } from 'next/navigation';
 import type { SessionUser } from '@/lib/types';
 import { homePathFor } from '@/lib/auth/constants';
 import { maskPhone } from '@/lib/utils/phone';
-import { Button } from '@/components/ui/Button';
-import { Field } from '@/components/ui/Field';
-import { Input } from '@/components/ui/Input';
+import { useHydrated } from '@/hooks/use-hydrated';
+import styles from '@/components/auth/login.module.css';
 
 /**
  * Entrada do Administrador do time: somente o telefone.
  *
- * O telefone nao e senha — sozinho ele nao autentica ninguem. Quem diz de
- * qual time se trata e o link, e a conferencia acontece inteira no servidor.
- * A tela nunca revela se o telefone existe, se esta inativo ou se pertence a
- * outro time: a resposta e sempre a mesma.
+ * Mesma estrutura do formulario de login — so o campo muda. O telefone nao e
+ * senha: sozinho ele nao autentica ninguem. Quem diz de qual time se trata e
+ * o link, e a conferencia acontece inteira no servidor. A tela nunca revela
+ * se o telefone existe, se esta inativo ou se pertence a outro time: a
+ * resposta e sempre a mesma.
  */
+
+/** Icone de alerta das mensagens de erro. Igual ao do login. */
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5M12 16.2v.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function TeamAccessForm({ token }: { token: string }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [phone, setPhone] = useState('');
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
 
     setPending(true);
-    setError(null);
+    setFormError(null);
+    setStatus('Validando acesso.');
 
     try {
       const response = await fetch(`/api/acesso-time/${encodeURIComponent(token)}`, {
@@ -42,46 +56,98 @@ export function TeamAccessForm({ token }: { token: string }) {
         | null;
 
       if (!response.ok || !data?.user) {
+        const message = data?.message ?? 'Não foi possível entrar.';
         setPending(false);
-        setError(data?.message ?? 'Não foi possível entrar.');
+        setFormError(message);
+        setStatus(message);
         return;
       }
 
-      // O painel e o mesmo de sempre: o administrador cai na pagina do time.
+      // `pending` segue ligado: o botao continua carregando ate a troca de
+      // tela. O painel e o mesmo de sempre: o administrador cai na pagina
+      // do proprio time.
+      setStatus('Acesso liberado. Redirecionando.');
       router.replace(homePathFor(data.user));
       router.refresh();
     } catch {
+      const message = 'Não foi possível entrar. Tente novamente.';
       setPending(false);
-      setError('Não foi possível entrar. Tente novamente.');
+      setFormError(message);
+      setStatus(message);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-4">
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-        >
-          {error}
+    <form
+      id="acesso-time-form"
+      onSubmit={handleSubmit}
+      noValidate
+      /* `method="post"` protege o caso extremo de um envio nativo acontecer
+         antes da hidratacao: o telefone nunca vai para a barra de enderecos. */
+      method="post"
+    >
+      {formError ? (
+        <p className={styles['form-alert']} role="alert">
+          <AlertIcon />
+          <span>{formError}</span>
         </p>
       ) : null}
 
-      <Field id="acesso-telefone" label="Número de telefone" required>
-        <Input
-          id="acesso-telefone"
-          type="tel"
-          inputMode="numeric"
-          autoComplete="tel"
-          placeholder="(00) 00000-0000"
-          value={phone}
-          onChange={(event) => setPhone(maskPhone(event.target.value))}
-        />
-      </Field>
+      <div className={styles.field} style={{ '--delay': '.76s' } as React.CSSProperties}>
+        <label htmlFor="telefone">Número de telefone</label>
+        <div className={styles['input-wrap']}>
+          <svg
+            className={styles['input-icon']}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M6.5 3.5h11a1.5 1.5 0 0 1 1.5 1.5v14a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1.5-1.5Z" />
+            <path d="M10.5 17.5h3" strokeLinecap="round" />
+          </svg>
+          <input
+            id="telefone"
+            name="telefone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            placeholder=""
+            required
+            value={phone}
+            onChange={(event) => setPhone(maskPhone(event.target.value))}
+            aria-describedby="form-status"
+          />
+        </div>
+      </div>
 
-      <Button type="submit" fullWidth loading={pending}>
-        Acessar meu time
-      </Button>
+      <button
+        className={`${styles['submit-button']}${pending ? ` ${styles['is-loading']}` : ''}`}
+        type="submit"
+        disabled={pending || !hydrated}
+      >
+        <span className={styles['button-inner']}>
+          <span className={styles.spinner} aria-hidden="true" />
+          <span className={styles['button-label']}>
+            {pending ? 'Entrando…' : 'Acessar meu time'}
+          </span>
+          <svg
+            className={styles['button-arrow']}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M5 12h14M14 6l6 6-6 6" />
+          </svg>
+        </span>
+      </button>
+
+      <p id="form-status" className={styles['sr-only']} aria-live="polite">
+        {status}
+      </p>
     </form>
   );
 }
