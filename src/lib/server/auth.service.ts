@@ -31,8 +31,21 @@ export interface LoginOutcome {
   throttled: boolean;
 }
 
-function toSessionUser(row: Pick<UserRow, 'id' | 'name' | 'email' | 'role'>): SessionUser {
-  return { id: row.id, name: row.name, email: row.email, role: row.role as Role };
+type SessionColumns = Pick<
+  UserRow,
+  'id' | 'name' | 'email' | 'role' | 'client_id' | 'must_change_password'
+>;
+
+function toSessionUser(row: SessionColumns): SessionUser {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role as Role,
+    // O vinculo vem sempre do banco: o navegador nunca escolhe o candidato.
+    candidateId: row.role === 'CANDIDATE' ? row.client_id : null,
+    mustChangePassword: row.must_change_password === true,
+  };
 }
 
 function isLocked(row: UserRow): boolean {
@@ -112,7 +125,7 @@ export async function login(email: string, password: string): Promise<LoginOutco
 }
 
 interface SessionJoinRow extends SessionRow {
-  user: Pick<UserRow, 'id' | 'name' | 'email' | 'role' | 'is_active'> | null;
+  user: (SessionColumns & Pick<UserRow, 'is_active'>) | null;
 }
 
 /** Resolve o token bruto do cookie para o usuario da sessao. */
@@ -120,7 +133,9 @@ export async function resolveSession(token: string | undefined): Promise<Session
   if (!token) return null;
 
   const row = await selectOne<SessionJoinRow>(TABLES.sessions, {
-    select: `id,expires_at,revoked_at,user:${TABLES.users}(id,name,email,role,is_active)`,
+    select:
+      `id,expires_at,revoked_at,` +
+      `user:${TABLES.users}(id,name,email,role,client_id,must_change_password,is_active)`,
     filters: { token_hash: `eq.${hashToken(token)}` },
   });
 
@@ -196,6 +211,45 @@ export async function changePassword(
   await callFunction<number>('cmd_change_password', {
     p_user_id: userId,
     p_password_hash: await hashPassword(newPassword),
+  });
+
+  return { ok: true, message: null };
+}
+
+/**
+ * Conclui o primeiro acesso do candidato.
+ *
+ * A senha temporaria e substituida, a obrigacao de troca cai e todas as
+ * outras sessoes sao revogadas na mesma transacao: fica valendo apenas a
+ * sessao que fez a troca, identificada pelo hash do token do cookie.
+ */
+export async function completeFirstAccess(
+  userId: string,
+  newPassword: string,
+  sessionToken: string | undefined,
+): Promise<ChangePasswordOutcome> {
+  if (!sessionToken) return { ok: false, message: 'Sessão expirada. Entre novamente.' };
+
+  const row = await selectOne<
+    Pick<UserRow, 'id' | 'password_hash' | 'is_active' | 'must_change_password'>
+  >(TABLES.users, {
+    select: 'id,password_hash,is_active,must_change_password',
+    filters: { id: `eq.${userId}` },
+  });
+
+  if (!row || !row.is_active) return { ok: false, message: 'Sessão expirada. Entre novamente.' };
+  if (!row.must_change_password) {
+    return { ok: false, message: 'Esta conta já definiu a senha definitiva.' };
+  }
+
+  if (await verifyPassword(newPassword, row.password_hash)) {
+    return { ok: false, message: 'A nova senha precisa ser diferente da senha temporária.' };
+  }
+
+  await callFunction<number>('cmd_complete_first_access', {
+    p_user_id: userId,
+    p_password_hash: await hashPassword(newPassword),
+    p_keep_token_hash: hashToken(sessionToken),
   });
 
   return { ok: true, message: null };

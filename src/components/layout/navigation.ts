@@ -21,13 +21,13 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/candidatos',
     label: 'Candidatos',
     icon: Users,
-    permission: 'client.view',
+    permission: 'client.list',
   },
   {
     href: '/recrutar',
     label: 'Recrutar',
     icon: Megaphone,
-    permission: 'invite.view',
+    permission: 'client.list',
   },
 ];
 

@@ -28,6 +28,7 @@ import {
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { daysAgoIso, startOfMonthIso } from '@/lib/utils/date';
 import { toClient } from './mappers';
+import { assertEmailAvailable, disableCandidateAccess, syncCandidateLogin } from './user.service';
 import { notFound } from './http';
 
 /**
@@ -222,6 +223,9 @@ export async function getClientByInviteToken(token: string): Promise<Client | nu
 }
 
 export async function createClient(input: ClientInput): Promise<Client> {
+  // O login do candidato usa o mesmo e-mail: conflito barra antes de gravar.
+  await assertEmailAvailable(null, input.email);
+
   const photo = input.photo && isDataUrl(input.photo) ? await uploadImage('clients', input.photo) : null;
 
   const row = await insertOne<ClientRow>(TABLES.clients, {
@@ -250,6 +254,14 @@ export async function createClient(input: ClientInput): Promise<Client> {
 
 export async function updateClient(id: string, input: Partial<ClientInput>): Promise<Client> {
   const current = await requireClientRow(id);
+
+  // Troca de e-mail sincroniza o login e derruba as sessoes antigas. O
+  // conflito e conferido antes de qualquer gravacao.
+  if (input.email !== undefined || input.name !== undefined) {
+    if (input.email !== undefined) await assertEmailAvailable(id, input.email);
+    await syncCandidateLogin(id, { name: input.name, email: input.email });
+  }
+
   const patch: Record<string, string | number | null> = {};
 
   if (input.name !== undefined) patch.name = input.name.trim();
@@ -278,6 +290,10 @@ export async function updateClient(id: string, input: Partial<ClientInput>): Pro
 
 export async function deleteClient(id: string): Promise<void> {
   const current = await requireClientRow(id);
+
+  // Acesso desativado e sessoes revogadas antes da exclusao. A linha em
+  // `cmd_users` sai junto pela cascata do banco.
+  await disableCandidateAccess(id);
 
   // As fotos vivem no Storage: a exclusao em cascata do banco nao as alcanca.
   const members = await selectRows<Pick<MemberRow, 'photo_path'>>(TABLES.members, {

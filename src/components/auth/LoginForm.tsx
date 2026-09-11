@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, Eye, EyeOff, LogIn } from 'lucide-react';
 import { loginSchema, type LoginInput } from '@/lib/validation/auth.schema';
 import { login } from '@/lib/auth/client';
-import { DEFAULT_AUTHENTICATED_PATH } from '@/lib/auth/constants';
+import { DEFAULT_AUTHENTICATED_PATH, homePathFor } from '@/lib/auth/constants';
 import { useHydrated } from '@/hooks/use-hydrated';
 import { Button } from '@/components/ui/Button';
 import { Field, describedBy } from '@/components/ui/Field';
@@ -45,7 +45,12 @@ export function LoginForm({ next, configured }: LoginFormProps) {
       return;
     }
 
-    router.replace(next ?? DEFAULT_AUTHENTICATED_PATH);
+    // Senha temporaria leva ao primeiro acesso; candidato, ao proprio
+    // cadastro. O destino pedido na URL so vale para quem ja pode navegar.
+    const home = result.user ? homePathFor(result.user) : DEFAULT_AUTHENTICATED_PATH;
+    const blocked = result.user?.mustChangePassword || result.user?.role === 'CANDIDATE';
+
+    router.replace(blocked ? home : (next ?? home));
     router.refresh();
   }
 

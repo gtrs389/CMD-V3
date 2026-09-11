@@ -114,7 +114,8 @@ export function createLocalClientRepository(
       };
 
       writeClients(storage, [client, ...clients]);
-      return client;
+      // A referencia local nao cria login: o acesso vive apenas no servidor.
+      return { client, access: null, accessMessage: null };
     },
 
     async update(id, input) {

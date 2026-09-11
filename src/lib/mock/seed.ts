@@ -124,7 +124,7 @@ export async function loadSampleData(): Promise<number> {
   let created = 0;
 
   for (const entry of SEED) {
-    const client: Client = await clientRepository.create({
+    const { client }: { client: Client } = await clientRepository.create({
       name: entry.name,
       email: entry.email,
       photo: null,

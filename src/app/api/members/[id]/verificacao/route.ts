@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requirePermission } from '@/lib/server/guard';
+import { requireMemberAccess } from '@/lib/server/guard';
 import { jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { getVerification, retryVerificationStep } from '@/lib/server/verification.service';
 
@@ -12,8 +12,8 @@ import { getVerification, retryVerificationStep } from '@/lib/server/verificatio
  */
 export async function GET(_request: NextRequest, ctx: RouteContext<'/api/members/[id]/verificacao'>) {
   try {
-    const user = await requirePermission('verification.view');
     const { id } = await ctx.params;
+    const user = await requireMemberAccess('verification.view', id);
     return jsonOk({ verification: await getVerification(id, user.id) });
   } catch (error) {
     return toErrorResponse(error);
@@ -25,8 +25,8 @@ const retrySchema = z.object({ step: z.enum(['cpf', 'tse']) });
 /** Nova tentativa manual de uma etapa. Cada tentativa pode gerar cobranca. */
 export async function POST(request: NextRequest, ctx: RouteContext<'/api/members/[id]/verificacao'>) {
   try {
-    await requirePermission('verification.retry');
     const { id } = await ctx.params;
+    await requireMemberAccess('verification.retry', id);
     const { step } = await readJson(request, retrySchema);
     return jsonOk({ verification: await retryVerificationStep(id, step) });
   } catch (error) {

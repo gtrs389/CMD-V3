@@ -1,5 +1,6 @@
 import type { Client, ClientFormConfig, ClientInput, ClientSummary } from '@/lib/types';
-import { NotFoundError, type ClientRepository } from '../types';
+import type { GeneratedCredential } from '@/lib/types';
+import { NotFoundError, type ClientCreation, type ClientRepository } from '../types';
 import { notifyDataChanged } from '../events';
 import { api } from './api';
 
@@ -43,8 +44,19 @@ export function createHttpClientRepository(): ClientRepository {
       return client;
     },
 
-    async create(input: ClientInput) {
-      return mutate('/api/clients', 'POST', input);
+    async create(input: ClientInput): Promise<ClientCreation> {
+      const data = await api<{
+        client: Client;
+        access: GeneratedCredential | null;
+        accessMessage: string | null;
+      }>('/api/clients', { method: 'POST', body: input });
+
+      notifyDataChanged();
+      return {
+        client: data.client,
+        access: data.access ?? null,
+        accessMessage: data.accessMessage ?? null,
+      };
     },
 
     async update(id, input) {

@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { useToast } from '@/components/ui/Toast';
+import { useSession } from '@/components/layout/SessionProvider';
 import { MemberDetailModal } from './MemberDetailModal';
 import { MemberFormModal } from './MemberFormModal';
 
@@ -31,6 +32,12 @@ interface MembersPanelProps {
  */
 export function MembersPanel({ client, members, loading }: MembersPanelProps) {
   const toast = useToast();
+  // Perfil somente leitura nao recebe as acoes. O servidor recusa do mesmo
+  // jeito: esconder o botao nunca e a protecao.
+  const { can } = useSession();
+  const podeCriar = can('member.create');
+  const podeEditar = can('member.update');
+  const podeExcluir = can('member.delete');
   const [term, setTerm] = useState('');
   const [viewing, setViewing] = useState<Member | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
@@ -77,10 +84,12 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
           title="Nenhum integrante cadastrado"
           description="Compartilhe o link de convite para receber cadastros ou adicione um integrante manualmente."
           action={
-            <Button onClick={openCreate}>
-              <UserPlus aria-hidden="true" className="size-4" />
-              Adicionar integrante
-            </Button>
+            podeCriar ? (
+              <Button onClick={openCreate}>
+                <UserPlus aria-hidden="true" className="size-4" />
+                Adicionar integrante
+              </Button>
+            ) : undefined
           }
         />
         <MemberFormModal
@@ -108,10 +117,12 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
           <p className="text-sm whitespace-nowrap text-ink-500">
             {filtered.length} de {ordered.length}
           </p>
-          <Button onClick={openCreate}>
-            <UserPlus aria-hidden="true" className="size-4" />
-            Adicionar
-          </Button>
+          {podeCriar ? (
+            <Button onClick={openCreate}>
+              <UserPlus aria-hidden="true" className="size-4" />
+              Adicionar
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -151,19 +162,23 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                           <Eye aria-hidden="true" className="size-4" />
                           Ficha
                         </Button>
-                        <Button variant="secondary" size="sm" onClick={() => openEdit(member)}>
-                          <Pencil aria-hidden="true" className="size-4" />
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-danger-600 hover:bg-danger-50"
-                          onClick={() => setRemoving(member)}
-                        >
-                          <Trash2 aria-hidden="true" className="size-4" />
-                          Excluir
-                        </Button>
+                        {podeEditar ? (
+                          <Button variant="secondary" size="sm" onClick={() => openEdit(member)}>
+                            <Pencil aria-hidden="true" className="size-4" />
+                            Editar
+                          </Button>
+                        ) : null}
+                        {podeExcluir ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-danger-600 hover:bg-danger-50"
+                            onClick={() => setRemoving(member)}
+                          >
+                            <Trash2 aria-hidden="true" className="size-4" />
+                            Excluir
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   </CardBody>
@@ -219,17 +234,21 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
                           icon={<Eye className="size-4" />}
                           onClick={() => setViewing(member)}
                         />
-                        <IconButton
-                          label={`Editar ${member.name}`}
-                          icon={<Pencil className="size-4" />}
-                          onClick={() => openEdit(member)}
-                        />
-                        <IconButton
-                          label={`Excluir ${member.name}`}
-                          icon={<Trash2 className="size-4" />}
-                          variant="danger"
-                          onClick={() => setRemoving(member)}
-                        />
+                        {podeEditar ? (
+                          <IconButton
+                            label={`Editar ${member.name}`}
+                            icon={<Pencil className="size-4" />}
+                            onClick={() => openEdit(member)}
+                          />
+                        ) : null}
+                        {podeExcluir ? (
+                          <IconButton
+                            label={`Excluir ${member.name}`}
+                            icon={<Trash2 className="size-4" />}
+                            variant="danger"
+                            onClick={() => setRemoving(member)}
+                          />
+                        ) : null}
                       </div>
                     </td>
                   </tr>

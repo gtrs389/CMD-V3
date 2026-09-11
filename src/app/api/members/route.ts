@@ -1,6 +1,6 @@
 import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { requirePermission } from '@/lib/server/guard';
+import { requireClientAccess, requirePermission } from '@/lib/server/guard';
 import { badRequest, jsonOk, notFound, readJson, toErrorResponse } from '@/lib/server/http';
 import { memberCreateSchema } from '@/lib/validation/server.schema';
 import { createMember, listAllMembers } from '@/lib/server/member.service';
@@ -9,7 +9,8 @@ import { resolveLocation } from '@/lib/server/map-location.service';
 
 export async function GET() {
   try {
-    await requirePermission('member.view');
+    // Lista de todas as equipes: apenas o ADMIN enxerga mais de um candidato.
+    await requirePermission('client.list');
     return jsonOk({ members: await listAllMembers() });
   } catch (error) {
     return toErrorResponse(error);
@@ -19,8 +20,8 @@ export async function GET() {
 /** Cadastro feito dentro do painel. O envio publico usa a rota do convite. */
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('member.create');
     const input = await readJson(request, memberCreateSchema);
+    await requireClientAccess('member.create', input.clientId);
 
     const client = await getClient(input.clientId);
     if (!client) throw notFound('Candidato não encontrado.');

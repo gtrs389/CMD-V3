@@ -13,6 +13,7 @@ import {
   relationshipIconElement,
   relationshipLabel,
 } from '@/lib/domain/relationship';
+import { useSession } from '@/components/layout/SessionProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -127,6 +128,12 @@ export function MemberDetailModal({
   onClose,
   onEdit,
 }: MemberDetailModalProps) {
+  // Dados enriquecidos e sinais do aparelho sao exclusivos do ADMIN.
+  const { can } = useSession();
+  const podeEditar = can('member.update');
+  const podeVerificar = can('verification.view');
+  const podeVerAparelho = can('device.view');
+
   if (!member) return null;
 
   const custom = sortedFields(client.form).filter((field) => field.systemKey === null);
@@ -142,15 +149,17 @@ export function MemberDetailModal({
           <Button variant="secondary" onClick={onClose}>
             Fechar
           </Button>
-          <Button
-            onClick={() => {
-              onClose();
-              onEdit(member);
-            }}
-          >
-            <Pencil aria-hidden="true" className="size-4" />
-            Editar
-          </Button>
+          {podeEditar ? (
+            <Button
+              onClick={() => {
+                onClose();
+                onEdit(member);
+              }}
+            >
+              <Pencil aria-hidden="true" className="size-4" />
+              Editar
+            </Button>
+          ) : null}
         </>
       }
     >
@@ -233,9 +242,9 @@ export function MemberDetailModal({
           )}
         </div>
 
-        <MemberVerificationSection member={member} />
+        {podeVerificar ? <MemberVerificationSection member={member} /> : null}
 
-        <MemberDeviceSection memberId={member.id} />
+        {podeVerAparelho ? <MemberDeviceSection memberId={member.id} /> : null}
       </div>
     </Modal>
   );

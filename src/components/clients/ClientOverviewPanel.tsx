@@ -24,6 +24,7 @@ import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
+import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { TeamChart, type TeamChartPoint } from './TeamChart';
 
@@ -53,6 +54,11 @@ function startOfDay(date: Date): number {
 export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
+
+  // Perfil somente leitura apenas consulta: os atalhos mudam de rotulo.
+  const { can } = useSession();
+  const podeGerenciarConvite = can('invite.manage');
+  const podeEditarFormulario = can('form.manage');
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -144,7 +150,11 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
             />
           </div>
 
-          <InviteCard client={client} onManage={() => onOpenTab('convite')} />
+          <InviteCard
+            client={client}
+            canManage={podeGerenciarConvite}
+            onManage={() => onOpenTab('convite')}
+          />
         </div>
       </div>
 
@@ -159,6 +169,7 @@ export function ClientOverviewPanel({ client, members, onOpenTab }: ClientOvervi
           ativos={form.ativos}
           obrigatorios={form.obrigatorios}
           percentual={form.percentual}
+          canEdit={podeEditarFormulario}
           onEdit={() => onOpenTab('formulario')}
         />
       </div>
@@ -321,7 +332,15 @@ function StatCard({
    Link de convite
    ------------------------------------------------------------------------- */
 
-function InviteCard({ client, onManage }: { client: Client; onManage: () => void }) {
+function InviteCard({
+  client,
+  canManage,
+  onManage,
+}: {
+  client: Client;
+  canManage: boolean;
+  onManage: () => void;
+}) {
   const toast = useToast();
   const origin = useOrigin();
   const [copied, setCopied] = useState(false);
@@ -411,7 +430,7 @@ function InviteCard({ client, onManage }: { client: Client; onManage: () => void
           onClick={onManage}
           className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-accent-600 px-4 text-sm font-medium text-white transition-colors hover:bg-accent-700"
         >
-          Gerenciar convite
+          {canManage ? 'Gerenciar convite' : 'Ver convite'}
         </button>
       </div>
 
@@ -620,11 +639,13 @@ function FormCard({
   ativos,
   obrigatorios,
   percentual,
+  canEdit,
   onEdit,
 }: {
   ativos: number;
   obrigatorios: number;
   percentual: number;
+  canEdit: boolean;
   onEdit: () => void;
 }) {
   return (
@@ -677,7 +698,7 @@ function FormCard({
           onClick={onEdit}
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-accent-50 px-4 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-100"
         >
-          Editar formulário
+          {canEdit ? 'Editar formulário' : 'Ver formulário'}
           <ArrowRight aria-hidden="true" className="size-4" />
         </button>
       </div>
