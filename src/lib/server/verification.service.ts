@@ -439,11 +439,20 @@ export async function seedVerificationFromForm(
 
   patch.status = overallStatus(patch.cpf_status as StepStatus, patch.tse_status as StepStatus);
 
-  await insertOne(
-    TABLES.memberVerifications,
-    { client_id: clientId, member_id: memberId, ...patch },
-    'id',
-  ).catch(() => undefined);
+  try {
+    await insertOne(
+      TABLES.memberVerifications,
+      { client_id: clientId, member_id: memberId, ...patch },
+      'id',
+    );
+  } catch (error) {
+    // Gravar o que ja foi confirmado no formulario falhou: nunca pode
+    // deixar o integrante sem NENHUMA verificacao. Reportar "nao gravado"
+    // aqui faz o chamador cair no fluxo de sempre (PENDING + consulta
+    // depois do cadastro), em vez de perder o resultado silenciosamente.
+    console.error('[cmd] Falha ao gravar verificação já confirmada no formulário público:', error);
+    return EMPTY_SEED;
+  }
 
   return { seeded: true, tseSucceeded: Boolean(tse) };
 }
