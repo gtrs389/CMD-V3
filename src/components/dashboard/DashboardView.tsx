@@ -24,6 +24,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ClientFormModal } from '@/components/clients/ClientFormModal';
+import { MobilizationMap } from './MobilizationMap';
 import { MembersChart, type ChartPoint } from './MembersChart';
 
 const RECENT_WINDOW_DAYS = 7;
@@ -467,6 +468,8 @@ export function DashboardView() {
           )}
         </article>
       </section>
+
+      <MobilizationMap />
 
       <ClientFormModal open={creating} onClose={() => setCreating(false)} />
     </div>

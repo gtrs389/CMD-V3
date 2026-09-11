@@ -19,6 +19,7 @@ import { insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
 import { privacyHash } from './consent';
 import { decryptJson, encryptJson, hasEncryptionKey } from './crypto';
 import { consultCpf, consultTse, FonteDataError } from './fontedata.service';
+import { createPendingLocation, invalidateLocation, resolveLocation } from './map-location.service';
 import { notFound } from './http';
 
 /**
@@ -352,6 +353,14 @@ async function execute(
 
   patch.status = overallStatus(cpfStatus, tseStatus);
   await releaseLock(memberId, patch);
+
+  // Local de votacao: o vinculo nasce aqui e e resolvido em seguida. Uma nova
+  // consulta eleitoral invalida so este tipo; a moradia segue como estava.
+  if (tseStatus === 'SUCCESS') {
+    await createPendingLocation(member.client_id, memberId, 'POLLING_PLACE').catch(() => undefined);
+    await invalidateLocation(member.client_id, memberId, 'POLLING_PLACE').catch(() => undefined);
+    await resolveLocation(memberId, 'POLLING_PLACE').catch(() => undefined);
+  }
 }
 
 /* -------------------------------------------------------------------------

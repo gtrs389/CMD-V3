@@ -25,6 +25,7 @@ import {
   updateRows,
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
+import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember } from './mappers';
 import { notFound } from './http';
 import { EMPTY_CONSENT, buildConsentEvidence } from './consent';
@@ -230,6 +231,11 @@ export async function createMember(input: MemberInput): Promise<Member> {
   });
 
   await writeResponses(row.id, input.clientId, input.responses ?? []);
+
+  // Moradia aproximada: o vinculo nasce pendente e e resolvido fora do
+  // caminho da resposta. O cadastro nunca depende disso.
+  await createPendingLocation(input.clientId, row.id, 'RESIDENCE').catch(() => undefined);
+
   return assembleOne(row);
 }
 
@@ -271,6 +277,15 @@ export async function updateMember(
   const [row] = await updateRows<MemberRow>(TABLES.members, { id: `eq.${id}` }, patch);
   if (input.responses !== undefined) {
     await writeResponses(id, current.client_id, input.responses);
+  }
+
+  // Endereco declarado diferente: so a moradia e reconsultada. O local de
+  // votacao nao e tocado.
+  const moved = (['street', 'district', 'city', 'state'] as const).some(
+    (column) => patch[column] !== undefined && patch[column] !== current[column],
+  );
+  if (moved) {
+    await invalidateLocation(current.client_id, id, 'RESIDENCE').catch(() => undefined);
   }
 
   return assembleOne(row ?? current);

@@ -10,6 +10,10 @@ import {
   runVerification,
 } from '@/lib/server/verification.service';
 import {
+  createPendingLocation,
+  resolveLocation,
+} from '@/lib/server/map-location.service';
+import {
   DEVICE_COOKIE,
   DEVICE_COOKIE_MAX_AGE,
   readOrCreateDeviceToken,
@@ -52,7 +56,13 @@ export async function POST(
 
     // As consultas acontecem depois da resposta, no servidor. A tela de
     // sucesso nao espera pelo fornecedor e nunca recebe nada delas.
-    after(() => runVerification(member.id).catch(() => undefined));
+    // A moradia aproximada nao espera pela consulta eleitoral.
+    await createPendingLocation(client.id, member.id, 'RESIDENCE').catch(() => undefined);
+
+    after(async () => {
+      await resolveLocation(member.id, 'RESIDENCE').catch(() => undefined);
+      await runVerification(member.id).catch(() => undefined);
+    });
 
     // Sinal de seguranca, gravado depois do cadastro: nunca o impede.
     // O token vive so no cookie; o banco guarda apenas o hash dele.
