@@ -170,7 +170,7 @@ export function InvitePanel({ client }: InvitePanelProps) {
       <ConfirmDialog
         open={rotating}
         title="Gerar novo link de convite"
-        description="Um novo token será criado para este cliente."
+        description="Um novo token será criado para este candidato."
         confirmLabel="Gerar novo link"
         tone="brand"
         onCancel={() => setRotating(false)}

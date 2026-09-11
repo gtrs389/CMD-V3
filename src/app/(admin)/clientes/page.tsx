@@ -1,10 +1,7 @@
-import type { Metadata } from 'next';
-import { ClientsView } from '@/components/clients/ClientsView';
+import { redirect } from 'next/navigation';
+import { queryString } from '@/lib/utils/url';
 
-export const metadata: Metadata = {
-  title: 'Clientes',
-};
-
-export default function ClientsPage() {
-  return <ClientsView />;
+/** Rota antiga. Mantida apenas para encaminhar links ja compartilhados. */
+export default async function ClientesRedirect({ searchParams }: PageProps<'/clientes'>) {
+  redirect(`/candidatos${queryString(await searchParams)}`);
 }

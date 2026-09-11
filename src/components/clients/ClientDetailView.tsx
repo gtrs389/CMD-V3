@@ -15,12 +15,11 @@ import {
 } from 'lucide-react';
 import { useClient } from '@/hooks/use-clients';
 import { useMembers } from '@/hooks/use-members';
-import { pluralize } from '@/lib/utils/text';
-import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/Badge';
+import { formatLongDate } from '@/lib/utils/date';
+import { initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
-import { Card, CardBody } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormBuilderPanel } from '@/components/fields/FormBuilderPanel';
@@ -30,19 +29,27 @@ import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { InvitePanel } from './InvitePanel';
 
-type TabId = 'visao-geral' | 'equipe' | 'formulario' | 'convite';
+const TAB_IDS = ['visao-geral', 'equipe', 'formulario', 'convite'] as const;
+export type TabId = (typeof TAB_IDS)[number];
+
+/** Confere o parametro `aba` da URL antes de escolher a aba inicial. */
+export function isTabId(value: string): value is TabId {
+  return (TAB_IDS as readonly string[]).includes(value);
+}
 
 interface ClientDetailViewProps {
   clientId: string;
+  /** Aba aberta ao entrar. Usada pelo atalho de recrutamento. */
+  initialTab?: TabId;
 }
 
-/** Pagina individual do cliente, organizada em abas. */
-export function ClientDetailView({ clientId }: ClientDetailViewProps) {
+/** Pagina individual do candidato, organizada em abas. */
+export function ClientDetailView({ clientId, initialTab }: ClientDetailViewProps) {
   const router = useRouter();
   const { data: client, loading, error, reload } = useClient(clientId);
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
-  const [tab, setTab] = useState<TabId>('visao-geral');
+  const [tab, setTab] = useState<TabId>(initialTab ?? 'visao-geral');
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -68,15 +75,15 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
     return (
       <EmptyState
         icon={<Building2 className="size-6" />}
-        title="Cliente não encontrado"
-        description="O cliente pode ter sido excluido por outra pessoa."
+        title="Candidato não encontrado"
+        description="O candidato pode ter sido excluido por outra pessoa."
         action={
           <Link
-            href="/clientes"
+            href="/candidatos"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-brand-700 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-800"
           >
             <ArrowLeft aria-hidden="true" className="size-4" />
-            Voltar para clientes
+            Voltar para candidatos
           </Link>
         }
       />
@@ -90,72 +97,117 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
       label: 'Equipe',
       icon: <Users className="size-4" />,
       badge: (
-        <span className="rounded-pill bg-white/20 px-1.5 text-xs tabular-nums">
+        <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">
           {memberList.length}
         </span>
       ),
     },
     { id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> },
-    { id: 'convite', label: 'Link de convite', icon: <Link2 className="size-4" /> },
+    { id: 'convite', label: 'Convite', icon: <Link2 className="size-4" /> },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <Link
-        href="/clientes"
-        className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-500 transition-colors hover:text-ink-900"
+        href="/candidatos"
+        className="inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-ink-500 transition-colors hover:text-ink-900"
       >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        Clientes
+        <ArrowLeft aria-hidden="true" className="size-3.5" />
+        Voltar para candidatos
       </Link>
 
-      <Card>
-        <CardBody className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <Avatar name={client.name} src={client.photo} size="xl" />
+      <header className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          {client.photo ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={client.photo}
+              alt={`Foto de ${client.name}`}
+              className="size-16 shrink-0 rounded-card border border-line object-cover"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex size-16 shrink-0 items-center justify-center rounded-card border border-line bg-ink-100 text-lg font-semibold text-ink-500"
+            >
+              {initials(client.name)}
+            </span>
+          )}
 
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight break-words text-ink-900 sm:text-2xl">
-              {client.name}
-            </h1>
-            <p className="mt-0.5 truncate text-sm text-ink-500">{client.email}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl leading-tight font-bold tracking-tight break-words text-ink-900 sm:text-[1.375rem]">
+                {client.name}
+              </h1>
+              <span
+                className={
+                  client.invite.active
+                    ? 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-success-600'
+                    : 'inline-flex shrink-0 items-center gap-1.5 rounded-pill bg-danger-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-danger-600'
+                }
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    client.invite.active
+                      ? 'size-1.5 rounded-full bg-success-600'
+                      : 'size-1.5 rounded-full bg-danger-600'
+                  }
+                />
+                {client.invite.active ? 'Convite ativo' : 'Convite inativo'}
+              </span>
+            </div>
 
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <Badge tone="brand">
-                <Users aria-hidden="true" className="size-3.5" />
-                {memberList.length} {pluralize(memberList.length, 'integrante', 'integrantes')}
-              </Badge>
-              <Badge tone={client.invite.active ? 'success' : 'neutral'}>
-                {client.invite.active ? 'Convite ativo' : 'Convite desativado'}
-              </Badge>
+            <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{client.email}</p>
+            <p className="mt-0.5 text-xs text-ink-400">
+              Candidato desde {formatLongDate(client.createdAt)}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium text-accent-600 shadow-card transition-colors hover:bg-accent-50"
+            >
+              <Pencil aria-hidden="true" className="size-4" />
+              Editar candidato
+            </button>
+
+            <div className="rounded-control border border-line bg-surface shadow-card">
+              <Menu
+                label={`Ações de ${client.name}`}
+                actions={[
+                  {
+                    id: 'editar',
+                    label: 'Editar candidato',
+                    icon: <Pencil className="size-4" />,
+                    onSelect: () => setEditing(true),
+                  },
+                  {
+                    id: 'excluir',
+                    label: 'Excluir candidato',
+                    icon: <Trash2 className="size-4" />,
+                    tone: 'danger',
+                    onSelect: () => setDeleting(true),
+                  },
+                ]}
+              />
             </div>
           </div>
-
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              <Pencil aria-hidden="true" className="size-4" />
-              Editar cliente
-            </Button>
-            <Button
-              variant="ghost"
-              className="text-danger-600 hover:bg-danger-50"
-              onClick={() => setDeleting(true)}
-            >
-              <Trash2 aria-hidden="true" className="size-4" />
-              Excluir
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+        </div>
+      </header>
 
       <Tabs
-        label="Seções do cliente"
+        variant="underline"
+        label="Seções do candidato"
         items={tabs}
         active={tab}
         onChange={(id) => setTab(id as TabId)}
       />
 
       <TabPanel id="visao-geral" active={tab}>
-        <ClientOverviewPanel client={client} members={memberList} />
+        <ClientOverviewPanel client={client} members={memberList} onOpenTab={setTab} />
       </TabPanel>
 
       <TabPanel id="equipe" active={tab}>
@@ -179,7 +231,7 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
         onCancel={() => setDeleting(false)}
         onDeleted={() => {
           setDeleting(false);
-          router.replace('/clientes');
+          router.replace('/candidatos');
         }}
       />
     </div>
@@ -188,22 +240,21 @@ export function ClientDetailView({ clientId }: ClientDetailViewProps) {
 
 function DetailSkeleton() {
   return (
-    <div className="space-y-6">
-      <Skeleton className="h-5 w-24" />
+    <div className="space-y-3">
+      <Skeleton className="h-5 w-40" />
       <div className="rounded-card border border-line bg-surface p-5 shadow-card">
         <div className="flex items-center gap-4">
-          <Skeleton className="size-20 rounded-full" />
+          <Skeleton className="size-16 rounded-card" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-6 w-1/2" />
             <Skeleton className="h-4 w-1/3" />
           </div>
         </div>
       </div>
-      <Skeleton className="h-11 w-full" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <Skeleton key={index} className="h-28 rounded-card" />
-        ))}
+      <Skeleton className="h-12 w-full rounded-card" />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <Skeleton className="h-64 rounded-card" />
+        <Skeleton className="h-64 rounded-card" />
       </div>
     </div>
   );

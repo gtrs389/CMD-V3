@@ -19,7 +19,7 @@ const photoValue = z
 const trimmed = (max: number) => z.string().trim().max(max);
 
 export const clientCreateSchema = z.object({
-  name: trimmed(80).min(2, 'Informe o nome do cliente.'),
+  name: trimmed(80).min(2, 'Informe o nome do candidato.'),
   email: z.string().trim().min(1, 'Informe o e-mail.').pipe(z.email('E-mail inválido.')),
   photo: photoValue.default(null),
   notes: trimmed(500).default(''),
@@ -122,7 +122,7 @@ const memberBase = {
 };
 
 export const memberCreateSchema = z.object({
-  clientId: z.uuid('Cliente inválido.'),
+  clientId: z.uuid('Candidato inválido.'),
   ...memberBase,
 });
 

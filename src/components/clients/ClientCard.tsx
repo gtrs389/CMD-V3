@@ -35,16 +35,16 @@ interface ClientCardProps {
   onDelete: (client: ClientSummary) => void;
 }
 
-/** Cartao de cliente: foto, contato, numeros da equipe e acoes principais. */
+/** Cartao de candidato: foto, contato, numeros da equipe e acoes principais. */
 export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardProps) {
   const router = useRouter();
-  const href = `/clientes/${client.id}`;
+  const href = `/candidatos/${client.id}`;
   const remaining = client.memberCount - client.recentMembers.length;
 
   return (
     <article
       onClick={(event) => {
-        // O clique em qualquer area livre do cartao abre o cliente.
+        // O clique em qualquer area livre do cartao abre o candidato.
         if ((event.target as HTMLElement).closest('a,button')) return;
         router.push(href);
       }}
@@ -155,7 +155,7 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
           href={href}
           className="inline-flex min-h-10 items-center gap-1.5 text-[0.8125rem] font-semibold text-accent-600 transition-colors hover:text-accent-700"
         >
-          Abrir cliente
+          Abrir candidato
           <ArrowRight aria-hidden="true" className="size-3.5" />
         </Link>
 
@@ -164,13 +164,13 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
           actions={[
             {
               id: 'editar',
-              label: 'Editar cliente',
+              label: 'Editar candidato',
               icon: <Pencil className="size-4" />,
               onSelect: () => onEdit(client),
             },
             {
               id: 'excluir',
-              label: 'Excluir cliente',
+              label: 'Excluir candidato',
               icon: <Trash2 className="size-4" />,
               tone: 'danger',
               onSelect: () => onDelete(client),

@@ -1,11 +1,8 @@
-import type { Metadata } from 'next';
-import { ClientDetailView } from '@/components/clients/ClientDetailView';
+import { redirect } from 'next/navigation';
+import { queryString } from '@/lib/utils/url';
 
-export const metadata: Metadata = {
-  title: 'Cliente',
-};
-
-export default async function ClientDetailPage({ params }: PageProps<'/clientes/[id]'>) {
+/** Rota antiga. Preserva o identificador e os parametros ao encaminhar. */
+export default async function ClienteRedirect({ params, searchParams }: PageProps<'/clientes/[id]'>) {
   const { id } = await params;
-  return <ClientDetailView clientId={id} />;
+  redirect(`/candidatos/${encodeURIComponent(id)}${queryString(await searchParams)}`);
 }

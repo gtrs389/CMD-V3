@@ -203,7 +203,7 @@ export function PlaceMembersPanel({
 function PersonRow({ member }: { member: PlaceMember }) {
   return (
     <a
-      href={`/clientes/${member.clientId}?integrante=${member.memberId}`}
+      href={`/candidatos/${member.clientId}?integrante=${member.memberId}`}
       className="flex items-center gap-3 rounded-control border border-line p-2.5 transition-colors hover:bg-ink-50"
     >
       {member.photo ? (

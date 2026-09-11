@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Permission } from '@/lib/permissions';
 
@@ -18,10 +18,16 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.view',
   },
   {
-    href: '/clientes',
-    label: 'Clientes',
+    href: '/candidatos',
+    label: 'Candidatos',
     icon: Users,
     permission: 'client.view',
+  },
+  {
+    href: '/recrutar',
+    label: 'Recrutar',
+    icon: Megaphone,
+    permission: 'invite.view',
   },
 ];
 

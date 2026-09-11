@@ -43,7 +43,7 @@ export default async function LoginPage({
             Acesso administrativo
           </h1>
           <p className="mt-1 text-sm text-ink-500">
-            Entre com as credenciais de administrador para gerenciar clientes e equipes.
+            Entre com as credenciais de administrador para gerenciar candidatos e equipes.
           </p>
 
           {senhaAlterada ? (
