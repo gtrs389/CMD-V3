@@ -203,6 +203,14 @@ textarea {
   scrollbar-color: var(--color-line-strong) transparent;
 }
 
+/* O Leaflet impoe `margin: 1.3em 0` em todo paragrafo do balao do mapa. A
+   folha dele nao vive em camada e chega junto com o mapa, entao a ordem de
+   carga decidiria quem ganha: a classe do proprio balao desempata sempre a
+   favor do espacamento das telas. */
+.leaflet-popup-content .map-popup p {
+  margin: 0;
+}
+
 /* Revelacao progressiva durante a rolagem (ver componente Reveal) */
 [data-reveal] {
   opacity: 0;

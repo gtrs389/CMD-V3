@@ -38,27 +38,91 @@ const COLORS: Record<MapPin['locationKind'], string> = {
   POLLING_PLACE: '#c2610a',
 };
 
-/** Desenho do pino: casa para moradia, predio para o local de votacao. */
-const GLYPHS: Record<MapPin['locationKind'], string> = {
-  RESIDENCE:
-    '<path d="M4 10 L12 4 L20 10 V19 H14 V14 H10 V19 H4 Z" fill="none" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>',
-  POLLING_PLACE:
-    '<path d="M4 19 H20 M5 19 V9 M19 19 V9 M12 3 L21 9 H3 Z M9 19 V13 H15 V19" fill="none" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>',
-};
+/** Lado do pino e altura da ponta, em pixels. */
+const PIN_SIZE = 40;
+const PIN_TIP = 9;
 
-function markerIcon(kind: MapPin['locationKind']): L.DivIcon {
+/**
+ * Reserva da escola sem foto: o predio.
+ *
+ * Constante do modulo, escrita aqui: nenhum dado de fora entra nesta marcacao.
+ */
+const PLACE_GLYPH =
+  '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="white" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M4 19 H20 M5 19 V9 M19 19 V9 M12 3 L21 9 H3 Z M9 19 V13 H15 V19"/></svg>';
+
+/**
+ * Pino com foto.
+ *
+ * A pessoa aparece pelo proprio rosto e a escola pela fachada: o pino deixa de
+ * ser um desenho vazio. A forma continua dizendo o que e o ponto mesmo com a
+ * foto dentro — gente e redondo, lugar e quadrado —, e o anel mantem a cor do
+ * tipo.
+ *
+ * O no e montado no DOM, nunca por texto: a foto assinada do integrante e a
+ * imagem que veio do provedor entram como atributo `src`, entao nenhuma URL
+ * de fora vira marcacao. Quando a imagem nao carrega — link assinado vencido,
+ * foto removida — o pino cai na reserva que ja esta montada embaixo dela:
+ * iniciais na pessoa, predio na escola.
+ */
+function pinElement(
+  kind: MapPin['locationKind'],
+  src: string | null,
+  label: string | null,
+): HTMLElement {
+  const color = COLORS[kind];
+
+  const root = document.createElement('span');
+  root.style.cssText = `position:relative;display:block;width:${PIN_SIZE}px;` +
+    `height:${PIN_SIZE + PIN_TIP}px;filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))`;
+
+  const frame = document.createElement('span');
+  frame.style.cssText =
+    `position:relative;display:flex;box-sizing:border-box;width:${PIN_SIZE}px;` +
+    `height:${PIN_SIZE}px;align-items:center;justify-content:center;overflow:hidden;` +
+    `border:3px solid ${color};border-radius:${kind === 'RESIDENCE' ? '9999px' : '11px'};` +
+    `background:${color};color:#fff;font-size:12px;font-weight:600;line-height:1`;
+
+  const fallback = document.createElement('span');
+  fallback.style.cssText =
+    'display:flex;width:100%;height:100%;align-items:center;justify-content:center';
+  if (label) fallback.textContent = label;
+  else fallback.innerHTML = PLACE_GLYPH;
+  frame.append(fallback);
+
+  if (src) {
+    const photo = document.createElement('img');
+    photo.alt = '';
+    photo.decoding = 'async';
+    photo.style.cssText =
+      'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+    photo.addEventListener('error', () => photo.remove());
+    photo.src = src;
+    frame.append(photo);
+  }
+
+  const tip = document.createElement('span');
+  tip.style.cssText =
+    `position:absolute;left:50%;top:${PIN_SIZE - 2}px;margin-left:-6px;width:0;height:0;` +
+    `border-left:6px solid transparent;border-right:6px solid transparent;` +
+    `border-top:${PIN_TIP}px solid ${color}`;
+
+  root.append(frame, tip);
+  return root;
+}
+
+function markerIcon(
+  kind: MapPin['locationKind'],
+  src: string | null,
+  /** Iniciais da pessoa. Nulo na escola: la a reserva e o predio. */
+  label: string | null = null,
+): L.DivIcon {
   return L.divIcon({
     className: '',
-    iconSize: [32, 40],
-    iconAnchor: [16, 38],
-    popupAnchor: [0, -34],
-    html: `
-      <span style="display:block;width:32px;height:40px;filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))">
-        <svg viewBox="0 0 32 40" width="32" height="40" aria-hidden="true">
-          <path d="M16 39C16 39 30 24.5 30 15.5A14 14 0 1 0 2 15.5C2 24.5 16 39 16 39Z" fill="${COLORS[kind]}"/>
-          <g transform="translate(4 3) scale(0.5)">${GLYPHS[kind]}</g>
-        </svg>
-      </span>`,
+    iconSize: [PIN_SIZE, PIN_SIZE + PIN_TIP],
+    // A ponta encosta na coordenada; o balao abre logo acima do pino.
+    iconAnchor: [PIN_SIZE / 2, PIN_SIZE + PIN_TIP],
+    popupAnchor: [0, -(PIN_SIZE + PIN_TIP - 2)],
+    html: pinElement(kind, src, label),
   });
 }
 
@@ -97,12 +161,17 @@ function FitBounds({ pins }: { pins: MapPin[] }) {
 }
 
 function PinPhoto({ pin }: { pin: MapPin }) {
-  if (pin.memberPhoto) {
+  // Link assinado vencido ou foto removida: as iniciais no lugar do icone de
+  // imagem quebrada, como ja acontece no pino.
+  const [quebrada, setQuebrada] = useState(false);
+
+  if (pin.memberPhoto && !quebrada) {
     return (
       /* eslint-disable-next-line @next/next/no-img-element */
       <img
         src={pin.memberPhoto}
         alt={`Foto de ${pin.memberName}`}
+        onError={() => setQuebrada(true)}
         className="size-10 shrink-0 rounded-full border border-line object-cover"
       />
     );
@@ -124,7 +193,7 @@ function PinDetails({ pin }: { pin: MapPin }) {
   const municipio = [pin.city, pin.state].filter(Boolean).join('/');
 
   return (
-    <div className="flex min-w-52 gap-2.5">
+    <div className="map-popup flex min-w-52 gap-2.5">
       <PinPhoto pin={pin} />
 
       <div className="min-w-0 flex-1 space-y-0.5">
@@ -156,9 +225,19 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
   const map = useMap();
   const single = cluster.pins.length === 1 ? cluster.pins[0] : null;
 
+  // Sozinha, a pessoa aparece pela propria foto; agrupadas, vale a contagem.
+  // O icone e guardado para a foto nao ser buscada de novo a cada desenho.
+  const icon = useMemo(
+    () =>
+      single
+        ? markerIcon(single.locationKind, single.memberPhoto, initials(single.memberName))
+        : clusterIcon(cluster.pins.length, cluster.pins.map((pin) => pin.locationKind)),
+    [cluster.pins, single],
+  );
+
   if (single) {
     return (
-      <Marker position={[single.latitude, single.longitude]} icon={markerIcon(single.locationKind)}>
+      <Marker position={[single.latitude, single.longitude]} icon={icon}>
         <Popup>
           <PinDetails pin={single} />
         </Popup>
@@ -169,13 +248,13 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
   return (
     <Marker
       position={[cluster.latitude, cluster.longitude]}
-      icon={clusterIcon(cluster.pins.length, cluster.pins.map((pin) => pin.locationKind))}
+      icon={icon}
       eventHandlers={{
         click: () => map.setView([cluster.latitude, cluster.longitude], Math.min(map.getZoom() + 3, 18)),
       }}
     >
       <Popup>
-        <div className="max-h-56 min-w-52 space-y-2 overflow-y-auto">
+        <div className="map-popup max-h-56 min-w-52 space-y-2 overflow-y-auto">
           <p className="text-xs font-semibold text-ink-700">
             {cluster.pins.length} integrantes neste ponto
           </p>
@@ -185,6 +264,34 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
         </div>
       </Popup>
     </Marker>
+  );
+}
+
+/** Fachada da escola. Sem imagem — ou com imagem quebrada —, fica o predio. */
+function PlaceImage({ place }: { place: PollingPlacePin }) {
+  const [quebrada, setQuebrada] = useState(false);
+
+  if (place.imageUrl && !quebrada) {
+    return (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img
+        src={place.imageUrl}
+        alt={place.title ?? 'Local de votação'}
+        onError={() => setQuebrada(true)}
+        className="h-24 w-full rounded-control border border-line object-cover"
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-24 w-full items-center justify-center rounded-control border border-line bg-ink-50 text-ink-400"
+    >
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M4 20h16M5 20V10M19 20V10M12 3l9 7H3zM9 20v-6h6v6" />
+      </svg>
+    </span>
   );
 }
 
@@ -232,27 +339,14 @@ function PlaceMarker({
   place: PollingPlacePin;
   onOpen: (place: PollingPlacePin) => void;
 }) {
+  // A fachada da escola no lugar do desenho; sem foto, fica o predio.
+  const icon = useMemo(() => markerIcon('POLLING_PLACE', place.imageUrl), [place.imageUrl]);
+
   return (
-    <Marker position={[place.latitude, place.longitude]} icon={markerIcon('POLLING_PLACE')}>
+    <Marker position={[place.latitude, place.longitude]} icon={icon}>
       <Popup>
-        <div className="w-56 space-y-1.5">
-          {place.imageUrl ? (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={place.imageUrl}
-              alt={place.title ?? 'Local de votação'}
-              className="h-24 w-full rounded-control border border-line object-cover"
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex h-24 w-full items-center justify-center rounded-control border border-line bg-ink-50 text-ink-400"
-            >
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6">
-                <path d="M4 20h16M5 20V10M19 20V10M12 3l9 7H3zM9 20v-6h6v6" />
-              </svg>
-            </span>
-          )}
+        <div className="map-popup w-56 space-y-1.5">
+          <PlaceImage place={place} />
 
           <p className="text-sm font-semibold text-ink-900">
             {place.title ?? 'Local de votação'}
