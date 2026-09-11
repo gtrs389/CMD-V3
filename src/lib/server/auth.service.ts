@@ -13,6 +13,7 @@ import {
 import { TABLES, type SessionRow, type UserRow } from '@/lib/supabase/tables';
 import { callFunction, deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
+import { ADMIN_DEVICE_COOKIE, checkAdminDevice } from './admin-device';
 
 /**
  * Autenticacao propria do CMD.
@@ -139,6 +140,14 @@ export async function login(email: string, password: string): Promise<LoginOutco
   return { user: toSessionUser(row), token, message: null, throttled: false };
 }
 
+/**
+ * Sessao do Administrador do time: alem de valida, ela precisa continuar
+ * vindo do aparelho autorizado.
+ */
+function isTeamAdmin(user: SessionColumns): boolean {
+  return user.role === 'CANDIDATE' && user.team_person_id !== null;
+}
+
 interface SessionJoinRow extends SessionRow {
   user:
     | (SessionColumns &
@@ -149,13 +158,24 @@ interface SessionJoinRow extends SessionRow {
     | null;
 }
 
-/** Resolve o token bruto do cookie para o usuario da sessao. */
-export async function resolveSession(token: string | undefined): Promise<SessionUser | null> {
+/**
+ * Resolve o token bruto do cookie para o usuario da sessao.
+ *
+ * No Administrador do time a conferencia nao para na sessao: o aparelho
+ * precisa continuar ativo, a credencial do cookie precisa bater com o hash
+ * guardado e o aparelho precisa ser do MESMO usuario. Qualquer divergencia
+ * revoga a sessao ali mesmo e devolve `null`, o que nega paginas e APIs e
+ * leva de volta a tela de acesso.
+ */
+export async function resolveSession(
+  token: string | undefined,
+  deviceToken?: string | undefined,
+): Promise<SessionUser | null> {
   if (!token) return null;
 
   const row = await selectOne<SessionJoinRow>(TABLES.sessions, {
     select:
-      `id,expires_at,revoked_at,` +
+      `id,expires_at,revoked_at,admin_device_id,` +
       `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
       `team_person:${TABLES.teamPeople}(photo_path))`,
     filters: { token_hash: `eq.${hashToken(token)}` },
@@ -164,6 +184,14 @@ export async function resolveSession(token: string | undefined): Promise<Session
   if (!row || !row.user || !row.user.is_active) return null;
   if (row.revoked_at !== null) return null;
   if (new Date(row.expires_at).getTime() <= Date.now()) return null;
+
+  if (isTeamAdmin(row.user)) {
+    const autorizado = await checkAdminDevice(row.user.id, row.admin_device_id, deviceToken);
+    if (!autorizado) {
+      await revokeSession(token);
+      return null;
+    }
+  }
 
   // Somente o Administrador do time tem foto propria: nos demais perfis
   // nenhuma assinatura e pedida ao Storage.
@@ -189,10 +217,13 @@ export async function purgeExpiredSessions(): Promise<void> {
   );
 }
 
-/** Le a sessao atual a partir do cookie da requisicao. */
+/** Le a sessao atual a partir dos cookies da requisicao. */
 export async function currentUser(): Promise<SessionUser | null> {
   const store = await cookies();
-  return resolveSession(store.get(SESSION_COOKIE)?.value);
+  return resolveSession(
+    store.get(SESSION_COOKIE)?.value,
+    store.get(ADMIN_DEVICE_COOKIE)?.value,
+  );
 }
 
 export interface ChangePasswordOutcome {

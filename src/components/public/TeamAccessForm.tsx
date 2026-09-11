@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SessionUser } from '@/lib/types';
 import { homePathFor } from '@/lib/auth/constants';
+import { collectDeviceSignals } from '@/lib/utils/device';
 import { maskPhone } from '@/lib/utils/phone';
 import { useHydrated } from '@/hooks/use-hydrated';
 import styles from '@/components/auth/login.module.css';
@@ -48,7 +49,10 @@ export function TeamAccessForm({ token }: { token: string }) {
       const response = await fetch(`/api/acesso-time/${encodeURIComponent(token)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        // Os sinais do aparelho vao junto apenas como auditoria do vinculo:
+        // quem autoriza e a credencial secreta que o servidor guarda no
+        // cookie. O navegador nao decide se o aparelho e confiavel.
+        body: JSON.stringify({ phone, device: collectDeviceSignals() }),
       });
 
       const data = (await response.json().catch(() => null)) as

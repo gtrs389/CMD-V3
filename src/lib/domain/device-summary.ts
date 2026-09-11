@@ -43,7 +43,9 @@ export function statusLabel(status: DeviceStatus): string {
  * Combina o sinal de mobile, os pontos de toque e o User-Agent. Nenhum deles
  * e obrigatorio: sem informacao suficiente, devolve o texto neutro.
  */
-export function deviceType(device: MemberDevice): string {
+export function deviceType(
+  device: Pick<MemberDevice, 'userAgent' | 'isMobile' | 'maxTouchPoints'>,
+): string {
   const ua = device.userAgent ?? '';
 
   if (/\bTablet\b|\biPad\b/i.test(ua)) return 'Tablet';
@@ -70,6 +72,20 @@ export function browserName(userAgent: string | null): string {
   if (/\bSafari\//.test(userAgent)) return 'Safari';
 
   return EMPTY;
+}
+
+/** Sistema operacional, deduzido do User-Agent. Ordem importa: Android diz Linux. */
+export function osName(userAgent: string | null): string | null {
+  if (!userAgent) return null;
+
+  if (/\bAndroid\b/.test(userAgent)) return 'Android';
+  if (/\biPhone\b|\biPad\b|\biPod\b/.test(userAgent)) return 'iOS';
+  if (/\bWindows\b/.test(userAgent)) return 'Windows';
+  if (/\bMac OS X\b|\bMacintosh\b/.test(userAgent)) return 'macOS';
+  if (/\bCrOS\b/.test(userAgent)) return 'ChromeOS';
+  if (/\bLinux\b|\bX11\b/.test(userAgent)) return 'Linux';
+
+  return null;
 }
 
 export function screenLabel(device: MemberDevice): string {

@@ -9,11 +9,13 @@ import {
   SearchX,
   ShieldCheck,
   ShieldOff,
+  Smartphone,
   Users,
   X,
 } from 'lucide-react';
 import type {
   AccessStatus,
+  AdminDeviceInfo,
   CandidateWithoutAdmins,
   GeneratedCredential,
   MemberWithoutAccess,
@@ -63,6 +65,8 @@ interface Row {
   contact: string;
   /** Administrador do time: entra por link + telefone, nunca por senha. */
   teamAdmin: boolean;
+  /** Aparelho autorizado. Nulo enquanto nenhum navegador foi vinculado. */
+  device: AdminDeviceInfo | null;
   role: Role;
   status: AccessStatus;
   candidate: { id: string; name: string; photo: string | null } | null;
@@ -97,9 +101,10 @@ export function SettingsView() {
   const [term, setTerm] = useState('');
   const [working, setWorking] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<GrantOutcome | null>(null);
-  const [confirming, setConfirming] = useState<{ row: Row; action: 'disable' | 'revoke' } | null>(
-    null,
-  );
+  const [confirming, setConfirming] = useState<{
+    row: Row;
+    action: 'disable' | 'revoke' | 'device';
+  } | null>(null);
 
   const rows = useMemo<Row[]>(() => {
     const users = (data?.users ?? []).map((item) => ({
@@ -112,6 +117,7 @@ export function SettingsView() {
       // com que entra, junto do link do time.
       contact: item.teamPersonId ? formatPhone(item.phone ?? '') : (item.email ?? '--'),
       teamAdmin: Boolean(item.teamPersonId),
+      device: item.device,
       role: item.role,
       status: item.status,
       candidate: item.candidate,
@@ -130,6 +136,7 @@ export function SettingsView() {
       name: item.name,
       contact: 'Nenhum administrador cadastrado',
       teamAdmin: true,
+      device: null,
       role: 'CANDIDATE' as Role,
       status: 'PENDING' as AccessStatus,
       candidate: { id: item.clientId, name: item.name, photo: item.photo },
@@ -149,6 +156,7 @@ export function SettingsView() {
       name: item.name,
       contact: item.email ?? '--',
       teamAdmin: false,
+      device: null,
       role: 'EQUIPE' as Role,
       status: (item.email ? 'PENDING' : 'NO_EMAIL') as AccessStatus,
       candidate: { id: item.clientId, name: item.candidateName, photo: null },
@@ -225,6 +233,20 @@ export function SettingsView() {
     void run(row.key, async () => {
       await api(`/api/usuarios/${row.userId}`, { method: 'PATCH', body: { isActive } });
       toast.success(isActive ? 'Acesso ativado.' : 'Acesso desativado.');
+    });
+  }
+
+  /**
+   * Libera um novo aparelho.
+   *
+   * O aparelho atual e revogado e as sessoes daquele usuario caem. Telefone,
+   * nome, foto, time e link nao mudam: o proximo acesso correto vincula o
+   * navegador novo. Exclusivo do ADMIN geral — a rota confere de novo.
+   */
+  function liberarAparelho(row: Row) {
+    void run(row.key, async () => {
+      await api(`/api/usuarios/${row.userId}/aparelho`, { method: 'DELETE' });
+      toast.success('Aparelho liberado. O próximo acesso vinculará um novo.');
     });
   }
 
@@ -378,6 +400,9 @@ export function SettingsView() {
                       {RECRUITED_BY_LABEL}: {recruiterText(row.recruitedBy)}
                     </p>
                   ) : null}
+
+                  {/* Aparelho autorizado: so o Administrador do time tem. */}
+                  {row.teamAdmin && row.userId ? <DeviceLine device={row.device} /> : null}
                 </div>
 
                 {/* No celular o estado desce para a segunda linha, para o
@@ -434,6 +459,17 @@ export function SettingsView() {
                           ? alterarAtivo(row, true)
                           : setConfirming({ row, action: 'disable' }),
                     },
+                    ...(row.teamAdmin && row.userId
+                      ? [
+                          {
+                            id: 'aparelho',
+                            label: 'Liberar novo aparelho',
+                            icon: <Smartphone className="size-4" />,
+                            disabled: working !== null,
+                            onSelect: () => setConfirming({ row, action: 'device' }),
+                          },
+                        ]
+                      : []),
                     {
                       id: 'sessoes',
                       label: 'Revogar sessões',
@@ -466,21 +502,71 @@ export function SettingsView() {
 
       <ConfirmDialog
         open={confirming !== null}
-        title={confirming?.action === 'disable' ? 'Desativar acesso' : 'Revogar sessões'}
+        title={
+          confirming?.action === 'disable'
+            ? 'Desativar acesso'
+            : confirming?.action === 'device'
+              ? 'Liberar novo aparelho'
+              : 'Revogar sessões'
+        }
         description={
           confirming?.action === 'disable'
             ? `${confirming?.row.name ?? ''} não conseguirá entrar até que o acesso seja ativado novamente.`
-            : `${confirming?.row.name ?? ''} precisará entrar de novo em todos os aparelhos.`
+            : confirming?.action === 'device'
+              ? 'O aparelho atual será removido e todas as sessões deste usuário serão encerradas. No próximo acesso, um novo aparelho será vinculado. Deseja continuar?'
+              : `${confirming?.row.name ?? ''} precisará entrar de novo em todos os aparelhos.`
         }
-        confirmLabel={confirming?.action === 'disable' ? 'Desativar' : 'Revogar'}
+        confirmLabel={
+          confirming?.action === 'disable'
+            ? 'Desativar'
+            : confirming?.action === 'device'
+              ? 'Liberar novo aparelho'
+              : 'Revogar'
+        }
         onCancel={() => setConfirming(null)}
         onConfirm={() => {
           if (!confirming) return;
           if (confirming.action === 'disable') alterarAtivo(confirming.row, false);
+          else if (confirming.action === 'device') liberarAparelho(confirming.row);
           else revogar(confirming.row);
           setConfirming(null);
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Estado do aparelho autorizado de um Administrador do time.
+ *
+ * Apenas auditoria: tipo, navegador, sistema e as datas. Nenhum
+ * identificador tecnico, credencial ou valor derivado de IP chega aqui.
+ */
+function DeviceLine({ device }: { device: AdminDeviceInfo | null }) {
+  if (!device) {
+    return (
+      <p className="mt-1 flex items-center gap-1.5 text-xs text-warning-600">
+        <Smartphone aria-hidden="true" className="size-3.5 shrink-0" />
+        Aparelho não vinculado
+      </p>
+    );
+  }
+
+  const identificacao = [device.deviceType, device.browser, device.os ?? device.platform]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div className="mt-1">
+      <p className="flex items-center gap-1.5 text-xs text-success-600">
+        <Smartphone aria-hidden="true" className="size-3.5 shrink-0" />
+        Aparelho vinculado
+        {identificacao ? <span className="truncate text-ink-500">{identificacao}</span> : null}
+      </p>
+      <p className="mt-0.5 text-[0.6875rem] text-ink-400">
+        Primeiro acesso: {formatDateTime(device.firstSeenAt)} · Último acesso:{' '}
+        {formatDateTime(device.lastSeenAt)}
+      </p>
     </div>
   );
 }

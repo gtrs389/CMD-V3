@@ -37,6 +37,21 @@ export interface CandidateWithoutAdmins {
   photo: string | null;
 }
 
+/**
+ * Aparelho autorizado de um Administrador do time, como o ADMIN geral o ve.
+ *
+ * Somente auditoria: nenhum identificador tecnico, hash de credencial ou
+ * valor derivado de IP chega ao navegador.
+ */
+export interface AdminDeviceInfo {
+  deviceType: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+  firstSeenAt: IsoDate;
+  lastSeenAt: IsoDate;
+}
+
 /** Responsavel pelo cadastro, preservado mesmo se o usuario for excluido. */
 export interface Recruiter {
   /** Nulo quando o usuario responsavel deixou de existir. */
@@ -64,6 +79,11 @@ export interface SystemUser {
   memberId: string | null;
   /** Administrador do time correspondente. */
   teamPersonId: string | null;
+  /**
+   * Aparelho autorizado. Nulo enquanto nenhum navegador foi vinculado, e
+   * sempre nulo nos perfis que nao usam essa regra.
+   */
+  device: AdminDeviceInfo | null;
   /** Quem cadastrou este usuario. Preenchido somente no perfil EQUIPE. */
   recruitedBy: Recruiter | null;
   lastLoginAt: IsoDate | null;
