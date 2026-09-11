@@ -163,12 +163,12 @@ export function canReachMember(
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Administrador',
   EQUIPE: 'Equipe',
-  CANDIDATE: 'Time',
+  CANDIDATE: 'Administrador do time',
 };
 
 /** Rotulo curto usado ao lado do nome em "Cadastrado por". */
 export const ROLE_SHORT_LABELS: Record<Role, string> = {
   ADMIN: 'Administração',
   EQUIPE: 'Equipe',
-  CANDIDATE: 'Time',
+  CANDIDATE: 'Administração do time',
 };

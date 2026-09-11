@@ -101,7 +101,9 @@ export function TeamDetailView() {
               </span>
             </div>
 
-            <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{profile.email}</p>
+            {profile.email ? (
+              <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{profile.email}</p>
+            ) : null}
             <p className="mt-0.5 text-xs text-ink-400">
               Equipe de {profile.candidateName} desde {formatLongDate(profile.joinedAt)}
             </p>

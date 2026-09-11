@@ -10,7 +10,6 @@ import type {
 } from '@/lib/types';
 import { appConfig } from '@/config/app.config';
 import { createSystemFields } from '@/lib/domain/form-config';
-import { normalizeEmail } from '@/lib/utils/email';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
@@ -42,8 +41,15 @@ import {
   rotatePersonalInvite,
   type InviteOwner,
 } from './invite.service';
-import { assertEmailAvailable, disableCandidateAccess, syncCandidateLogin } from './user.service';
-import { notFound } from './http';
+import {
+  assertTeamPhoneAvailable,
+  createTeamPersonUser,
+  disableCandidateAccess,
+  revokeTeamPersonUser,
+  syncTeamPersonUser,
+} from './user.service';
+import { ensureTeamAccessLink } from './team-access.service';
+import { badRequest, notFound } from './http';
 
 /**
  * Regras de cliente no servidor.
@@ -346,7 +352,25 @@ function normalizeTeamPersonName(name: string): string {
 }
 
 /**
- * Insere as pessoas do time de um cliente recem-criado, na ordem recebida.
+ * Recusa dois administradores com o mesmo telefone dentro do mesmo time.
+ *
+ * A conferencia roda ANTES de gravar qualquer coisa: o banco tambem tem o
+ * indice unico, mas aqui a mensagem chega pronta para a tela.
+ */
+function assertPhonesUnique(people: TeamPersonInput[]): void {
+  const vistos = new Set<string>();
+  for (const person of people) {
+    const phone = normalizePhone(person.phone);
+    if (vistos.has(phone)) {
+      throw badRequest('Telefone repetido entre os administradores deste time.');
+    }
+    vistos.add(phone);
+  }
+}
+
+/**
+ * Insere as pessoas do time de um cliente recem-criado, na ordem recebida, e
+ * cria a identidade de acesso de cada uma (link do time + telefone).
  *
  * Falha no meio da lista desfaz as fotos ja enviadas nesta chamada: nenhum
  * arquivo fica orfao no bucket, mesmo que a pessoa correspondente nao tenha
@@ -354,6 +378,8 @@ function normalizeTeamPersonName(name: string): string {
  */
 async function insertTeamPeople(clientId: string, people: TeamPersonInput[]): Promise<void> {
   if (people.length === 0) return;
+
+  assertPhonesUnique(people);
 
   const uploadedPaths: string[] = [];
   const rows: Record<string, string | number | null>[] = [];
@@ -377,7 +403,15 @@ async function insertTeamPeople(clientId: string, people: TeamPersonInput[]): Pr
       });
     }
 
-    await insertRows<TeamPersonRow>(TABLES.teamPeople, rows, 'id');
+    const inserted = await insertRows<TeamPersonRow>(TABLES.teamPeople, rows, 'id,name,phone');
+    for (const person of inserted) {
+      await createTeamPersonUser({
+        clientId,
+        personId: person.id,
+        name: person.name,
+        phone: person.phone,
+      });
+    }
   } catch (error) {
     for (const path of uploadedPaths) await deleteImage(path).catch(() => undefined);
     throw error;
@@ -394,6 +428,8 @@ async function insertTeamPeople(clientId: string, people: TeamPersonInput[]): Pr
  * meio do processo nao deixa nenhuma foto recem-enviada orfa.
  */
 async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Promise<void> {
+  assertPhonesUnique(people);
+
   const existing = await selectRows<TeamPersonRow>(TABLES.teamPeople, {
     select: '*',
     filters: { client_id: `eq.${clientId}` },
@@ -401,6 +437,12 @@ async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Prom
   const byId = new Map(existing.map((row) => [row.id, row]));
   const keptIds = new Set<string>();
   const uploadedPaths: string[] = [];
+
+  // Telefone em uso por outro administrador do mesmo time para a edicao
+  // antes de qualquer gravacao.
+  for (const person of people) {
+    await assertTeamPhoneAvailable(clientId, person.phone, person.id);
+  }
 
   try {
     for (const [index, person] of people.entries()) {
@@ -432,6 +474,14 @@ async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Prom
       if (current) {
         keptIds.add(current.id);
         await updateRows<TeamPersonRow>(TABLES.teamPeople, { id: `eq.${current.id}` }, values, 'id');
+        // Identidade de acesso acompanha o cadastro: trocar o telefone
+        // derruba na hora as sessoes daquela pessoa.
+        await syncTeamPersonUser({
+          clientId,
+          personId: current.id,
+          name: String(values.name),
+          phone: String(values.phone),
+        });
         // So remove a foto antiga depois que a troca foi salva com sucesso.
         if ((person.photo === null || photo) && current.photo_path) {
           await deleteImage(current.photo_path);
@@ -442,7 +492,15 @@ async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Prom
           [{ client_id: clientId, ...values }],
           'id',
         );
-        if (inserted) keptIds.add(inserted.id);
+        if (inserted) {
+          keptIds.add(inserted.id);
+          await createTeamPersonUser({
+            clientId,
+            personId: inserted.id,
+            name: String(values.name),
+            phone: String(values.phone),
+          });
+        }
       }
     }
   } catch (error) {
@@ -450,24 +508,30 @@ async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Prom
     throw error;
   }
 
-  // Pessoas removidas: fora da lista enviada por quem salvou. Remover uma
-  // pessoa nunca alcanca o time nem os integrantes recrutados.
+  // Pessoas removidas: fora da lista enviada por quem salvou. As sessoes
+  // caem antes da exclusao e o usuario sai junto, pela cascata do banco;
+  // os snapshots de quem ela cadastrou permanecem. Remover uma pessoa nunca
+  // alcanca o time nem os integrantes recrutados.
   const removable = existing.filter((row) => !keptIds.has(row.id));
-  for (const row of removable) await deleteImage(row.photo_path);
+  for (const row of removable) {
+    await revokeTeamPersonUser(row.id);
+    await deleteImage(row.photo_path);
+  }
   if (removable.length > 0) {
     await deleteRows(TABLES.teamPeople, { id: inFilter(removable.map((row) => row.id)) });
   }
 }
 
 export async function createClient(input: ClientInput): Promise<Client> {
-  // O login do time usa o mesmo e-mail: conflito barra antes de gravar.
-  await assertEmailAvailable(null, input.email);
+  // Time sem administrador nao teria como ser acessado por ninguem.
+  if (!input.people?.length) {
+    throw badRequest('Cadastre pelo menos um administrador do time.');
+  }
 
   const photo = input.photo && isDataUrl(input.photo) ? await uploadImage('clients', input.photo) : null;
 
   const row = await insertOne<ClientRow>(TABLES.clients, {
     name: input.name.trim(),
-    email: normalizeEmail(input.email),
     notes: input.notes?.trim() ?? '',
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
@@ -480,27 +544,22 @@ export async function createClient(input: ClientInput): Promise<Client> {
 
   await insertDefaultFields(row.id);
 
-  if (input.people?.length) await insertTeamPeople(row.id, input.people);
+  // Cada administrador vira um usuario proprio, com o proprio link pessoal
+  // de recrutamento.
+  await insertTeamPeople(row.id, input.people);
 
-  // O link pessoal nasce junto com o acesso do time, em
-  // `createCandidateAccess`: e o usuario que da nome ao link.
+  // O link de acesso dos administradores nasce junto com o time.
+  await ensureTeamAccessLink(row.id);
+
   return assemble(row);
 }
 
 export async function updateClient(id: string, input: Partial<ClientInput>): Promise<Client> {
   const current = await requireClientRow(id);
 
-  // Troca de e-mail sincroniza o login e derruba as sessoes antigas. O
-  // conflito e conferido antes de qualquer gravacao.
-  if (input.email !== undefined || input.name !== undefined) {
-    if (input.email !== undefined) await assertEmailAvailable(id, input.email);
-    await syncCandidateLogin(id, { name: input.name, email: input.email });
-  }
-
   const patch: Record<string, string | number | null> = {};
 
   if (input.name !== undefined) patch.name = input.name.trim();
-  if (input.email !== undefined) patch.email = normalizeEmail(input.email);
   if (input.notes !== undefined) patch.notes = input.notes.trim();
 
   if (input.photo !== undefined) {
@@ -681,13 +740,14 @@ export async function regenerateInvite(id: string): Promise<Client> {
     return assemble(row);
   }
 
-  // Time ainda sem usuario: o link so existe depois que o acesso e
-  // criado em Configuracoes.
+  // Time ainda sem administrador: o link so existe depois que a primeira
+  // pessoa e cadastrada em "Administradores do time".
   const user = await selectOne<Pick<UserRow, 'id'>>(TABLES.users, {
     select: 'id',
     filters: { client_id: `eq.${id}`, role: 'eq.CANDIDATE' },
+    order: 'created_at.asc',
   });
-  if (!user) throw notFound('Gere o acesso do time antes de criar o link.');
+  if (!user) throw notFound('Cadastre um administrador do time antes de criar o link.');
 
   await ensurePersonalInvite(user.id, id);
   await rotatePersonalInvite(user.id);

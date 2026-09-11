@@ -60,7 +60,6 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
             <h3 className="truncate text-[0.9375rem] leading-tight font-semibold text-ink-900">
               {client.name}
             </h3>
-            <p className="mt-0.5 truncate text-xs text-ink-500">{client.email}</p>
           </div>
 
           <span
@@ -175,7 +174,11 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
             </ul>
             <span className="text-[0.6875rem] text-ink-500">
               {formatNumber(client.teamPeopleCount)}{' '}
-              {pluralize(client.teamPeopleCount, 'pessoa do time', 'pessoas do time')}
+              {pluralize(
+                client.teamPeopleCount,
+                'administrador do time',
+                'administradores do time',
+              )}
             </span>
           </div>
         ) : null}

@@ -11,6 +11,16 @@ export function invitePath(token: string): string {
 }
 
 /**
+ * Caminho do link de acesso dos administradores do time.
+ *
+ * Tambem carrega apenas um identificador opaco: nome, telefone e qualquer
+ * dado do time ficam no servidor. Este link nao e o de recrutamento.
+ */
+export function teamAccessPath(token: string): string {
+  return `/acesso/time/${token}`;
+}
+
+/**
  * Reconstroi a query de uma rota antiga ao encaminhar para a nova.
  *
  * Preserva chaves repetidas e devolve string vazia quando nao ha parametro,

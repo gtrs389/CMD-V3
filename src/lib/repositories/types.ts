@@ -3,9 +3,9 @@ import type {
   ClientFormConfig,
   ClientInput,
   ClientSummary,
-  GeneratedCredential,
   Member,
   MemberInput,
+  TeamAccessLink,
 } from '@/lib/types';
 
 /**
@@ -20,14 +20,13 @@ import type {
 /**
  * Resultado do cadastro de um time.
  *
- * A credencial existe apenas nesta resposta: e mostrada uma unica vez ao
- * ADMIN e descartada quando o modal fecha.
+ * O link de acesso dos administradores nasce junto com o time e volta aqui
+ * para o ADMIN geral copiar e enviar. Nao ha senha: quem entra no painel do
+ * time usa este link mais o proprio telefone.
  */
 export interface ClientCreation {
   client: Client;
-  access: GeneratedCredential | null;
-  /** Preenchido quando o acesso nao pode ser criado (e-mail em uso). */
-  accessMessage: string | null;
+  accessLink: TeamAccessLink | null;
 }
 
 export interface ClientRepository {

@@ -1,7 +1,7 @@
 import 'server-only';
 import type {
   AccessStatus,
-  CandidateWithoutAccess,
+  CandidateWithoutAdmins,
   GeneratedCredential,
   MemberWithoutAccess,
   Recruiter,
@@ -12,7 +12,14 @@ import { hashPassword } from '@/lib/auth/password';
 import { generateTempPassword } from '@/lib/auth/temp-password';
 import { createInviteToken } from '@/lib/auth/tokens';
 import { isValidEmail, normalizeEmail } from '@/lib/utils/email';
-import { TABLES, type ClientRow, type MemberRow, type UserRow } from '@/lib/supabase/tables';
+import { normalizePhone } from '@/lib/utils/phone';
+import {
+  TABLES,
+  type ClientRow,
+  type MemberRow,
+  type TeamPersonRow,
+  type UserRow,
+} from '@/lib/supabase/tables';
 import {
   callFunction,
   inFilter,
@@ -26,11 +33,17 @@ import { ensurePersonalInvite } from './invite.service';
 import { ApiError, badRequest, notFound } from './http';
 
 /**
- * Usuarios do sistema: ADMINs, times e integrantes da equipe.
+ * Usuarios do sistema: ADMINs, administradores de time e integrantes da
+ * equipe.
  *
  * Todo integrante cadastrado por um link passa a ter acesso proprio ao CMD,
  * com um link pessoal de recrutamento. Integrantes anteriores ao campo de
  * e-mail continuam sem acesso ate que o endereco seja informado.
+ *
+ * O Administrador do time (perfil CANDIDATE) nao usa e-mail nem senha: ele
+ * entra pelo par LINK DO TIME + TELEFONE (ver `team-access.service.ts`). Cada
+ * pessoa cadastrada em "Administradores do time" tem o proprio usuario, a
+ * propria sessao e o proprio link de recrutamento.
  *
  * Senha em texto puro nunca e gravada nem registrada. A geracao devolve o
  * valor uma unica vez, na resposta da acao; no banco fica apenas o hash
@@ -38,16 +51,19 @@ import { ApiError, badRequest, notFound } from './http';
  */
 
 const USER_COLUMNS =
-  'id,name,email,role,client_id,member_id,is_active,must_change_password,password_hash,last_login_at,created_at';
+  'id,name,email,phone,role,client_id,member_id,team_person_id,is_active,' +
+  'must_change_password,password_hash,last_login_at,created_at';
 
 type UserColumns = Pick<
   UserRow,
   | 'id'
   | 'name'
   | 'email'
+  | 'phone'
   | 'role'
   | 'client_id'
   | 'member_id'
+  | 'team_person_id'
   | 'is_active'
   | 'must_change_password'
   | 'password_hash'
@@ -65,9 +81,20 @@ export function emailConflict(): ApiError {
   return new ApiError(409, EMAIL_IN_USE);
 }
 
-/** Sem senha utilizavel o acesso esta pendente; desativado vem antes de ativo. */
-export function accessStatus(row: Pick<UserColumns, 'is_active' | 'password_hash'>): AccessStatus {
+/** Telefone ja usado por outro administrador do mesmo time. */
+export const PHONE_IN_USE = 'Telefone já utilizado por outro administrador deste time.';
+
+/**
+ * Sem senha utilizavel o acesso esta pendente; desativado vem antes de ativo.
+ *
+ * O Administrador do time nunca tem senha: para ele o acesso esta ativo
+ * enquanto o usuario estiver ativo, porque quem autentica e o link + telefone.
+ */
+export function accessStatus(
+  row: Pick<UserColumns, 'is_active' | 'password_hash'> & { team_person_id?: string | null },
+): AccessStatus {
   if (!row.is_active) return 'DISABLED';
+  if (row.team_person_id) return 'ACTIVE';
   return row.password_hash ? 'ACTIVE' : 'PENDING';
 }
 
@@ -75,13 +102,6 @@ async function findUserByEmail(email: string): Promise<UserColumns | null> {
   return selectOne<UserColumns>(TABLES.users, {
     select: USER_COLUMNS,
     filters: { email: `eq.${normalizeEmail(email)}` },
-  });
-}
-
-async function findUserByClient(clientId: string): Promise<UserColumns | null> {
-  return selectOne<UserColumns>(TABLES.users, {
-    select: USER_COLUMNS,
-    filters: { client_id: `eq.${clientId}`, role: 'eq.CANDIDATE' },
   });
 }
 
@@ -126,8 +146,11 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
 
   const clientIds = [...new Set(rows.map((row) => row.client_id).filter((id): id is string => Boolean(id)))];
   const memberIds = rows.map((row) => row.member_id).filter((id): id is string => Boolean(id));
+  const personIds = rows
+    .map((row) => row.team_person_id)
+    .filter((id): id is string => Boolean(id));
 
-  const [clients, members] = await Promise.all([
+  const [clients, members, people] = await Promise.all([
     clientIds.length
       ? selectRows<Pick<ClientRow, 'id' | 'name' | 'photo_path'>>(TABLES.clients, {
           select: 'id,name,photo_path',
@@ -145,9 +168,18 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
           filters: { id: inFilter(memberIds) },
         })
       : Promise.resolve([]),
+    personIds.length
+      ? selectRows<Pick<TeamPersonRow, 'id' | 'photo_path'>>(TABLES.teamPeople, {
+          select: 'id,photo_path',
+          filters: { id: inFilter(personIds) },
+        })
+      : Promise.resolve([]),
   ]);
 
-  const photos = await signedUrls(clients.map((client) => client.photo_path));
+  const [photos, personPhotos] = await Promise.all([
+    signedUrls(clients.map((client) => client.photo_path)),
+    signedUrls(people.map((person) => person.photo_path)),
+  ]);
   const byId = new Map(
     clients.map((client, index) => [
       client.id,
@@ -155,6 +187,9 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
     ]),
   );
   const memberById = new Map(members.map((member) => [member.id, member]));
+  const personPhotoById = new Map(
+    people.map((person, index) => [person.id, personPhotos[index] ?? null]),
+  );
 
   return rows.map((row) => {
     const member = row.member_id ? memberById.get(row.member_id) : undefined;
@@ -162,10 +197,13 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
       id: row.id,
       name: row.name,
       email: row.email,
+      phone: row.phone,
+      photo: row.team_person_id ? (personPhotoById.get(row.team_person_id) ?? null) : null,
       role: row.role as Role,
       status: accessStatus(row),
       candidate: row.client_id ? (byId.get(row.client_id) ?? null) : null,
       memberId: row.member_id,
+      teamPersonId: row.team_person_id,
       recruitedBy: member ? recruiterOf(member) : null,
       lastLoginAt: row.last_login_at,
       mustChangePassword: row.must_change_password,
@@ -176,31 +214,31 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
 }
 
 /**
- * Times que ainda nao possuem usuario.
+ * Times que ainda nao possuem nenhum administrador.
  *
- * Acontece quando o e-mail estava em uso por outra conta no momento do
- * cadastro. Eles aparecem em Configuracoes como acesso pendente.
+ * Sem administrador nao existe acesso ao time: quem entra no painel do time
+ * e sempre uma pessoa cadastrada em "Administradores do time". Eles aparecem
+ * em Configuracoes apenas como aviso, sem senha a gerar.
  */
-export async function listCandidatesWithoutAccess(): Promise<CandidateWithoutAccess[]> {
-  const clients = await selectRows<Pick<ClientRow, 'id' | 'name' | 'email' | 'photo_path'>>(
-    TABLES.clients,
-    { select: 'id,name,email,photo_path', order: 'created_at.asc' },
-  );
+export async function listTeamsWithoutAdmins(): Promise<CandidateWithoutAdmins[]> {
+  const clients = await selectRows<Pick<ClientRow, 'id' | 'name' | 'photo_path'>>(TABLES.clients, {
+    select: 'id,name,photo_path',
+    order: 'created_at.asc',
+  });
   if (clients.length === 0) return [];
 
-  const users = await selectRows<Pick<UserColumns, 'client_id'>>(TABLES.users, {
+  const people = await selectRows<Pick<TeamPersonRow, 'client_id'>>(TABLES.teamPeople, {
     select: 'client_id',
-    filters: { client_id: inFilter(clients.map((client) => client.id)), role: 'eq.CANDIDATE' },
+    filters: { client_id: inFilter(clients.map((client) => client.id)) },
   });
-  const vinculados = new Set(users.map((user) => user.client_id));
+  const comAdministrador = new Set(people.map((person) => person.client_id));
 
-  const pendentes = clients.filter((client) => !vinculados.has(client.id));
+  const pendentes = clients.filter((client) => !comAdministrador.has(client.id));
   const photos = await signedUrls(pendentes.map((client) => client.photo_path));
 
   return pendentes.map((client, index) => ({
     clientId: client.id,
     name: client.name,
-    email: client.email,
     photo: photos[index] ?? null,
   }));
 }
@@ -263,63 +301,118 @@ export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]>
    Geracao de acesso
    ------------------------------------------------------------------------- */
 
-interface CandidateSeed {
-  id: string;
-  name: string;
-  email: string;
+/* -------------------------------------------------------------------------
+   Identidade de acesso do Administrador do time
+   ------------------------------------------------------------------------- */
+
+/** Usuario de um administrador do time, quando ja existe. */
+async function findUserByTeamPerson(personId: string): Promise<UserColumns | null> {
+  return selectOne<UserColumns>(TABLES.users, {
+    select: USER_COLUMNS,
+    filters: { team_person_id: `eq.${personId}` },
+  });
 }
 
 /**
- * Cria ou renova a senha temporaria de um time, junto do link pessoal.
+ * Confere o telefone antes de gravar.
  *
- * Devolve `null` quando o e-mail ja pertence a outro usuario: nesse caso
- * nada e sobrescrito e quem chamou mostra a mensagem padrao.
+ * O mesmo telefone nunca se repete dentro do mesmo time; em times diferentes
+ * pode, porque o link identifica primeiro qual time esta sendo acessado.
  */
-async function grantForCandidate(client: CandidateSeed): Promise<GeneratedCredential | null> {
-  const existing = await findUserByClient(client.id);
-  const password = generateTempPassword();
-  const passwordHash = await hashPassword(password);
+export async function assertTeamPhoneAvailable(
+  clientId: string,
+  phone: string,
+  personId?: string,
+): Promise<void> {
+  const normalized = normalizePhone(phone);
+  if (normalized.length < 10) throw badRequest('Telefone inválido. Use DDD + número.');
 
-  if (existing) {
-    await callFunction<number>('cmd_set_temp_password', {
-      p_user_id: existing.id,
-      p_password_hash: passwordHash,
-    });
-    // Reativa o acesso: gerar senha e sempre um convite para entrar.
-    await updateRows<UserRow>(TABLES.users, { id: `eq.${existing.id}` }, { is_active: true }, 'id');
-    await ensurePersonalInvite(existing.id, client.id);
-    return { userId: existing.id, name: existing.name, email: existing.email, password };
+  const conflict = await selectOne<Pick<UserColumns, 'id' | 'team_person_id'>>(TABLES.users, {
+    select: 'id,team_person_id',
+    filters: { client_id: `eq.${clientId}`, phone: `eq.${normalized}` },
+  });
+  if (conflict && conflict.team_person_id !== (personId ?? null)) {
+    throw new ApiError(409, PHONE_IN_USE);
   }
-
-  const email = normalizeEmail(client.email);
-  const conflict = await findUserByEmail(email);
-  if (conflict) return null;
-
-  const row = await insertOne<Pick<UserRow, 'id' | 'name' | 'email'>>(
-    TABLES.users,
-    {
-      name: client.name,
-      email,
-      role: 'CANDIDATE',
-      client_id: client.id,
-      password_hash: passwordHash,
-      must_change_password: true,
-      is_active: true,
-    },
-    'id,name,email',
-  );
-
-  // O link pessoal do time nasce junto com o acesso dele.
-  await ensurePersonalInvite(row.id, client.id);
-
-  return { userId: row.id, name: row.name, email: row.email, password };
 }
 
-/** Acesso de um time, criado logo apos o cadastro. */
-export async function createCandidateAccess(
-  client: CandidateSeed,
-): Promise<GeneratedCredential | null> {
-  return grantForCandidate(client);
+/**
+ * Cria a identidade de acesso de um administrador do time.
+ *
+ * O usuario nasce sem e-mail e sem senha: quem autentica e o par link do
+ * time + telefone. O link pessoal de recrutamento dele nasce junto.
+ */
+export async function createTeamPersonUser(person: {
+  clientId: string;
+  personId: string;
+  name: string;
+  phone: string;
+}): Promise<void> {
+  const existing = await findUserByTeamPerson(person.personId);
+  if (existing) return;
+
+  const row = await insertOne<Pick<UserRow, 'id'>>(
+    TABLES.users,
+    {
+      name: person.name,
+      email: null,
+      phone: normalizePhone(person.phone),
+      role: 'CANDIDATE',
+      client_id: person.clientId,
+      team_person_id: person.personId,
+      password_hash: null,
+      must_change_password: false,
+      is_active: true,
+    },
+    'id',
+  );
+
+  await ensurePersonalInvite(row.id, person.clientId);
+}
+
+/**
+ * Mantem a identidade igual ao cadastro do administrador.
+ *
+ * Trocar o telefone derruba na hora todas as sessoes daquela pessoa: o
+ * telefone antigo deixa de entrar imediatamente.
+ */
+export async function syncTeamPersonUser(person: {
+  clientId: string;
+  personId: string;
+  name: string;
+  phone: string;
+}): Promise<void> {
+  const user = await findUserByTeamPerson(person.personId);
+  if (!user) {
+    await createTeamPersonUser(person);
+    return;
+  }
+
+  const phone = normalizePhone(person.phone);
+  const name = person.name.trim();
+  const changes: Record<string, string> = {};
+
+  if (name && name !== user.name) changes.name = name;
+  if (phone !== user.phone) changes.phone = phone;
+  if (Object.keys(changes).length === 0) return;
+
+  await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, changes, 'id');
+  if (changes.phone) await revokeUserSessions(user.id);
+}
+
+/**
+ * Encerra o acesso de um administrador removido do time.
+ *
+ * As sessoes caem antes da exclusao; a linha em `cmd_users` sai junto com a
+ * pessoa, pela cascata do banco. Os snapshots de quem ela cadastrou
+ * permanecem: o historico continua existindo.
+ */
+export async function revokeTeamPersonUser(personId: string): Promise<void> {
+  const user = await findUserByTeamPerson(personId);
+  if (!user) return;
+
+  await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, { is_active: false }, 'id');
+  await revokeUserSessions(user.id);
 }
 
 /* -------------------------------------------------------------------------
@@ -400,24 +493,6 @@ export interface GrantOutcome {
   conflicts: { clientId: string; name: string; email: string }[];
 }
 
-/** Gera o acesso de um time especifico, a pedido do ADMIN. */
-export async function grantAccess(clientId: string): Promise<GrantOutcome> {
-  const client = await selectOne<Pick<ClientRow, 'id' | 'name' | 'email'>>(TABLES.clients, {
-    select: 'id,name,email',
-    filters: { id: `eq.${clientId}` },
-  });
-  if (!client) throw notFound('Time não encontrado.');
-
-  const credential = await grantForCandidate(client);
-  if (!credential) {
-    return {
-      credentials: [],
-      conflicts: [{ clientId: client.id, name: client.name, email: client.email }],
-    };
-  }
-  return { credentials: [credential], conflicts: [] };
-}
-
 /**
  * Gera o acesso de um integrante, a pedido do ADMIN.
  *
@@ -460,39 +535,6 @@ export async function grantMemberAccess(memberId: string): Promise<GrantOutcome>
   return { credentials: [credential], conflicts: [] };
 }
 
-/**
- * Gera de uma vez o acesso de todos os times ainda pendentes.
- *
- * Pendente e quem nao tem usuario ou esta sem senha utilizavel. Quem ja
- * definiu a senha nao e tocado: a senha atual continua valendo.
- */
-export async function grantPendingAccess(): Promise<GrantOutcome> {
-  const clients = await selectRows<Pick<ClientRow, 'id' | 'name' | 'email'>>(TABLES.clients, {
-    select: 'id,name,email',
-    order: 'created_at.asc',
-  });
-  if (clients.length === 0) return { credentials: [], conflicts: [] };
-
-  const users = await selectRows<UserColumns>(TABLES.users, {
-    select: USER_COLUMNS,
-    filters: { client_id: inFilter(clients.map((client) => client.id)), role: 'eq.CANDIDATE' },
-  });
-  const byClient = new Map(users.map((user) => [user.client_id, user]));
-
-  const outcome: GrantOutcome = { credentials: [], conflicts: [] };
-
-  for (const client of clients) {
-    const user = byClient.get(client.id);
-    if (user && user.password_hash) continue;
-
-    const credential = await grantForCandidate(client);
-    if (credential) outcome.credentials.push(credential);
-    else outcome.conflicts.push({ clientId: client.id, name: client.name, email: client.email });
-  }
-
-  return outcome;
-}
-
 /* -------------------------------------------------------------------------
    Acoes sobre um usuario
    ------------------------------------------------------------------------- */
@@ -528,37 +570,8 @@ export async function revokeUserSessions(userId: string): Promise<number> {
 }
 
 /* -------------------------------------------------------------------------
-   Sincronizacao com o cadastro do time
+   Sincronizacao com o cadastro do integrante
    ------------------------------------------------------------------------- */
-
-/**
- * Mantem o login igual ao cadastro do time.
- *
- * Se o novo e-mail ja for de outro usuario, nada e alterado e o erro sobe
- * com a mensagem padrao. Trocar o e-mail derruba as sessoes antigas.
- */
-export async function syncCandidateLogin(
-  clientId: string,
-  patch: { name?: string; email?: string },
-): Promise<void> {
-  const user = await findUserByClient(clientId);
-  if (!user) return;
-
-  const changes: Record<string, string> = {};
-  const email = patch.email ? normalizeEmail(patch.email) : undefined;
-  const name = patch.name?.trim();
-
-  if (email && email !== user.email) {
-    const conflict = await findUserByEmail(email);
-    if (conflict && conflict.id !== user.id) throw emailConflict();
-    changes.email = email;
-  }
-  if (name && name !== user.name) changes.name = name;
-  if (Object.keys(changes).length === 0) return;
-
-  await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, changes, 'id');
-  if (changes.email) await revokeUserSessions(user.id);
-}
 
 /**
  * Mantem o login do integrante igual ao cadastro dele.
@@ -586,26 +599,6 @@ export async function syncMemberLogin(
 
   await updateRows<UserRow>(TABLES.users, { id: `eq.${user.id}` }, changes, 'id');
   if (changes.email) await revokeUserSessions(user.id);
-}
-
-/**
- * Confere o conflito antes de qualquer gravacao no cadastro do time.
- * `clientId` nulo significa cadastro novo, que ainda nao tem vinculo.
- */
-export async function assertEmailAvailable(
-  clientId: string | null,
-  email: string,
-): Promise<void> {
-  const normalized = normalizeEmail(email);
-  const conflict = await findUserByEmail(normalized);
-  if (conflict && conflict.client_id !== clientId) throw emailConflict();
-
-  // O e-mail tambem e a credencial dos integrantes: nao pode colidir.
-  const member = await selectOne<Pick<MemberRow, 'id'>>(TABLES.members, {
-    select: 'id',
-    filters: { email: `eq.${normalized}` },
-  });
-  if (member) throw emailConflict();
 }
 
 /**

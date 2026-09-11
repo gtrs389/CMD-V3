@@ -124,7 +124,8 @@ export function createLocalClientRepository(
       const client: Client = {
         id: createId('cli'),
         name: input.name.trim(),
-        email: input.email.trim().toLowerCase(),
+        // Legado: o cadastro nao pede mais e-mail do time.
+        email: null,
         photo: input.photo ?? null,
         notes: input.notes?.trim() ?? '',
         createdAt: timestamp,
@@ -144,15 +145,15 @@ export function createLocalClientRepository(
       };
 
       writeClients(storage, [client, ...clients]);
-      // A referencia local nao cria login: o acesso vive apenas no servidor.
-      return { client, access: null, accessMessage: null };
+      // A referencia local nao cria acesso: o link do time e os usuarios dos
+      // administradores vivem apenas no servidor.
+      return { client, accessLink: null };
     },
 
     async update(id, input) {
       return persist(id, (client) => ({
         ...client,
         name: input.name?.trim() ?? client.name,
-        email: input.email?.trim().toLowerCase() ?? client.email,
         photo: input.photo === undefined ? client.photo : input.photo,
         notes: input.notes === undefined ? client.notes : input.notes.trim(),
         people: input.people === undefined ? client.people : toTeamPeople(input.people),

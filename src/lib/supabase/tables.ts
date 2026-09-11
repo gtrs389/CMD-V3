@@ -17,6 +17,7 @@ export const TABLES = {
   formFields: 'cmd_form_fields',
   members: 'cmd_members',
   teamPeople: 'cmd_team_people',
+  teamAccessLinks: 'cmd_team_access_links',
   memberResponses: 'cmd_member_responses',
   invites: 'cmd_invites',
   memberDevices: 'cmd_member_devices',
@@ -32,7 +33,8 @@ export const TABLES = {
 export interface UserRow {
   id: string;
   name: string;
-  email: string;
+  /** Nulo no Administrador do time: ele entra por link + telefone. */
+  email: string | null;
   /** Nulo enquanto o acesso esta pendente: nao existe senha utilizavel. */
   password_hash: string | null;
   role: 'ADMIN' | 'EQUIPE' | 'CANDIDATE';
@@ -40,6 +42,10 @@ export interface UserRow {
   client_id: string | null;
   /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */
   member_id: string | null;
+  /** Administrador do time correspondente (migration 016). */
+  team_person_id: string | null;
+  /** Telefone normalizado do acesso por link do time. Nunca e senha. */
+  phone: string | null;
   /** Senha temporaria em uso: obriga a troca no primeiro acesso. */
   must_change_password: boolean;
   is_active: boolean;
@@ -63,7 +69,8 @@ export interface SessionRow {
 export interface ClientRow {
   id: string;
   name: string;
-  email: string;
+  /** Legado: nao e mais solicitado no cadastro (migration 016). */
+  email: string | null;
   photo_path: string | null;
   photo_mime: string | null;
   photo_size: number | null;
@@ -134,6 +141,21 @@ export interface MemberRow {
   recruited_by_user_id: string | null;
   recruited_by_name: string | null;
   recruited_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Link administrativo do time (migration 016). Um por time. */
+export interface TeamAccessLinkRow {
+  id: string;
+  client_id: string;
+  /** Token em claro: o ADMIN geral precisa copiar o endereco. */
+  token: string;
+  token_hash: string;
+  active: boolean;
+  failed_attempts: number;
+  locked_until: string | null;
+  rotated_at: string | null;
   created_at: string;
   updated_at: string;
 }

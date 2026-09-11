@@ -307,9 +307,13 @@ export async function loadOperationInvites(
   const map = new Map<string, InviteRow>();
   if (clientIds.length === 0) return map;
 
+  // Um time pode ter varios administradores, cada um com o proprio link.
+  // O link exibido como "link do time" e sempre o do administrador mais
+  // antigo: a ordem fixa evita que a tela troque de endereco sozinha.
   const candidates = await selectRows<Pick<UserRow, 'id' | 'client_id'>>(TABLES.users, {
     select: 'id,client_id',
     filters: { client_id: inFilter(clientIds), role: 'eq.CANDIDATE' },
+    order: 'created_at.asc',
   });
 
   const [legacy, owned] = await Promise.all([
@@ -326,8 +330,15 @@ export async function loadOperationInvites(
   ]);
 
   for (const row of legacy) map.set(row.client_id, row);
-  // O link do time tem precedencia sobre o convite legado.
-  for (const row of owned) map.set(row.client_id, row);
+  // O link do administrador tem precedencia sobre o convite legado; entre
+  // administradores vale o primeiro da ordem de cadastro.
+  // Ordem decrescente: quem grava por ultimo e o administrador mais antigo.
+  const ordem = new Map(candidates.map((user, index) => [user.id, index]));
+  for (const row of [...owned].sort(
+    (a, b) => (ordem.get(b.user_id ?? '') ?? 0) - (ordem.get(a.user_id ?? '') ?? 0),
+  )) {
+    map.set(row.client_id, row);
+  }
   return map;
 }
 

@@ -27,7 +27,7 @@ export function RecruitView() {
   const clients = useMemo(() => data ?? [], [data]);
 
   const filtered = useMemo(
-    () => clients.filter((client) => matchesSearch(term, client.name, client.email)),
+    () => clients.filter((client) => matchesSearch(term, client.name)),
     [clients, term],
   );
 
@@ -60,8 +60,8 @@ export function RecruitView() {
             id="busca-recrutamento"
             type="search"
             value={term}
-            aria-label="Buscar times por nome ou e-mail"
-            placeholder="Buscar por nome ou e-mail"
+            aria-label="Buscar times por nome"
+            placeholder="Buscar por nome"
             onChange={(event) => setTerm(event.target.value)}
             className="min-h-11 w-full rounded-control bg-transparent pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
           />

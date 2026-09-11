@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type {
   AccessStatus,
-  CandidateWithoutAccess,
+  CandidateWithoutAdmins,
   GeneratedCredential,
   MemberWithoutAccess,
   Recruiter,
@@ -29,6 +29,7 @@ import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { useSession } from '@/components/layout/SessionProvider';
 import { cn } from '@/lib/utils/cn';
 import { formatDateTime } from '@/lib/utils/date';
+import { formatPhone } from '@/lib/utils/phone';
 import { initials, matchesSearch } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -42,7 +43,7 @@ import { InviteHistoryCard } from './InviteHistoryCard';
 
 interface Payload {
   users: SystemUser[];
-  pendingCandidates: CandidateWithoutAccess[];
+  teamsWithoutAdmins: CandidateWithoutAdmins[];
   pendingMembers: MemberWithoutAccess[];
 }
 
@@ -58,7 +59,10 @@ interface Row {
   clientId: string | null;
   memberId: string | null;
   name: string;
-  email: string;
+  /** Contato exibido: e-mail nos perfis com senha, telefone no do time. */
+  contact: string;
+  /** Administrador do time: entra por link + telefone, nunca por senha. */
+  teamAdmin: boolean;
   role: Role;
   status: AccessStatus;
   candidate: { id: string; name: string; photo: string | null } | null;
@@ -104,23 +108,28 @@ export function SettingsView() {
       clientId: item.candidate?.id ?? null,
       memberId: item.memberId,
       name: item.name,
-      email: item.email,
+      // O administrador do time nao tem e-mail: o contato dele e o telefone
+      // com que entra, junto do link do time.
+      contact: item.teamPersonId ? formatPhone(item.phone ?? '') : (item.email ?? '--'),
+      teamAdmin: Boolean(item.teamPersonId),
       role: item.role,
       status: item.status,
       candidate: item.candidate,
       recruitedBy: item.recruitedBy,
-      photo: item.candidate?.photo ?? null,
+      photo: item.photo ?? item.candidate?.photo ?? null,
       lastLoginAt: item.lastLoginAt,
       self: item.self,
     }));
 
-    const times = (data?.pendingCandidates ?? []).map((item) => ({
+    // Time sem nenhum administrador: ninguem consegue entrar nele ainda.
+    const times = (data?.teamsWithoutAdmins ?? []).map((item) => ({
       key: `c-${item.clientId}`,
       userId: null,
       clientId: item.clientId,
       memberId: null,
       name: item.name,
-      email: item.email,
+      contact: 'Nenhum administrador cadastrado',
+      teamAdmin: true,
       role: 'CANDIDATE' as Role,
       status: 'PENDING' as AccessStatus,
       candidate: { id: item.clientId, name: item.name, photo: item.photo },
@@ -138,7 +147,8 @@ export function SettingsView() {
       clientId: item.clientId,
       memberId: item.memberId,
       name: item.name,
-      email: item.email ?? '--',
+      contact: item.email ?? '--',
+      teamAdmin: false,
       role: 'EQUIPE' as Role,
       status: (item.email ? 'PENDING' : 'NO_EMAIL') as AccessStatus,
       candidate: { id: item.clientId, name: item.candidateName, photo: null },
@@ -157,20 +167,13 @@ export function SettingsView() {
         matchesSearch(
           term,
           row.name,
-          row.email,
+          row.contact,
           row.candidate?.name ?? '',
           ROLE_LABELS[row.role],
           recruiterText(row.recruitedBy),
         ),
       ),
     [rows, term],
-  );
-
-  // Somente times entram na geracao em lote: integrante e sempre
-  // individual, e sem e-mail nao ha acesso a gerar.
-  const pendentes = useMemo(
-    () => rows.filter((row) => row.role === 'CANDIDATE' && row.status === 'PENDING').length,
-    [rows],
   );
 
   async function run(key: string, action: () => Promise<void>) {
@@ -190,17 +193,15 @@ export function SettingsView() {
     }
   }
 
-  function gerarPendentes() {
-    void run('pendentes', async () => {
-      const result = await api<GrantOutcome>('/api/usuarios', {
-        method: 'POST',
-        body: { action: 'grant-pending' },
-      });
-      setOutcome(result);
-    });
-  }
-
+  /**
+   * Senha do ADMIN ou do integrante da equipe.
+   *
+   * O administrador do time nunca passa por aqui: ele nao tem senha nenhuma,
+   * nem visivel nem oculta — entra com o link do time e o proprio telefone.
+   */
   function gerarAcesso(row: Row) {
+    if (row.teamAdmin) return;
+
     void run(row.key, async () => {
       if (row.userId) {
         const { credential } = await api<{ credential: GeneratedCredential }>(
@@ -211,11 +212,12 @@ export function SettingsView() {
         return;
       }
 
-      const body = row.memberId
-        ? { action: 'grant-member', memberId: row.memberId }
-        : { action: 'grant', clientId: row.clientId };
-
-      setOutcome(await api<GrantOutcome>('/api/usuarios', { method: 'POST', body }));
+      setOutcome(
+        await api<GrantOutcome>('/api/usuarios', {
+          method: 'POST',
+          body: { action: 'grant-member', memberId: row.memberId },
+        }),
+      );
     });
   }
 
@@ -265,17 +267,11 @@ export function SettingsView() {
               Usuários do sistema
             </h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              Todo integrante cadastrado por um link tem acesso próprio. Quem não tem e-mail fica
+              Cada administrador do time entra com o link do time e o próprio telefone, sem senha.
+              Todo integrante cadastrado por um link tem acesso próprio; quem não tem e-mail fica
               em &quot;{ACCESS_STATUS_LABELS.NO_EMAIL}&quot; e não recebe senha.
             </p>
           </div>
-
-          {pendentes > 0 ? (
-            <Button onClick={gerarPendentes} loading={working === 'pendentes'} className="shrink-0">
-              {working !== 'pendentes' ? <KeyRound aria-hidden="true" className="size-4" /> : null}
-              Gerar acessos pendentes
-            </Button>
-          ) : null}
         </div>
 
         <div className="border-b border-line p-3">
@@ -372,7 +368,7 @@ export function SettingsView() {
                       </span>
                     ) : null}
                   </p>
-                  <p className="truncate text-xs text-ink-500">{row.email}</p>
+                  <p className="truncate text-xs text-ink-500">{row.contact}</p>
                   <p className="mt-0.5 truncate text-xs text-ink-500">
                     {ROLE_LABELS[row.role]}
                     {row.candidate ? ` · ${row.candidate.name}` : ''}
@@ -403,20 +399,26 @@ export function SettingsView() {
                 <Menu
                   label={`Ações de ${row.name}`}
                   actions={[
-                    {
-                      id: 'senha',
-                      label:
-                        row.status === 'NO_EMAIL'
-                          ? 'E-mail necessário'
-                          : row.status === 'PENDING'
-                            ? 'Gerar acesso'
-                            : 'Redefinir senha',
-                      icon: <KeyRound className="size-4" />,
-                      // Sem e-mail nao ha acesso a gerar: o integrante antigo
-                      // precisa do endereco antes.
-                      disabled: row.self || row.status === 'NO_EMAIL' || working !== null,
-                      onSelect: () => gerarAcesso(row),
-                    },
+                    // O administrador do time nao tem senha para gerar nem
+                    // redefinir: a acao simplesmente nao existe para ele.
+                    ...(row.teamAdmin
+                      ? []
+                      : [
+                          {
+                            id: 'senha',
+                            label:
+                              row.status === 'NO_EMAIL'
+                                ? 'E-mail necessário'
+                                : row.status === 'PENDING'
+                                  ? 'Gerar acesso'
+                                  : 'Redefinir senha',
+                            icon: <KeyRound className="size-4" />,
+                            // Sem e-mail nao ha acesso a gerar: o integrante
+                            // antigo precisa do endereco antes.
+                            disabled: row.self || row.status === 'NO_EMAIL' || working !== null,
+                            onSelect: () => gerarAcesso(row),
+                          },
+                        ]),
                     {
                       id: 'ativo',
                       label: row.status === 'DISABLED' ? 'Ativar acesso' : 'Desativar acesso',
@@ -449,8 +451,8 @@ export function SettingsView() {
       </section>
 
       <p className="text-xs text-ink-500">
-        Conectado como {user?.email ?? '--'}. Sua própria conta não pode ser desativada nem ter as
-        sessões revogadas por aqui.
+        Conectado como {user?.email ?? user?.name ?? '--'}. Sua própria conta não pode ser
+        desativada nem ter as sessões revogadas por aqui.
       </p>
 
       <InviteHistoryCard />

@@ -41,15 +41,33 @@ const teamPersonSchema = z.object({
   photo: photoValue,
 });
 
+/**
+ * Cadastro do time.
+ *
+ * Sem e-mail: quem entra no painel do time e sempre um administrador, pelo
+ * link do time + telefone. Por isso todo time novo precisa de pelo menos um.
+ */
 export const clientCreateSchema = z.object({
   name: trimmed(80).min(2, 'Informe o nome do time.'),
-  email: z.string().trim().min(1, 'Informe o e-mail.').pipe(z.email('E-mail inválido.')),
   photo: photoValue.default(null),
   notes: trimmed(500).default(''),
-  people: z.array(teamPersonSchema).max(MAX_TEAM_PEOPLE).optional(),
+  people: z
+    .array(teamPersonSchema)
+    .min(1, 'Cadastre pelo menos um administrador do time.')
+    .max(MAX_TEAM_PEOPLE),
 });
 
 export const clientUpdateSchema = clientCreateSchema.partial();
+
+/**
+ * Acesso do administrador do time: apenas o telefone.
+ *
+ * O token vem da propria URL e nunca do corpo; o telefone e normalizado no
+ * servidor antes de qualquer comparacao.
+ */
+export const teamPhoneLoginSchema = z.object({
+  phone: trimmed(30).min(1, 'Informe o telefone.'),
+});
 
 const fieldOptionSchema = z.object({
   id: z.string().min(1).max(64),

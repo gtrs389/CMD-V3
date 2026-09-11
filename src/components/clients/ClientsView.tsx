@@ -73,7 +73,14 @@ export function ClientsView() {
   }, [clients, sort]);
 
   const filtered = useMemo(
-    () => ordered.filter((client) => matchesSearch(term, client.name, client.email)),
+    () =>
+      ordered.filter((client) =>
+        matchesSearch(
+          term,
+          client.name,
+          ...client.teamPeoplePreview.map((person) => person.name),
+        ),
+      ),
     [ordered, term],
   );
 
@@ -141,8 +148,8 @@ export function ClientsView() {
             id="busca-candidatos"
             type="search"
             value={term}
-            aria-label="Buscar times por nome ou e-mail"
-            placeholder="Buscar por nome ou e-mail"
+            aria-label="Buscar times por nome ou administrador"
+            placeholder="Buscar por nome ou administrador"
             onChange={(event) => setTerm(event.target.value)}
             className="min-h-11 w-full rounded-control bg-transparent pr-10 pl-9 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
           />
