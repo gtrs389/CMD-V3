@@ -28,7 +28,7 @@ describe('repositorio de clientes', () => {
     expect(client.notes).toBe('anotacao');
     expect(client.invite.active).toBe(true);
     expect(client.invite.token ?? '').toHaveLength(20);
-    expect(client.form.fields).toHaveLength(10);
+    expect(client.form.fields).toHaveLength(11);
   });
 
   it('não coloca dado pessoal no token do convite', async () => {

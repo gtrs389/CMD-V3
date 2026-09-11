@@ -11,25 +11,33 @@ import {
 } from 'react';
 import type { CustomField, SystemFieldKey } from '@/lib/types';
 import {
+  CHAIN_ORDER,
   citiesPath,
+  clearFrom,
   districtsPath,
-  selectCity,
-  selectState,
+  forcedManual,
   statesPath,
+  streetsPath,
   type CityOption,
   type DistrictOption,
   type StateOption,
+  type StreetOption,
 } from '@/lib/domain/location';
-import type { LocationSelection } from '@/lib/domain/location';
 import type { DynamicFormValues, DynamicValue } from '@/lib/validation/dynamic-form';
 
 /**
- * Encadeamento Estado -> Municipio -> Bairro.
+ * Encadeamento Estado -> Municipio -> Bairro -> Rua.
  *
  * As listas vem das rotas internas em `/api/localidades`: o navegador nunca
- * fala com a API externa. O identificador do municipio existe apenas aqui,
- * durante o preenchimento; no banco continuam a sigla da UF e os nomes.
+ * fala com a API externa. Os identificadores da API vivem apenas aqui,
+ * durante o preenchimento; no banco ficam a sigla da UF e os nomes.
+ *
+ * Quando um passo nao tem lista (municipio ou bairro digitado a mao, ou a API
+ * indisponivel), os campos seguintes passam a aceitar digitacao livre: o
+ * cadastro nunca fica impedido por causa da API.
  */
+
+export type LocationKey = 'city' | 'district' | 'street';
 
 export interface ListState<T> {
   items: T[];
@@ -42,15 +50,24 @@ interface LocationContextValue {
   state: string;
   city: string;
   district: string;
+  street: string;
   states: ListState<StateOption>;
   cities: ListState<CityOption>;
   districts: ListState<DistrictOption>;
+  streets: ListState<StreetOption>;
   /** Verdadeiro quando o passo anterior ainda nao foi escolhido. */
   cityBlocked: boolean;
   districtBlocked: boolean;
+  streetBlocked: boolean;
+  /** Campos em digitacao livre, ja com a cascata aplicada. */
+  manual: Record<LocationKey, boolean>;
+  /** Escolha explicita de quem preenche, sem a cascata. */
+  chosenManual: Record<LocationKey, boolean>;
+  setManual: (key: LocationKey, manual: boolean) => void;
   selectState: (uf: string) => void;
   selectCity: (name: string) => void;
   selectDistrict: (name: string) => void;
+  selectStreet: (name: string) => void;
 }
 
 const LocationContext = createContext<LocationContextValue | null>(null);
@@ -127,6 +144,7 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
       state: fieldId(fields, 'state'),
       city: fieldId(fields, 'city'),
       district: fieldId(fields, 'district'),
+      street: fieldId(fields, 'street'),
     }),
     [fields],
   );
@@ -134,49 +152,118 @@ export function LocationProvider({ fields, values, setValue, children }: Locatio
   const state = ids.state ? text(values[ids.state]) : '';
   const city = ids.city ? text(values[ids.city]) : '';
   const district = ids.district ? text(values[ids.district]) : '';
+  const street = ids.street ? text(values[ids.street]) : '';
+
+  /** Bairro escolhido na lista: o identificador nunca sai da memoria. */
+  const [districtId, setDistrictId] = useState<number | null>(null);
+  const [chosen, setChosen] = useState<Record<LocationKey, boolean>>({
+    city: false,
+    district: false,
+    street: false,
+  });
+
+  // A escolha de um passo obriga os seguintes: sem id nao existe lista.
+  const manual = useMemo(() => forcedManual(chosen), [chosen]);
 
   const states = useLocationList<StateOption>(ids.state ? statesPath() : null);
-  const cities = useLocationList<CityOption>(ids.city && state ? citiesPath(state) : null);
+  const cities = useLocationList<CityOption>(
+    ids.city && state && !manual.city ? citiesPath(state) : null,
+  );
 
   /**
    * Os bairros sao pedidos pela UF e pelo nome do municipio: o identificador
-   * da Brasil Aberto e resolvido no servidor. Municipio antigo que a API nao
-   * conhece mais simplesmente nao traz bairros, e o valor gravado permanece.
+   * da Brasil Aberto e resolvido no servidor. Municipio digitado a mao nao
+   * tem lista, e o bairro passa a ser digitado tambem.
    */
   const districts = useLocationList<DistrictOption>(
-    ids.district && state && city ? districtsPath(state, city) : null,
+    ids.district && state && city && !manual.city && !manual.district
+      ? districtsPath(state, city)
+      : null,
+  );
+
+  const streets = useLocationList<StreetOption>(
+    ids.street && districtId && !manual.district && !manual.street
+      ? streetsPath({ id: districtId })
+      : null,
+  );
+
+  const setManual = useCallback(
+    (key: LocationKey, value: boolean) => {
+      setChosen((current) => ({ ...current, [key]: value }));
+    },
+    [setChosen],
   );
 
   const value = useMemo<LocationContextValue>(() => {
-    // O identificador nao e guardado aqui: quem resolve o municipio e o servidor.
-    const current: LocationSelection = { state, city, cityId: null, district };
+    const write = (key: 'state' | LocationKey, next: string) => {
+      const id = ids[key];
+      if (id) setValue(id, next);
+    };
 
-    const apply = (next: LocationSelection) => {
-      if (ids.state && next.state !== state) setValue(ids.state, next.state);
-      if (ids.city && next.city !== city) setValue(ids.city, next.city);
-      if (ids.district && next.district !== district) setValue(ids.district, next.district);
+    /** Limpa os campos seguintes e devolve cada um para a lista. */
+    const clear = (key: LocationKey) => {
+      const limpo = clearFrom({ state, city, district, street }, key);
+      for (const step of CHAIN_ORDER.slice(CHAIN_ORDER.indexOf(key))) {
+        write(step, limpo[step]);
+        setManual(step, false);
+      }
+      setDistrictId(null);
     };
 
     return {
       state,
       city,
       district,
+      street,
       states,
       cities,
       districts,
+      streets,
       cityBlocked: !state,
       districtBlocked: !state || !city,
-      selectState: (uf) => apply(selectState(current, uf)),
+      streetBlocked: !city || !district,
+      manual,
+      chosenManual: chosen,
+      setManual,
+
+      // Trocar um passo limpa todos os seguintes; repetir a mesma escolha nao
+      // apaga nada, para que a edicao de um cadastro antigo continue intacta.
+      selectState: (uf) => {
+        if (uf === state) return;
+        write('state', uf);
+        clear('city');
+      },
       selectCity: (name) => {
-        const found = cities.items.find((option) => option.name === name) ?? null;
-        // Sem correspondencia na lista (valor antigo): guarda o nome sem id.
-        apply(found ? selectCity(current, found) : { ...current, city: name, cityId: null, district: '' });
+        if (name === city) return;
+        write('city', name);
+        clear('district');
       },
       selectDistrict: (name) => {
-        if (ids.district) setValue(ids.district, name);
+        if (name === district) return;
+        write('district', name);
+        write('street', '');
+        setManual('street', false);
+        // O identificador vem da propria lista; nome digitado nao tem id.
+        setDistrictId(districts.items.find((item) => item.name === name)?.id ?? null);
       },
+      selectStreet: (name) => write('street', name),
     };
-  }, [state, city, district, states, cities, districts, ids, setValue]);
+  }, [
+    state,
+    city,
+    district,
+    street,
+    states,
+    cities,
+    districts,
+    streets,
+    manual,
+    chosen,
+    setManual,
+    setDistrictId,
+    ids,
+    setValue,
+  ]);
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
 }

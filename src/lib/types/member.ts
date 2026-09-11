@@ -27,6 +27,8 @@ export interface Member extends Timestamped {
   state: string | null;
   city: string | null;
   district: string | null;
+  /** Nome da rua. Apenas o nome: nenhum identificador de API e guardado. */
+  street: string | null;
   /** Opcao de vinculo escolhida, pelo identificador estavel. */
   relationshipOptionId: string | null;
   /** Nome da opcao no momento do cadastro. Reserva do historico. */
@@ -50,6 +52,7 @@ export interface MemberInput {
   state?: string | null;
   city?: string | null;
   district?: string | null;
+  street?: string | null;
   relationshipOptionId?: string | null;
   relationshipLabel?: string | null;
   responses: FieldResponse[];

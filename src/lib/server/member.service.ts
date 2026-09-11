@@ -8,6 +8,7 @@ import {
   normalizeState,
   normalizeVoterId,
 } from '@/lib/utils/documents';
+import { OTHER_OPTION } from '@/lib/domain/location';
 import {
   TABLES,
   type FormFieldRow,
@@ -76,6 +77,17 @@ async function assembleOne(row: MemberRow): Promise<Member> {
  * como valor repetido. Valor invalido tambem vira nulo: a validacao completa
  * acontece no esquema Zod da rota.
  */
+/**
+ * Nome de localidade pronto para gravar.
+ *
+ * O marcador da opcao "Outro" vive so na tela: se por qualquer caminho ele
+ * chegar aqui, vira ausencia de valor, nunca um nome.
+ */
+function place(value: string | null | undefined): string | null {
+  const normalized = normalizePlace(value ?? '');
+  return !normalized || normalized === OTHER_OPTION ? null : normalized;
+}
+
 function standardColumns(
   input: Partial<
     Pick<
@@ -86,6 +98,7 @@ function standardColumns(
       | 'state'
       | 'city'
       | 'district'
+      | 'street'
       | 'relationshipOptionId'
       | 'relationshipLabel'
     >
@@ -100,8 +113,9 @@ function standardColumns(
   if (input.cpf !== undefined) patch.cpf = normalizeCpf(input.cpf ?? '') || null;
   if (input.voterId !== undefined) patch.voter_id = normalizeVoterId(input.voterId ?? '') || null;
   if (input.state !== undefined) patch.state = normalizeState(input.state ?? '') || null;
-  if (input.city !== undefined) patch.city = normalizePlace(input.city ?? '') || null;
-  if (input.district !== undefined) patch.district = normalizePlace(input.district ?? '') || null;
+  if (input.city !== undefined) patch.city = place(input.city);
+  if (input.district !== undefined) patch.district = place(input.district);
+  if (input.street !== undefined) patch.street = place(input.street);
 
   // As duas colunas do vinculo andam juntas, como exige o check do banco.
   if (input.relationshipOptionId !== undefined) {

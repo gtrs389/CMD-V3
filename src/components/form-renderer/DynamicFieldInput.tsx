@@ -53,7 +53,10 @@ export function DynamicFieldInput({
   // esta dentro de `LocationProvider`. Sem ele, seguem os controles simples.
   if (
     chain &&
-    (field.systemKey === 'state' || field.systemKey === 'city' || field.systemKey === 'district')
+    (field.systemKey === 'state' ||
+      field.systemKey === 'city' ||
+      field.systemKey === 'district' ||
+      field.systemKey === 'street')
   ) {
     return (
       <Field id={id} label={field.label} help={help} error={error} required={field.required}>

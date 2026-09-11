@@ -26,6 +26,7 @@ export const SYSTEM_FIELD_KEYS = [
   'state',
   'city',
   'district',
+  'street',
   'relationship',
 ] as const;
 export type SystemFieldKey = (typeof SYSTEM_FIELD_KEYS)[number];

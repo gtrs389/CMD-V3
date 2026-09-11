@@ -15,11 +15,15 @@ const BASE_URL = 'https://api.brasilaberto.com/v1';
 /** Tempo maximo de espera da API externa. */
 export const LOCATION_TIMEOUT_MS = 8_000;
 
-/** Cache das listas: sete dias para estados e municipios, 24 horas para bairros. */
+/**
+ * Cache das listas: sete dias para estados e municipios, 24 horas para
+ * bairros e ruas.
+ */
 export const CACHE_SECONDS = {
   states: 60 * 60 * 24 * 7,
   cities: 60 * 60 * 24 * 7,
   districts: 60 * 60 * 24,
+  streets: 60 * 60 * 24,
 } as const;
 
 export interface StateOption {
@@ -37,6 +41,12 @@ export interface CityOption {
 }
 
 export interface DistrictOption {
+  /** Identificador do bairro: usado apenas para buscar as ruas. */
+  id: number;
+  name: string;
+}
+
+export interface StreetOption {
   name: string;
 }
 
@@ -106,15 +116,16 @@ const citySchema = z.object({
   name: z.string().min(1),
 });
 
-/** O bairro pode chegar como objeto com nome ou como texto solto. */
-const districtSchema = z.union([
+/** O bairro traz `id` e `name`; o identificador so serve para as ruas. */
+const districtSchema = z.object({
+  id: z.union([z.number(), z.string()]).optional(),
+  name: z.string().min(1),
+});
+
+/** Da rua interessa apenas o nome: e ele que sera gravado. */
+const streetSchema = z.union([
   z.string().min(1),
-  z.object({
-    name: z.string().min(1).optional(),
-    district: z.string().min(1).optional(),
-    districtName: z.string().min(1).optional(),
-    bairro: z.string().min(1).optional(),
-  }),
+  z.object({ id: z.union([z.number(), z.string()]).optional(), name: z.string().min(1) }),
 ]);
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR');
@@ -154,16 +165,31 @@ export function parseDistricts(payload: unknown): DistrictOption[] {
   const districts: DistrictOption[] = [];
 
   for (const row of rows(payload, districtSchema)) {
-    const raw =
-      typeof row === 'string' ? row : (row.name ?? row.district ?? row.districtName ?? row.bairro ?? '');
+    const id = toCityId(row.id ?? null);
+    const name = normalizePlace(row.name) || row.name.trim();
+    const key = normalizeSearch(name);
+    if (id === null || !name || seen.has(key)) continue;
+    seen.add(key);
+    districts.push({ id, name });
+  }
+
+  return districts.sort(byName);
+}
+
+export function parseStreets(payload: unknown): StreetOption[] {
+  const seen = new Set<string>();
+  const streets: StreetOption[] = [];
+
+  for (const row of rows(payload, streetSchema)) {
+    const raw = typeof row === 'string' ? row : row.name;
     const name = normalizePlace(raw) || raw.trim();
     const key = normalizeSearch(name);
     if (!name || seen.has(key)) continue;
     seen.add(key);
-    districts.push({ name });
+    streets.push({ name });
   }
 
-  return districts.sort(byName);
+  return streets.sort(byName);
 }
 
 /* -------------------------------------------------------------------------
@@ -201,6 +227,12 @@ export function districtsUrl(cityId: number): string {
   return `${BASE_URL}/districts/${cityId}`;
 }
 
+/** Ruas pelo identificador do bairro (`district.id`), nunca pelo nome. */
+export function streetsUrl(districtId: number): string {
+  if (!isCityId(districtId)) throw new LocationError('Bairro inválido.');
+  return `${BASE_URL}/streets/${districtId}`;
+}
+
 export const UF_CODES: readonly string[] = UF_OPTIONS.map((option) => option.id);
 
 /* -------------------------------------------------------------------------
@@ -225,6 +257,11 @@ export function citiesPath(uf: string): string {
   return `/api/localidades/municipios/${encodeURIComponent(uf)}?v=${LOCATION_FORMAT}`;
 }
 
+/** Ruas: o identificador do bairro vem da lista carregada, so em memoria. */
+export function streetsPath(district: Pick<DistrictOption, 'id'>): string {
+  return `/api/localidades/ruas/${district.id}?v=${LOCATION_FORMAT}`;
+}
+
 /**
  * Bairros: o navegador manda apenas a UF e o nome do municipio.
  *
@@ -238,8 +275,60 @@ export function districtsPath(uf: string, cityName: string): string {
 }
 
 /* -------------------------------------------------------------------------
-   Encadeamento Estado -> Municipio -> Bairro
+   Encadeamento Estado -> Municipio -> Bairro -> Rua
    ------------------------------------------------------------------------- */
+
+/**
+ * Marca da opcao "Outro" nas listas.
+ *
+ * Vive apenas na tela: o que chega ao banco e sempre o nome digitado. Um
+ * valor com este texto nunca e aceito como nome.
+ */
+export const OTHER_OPTION = '__OTHER__';
+
+/** Passos que aceitam digitacao livre quando a lista nao serve. */
+export type ChainKey = 'city' | 'district' | 'street';
+
+export const CHAIN_ORDER: readonly ChainKey[] = ['city', 'district', 'street'];
+
+export interface ChainValues {
+  state: string;
+  city: string;
+  district: string;
+  street: string;
+}
+
+/**
+ * Limpa o passo informado e todos os seguintes.
+ * Trocar o estado zera municipio, bairro e rua; trocar o municipio zera bairro
+ * e rua; trocar o bairro zera a rua.
+ */
+export function clearFrom(values: ChainValues, key: ChainKey): ChainValues {
+  const next = { ...values };
+  for (const step of CHAIN_ORDER.slice(CHAIN_ORDER.indexOf(key))) next[step] = '';
+  return next;
+}
+
+/**
+ * Digitacao forcada em cascata.
+ *
+ * Sem `cityId` nao ha lista de bairros, e sem `districtId` nao ha lista de
+ * ruas: escolher "Outro" em um passo obriga os seguintes a serem digitados.
+ */
+export function forcedManual(
+  manual: Record<ChainKey, boolean>,
+): Record<ChainKey, boolean> {
+  const city = manual.city;
+  const district = city || manual.district;
+  return { city, district, street: district || manual.street };
+}
+
+/** Nome digitado a mao, ja normalizado. Vazio ou o marcador viram nulo. */
+export function manualPlace(value: string | null | undefined, maxLength = 120): string | null {
+  const trimmed = normalizePlace(value ?? '', maxLength);
+  if (!trimmed || trimmed === OTHER_OPTION) return null;
+  return trimmed.length < 2 ? null : trimmed;
+}
 
 export interface LocationSelection {
   /** Sigla da UF. */

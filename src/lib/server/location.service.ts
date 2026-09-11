@@ -9,10 +9,13 @@ import {
   parseCities,
   parseDistricts,
   parseStates,
+  parseStreets,
   statesUrl,
+  streetsUrl,
   type CityOption,
   type DistrictOption,
   type StateOption,
+  type StreetOption,
 } from '@/lib/domain/location';
 
 /**
@@ -137,4 +140,9 @@ export async function listDistrictsOfCity(
   const city = findCity(await listCities(uf), cityName);
   if (!city) return [];
   return listDistricts(city.id);
+}
+
+/** Ruas de um bairro, pelo identificador devolvido na lista de bairros. */
+export function listStreets(districtId: number): Promise<StreetOption[]> {
+  return load(streetsUrl(districtId), CACHE_SECONDS.streets, parseStreets);
 }

@@ -5,6 +5,7 @@ import {
   listDistricts,
   listDistrictsOfCity,
   listStates,
+  listStreets,
 } from '@/lib/server/location.service';
 import {
   EMPTY_SELECTION,
@@ -19,7 +20,14 @@ import {
   selectCity,
   selectDistrict,
   selectState,
+  clearFrom,
+  forcedManual,
+  manualPlace,
+  OTHER_OPTION,
+  parseStreets,
   statesUrl,
+  streetsPath,
+  streetsUrl,
   toCityId,
   withCurrentValue,
   type CityOption,
@@ -43,6 +51,14 @@ const CITIES = {
     { id: 669, ibgeId: 3550308, name: 'São Paulo' },
     { id: 646, ibgeId: 3304557, name: 'Campinas' },
     { id: 0, ibgeId: 0, name: 'Sem identificador' },
+  ],
+};
+
+const STREETS = {
+  meta: { currentPage: 1, itemsPerPage: 95, totalOfItems: 95, totalOfPages: 1 },
+  result: [
+    { id: 1, name: 'Praça da Sé' },
+    { id: 2, name: 'Rua Filipe de Oliveira' },
   ],
 };
 
@@ -72,11 +88,19 @@ describe('leitura das respostas da API', () => {
     ]);
   });
 
-  it('remove bairros repetidos e ordena alfabeticamente', () => {
-    expect(parseDistricts(DISTRICTS).map((district) => district.name)).toEqual([
-      'Bela Vista',
-      'Vila Mariana',
+  it('remove bairros repetidos, guarda o id e ordena alfabeticamente', () => {
+    expect(parseDistricts(DISTRICTS)).toEqual([
+      { id: 2, name: 'Bela Vista' },
+      { id: 1, name: 'Vila Mariana' },
     ]);
+  });
+
+  it('lê as ruas no formato { meta, result } e guarda só o nome', () => {
+    expect(parseStreets(STREETS)).toEqual([
+      { name: 'Praça da Sé' },
+      { name: 'Rua Filipe de Oliveira' },
+    ]);
+    expect(parseStreets({ meta: {}, result: [] })).toEqual([]);
   });
 
   it('recusa resposta fora do formato esperado', () => {
@@ -92,14 +116,12 @@ describe('leitura das respostas da API', () => {
         { id: 1, name: 'Sé' },
         { id: 2, name: null },
         { id: 3 },
-        'Centro',
         { id: 4, name: 'Bela Vista', extra: true },
       ],
     };
 
     expect(parseDistricts(payload).map((district) => district.name)).toEqual([
       'Bela Vista',
-      'Centro',
       'Sé',
     ]);
   });
@@ -114,6 +136,7 @@ describe('montagem das URLs', () => {
     expect(statesUrl()).toBe('https://api.brasilaberto.com/v1/states');
     expect(citiesUrl('sp')).toBe('https://api.brasilaberto.com/v1/cities/SP');
     expect(districtsUrl(669)).toBe('https://api.brasilaberto.com/v1/districts/669');
+    expect(streetsUrl(2368)).toBe('https://api.brasilaberto.com/v1/streets/2368');
   });
 
   it('o caminho interno dos bairros leva UF e nome, nunca um identificador', () => {
@@ -124,6 +147,13 @@ describe('montagem das URLs', () => {
     expect(path).toContain('municipio=S%C3%A3o+Paulo');
     expect(path).not.toContain(String(saoPaulo.id));
     expect(path).not.toContain(String(saoPaulo.ibgeId));
+  });
+
+  it('o caminho interno das ruas leva o id do bairro', () => {
+    const [primeiro] = parseDistricts(DISTRICTS);
+    expect(streetsPath(primeiro)).toContain(`/api/localidades/ruas/${primeiro.id}`);
+    expect(() => streetsUrl(0)).toThrow(LocationError);
+    expect(() => streetsUrl(-3)).toThrow(LocationError);
   });
 
   it('recusa UF fora das 27 siglas e identificador inválido', () => {
@@ -322,6 +352,28 @@ describe('consulta no servidor', () => {
     expect(calls).toEqual(['https://api.brasilaberto.com/v1/cities/SP']);
   });
 
+  it('consulta as ruas pelo id do bairro, com a chave no cabeçalho', async () => {
+    const calls: [string, RequestInit][] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push([url, init]);
+        return { ok: true, json: async () => STREETS };
+      }),
+    );
+
+    const streets = await listStreets(2368);
+
+    expect(calls[0][0]).toBe('https://api.brasilaberto.com/v1/streets/2368');
+    expect(calls[0][1].headers).toMatchObject({ Authorization: `Bearer ${CHAVE}` });
+    expect(streets.map((street) => street.name)).toEqual([
+      'Praça da Sé',
+      'Rua Filipe de Oliveira',
+    ]);
+    // Nenhum nome de bairro, municipio ou codigo IBGE vai na consulta.
+    expect(calls[0][0]).not.toMatch(/bairro|municipio|ibge|Vila|Centro/i);
+  });
+
   it('falha da API vira erro previsto, sem detalhe interno', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
@@ -332,5 +384,71 @@ describe('consulta no servidor', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('getaddrinfo ENOTFOUND')));
 
     await expect(listStates()).rejects.toThrow(LocationError);
+  });
+});
+
+describe('cascata Estado, Município, Bairro e Rua', () => {
+  const cheio = {
+    state: 'SP',
+    city: 'São Paulo',
+    district: 'Bela Vista',
+    street: 'Rua Filipe de Oliveira',
+  };
+
+  it('trocar o estado limpa município, bairro e rua', () => {
+    expect(clearFrom(cheio, 'city')).toEqual({
+      state: 'SP',
+      city: '',
+      district: '',
+      street: '',
+    });
+  });
+
+  it('trocar o município limpa bairro e rua', () => {
+    expect(clearFrom(cheio, 'district')).toEqual({
+      state: 'SP',
+      city: 'São Paulo',
+      district: '',
+      street: '',
+    });
+  });
+
+  it('trocar o bairro limpa apenas a rua', () => {
+    expect(clearFrom(cheio, 'street')).toEqual({ ...cheio, street: '' });
+  });
+
+  it('município digitado força bairro e rua digitados', () => {
+    expect(forcedManual({ city: true, district: false, street: false })).toEqual({
+      city: true,
+      district: true,
+      street: true,
+    });
+  });
+
+  it('bairro digitado força apenas a rua digitada', () => {
+    expect(forcedManual({ city: false, district: true, street: false })).toEqual({
+      city: false,
+      district: true,
+      street: true,
+    });
+  });
+
+  it('rua digitada não afeta os passos anteriores', () => {
+    expect(forcedManual({ city: false, district: false, street: true })).toEqual({
+      city: false,
+      district: false,
+      street: true,
+    });
+  });
+});
+
+describe('opção de digitar o nome', () => {
+  it('normaliza o texto digitado e nunca aceita o marcador interno', () => {
+    expect(manualPlace('  Rua   das   Flores  ')).toBe('Rua das Flores');
+    expect(manualPlace(OTHER_OPTION)).toBeNull();
+    expect(manualPlace('')).toBeNull();
+    expect(manualPlace('   ')).toBeNull();
+    expect(manualPlace('a')).toBeNull();
+    expect(manualPlace('x'.repeat(200))?.length).toBe(120);
   });
 });

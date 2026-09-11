@@ -23,6 +23,9 @@ interface SearchableSelectProps {
   loading?: boolean;
   error?: string | null;
   onRetry?: () => void;
+  /** Caminho alternativo quando a lista falha (ex.: digitar o nome). */
+  onFallback?: () => void;
+  fallbackLabel?: string;
   invalid?: boolean;
   describedBy?: string;
   searchPlaceholder?: string;
@@ -47,6 +50,8 @@ export function SearchableSelect({
   loading = false,
   error = null,
   onRetry,
+  onFallback,
+  fallbackLabel,
   invalid = false,
   describedBy,
   searchPlaceholder = 'Buscar',
@@ -97,15 +102,27 @@ export function SearchableSelect({
         <p role="alert" className="text-sm text-danger-700">
           {error}
         </p>
-        {onRetry ? (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="inline-flex min-h-11 items-center justify-center rounded-control border border-line-strong bg-surface px-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-50"
-          >
-            Tentar novamente
-          </button>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-11 items-center justify-center rounded-control border border-line-strong bg-surface px-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-50"
+            >
+              Tentar novamente
+            </button>
+          ) : null}
+
+          {onFallback ? (
+            <button
+              type="button"
+              onClick={onFallback}
+              className="inline-flex min-h-11 items-center justify-center rounded-control border border-line-strong bg-surface px-3 text-sm font-medium text-ink-900 transition-colors hover:bg-ink-50"
+            >
+              {fallbackLabel ?? 'Digitar'}
+            </button>
+          ) : null}
+        </div>
       </div>
     );
   }

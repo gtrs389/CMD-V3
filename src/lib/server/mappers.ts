@@ -103,6 +103,7 @@ export function toMember(
     state: row.state,
     city: row.city,
     district: row.district,
+    street: row.street,
     relationshipOptionId: row.relationship_option_id,
     relationshipLabel: row.relationship_label,
     responses: responses.map(toResponse),
