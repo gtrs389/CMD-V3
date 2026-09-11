@@ -57,3 +57,34 @@ export function formatRelative(iso: string | null | undefined): string {
 export function byNewest(a: { createdAt: string }, b: { createdAt: string }): number {
   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 }
+
+/** Primeiro instante do mes corrente, em ISO. */
+export function startOfMonthIso(reference: Date = new Date()): string {
+  return new Date(reference.getFullYear(), reference.getMonth(), 1).toISOString();
+}
+
+/** Instante de N dias atras, em ISO. */
+export function daysAgoIso(days: number, reference: Date = new Date()): string {
+  return new Date(reference.getTime() - days * 86_400_000).toISOString();
+}
+
+const hourFormatter = new Intl.DateTimeFormat(appConfig.locale, {
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Texto do ultimo cadastro: "Hoje, 10:24", "Ontem, 18:41", "Há 3 dias" ou a data. */
+export function formatLastActivity(iso: string | null | undefined): string {
+  if (!iso) return '--';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '--';
+
+  const startOfDay = (value: Date) =>
+    new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000);
+
+  if (days <= 0) return `Hoje, ${hourFormatter.format(date)}`;
+  if (days === 1) return `Ontem, ${hourFormatter.format(date)}`;
+  if (days < 7) return `Há ${days} dias`;
+  return formatDate(iso);
+}

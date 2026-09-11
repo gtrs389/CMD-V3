@@ -1,7 +1,7 @@
 import type { Client, ClientFormConfig, ClientInput, ClientSummary, Member } from '@/lib/types';
 import { createDefaultFormConfig } from '@/lib/domain/form-config';
 import { createId, createInviteToken } from '@/lib/utils/id';
-import { nowIso } from '@/lib/utils/date';
+import { daysAgoIso, nowIso, startOfMonthIso } from '@/lib/utils/date';
 import { NotFoundError, type ClientRepository } from '../types';
 import { notifyDataChanged } from '../events';
 import { STORAGE_KEYS, getStorage, type StorageDriver } from './storage';
@@ -59,13 +59,26 @@ export function createLocalClientRepository(
       const clients = readClients(storage);
       const members = readMembers(storage);
 
+      const monthStart = startOfMonthIso();
+      const weekStart = daysAgoIso(7);
+
       return clients.map((client) => {
-        const own = members.filter((member) => member.clientId === client.id);
-        const lastMemberAt = own.reduce<string | null>((latest, member) => {
-          if (!latest || member.createdAt > latest) return member.createdAt;
-          return latest;
-        }, null);
-        return { ...client, memberCount: own.length, lastMemberAt };
+        const own = members
+          .filter((member) => member.clientId === client.id)
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+        return {
+          ...client,
+          memberCount: own.length,
+          lastMemberAt: own[0]?.createdAt ?? null,
+          memberCountThisMonth: own.filter((member) => member.createdAt >= monthStart).length,
+          memberCountLast7Days: own.filter((member) => member.createdAt >= weekStart).length,
+          recentMembers: own.slice(0, 3).map((member) => ({
+            id: member.id,
+            name: member.name,
+            photo: member.photo,
+          })),
+        };
       });
     },
 

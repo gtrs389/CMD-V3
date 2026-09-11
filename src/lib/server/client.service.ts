@@ -26,6 +26,7 @@ import {
   updateRows,
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
+import { daysAgoIso, startOfMonthIso } from '@/lib/utils/date';
 import { toClient } from './mappers';
 import { notFound } from './http';
 
@@ -38,6 +39,9 @@ import { notFound } from './http';
  */
 
 const CLIENT_COLUMNS = '*';
+
+/** Quantidade de fotos exibidas na pilha de integrantes recentes. */
+const RECENT_MEMBERS = 3;
 
 async function loadFields(clientIds: string[]): Promise<Map<string, FormFieldRow[]>> {
   const grouped = new Map<string, FormFieldRow[]>();
@@ -125,30 +129,61 @@ export async function listClientSummaries(): Promise<ClientSummary[]> {
     loadFields(ids),
     loadInvites(ids),
     signedUrls(rows.map((row) => row.photo_path)),
-    selectRows<Pick<MemberRow, 'client_id' | 'created_at'>>(TABLES.members, {
-      select: 'client_id,created_at',
-      filters: { client_id: inFilter(ids) },
-    }),
+    selectRows<Pick<MemberRow, 'id' | 'client_id' | 'name' | 'photo_path' | 'created_at'>>(
+      TABLES.members,
+      {
+        select: 'id,client_id,name,photo_path,created_at',
+        filters: { client_id: inFilter(ids) },
+        order: 'created_at.desc',
+      },
+    ),
   ]);
 
-  const counts = new Map<string, { total: number; last: string | null }>();
+  const monthStart = startOfMonthIso();
+  const weekStart = daysAgoIso(7);
+
+  interface Aggregate {
+    total: number;
+    month: number;
+    week: number;
+    last: string | null;
+    recent: typeof members;
+  }
+
+  const counts = new Map<string, Aggregate>();
   for (const member of members) {
-    const current = counts.get(member.client_id) ?? { total: 0, last: null };
+    const current =
+      counts.get(member.client_id) ?? { total: 0, month: 0, week: 0, last: null, recent: [] };
     current.total += 1;
+    if (member.created_at >= monthStart) current.month += 1;
+    if (member.created_at >= weekStart) current.week += 1;
     if (!current.last || member.created_at > current.last) current.last = member.created_at;
+    if (current.recent.length < RECENT_MEMBERS) current.recent.push(member);
     counts.set(member.client_id, current);
   }
 
+  // Uma unica assinatura para todas as fotos exibidas na pilha dos cartoes.
+  const recentRows = [...counts.values()].flatMap((aggregate) => aggregate.recent);
+  const recentPhotos = await signedUrls(recentRows.map((member) => member.photo_path));
+  const photoById = new Map(recentRows.map((member, index) => [member.id, recentPhotos[index] ?? null]));
+
   return rows.map((row, index) => {
-    const aggregate = counts.get(row.id) ?? { total: 0, last: null };
+    const aggregate = counts.get(row.id);
     return {
       ...toClient(row, {
         fields: fields.get(row.id) ?? [],
         invite: invites.get(row.id) ?? null,
         photoUrl: photos[index] ?? null,
       }),
-      memberCount: aggregate.total,
-      lastMemberAt: aggregate.last,
+      memberCount: aggregate?.total ?? 0,
+      lastMemberAt: aggregate?.last ?? null,
+      memberCountThisMonth: aggregate?.month ?? 0,
+      memberCountLast7Days: aggregate?.week ?? 0,
+      recentMembers: (aggregate?.recent ?? []).map((member) => ({
+        id: member.id,
+        name: member.name,
+        photo: photoById.get(member.id) ?? null,
+      })),
     };
   });
 }

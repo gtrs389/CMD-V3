@@ -39,8 +39,13 @@
   --color-navy-600: #26405f;
   --color-navy-300: #8ea6c4;
   --color-navy-200: #b8cae0;
+  --color-accent-50: #eaf1fe;
+  --color-accent-100: #d7e5fd;
   --color-accent-400: #4f9bff;
   --color-accent-500: #2f7de1;
+  /* Azul dos botoes e links de acao (contraste AA sobre branco) */
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
 
   /* Neutros */
   --color-ink-900: #17212b;
