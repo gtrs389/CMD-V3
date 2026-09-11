@@ -365,8 +365,10 @@ async function scopeLinksToClient(
   clientId: string,
 ): Promise<MemberLocationRow[]> {
   const clientMembers = await selectRows<{ id: string }>(TABLES.members, {
+    // O filtro do PostgREST precisa do operador: sem o `eq.` o banco recusa a
+    // consulta e o mapa do candidato nao abre.
     select: 'id',
-    filters: { client_id: clientId },
+    filters: { client_id: `eq.${clientId}` },
   });
   const memberIds = new Set(clientMembers.map((member) => member.id));
   return links.filter((link) => memberIds.has(link.member_id));
