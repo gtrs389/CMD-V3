@@ -24,6 +24,15 @@ interface PhotoUploadProps {
   allowCamera?: boolean;
   /** Some com a dica de formato quando o campo ja traz texto de ajuda proprio. */
   showFormatHint?: boolean;
+  /**
+   * `invite`: circulo tracejado que abre a escolha da imagem, com titulo e
+   * dica de formato ao lado — a apresentacao da pagina publica de cadastro.
+   */
+  appearance?: 'default' | 'invite';
+  /** Titulo ao lado do circulo na apresentacao `invite`. */
+  title?: string;
+  /** Marca o titulo com o asterisco de campo obrigatorio. */
+  required?: boolean;
   onError?: (message: string) => void;
 }
 
@@ -40,6 +49,9 @@ export function PhotoUpload({
   disabled = false,
   allowCamera = false,
   showFormatHint = true,
+  appearance = 'default',
+  title,
+  required = false,
   onError,
 }: PhotoUploadProps) {
   const inputId = useId();
@@ -70,6 +82,102 @@ export function PhotoUpload({
       if (galleryRef.current) galleryRef.current.value = '';
       if (cameraRef.current) cameraRef.current.value = '';
     }
+  }
+
+  const inputs = (
+    <>
+      <input
+        ref={galleryRef}
+        id={inputId}
+        type="file"
+        accept={ACCEPTED_IMAGE_ACCEPT_ATTR}
+        className="sr-only"
+        onChange={(event) => handleFile(event.target.files?.[0])}
+      />
+
+      {allowCamera ? (
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          onChange={(event) => handleFile(event.target.files?.[0])}
+        />
+      ) : null}
+    </>
+  );
+
+  if (appearance === 'invite') {
+    return (
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          disabled={disabled || processing}
+          aria-label={value ? 'Trocar foto' : (title ?? 'Adicionar foto')}
+          onClick={() => galleryRef.current?.click()}
+          className={cn(
+            'relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full transition-colors',
+            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+            value
+              ? 'border border-line bg-ink-100'
+              : 'border-2 border-dashed border-line-strong bg-ink-50 text-ink-400 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-700',
+            (disabled || processing) && 'cursor-not-allowed opacity-60',
+          )}
+        >
+          {value ? (
+            <img src={value} alt="Prévia da foto" className="size-full object-cover" />
+          ) : (
+            <Camera aria-hidden="true" className="size-7" />
+          )}
+
+          {processing ? (
+            <span className="absolute inset-0 flex items-center justify-center bg-ink-900/40">
+              <Loader2 className="size-6 animate-spin text-white" />
+            </span>
+          ) : null}
+        </button>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink-900">
+            {value ? 'Foto adicionada' : (title ?? 'Adicionar foto')}
+            {required ? (
+              <span aria-hidden="true" className="ml-1 text-danger-600">
+                *
+              </span>
+            ) : null}
+          </p>
+          <p className="mt-0.5 text-xs text-ink-500">JPG, PNG ou WEBP · até 2 MB</p>
+
+          {/* O seletor de arquivo do celular ja oferece a camera para estes
+              formatos, entao o circulo e o unico controle. */}
+          <div className="flex flex-wrap items-center gap-x-3">
+            {value ? (
+              <button
+                type="button"
+                disabled={disabled || processing}
+                onClick={() => {
+                  setLocalError(null);
+                  onChange(null);
+                }}
+                className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-danger-600 transition-colors hover:text-danger-700 disabled:opacity-60"
+              >
+                <Trash2 aria-hidden="true" className="size-3.5" />
+                Remover
+              </button>
+            ) : null}
+          </div>
+
+          {localError ? (
+            <p role="alert" className="mt-1 text-xs font-medium text-danger-600">
+              {localError}
+            </p>
+          ) : null}
+        </div>
+
+        {inputs}
+      </div>
+    );
   }
 
   return (
@@ -154,25 +262,7 @@ export function PhotoUpload({
         ) : null}
       </div>
 
-      <input
-        ref={galleryRef}
-        id={inputId}
-        type="file"
-        accept={ACCEPTED_IMAGE_ACCEPT_ATTR}
-        className="sr-only"
-        onChange={(event) => handleFile(event.target.files?.[0])}
-      />
-
-      {allowCamera ? (
-        <input
-          ref={cameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          onChange={(event) => handleFile(event.target.files?.[0])}
-        />
-      ) : null}
+      {inputs}
     </div>
   );
 }

@@ -31,3 +31,17 @@ export interface PersonalInvite {
   /** Recrutamento da operacao ligado pelo ADMIN. */
   operationActive: boolean;
 }
+
+/**
+ * Dono do link, como a pagina publica de cadastro o exibe.
+ *
+ * Somente o necessario para a pessoa saber quem a convidou. Nada privado
+ * passa por aqui: nem e-mail, nem identificador interno de usuario,
+ * integrante ou operacao.
+ */
+export interface PublicInviteOwner {
+  name: string;
+  /** URL assinada da foto. Nulo quando nao ha foto: a tela usa as iniciais. */
+  photoUrl: string | null;
+  role: 'CANDIDATE' | 'EQUIPE';
+}

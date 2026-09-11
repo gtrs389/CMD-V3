@@ -1,15 +1,17 @@
 'use client';
 
 import { AlertTriangle } from 'lucide-react';
-import type { ClientFormConfig, CustomField } from '@/lib/types';
+import type { ClientFormConfig } from '@/lib/types';
 import {
   CONFIRMATION_NOTICE,
   CONFIRMATION_TITLE,
   CONFIRMATION_VERSION,
 } from '@/lib/domain/confirmation';
-import { formatResponse, visibleFields, type DynamicFormValues } from '@/lib/validation/dynamic-form';
-import { formatPhone } from '@/lib/utils/phone';
-import { formatCpf, formatVoterId } from '@/lib/utils/documents';
+import {
+  formatFilledValue,
+  visibleFields,
+  type DynamicFormValues,
+} from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 
@@ -20,24 +22,6 @@ interface ConfirmSubmissionModalProps {
   submitting: boolean;
   onCancel: () => void;
   onConfirm: () => void;
-}
-
-/** Formato de leitura de cada campo, igual ao que a pessoa digitou. */
-function displayValue(field: CustomField, raw: unknown): string {
-  if (field.type === 'photo') return raw ? 'Foto enviada' : '--';
-
-  const value = typeof raw === 'boolean' || Array.isArray(raw) ? raw : ((raw as string) ?? '');
-  if (field.systemKey === 'phone' || field.type === 'phone') {
-    return typeof value === 'string' && value ? formatPhone(value) : '--';
-  }
-  if (field.systemKey === 'cpf') {
-    return typeof value === 'string' && value ? formatCpf(value) : '--';
-  }
-  if (field.systemKey === 'voter_id') {
-    return typeof value === 'string' && value ? formatVoterId(value) : '--';
-  }
-
-  return formatResponse(field, value as never);
 }
 
 /**
@@ -104,7 +88,7 @@ export function ConfirmSubmissionModal({
               <div key={field.id} className="flex flex-col gap-0.5 px-3 py-2.5 sm:flex-row sm:gap-3">
                 <dt className="text-xs text-ink-500 sm:w-2/5 sm:text-sm">{field.label}</dt>
                 <dd className="text-sm font-medium break-words text-ink-900 sm:flex-1">
-                  {displayValue(field, values[field.id])}
+                  {formatFilledValue(field, values[field.id])}
                 </dd>
               </div>
             ))}

@@ -1,6 +1,29 @@
-import type { FieldResponse } from '@/lib/types';
+import type { Client, FieldResponse, PublicInviteOwner } from '@/lib/types';
 import { collectDeviceSignals, type DeviceSignals } from '@/lib/utils/device';
 import { api } from './api';
+
+/**
+ * Convite aberto pelo link publico.
+ *
+ * O formulario e a identificacao de quem convidou vem da mesma resposta,
+ * resolvida no servidor a partir do token. `owner` traz apenas nome, foto e
+ * perfil; nulo em convite legado, sem dono registrado.
+ */
+export interface PublicInvite {
+  client: Client;
+  owner: PublicInviteOwner | null;
+}
+
+/** Nulo quando o link nao existe ou nao aceita cadastro agora. */
+export async function fetchPublicInvite(token: string): Promise<PublicInvite | null> {
+  if (!token) return null;
+
+  const { client, owner } = await api<{ client: Client | null; owner: PublicInviteOwner | null }>(
+    `/api/public/convite/${encodeURIComponent(token)}`,
+  );
+
+  return client ? { client, owner: owner ?? null } : null;
+}
 
 /**
  * Envio do formulario publico.

@@ -1,29 +1,40 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Check, CheckCircle2, Copy, KeyRound, LogIn, Send, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  Copy,
+  KeyRound,
+  LogIn,
+  Send,
+  ShieldAlert,
+} from 'lucide-react';
 import Link from 'next/link';
-import { appConfig } from '@/config/app.config';
-import type { Client } from '@/lib/types';
+import type { Client, PublicInviteOwner } from '@/lib/types';
 import { submitInvite, type CreatedAccess } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories/http/api';
 import { copyText } from '@/lib/utils/clipboard';
 import { LOGIN_PATH } from '@/lib/auth/constants';
-import {
-  CONSENT_KEY,
-  toSubmission,
-  visibleFields,
-  type DynamicFormValues,
-} from '@/lib/validation/dynamic-form';
-import { useFormDraft } from '@/hooks/use-form-draft';
-import { Avatar } from '@/components/ui/Avatar';
+import { CONSENT_KEY, toSubmission, visibleFields } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
+import {
+  InviteBrandBar,
+  InviteOwnerAside,
+  InviteOwnerBanner,
+  InviteProgress,
+  InviteStateShell,
+  InviteStepChips,
+} from './InviteChrome';
+import { InviteReviewStep } from './InviteReviewStep';
+import { buildInviteSteps, isWideField, stepValueKeys } from './invite-steps';
 
 /**
  * Aviso curto sobre os sinais tecnicos registrados no envio.
@@ -32,21 +43,48 @@ import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 const DEVICE_NOTICE =
   'Ao enviar, registramos dados técnicos do aparelho e da conexão para segurança e prevenção de fraude.';
 
+const REQUIRED_HINT = 'Campos marcados com * são obrigatórios.';
+
 interface PublicFormViewProps {
   client: Client;
+  /** Quem enviou o convite: apenas nome, foto e perfil. */
+  owner: PublicInviteOwner | null;
   /** Token do link aberto. Identifica no servidor a operacao e o responsavel. */
   token: string;
 }
 
+/** Rolagem sem movimento quando o sistema pede menos animacao. */
+function scrollBehavior(): ScrollBehavior {
+  if (typeof window === 'undefined') return 'auto';
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+}
+
+/** Leva o foco para o primeiro campo invalido da etapa. */
+function focusFirstInvalid(container: HTMLElement | null) {
+  if (!container) return;
+
+  const invalid = container.querySelector<HTMLElement>('[aria-invalid="true"]');
+  const target =
+    invalid &&
+    (invalid.matches('input, select, textarea, button, [tabindex]')
+      ? invalid
+      : invalid.querySelector<HTMLElement>('input, select, textarea, button'));
+
+  const anchor = target ?? invalid ?? container.querySelector<HTMLElement>('[role="alert"]');
+  anchor?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+  target?.focus({ preventScroll: true });
+}
+
 /**
- * Formulario publico de cadastro de equipe.
+ * Pagina publica de cadastro, em quatro etapas.
  *
- * Pensado para o celular: uma coluna, campos grandes, foto pela camera ou
- * galeria, rascunho preservado e protecao contra envio duplicado.
+ * Os campos, a obrigatoriedade e as opcoes vem da configuracao real feita
+ * pelo ADMIN: campo desativado nao aparece e nao e enviado. Nada do que e
+ * digitado sai da memoria da aba — nem `localStorage`, nem `sessionStorage`,
+ * nem cookie, nem URL — e o envio acontece so depois da confirmacao final.
  */
-export function PublicFormView({ client, token }: PublicFormViewProps) {
+export function PublicFormView({ client, owner, token }: PublicFormViewProps) {
   const toast = useToast();
-  const draft = useFormDraft<DynamicFormValues>(`convite.${token}`);
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
@@ -59,58 +97,75 @@ export function PublicFormView({ client, token }: PublicFormViewProps) {
    */
   const [access, setAccess] = useState<CreatedAccess | null>(null);
   const submittedRef = useRef(false);
-  const restoredRef = useRef(false);
+  const stepRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
-  const form = useDynamicForm(client.form, undefined, (values) => draft.save(values));
-  const fields = visibleFields(client.form);
-  const { privacy } = client.form;
+  const form = useDynamicForm(client.form);
+  const steps = useMemo(() => buildInviteSteps(client.form), [client.form]);
+  const allFields = useMemo(() => visibleFields(client.form), [client.form]);
 
-  const { reset } = form;
+  const [index, setIndex] = useState(0);
+  const position = Math.min(index, steps.length - 1);
+  const current = steps[position];
+  const isReview = current.id === 'revisao';
+  const fillSteps = useMemo(() => steps.filter((step) => step.id !== 'revisao'), [steps]);
 
-  // Recupera o preenchimento anterior uma unica vez, apos a hidratacao.
-  useEffect(() => {
-    if (restoredRef.current) return;
-    restoredRef.current = true;
+  /** Muda de etapa e volta o cartao para o topo. */
+  function goTo(next: number) {
+    setIndex(Math.max(0, Math.min(next, steps.length - 1)));
+    cardRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+  }
 
-    const saved = draft.read();
-    if (!saved) return;
+  /** Abre a etapa do primeiro campo com erro, quando ele nao e desta. */
+  function jumpToInvalid(): boolean {
+    const invalid = Object.keys(form.errors);
+    if (invalid.length === 0) return false;
 
-    const known = new Set(fields.map((field) => field.id));
-    known.add(CONSENT_KEY);
-
-    const merged: DynamicFormValues = {};
-    for (const [key, value] of Object.entries(saved)) {
-      if (known.has(key) && value !== undefined) merged[key] = value;
+    const target = steps.findIndex((step) =>
+      stepValueKeys(step, client.form).some((key) => invalid.includes(key)),
+    );
+    if (target >= 0 && target !== position) {
+      goTo(target);
+      return true;
     }
-
-    if (Object.keys(merged).length > 0) {
-      reset({ ...form.values, ...merged });
-      toast.info('Recuperamos o preenchimento anterior.');
-    }
-    // Executa apenas uma vez, na montagem.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return false;
+  }
 
   /**
-   * Primeiro passo: valida e abre a conferencia.
-   * Nada e salvo e nenhuma consulta acontece aqui.
+   * "Continuar": valida somente a etapa atual.
+   *
+   * Com erro, a pessoa fica onde esta, ve a mensagem e o foco vai para o
+   * primeiro campo invalido.
    */
-  function handleSubmit(event: React.FormEvent) {
+  function handleAdvance(event: React.FormEvent) {
     event.preventDefault();
     if (submittedRef.current || submitting) return;
 
-    const values = form.validate();
-    if (!values) {
+    const keys = stepValueKeys(current, client.form);
+    if (!form.validateOnly(keys)) {
+      toast.error('Revise os campos destacados para continuar.');
+      window.requestAnimationFrame(() => focusFirstInvalid(stepRef.current));
+      return;
+    }
+
+    if (!isReview) {
+      goTo(position + 1);
+      return;
+    }
+
+    // Ultima etapa: confere o formulario inteiro antes da confirmacao.
+    if (!form.validate()) {
       toast.error('Revise os campos destacados antes de enviar.');
-      const firstError = document.querySelector('[aria-invalid="true"], [role="alert"]');
-      firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.requestAnimationFrame(() => {
+        if (!jumpToInvalid()) focusFirstInvalid(stepRef.current);
+      });
       return;
     }
 
     setConfirming(true);
   }
 
-  /** Segundo passo: envio, apos a confirmacao explicita. */
+  /** Envio, apos a confirmacao explicita. */
   async function handleConfirm() {
     // Barra duplo clique e reenvio antes mesmo do estado do React atualizar.
     if (submittedRef.current || submitting) return;
@@ -146,7 +201,6 @@ export function PublicFormView({ client, token }: PublicFormViewProps) {
         consentAt: payload.consentAt,
       });
 
-      draft.clear();
       setConfirming(false);
       setAccess(outcome);
       setDone(true);
@@ -170,6 +224,7 @@ export function PublicFormView({ client, token }: PublicFormViewProps) {
         onNew={() => {
           submittedRef.current = false;
           form.reset();
+          setIndex(0);
           // A senha sai da memoria assim que a tela muda.
           setAccess(null);
           setDone(false);
@@ -178,104 +233,141 @@ export function PublicFormView({ client, token }: PublicFormViewProps) {
     );
   }
 
-  return (
-    <main className="safe-x min-h-dvh bg-surface-muted pb-10">
-      <header className="safe-top border-b border-line bg-surface">
-        <div className="mx-auto flex w-full max-w-lg items-center gap-3 px-4 py-4">
-          <Avatar name={client.name} src={client.photo} size="md" />
-          <div className="min-w-0">
-            <p className="truncate text-base font-semibold text-ink-900">{client.name}</p>
-            <p className="truncate text-sm text-ink-500">Cadastro de equipe</p>
-          </div>
-        </div>
-      </header>
+  const nextLabel = isReview ? 'Confirmar cadastro' : 'Continuar';
 
-      <div className="mx-auto w-full max-w-lg px-4 py-5">
-        {client.form.introText ? (
-          <p className="mb-5 animate-rise rounded-card border border-line bg-surface p-4 text-sm text-ink-700">
-            {client.form.introText}
-          </p>
-        ) : null}
-
-        <form
-          onSubmit={handleSubmit}
-          noValidate
-          className="animate-rise space-y-5 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5"
+  const actions = (
+    <>
+      {position > 0 ? (
+        <Button
+          variant="secondary"
+          disabled={submitting}
+          onClick={() => goTo(position - 1)}
+          className="shrink-0"
         >
-          <LocationProvider fields={fields} values={form.values} setValue={form.setValue}>
-            {fields.map((field) => (
-              <DynamicFieldInput
-                key={field.id}
-                field={field}
-                idPrefix="publico"
-                allowCamera
-                disabled={submitting}
-                value={form.values[field.id] ?? null}
-                error={form.errors[field.id]}
-                onChange={(value) => form.setValue(field.id, value)}
-                onImageError={(message) => toast.error(message)}
-              />
-            ))}
-          </LocationProvider>
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          Voltar
+        </Button>
+      ) : null}
 
-          {privacy.enabled ? (
-            <section
-              aria-labelledby="aviso-privacidade"
-              className="rounded-control border border-line bg-ink-50 p-3"
-            >
-              <h2
-                id="aviso-privacidade"
-                className="flex items-center gap-2 text-sm font-semibold text-ink-900"
-              >
-                <ShieldCheck aria-hidden="true" className="size-4 text-brand-700" />
-                {privacy.title}
-              </h2>
-              <p className="mt-1.5 text-xs whitespace-pre-line text-ink-700">{privacy.text}</p>
-              <p className="mt-1.5 text-xs text-ink-700">{DEVICE_NOTICE}</p>
+      <Button
+        type="submit"
+        form="cadastro-publico"
+        variant="accent"
+        loading={submitting}
+        className="flex-1 lg:flex-none"
+      >
+        {isReview && !submitting ? <Send aria-hidden="true" className="size-4" /> : null}
+        {nextLabel}
+        {!isReview ? <ArrowRight aria-hidden="true" className="size-4" /> : null}
+      </Button>
+    </>
+  );
 
-              {privacy.requireConsent ? (
-                <>
-                  <Checkbox
-                    id="publico-consentimento"
-                    className="mt-1"
-                    label={privacy.consentLabel}
-                    checked={form.values[CONSENT_KEY] === true}
+  return (
+    <main className="safe-x min-h-dvh bg-surface-muted">
+      <InviteBrandBar />
+
+      <LocationProvider fields={allFields} values={form.values} setValue={form.setValue}>
+        <div className="mx-auto grid w-full max-w-[76rem] grid-cols-1 gap-3 px-4 pt-4 pb-32 sm:px-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-6 lg:py-8 lg:pb-10">
+          {/* Celular: cartao azul-marinho horizontal. */}
+          <InviteOwnerBanner owner={owner} fallbackName={client.name} className="lg:hidden" />
+
+          {/* Desktop: cartao azul-marinho lateral, com as etapas verticais. */}
+          <InviteOwnerAside
+            owner={owner}
+            fallbackName={client.name}
+            steps={steps}
+            current={position}
+            className="hidden lg:flex"
+          />
+
+          {/* Celular: progresso em cartao proprio. */}
+          <div className="rounded-card border border-line bg-surface p-3.5 shadow-card lg:hidden">
+            <InviteProgress steps={steps} current={position} />
+            <InviteStepChips steps={steps} current={position} />
+          </div>
+
+          <section
+            ref={cardRef}
+            className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:flex lg:flex-col lg:p-7"
+          >
+            <InviteProgress steps={steps} current={position} className="hidden lg:block" />
+
+            <div className="lg:mt-7">
+              <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
+                {current.title}
+              </h1>
+              <p className="mt-1.5 text-sm text-ink-500">{current.description}</p>
+            </div>
+
+            <form id="cadastro-publico" onSubmit={handleAdvance} noValidate className="contents">
+              <div key={current.id} ref={stepRef} className="mt-5 animate-rise lg:mt-6 lg:flex-1">
+                {position === 0 && client.form.introText ? (
+                  <p className="mb-4 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
+                    {client.form.introText}
+                  </p>
+                ) : null}
+
+                {isReview ? (
+                  <InviteReviewStep
+                    config={client.form}
+                    values={form.values}
+                    steps={fillSteps}
                     disabled={submitting}
-                    onChange={(event) => form.setValue(CONSENT_KEY, event.target.checked)}
+                    consentError={form.errors[CONSENT_KEY]}
+                    deviceNotice={DEVICE_NOTICE}
+                    onEditStep={goTo}
+                    onConsentChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
                   />
-                  {form.errors[CONSENT_KEY] ? (
-                    <p role="alert" className="text-xs font-medium text-danger-600">
-                      {form.errors[CONSENT_KEY]}
-                    </p>
-                  ) : null}
-                </>
-              ) : null}
-            </section>
-          ) : null}
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-5">
+                    {current.fields.map((field) => (
+                      <div key={field.id} className={isWideField(field) ? 'sm:col-span-2' : undefined}>
+                        <DynamicFieldInput
+                          field={field}
+                          idPrefix="publico"
+                          variant="invite"
+                          allowCamera
+                          disabled={submitting}
+                          value={form.values[field.id] ?? null}
+                          error={form.errors[field.id]}
+                          onChange={(value) => form.setValue(field.id, value)}
+                          onImageError={(message) => toast.error(message)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          <Button type="submit" size="lg" fullWidth loading={submitting}>
-            {!submitting ? <Send aria-hidden="true" className="size-4" /> : null}
-            {submitting ? 'Enviando...' : 'Enviar cadastro'}
-          </Button>
+              {/* Desktop: acoes no proprio cartao. */}
+              <div className="mt-7 hidden items-center justify-between gap-4 lg:flex">
+                <p className="text-xs text-ink-500">{REQUIRED_HINT}</p>
+                <div className="flex shrink-0 items-center gap-2">{actions}</div>
+              </div>
+            </form>
 
-          <p className="text-center text-xs text-ink-500">
-            Seu preenchimento fica salvo neste aparelho até o envio.
-          </p>
+            <p className="mt-5 text-xs text-ink-500 lg:hidden">{REQUIRED_HINT}</p>
+          </section>
+        </div>
+      </LocationProvider>
 
-          <p className="text-center text-xs text-ink-500">{DEVICE_NOTICE}</p>
-        </form>
-
-        <ConfirmSubmissionModal
-          open={confirming}
-          config={client.form}
-          values={form.values}
-          submitting={submitting}
-          onCancel={() => setConfirming(false)}
-          onConfirm={handleConfirm}
-        />
-
-        <p className="mt-6 text-center text-xs text-ink-400">{appConfig.shortName}</p>
+      {/* Celular: "Continuar" fixo no rodape, com area segura. O conteudo
+          reserva espaco equivalente para nunca ficar encoberto. */}
+      <div className="safe-bottom safe-x fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
+        <div className="mx-auto flex w-full max-w-[76rem] items-center gap-2 px-4 py-3 sm:px-6">
+          {actions}
+        </div>
       </div>
+
+      <ConfirmSubmissionModal
+        open={confirming}
+        config={client.form}
+        values={form.values}
+        submitting={submitting}
+        onCancel={() => setConfirming(false)}
+        onConfirm={handleConfirm}
+      />
     </main>
   );
 }
@@ -289,29 +381,25 @@ interface SuccessScreenProps {
 
 function SuccessScreen({ client, access, onNew }: SuccessScreenProps) {
   return (
-    <main className="safe-x flex min-h-dvh items-center justify-center bg-surface-muted px-4 py-12">
-      <div className="w-full max-w-md animate-rise rounded-card border border-line bg-surface p-6 text-center shadow-card sm:p-8">
-        <span
-          aria-hidden="true"
-          className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-50 text-success-600"
-        >
-          <CheckCircle2 className="size-7" />
-        </span>
+    <InviteStateShell>
+      <span
+        aria-hidden="true"
+        className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-50 text-success-600"
+      >
+        <CheckCircle2 className="size-7" />
+      </span>
 
-        <h1 className="text-lg font-semibold text-ink-900">{client.form.successMessage}</h1>
-        <p className="mt-2 text-sm text-balance text-ink-500">
-          Seu cadastro foi registrado na equipe de {client.name}.
-        </p>
+      <h1 className="text-lg font-semibold text-ink-900">{client.form.successMessage}</h1>
+      <p className="mt-2 text-sm text-balance text-ink-500">
+        Seu cadastro foi registrado na equipe de {client.name}.
+      </p>
 
-        {access ? <AccessCreatedCard access={access} /> : null}
+      {access ? <AccessCreatedCard access={access} /> : null}
 
-        <Button variant="secondary" fullWidth className="mt-3" onClick={onNew}>
-          Cadastrar outra pessoa
-        </Button>
-
-        <p className="mt-6 text-xs text-ink-400">{appConfig.shortName}</p>
-      </div>
-    </main>
+      <Button variant="secondary" fullWidth className="mt-3" onClick={onNew}>
+        Cadastrar outra pessoa
+      </Button>
+    </InviteStateShell>
   );
 }
 

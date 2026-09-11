@@ -27,6 +27,8 @@ export interface InviteOwner {
   userId: string;
   name: string;
   role: Extract<Role, 'CANDIDATE' | 'EQUIPE'>;
+  /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */
+  memberId: string | null;
 }
 
 export interface ResolvedInvite {
@@ -62,10 +64,12 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
 
   let owner: InviteOwner | null = null;
   if (invite.user_id) {
-    const user = await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(
-      TABLES.users,
-      { select: 'id,name,role,client_id,is_active', filters: { id: `eq.${invite.user_id}` } },
-    );
+    const user = await selectOne<
+      Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'member_id' | 'is_active'>
+    >(TABLES.users, {
+      select: 'id,name,role,client_id,member_id,is_active',
+      filters: { id: `eq.${invite.user_id}` },
+    });
 
     // O dono precisa continuar ativo e pertencer a MESMA operacao do convite.
     // Vinculo entre candidatos diferentes nao passa daqui, nem do banco.
@@ -75,7 +79,12 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
       user.client_id === invite.client_id &&
       (user.role === 'CANDIDATE' || user.role === 'EQUIPE')
     ) {
-      owner = { userId: user.id, name: user.name, role: user.role };
+      owner = {
+        userId: user.id,
+        name: user.name,
+        role: user.role,
+        memberId: user.member_id,
+      };
     } else {
       // Dono inativo ou incoerente: o link para de aceitar cadastros.
       return { clientId: invite.client_id, owner: null, active: false, operationActive: false };

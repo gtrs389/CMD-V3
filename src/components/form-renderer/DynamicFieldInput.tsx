@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PhotoUpload } from '@/components/common/PhotoUpload';
 import { LocationField } from './LocationField';
 import { useLocationChain } from './location-context';
+import { RadioCardGroup } from './RadioCardGroup';
 import { RelationshipPicker } from './RelationshipPicker';
 
 interface DynamicFieldInputProps {
@@ -25,6 +26,12 @@ interface DynamicFieldInputProps {
   idPrefix?: string;
   allowCamera?: boolean;
   onImageError?: (message: string) => void;
+  /**
+   * `invite`: apresentacao da pagina publica de cadastro — foto em circulo
+   * tracejado e genero em cartoes de escolha. O painel administrativo segue
+   * com `default`.
+   */
+  variant?: 'default' | 'invite';
 }
 
 /**
@@ -42,6 +49,7 @@ export function DynamicFieldInput({
   idPrefix = 'campo',
   allowCamera = false,
   onImageError,
+  variant = 'default',
 }: DynamicFieldInputProps) {
   const id = `${idPrefix}-${field.id}`;
   const help = field.helpText || undefined;
@@ -73,7 +81,14 @@ export function DynamicFieldInput({
 
   if (field.type === 'photo') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field
+        id={id}
+        label={field.label}
+        help={help}
+        error={error}
+        required={field.required}
+        hideLabel={variant === 'invite'}
+      >
         <PhotoUpload
           value={typeof value === 'string' ? value : null}
           onChange={(next) => onChange(next)}
@@ -81,7 +96,28 @@ export function DynamicFieldInput({
           allowCamera={allowCamera}
           size="lg"
           showFormatHint={!help}
+          appearance={variant === 'invite' ? 'invite' : 'default'}
+          title={variant === 'invite' ? field.label : undefined}
+          required={field.required}
           onError={onImageError}
+        />
+      </Field>
+    );
+  }
+
+  // Genero na pagina publica: cartoes de escolha, como no desenho do convite.
+  if (variant === 'invite' && field.systemKey === 'gender') {
+    return (
+      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+        <RadioCardGroup
+          idPrefix={id}
+          label={field.label}
+          options={GENDER_OPTIONS}
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          invalid={invalid}
+          describedBy={described}
+          onChange={(next) => onChange(next)}
         />
       </Field>
     );

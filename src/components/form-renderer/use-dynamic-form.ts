@@ -16,6 +16,14 @@ export interface DynamicFormState {
   reset: (next?: DynamicFormValues) => void;
   /** Valida tudo e devolve os valores quando nao ha erro. */
   validate: () => DynamicFormValues | null;
+  /**
+   * Valida somente os campos informados, para formularios em etapas.
+   *
+   * Erro de outra etapa nao impede o avanco nem aparece na tela: o que vale
+   * e o que esta sendo preenchido agora. O envio final continua passando por
+   * `validate`, que confere tudo.
+   */
+  validateOnly: (fieldIds: readonly string[]) => boolean;
   hasErrors: boolean;
 }
 
@@ -62,21 +70,44 @@ export function useDynamicForm(
     [config],
   );
 
-  const validate = useCallback((): DynamicFormValues | null => {
+  /** Erros de todos os campos, sem tocar no estado da tela. */
+  const collectErrors = useCallback((): Record<string, string> => {
     const result = schema.safeParse(values);
-    if (result.success) {
-      setErrors({});
-      return result.data;
-    }
+    if (result.success) return {};
 
     const collected: Record<string, string> = {};
     for (const issue of result.error.issues) {
       const key = issue.path[0];
       if (typeof key === 'string' && !collected[key]) collected[key] = issue.message;
     }
-    setErrors(collected);
-    return null;
+    return collected;
   }, [schema, values]);
+
+  const validate = useCallback((): DynamicFormValues | null => {
+    const result = schema.safeParse(values);
+    if (result.success) {
+      setErrors({});
+      return result.data;
+    }
+    setErrors(collectErrors());
+    return null;
+  }, [collectErrors, schema, values]);
+
+  const validateOnly = useCallback(
+    (fieldIds: readonly string[]): boolean => {
+      const scope = new Set(fieldIds);
+      const found = collectErrors();
+
+      const step: Record<string, string> = {};
+      for (const [key, message] of Object.entries(found)) {
+        if (scope.has(key)) step[key] = message;
+      }
+
+      setErrors(step);
+      return Object.keys(step).length === 0;
+    },
+    [collectErrors],
+  );
 
   return {
     values,
@@ -84,6 +115,7 @@ export function useDynamicForm(
     setValue,
     reset,
     validate,
+    validateOnly,
     hasErrors: Object.keys(errors).length > 0,
   };
 }

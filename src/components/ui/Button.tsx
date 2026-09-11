@@ -4,12 +4,15 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils/cn';
 import { Spinner } from './Spinner';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'subtle';
+type Variant = 'primary' | 'accent' | 'secondary' | 'ghost' | 'danger' | 'subtle';
 type Size = 'sm' | 'md' | 'lg';
 
 const VARIANTS: Record<Variant, string> = {
   primary:
     'bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900 shadow-card disabled:bg-brand-300',
+  /** Azul de acao, usado no avanco do cadastro publico. */
+  accent:
+    'bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-700 shadow-card disabled:bg-accent-400',
   secondary:
     'bg-surface text-ink-900 border border-line-strong hover:bg-ink-50 active:bg-ink-100 shadow-card',
   ghost: 'bg-transparent text-ink-700 hover:bg-ink-100 active:bg-ink-200',

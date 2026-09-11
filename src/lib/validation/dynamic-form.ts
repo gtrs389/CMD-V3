@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import type { ClientFormConfig, CustomField, FieldResponse, FieldValue, Member } from '@/lib/types';
-import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
+import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/phone';
 import {
+  formatCpf,
+  formatVoterId,
+  genderLabel,
   isValidCpf,
   isValidVoterId,
   normalizeCpf,
@@ -454,4 +457,29 @@ export function formatResponse(field: CustomField, value: FieldValue): string {
     default:
       return String(value);
   }
+}
+
+/**
+ * Texto de leitura de um valor ainda em preenchimento.
+ *
+ * Usado na revisao e na confirmacao final do formulario publico: mostra
+ * exatamente o que a pessoa informou, ja formatado (telefone, CPF, titulo e
+ * genero), sem nada normalizado pela metade.
+ */
+export function formatFilledValue(field: CustomField, raw: DynamicValue | undefined): string {
+  if (field.type === 'photo') return raw ? 'Foto enviada' : '--';
+
+  const value = typeof raw === 'boolean' || Array.isArray(raw) ? raw : (raw ?? '');
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return '--';
+
+    if (field.systemKey === 'phone' || field.type === 'phone') return formatPhone(trimmed);
+    if (field.systemKey === 'cpf') return formatCpf(trimmed);
+    if (field.systemKey === 'voter_id') return formatVoterId(trimmed);
+    if (field.systemKey === 'gender') return genderLabel(trimmed) ?? trimmed;
+  }
+
+  return formatResponse(field, value as FieldValue);
 }
