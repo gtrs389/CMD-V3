@@ -167,6 +167,33 @@ export function districtsUrl(cityId: number): string {
 export const UF_CODES: readonly string[] = UF_OPTIONS.map((option) => option.id);
 
 /* -------------------------------------------------------------------------
+   Caminhos internos usados pelo navegador
+   ------------------------------------------------------------------------- */
+
+/**
+ * Versao do formato devolvido pelas rotas internas.
+ *
+ * As respostas ficam guardadas por dias no navegador e na borda. Mudar este
+ * numero descarta o que foi guardado com o formato anterior: sem isso, uma
+ * lista antiga de municipios (que trazia o codigo do IBGE no lugar do `id`)
+ * continuaria pedindo bairros com o identificador errado.
+ */
+export const LOCATION_FORMAT = 2;
+
+export function statesPath(): string {
+  return `/api/localidades/estados?v=${LOCATION_FORMAT}`;
+}
+
+export function citiesPath(uf: string): string {
+  return `/api/localidades/municipios/${encodeURIComponent(uf)}?v=${LOCATION_FORMAT}`;
+}
+
+/** Sempre o `id` interno do municipio, nunca o `ibgeId`. */
+export function districtsPath(city: Pick<CityOption, 'id'>): string {
+  return `/api/localidades/bairros/${city.id}?v=${LOCATION_FORMAT}`;
+}
+
+/* -------------------------------------------------------------------------
    Encadeamento Estado -> Municipio -> Bairro
    ------------------------------------------------------------------------- */
 
