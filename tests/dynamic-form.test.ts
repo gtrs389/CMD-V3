@@ -182,6 +182,7 @@ describe('conversao para persistencia', () => {
       email: null,
       recruitedBy: null,
       access: 'NO_EMAIL' as const,
+    userId: null,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
     };

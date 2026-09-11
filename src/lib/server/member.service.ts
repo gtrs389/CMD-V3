@@ -68,9 +68,11 @@ async function loadResponses(memberIds: string[]): Promise<Map<string, MemberRes
 interface MemberContext {
   recruiterPhoto: Map<string, string | null>;
   access: Map<string, AccessStatus>;
+  /** Usuario de cada integrante: e ele que aparece no snapshot de origem. */
+  userId: Map<string, string>;
 }
 
-type AccessColumns = Pick<UserRow, 'member_id' | 'is_active' | 'password_hash'>;
+type AccessColumns = Pick<UserRow, 'id' | 'member_id' | 'is_active' | 'password_hash'>;
 
 function statusOf(row: AccessColumns | undefined, email: string | null): AccessStatus {
   // Sem e-mail nao ha como entrar: o integrante antigo fica assim ate que
@@ -82,7 +84,11 @@ function statusOf(row: AccessColumns | undefined, email: string | null): AccessS
 }
 
 async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
-  const context: MemberContext = { recruiterPhoto: new Map(), access: new Map() };
+  const context: MemberContext = {
+    recruiterPhoto: new Map(),
+    access: new Map(),
+    userId: new Map(),
+  };
   if (rows.length === 0) return context;
 
   const recruiterIds = [
@@ -91,7 +97,7 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
 
   const [users, recruiters] = await Promise.all([
     selectRows<AccessColumns>(TABLES.users, {
-      select: 'member_id,is_active,password_hash',
+      select: 'id,member_id,is_active,password_hash',
       filters: { member_id: inFilter(rows.map((row) => row.id)) },
     }),
     recruiterIds.length
@@ -104,7 +110,9 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
 
   const byMember = new Map(users.map((row) => [row.member_id, row]));
   for (const row of rows) {
-    context.access.set(row.id, statusOf(byMember.get(row.id) ?? undefined, row.email));
+    const user = byMember.get(row.id);
+    context.access.set(row.id, statusOf(user ?? undefined, row.email));
+    if (user) context.userId.set(row.id, user.id);
   }
 
   if (recruiters.length === 0) return context;
@@ -164,6 +172,7 @@ async function assembleMany(rows: MemberRow[]): Promise<Member[]> {
       photoUrl: photos[index] ?? null,
       recruitedBy: recruiterOf(row, context),
       access: context.access.get(row.id) ?? 'NO_EMAIL',
+      userId: context.userId.get(row.id) ?? null,
     }),
   );
 }

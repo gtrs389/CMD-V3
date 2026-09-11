@@ -55,6 +55,14 @@ export interface Member extends Timestamped {
   recruitedBy: Recruiter | null;
   /** Estado do acesso do proprio integrante ao CMD. */
   access: AccessStatus;
+  /**
+   * Usuario do proprio integrante, quando ele ja tem acesso.
+   *
+   * E o que liga a pessoa aos cadastros que ELA trouxe: o snapshot de origem
+   * de cada cadastro guarda justamente este identificador. Nulo enquanto o
+   * acesso nao existe.
+   */
+  userId: string | null;
 }
 
 export interface MemberInput {

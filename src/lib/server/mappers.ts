@@ -135,6 +135,8 @@ export interface ToMemberOptions {
   recruitedBy: Recruiter | null;
   /** Estado do acesso do proprio integrante ao CMD. */
   access: AccessStatus;
+  /** Usuario do proprio integrante. Nulo enquanto o acesso nao existe. */
+  userId: string | null;
 }
 
 export function toMember(row: MemberRow, options: ToMemberOptions): Member {
@@ -161,6 +163,7 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
     source: row.source,
     recruitedBy: options.recruitedBy,
     access: options.access,
+    userId: options.userId,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

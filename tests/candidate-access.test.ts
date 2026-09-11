@@ -37,14 +37,16 @@ const CANDIDATO_A: SessionUser = {
 const CANDIDATO_B: SessionUser = { ...CANDIDATO_A, id: 'u-b', candidateId: 'cli-b' };
 
 describe('perfil Candidato', () => {
-  it('é exibido como Time e entra no painel', () => {
-    expect(ROLE_LABELS.CANDIDATE).toBe('Time');
+  it('é exibido como Administrador do time e entra no painel', () => {
+    expect(ROLE_LABELS.CANDIDATE).toBe('Administrador do time');
     expect(hasPanelAccess(CANDIDATO_A)).toBe(true);
     expect(hasPanelAccess(ADMIN)).toBe(true);
   });
 
   it('lê apenas o que é da própria equipe', () => {
-    for (const permissao of ['client.view', 'member.view', 'invite.view'] as const) {
+    // O mapa entra como leitura: o recorte por operação é imposto pelo
+    // servidor, a partir da sessão.
+    for (const permissao of ['client.view', 'member.view', 'invite.view', 'map.view'] as const) {
       expect(can(CANDIDATO_A, permissao)).toBe(true);
     }
   });
@@ -67,7 +69,7 @@ describe('perfil Candidato', () => {
       'verification.view',
       'verification.retry',
       'device.view',
-      'map.view',
+      // Localizar cadastro pendente aciona consulta paga: só o ADMIN.
       'map.resolve',
       'settings.view',
       'settings.manage',
@@ -221,7 +223,7 @@ describe('proteção no servidor', () => {
     expect(await statusOf(() => requireClientAccess('client.update', 'cli-a'))).toBe(403);
     expect(await statusOf(() => requirePermission('client.list'))).toBe(403);
     expect(await statusOf(() => requirePermission('settings.view'))).toBe(403);
-    expect(await statusOf(() => requirePermission('map.view'))).toBe(403);
+    expect(await statusOf(() => requirePermission('map.resolve'))).toBe(403);
   });
 
   it('confere o vínculo do integrante pelo banco', async () => {
