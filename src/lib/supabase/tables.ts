@@ -1,7 +1,7 @@
 import 'server-only';
 import type { FieldType, FieldValue, SystemFieldKey } from '@/lib/types';
 import type { StepStatus, VerificationStatus } from '@/lib/domain/verification';
-import type { LocationKind, LocationStatus } from '@/lib/domain/map-location';
+import type { LocationKind, LocationPrecision, LocationStatus } from '@/lib/domain/map-location';
 
 /**
  * Nomes e formatos das tabelas do CMD.
@@ -227,6 +227,7 @@ export interface MemberLocationRow {
   status: LocationStatus;
   query_hash: string | null;
   location_id: string | null;
+  location_precision: LocationPrecision | null;
   attempts: number;
   error_code: string | null;
   requested_at: string | null;

@@ -6,7 +6,7 @@ import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPin } from '@/lib/domain/map-pin';
-import { clusterPins, pinLabel, type PinCluster } from '@/lib/domain/map-pin';
+import { clusterPins, pinLabel, precisionLabel, type PinCluster } from '@/lib/domain/map-pin';
 import { initials } from '@/lib/utils/text';
 
 /**
@@ -124,7 +124,7 @@ function PinDetails({ pin }: { pin: MapPin }) {
         </p>
 
         {residence ? (
-          <p className="text-[0.6875rem] text-ink-500 italic">Localização aproximada da rua</p>
+          <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
         ) : (
           <p className="text-xs text-ink-500">
             Zona {pin.zone ?? '--'} · Seção {pin.section ?? '--'}

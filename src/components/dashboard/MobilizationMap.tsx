@@ -119,7 +119,7 @@ export function MobilizationMap() {
         ) : null}
       </header>
 
-      <div className="h-[360px] w-full overflow-hidden sm:h-[420px] lg:h-[520px]">
+      <div className="relative h-[360px] w-full overflow-hidden sm:h-[420px] lg:h-[520px]">
         {loading ? (
           <Skeleton className="h-full w-full rounded-none" />
         ) : error ? (
@@ -129,16 +129,17 @@ export function MobilizationMap() {
               Tentar novamente
             </Button>
           </div>
-        ) : pins.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-1 p-4 text-center">
-            <p className="text-sm font-medium text-ink-900">Nenhuma localização ainda</p>
-            <p className="max-w-sm text-xs text-ink-500">
-              Os pinos aparecem quando os endereços dos integrantes são localizados. Nenhuma
-              posição é estimada.
-            </p>
-          </div>
         ) : (
-          <MapCanvas pins={pins} />
+          <>
+            {/* O mapa fica sempre na tela, mesmo sem pino no filtro. */}
+            <MapCanvas pins={pins} />
+
+            {pins.length === 0 ? (
+              <p className="pointer-events-none absolute inset-x-3 top-3 z-[500] rounded-control border border-line bg-surface/95 px-3 py-2 text-center text-xs text-ink-700 shadow-card">
+                Nenhuma localização neste filtro ainda. Nenhuma posição é estimada.
+              </p>
+            ) : null}
+          </>
         )}
       </div>
 
