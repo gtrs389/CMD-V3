@@ -76,6 +76,8 @@ export function createLocalMemberRepository(
         // link: a implementacao local nao inventa responsavel.
         recruitedBy: null,
         access: isValidEmail(input.email) ? 'PENDING' : 'NO_EMAIL',
+        // A referencia local nao cria acesso: o usuario vive so no servidor.
+        userId: null,
         createdAt: timestamp,
         updatedAt: timestamp,
       };

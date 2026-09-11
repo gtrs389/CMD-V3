@@ -21,8 +21,6 @@ import {
   relationshipLabel,
 } from '@/lib/domain/relationship';
 import { inviteIsLive } from '@/lib/domain/invite-expiration';
-import { recruiterKey } from '@/lib/domain/recruitment';
-import { ROLE_SHORT_LABELS } from '@/lib/permissions';
 import { copyText } from '@/lib/utils/clipboard';
 import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
@@ -152,38 +150,28 @@ export function ClientOverviewPanel({
   /**
    * Ranking de cadastros da equipe.
    *
-   * Sai do snapshot de origem gravado em cada cadastro, entao continua certo
-   * mesmo depois que um acesso e removido. Quem nunca cadastrou ninguem nao
-   * aparece, e cadastro sem origem conhecida (anterior ao rastreamento) fica
-   * de fora em vez de ser atribuido a alguem.
+   * As linhas sao os INTEGRANTES deste time — todos eles, inclusive quem
+   * ainda nao trouxe ninguem, que aparece com zero. O que cada um soma e a
+   * quantidade de gente cadastrada pelo link dele, lida do snapshot de
+   * origem: cadastro trazido por quem administra o time nao entra aqui,
+   * porque este quadro e da equipe.
    */
   const ranking = useMemo<RankingRow[]>(() => {
-    const map = new Map<string, RankingRow>();
-
+    const porResponsavel = new Map<string, number>();
     for (const member of members) {
-      const recruiter = member.recruitedBy;
-      if (!recruiter) continue;
-
-      const key = recruiterKey(member);
-      const current = map.get(key);
-      if (current) {
-        current.count += 1;
-        continue;
-      }
-
-      map.set(key, {
-        key,
-        userId: recruiter.userId,
-        name: recruiter.name,
-        role: ROLE_SHORT_LABELS[recruiter.role],
-        photo: recruiter.photo,
-        count: 1,
-      });
+      const userId = member.recruitedBy?.userId;
+      if (userId) porResponsavel.set(userId, (porResponsavel.get(userId) ?? 0) + 1);
     }
 
-    return [...map.values()].sort(
-      (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'pt-BR'),
-    );
+    return members
+      .map((member) => ({
+        key: member.id,
+        userId: member.userId,
+        name: member.name,
+        photo: member.photo,
+        count: member.userId ? (porResponsavel.get(member.userId) ?? 0) : 0,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'pt-BR'));
   }, [members]);
 
   const relationshipOptions: FieldOption[] = useMemo(
@@ -722,19 +710,15 @@ function RecentMembersCard({
    Ranking de cadastros
    ------------------------------------------------------------------------- */
 
-/** Uma posicao do ranking, ja somada a partir do snapshot de origem. */
+/** Uma linha do ranking: um integrante da equipe e o que ele ja trouxe. */
 interface RankingRow {
   key: string;
-  /** Nulo quando o acesso daquela pessoa foi removido. */
+  /** Usuario do integrante. Nulo enquanto ele nao tem acesso proprio. */
   userId: string | null;
   name: string;
-  role: string;
   photo: string | null;
   count: number;
 }
-
-/** Quantas posicoes aparecem antes do resumo do restante. */
-const RANKING_LIMIT = 5;
 
 /** Medalhas das tres primeiras posicoes. Da quarta em diante, so o numero. */
 const MEDAL_CLASSES = [
@@ -747,8 +731,12 @@ const MEDAL_CLASSES = [
  * Ranking de cadastros da equipe.
  *
  * Responde a pergunta que o responsavel pela operacao faz primeiro: quem
- * esta trazendo gente. A contagem sai do snapshot gravado em cada cadastro,
- * entao ninguem perde o que ja fez se o acesso for removido depois.
+ * esta trazendo gente. A equipe inteira aparece, inclusive quem ainda esta
+ * em zero — e justamente isso que mostra onde falta empurrar. A contagem sai
+ * do snapshot gravado em cada cadastro, entao ninguem perde o que ja fez se
+ * o acesso for removido depois.
+ *
+ * A lista rola dentro do proprio cartao: equipe grande nao estica a pagina.
  */
 function RankingCard({
   rows,
@@ -758,10 +746,8 @@ function RankingCard({
   /** Destaca a linha de quem esta olhando o painel. */
   currentUserId: string | null;
 }) {
-  const visiveis = rows.slice(0, RANKING_LIMIT);
-  const restantes = rows.slice(RANKING_LIMIT);
-  const restanteTotal = restantes.reduce((soma, row) => soma + row.count, 0);
-  const maior = visiveis[0]?.count ?? 0;
+  const maior = rows[0]?.count ?? 0;
+  const comCadastro = rows.filter((row) => row.count > 0).length;
 
   return (
     <section
@@ -774,22 +760,29 @@ function RankingCard({
           className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
         >
           <Trophy aria-hidden="true" className="size-4 text-accent-600" />
-          Ranking de cadastros
+          Ranking de cadastros equipe
         </h2>
+        {rows.length > 0 ? (
+          <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">
+            {formatNumber(rows.length)}
+          </span>
+        ) : null}
       </div>
 
-      {visiveis.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="flex flex-1 items-center justify-center px-4 pb-5 text-center text-sm text-ink-500">
-          Ninguém cadastrou ninguém ainda. Compartilhe o link de cadastro para começar.
+          Nenhum integrante cadastrado ainda. Compartilhe o link de cadastro para começar.
         </p>
       ) : (
-        <ul className="flex-1 divide-y divide-line px-4">
-          {visiveis.map((row, index) => (
+        <ul className="scrollbar-slim max-h-80 flex-1 divide-y divide-line overflow-y-auto px-4">
+          {rows.map((row, index) => (
             <li key={row.key} className="flex items-center gap-2.5 py-2.5">
               <span
                 aria-hidden="true"
                 className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
-                  MEDAL_CLASSES[index] ?? 'bg-ink-100 text-ink-500'
+                  row.count > 0
+                    ? (MEDAL_CLASSES[index] ?? 'bg-ink-100 text-ink-500')
+                    : 'bg-ink-100 text-ink-400'
                 }`}
               >
                 {index + 1}
@@ -818,7 +811,6 @@ function RankingCard({
                     <span className="ml-1.5 text-[0.6875rem] font-medium text-ink-500">(você)</span>
                   ) : null}
                 </p>
-                <p className="mt-0.5 truncate text-xs text-ink-500">{row.role}</p>
 
                 {/* Barra proporcional ao primeiro colocado: a diferenca
                     entre as posicoes fica visivel sem ler os numeros. */}
@@ -834,7 +826,11 @@ function RankingCard({
               </div>
 
               <span className="shrink-0 text-right">
-                <span className="block text-base leading-none font-bold text-ink-900 tabular-nums">
+                <span
+                  className={`block text-base leading-none font-bold tabular-nums ${
+                    row.count > 0 ? 'text-ink-900' : 'text-ink-400'
+                  }`}
+                >
                   {formatNumber(row.count)}
                 </span>
                 <span className="mt-0.5 block text-[0.6875rem] text-ink-500">
@@ -846,10 +842,15 @@ function RankingCard({
         </ul>
       )}
 
-      {restantes.length > 0 ? (
-        <p className="px-4 pb-3 text-xs text-ink-500">
-          +{formatNumber(restantes.length)} {pluralize(restantes.length, 'pessoa', 'pessoas')} com{' '}
-          {formatNumber(restanteTotal)} {pluralize(restanteTotal, 'cadastro', 'cadastros')}
+      {rows.length > 0 ? (
+        <p className="px-4 py-2.5 text-[0.6875rem] text-ink-500">
+          {comCadastro === 0
+            ? 'Ninguém da equipe trouxe alguém ainda.'
+            : `${formatNumber(comCadastro)} de ${formatNumber(rows.length)} ${pluralize(
+                rows.length,
+                'integrante já trouxe alguém',
+                'integrantes já trouxeram alguém',
+              )}`}
         </p>
       ) : null}
     </section>
