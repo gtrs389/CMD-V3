@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCpfResult, parseTseResult, type ErrorCode } from '@/lib/domain/verification';
+import { encryptJson } from '@/lib/server/crypto';
 import type { MemberVerificationRow } from '@/lib/supabase/tables';
 
 /**
@@ -227,6 +228,38 @@ describe('nova tentativa manual', () => {
     expect(consultTse).toHaveBeenCalledTimes(2);
     expect(view.steps.tse.status).toBe('SUCCESS');
     expect(view.status).toBe('COMPLETED');
+  });
+
+  it('cadastro pulado: consulta só o TSE, reusando o CPF já guardado', async () => {
+    // Primeira execucao ficou sem nome da mae: etapa eleitoral pulada.
+    consultCpf.mockResolvedValueOnce({ ...parseCpfResult(CADASTRO), nomeMae: null });
+    await runVerification('mem-1');
+
+    expect(db.verification?.tse_status).toBe('SKIPPED_MISSING_DATA');
+    expect(consultTse).not.toHaveBeenCalled();
+
+    // O ADMIN pede a consulta eleitoral: o CPF guardado e decifrado e
+    // reaproveitado, entao `cadastro-pf-plus` nao e chamado de novo.
+    db.verification = {
+      ...(db.verification as MemberVerificationRow),
+      cpf_payload: encryptJson(parseCpfResult(CADASTRO)),
+    };
+
+    const view = await retryVerificationStep('mem-1', 'tse');
+
+    expect(consultCpf).toHaveBeenCalledTimes(1);
+    expect(consultTse).toHaveBeenCalledTimes(1);
+    expect(consultTse).toHaveBeenCalledWith({
+      cpf: '12345678901',
+      nomeMae: 'Ana de Souza',
+      dataNascimento: '12/04/1991',
+    });
+
+    expect(view.steps.tse.status).toBe('SUCCESS');
+    expect(view.status).toBe('COMPLETED');
+    expect(db.verification?.tse_completed_at).toBeTruthy();
+    expect(db.verification?.tse_payload).toBeTruthy();
+    expect(db.verification?.tse_payload).not.toContain('REGULAR');
   });
 
   it('etapa com sucesso não é repetida', async () => {

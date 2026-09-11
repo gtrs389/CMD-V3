@@ -267,8 +267,11 @@ export async function runVerification(memberId: string): Promise<void> {
 }
 
 /**
- * Repeticao manual de uma etapa que falhou, pedida pelo ADMIN.
- * Nunca acontece sozinha: cada tentativa pode gerar cobranca.
+ * Repeticao manual de uma etapa, pedida pelo ADMIN.
+ *
+ * Nunca acontece sozinha: cada tentativa pode gerar cobranca. Pedir a etapa
+ * eleitoral reusa a consulta de CPF ja guardada (decifrada aqui) e chama
+ * somente `tse-titulo`: `cadastro-pf-plus` nao e consultado nem cobrado de novo.
  */
 export async function retryVerificationStep(
   memberId: string,

@@ -151,11 +151,12 @@ export function parseCpfResult(payload: unknown): CpfResult {
     sexo: text(pick(data, 'sexo', 'genero'), 20),
     idade: integer(pick(data, 'idade')),
     obito: boolean(pick(data, 'obito', 'obitoIndicador')),
-    dataNascimento: text(pick(data, 'dataNascimento', 'nascimento'), 20),
+    // Cabe a data com hora e fuso: a normalizacao acontece em `toBirthDate`.
+    dataNascimento: text(pick(data, 'dataNascimento', 'nascimento'), 40),
     nomeMae: text(pick(data, 'nomeMae', 'mae')),
     nomePai: text(pick(data, 'nomePai', 'pai')),
     situacaoCadastral: text(pick(data, 'situacaoCadastral', 'situacao'), 60),
-    dataSituacaoCadastral: text(pick(data, 'dataSituacaoCadastral'), 20),
+    dataSituacaoCadastral: text(pick(data, 'dataSituacaoCadastral'), 40),
   };
 }
 
@@ -185,16 +186,30 @@ export function parseTseResult(payload: unknown): TseResult {
    Regras do encadeamento
    ------------------------------------------------------------------------- */
 
-/** Converte a data de nascimento para DD/MM/AAAA. Aceita ISO ou ja formatada. */
+/**
+ * Normaliza a data de nascimento devolvida pela consulta de CPF para
+ * DD/MM/AAAA. Aceita `DD/MM/AAAA`, `AAAA-MM-DD`, `AAAA-MM-DDTHH:mm:ss.sssZ` e
+ * `AAAA-MM-DD HH:mm:ss`. Qualquer outro formato e tratado como ausente.
+ */
 export function toBirthDate(value: string | null | undefined): string | null {
   const raw = (value ?? '').trim();
   if (!raw) return null;
 
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
-  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?Z?)?$/.exec(raw);
+  if (iso) return validDate(iso[3], iso[2], iso[1]);
 
   const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw);
-  return br ? raw : null;
+  return br ? validDate(br[1], br[2], br[3]) : null;
+}
+
+/** Confere dia, mes e ano antes de montar o texto final. */
+function validDate(day: string, month: string, year: string): string | null {
+  const d = Number(day);
+  const m = Number(month);
+  const y = Number(year);
+
+  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) return null;
+  return `${day}/${month}/${year}`;
 }
 
 export interface TseInput {
@@ -204,11 +219,15 @@ export interface TseInput {
 }
 
 /**
- * A consulta eleitoral so acontece com CPF, nome da mae e nascimento.
- * Sem qualquer um deles a etapa e marcada como SKIPPED_MISSING_DATA.
+ * Monta a consulta eleitoral.
+ *
+ * O CPF e o digitado pelo membro, so com numeros. O nome da mae e a data de
+ * nascimento vem exclusivamente do resultado da consulta de CPF: nada aqui
+ * olha para os campos preenchidos no formulario. Sem um deles, depois da
+ * normalizacao, a etapa vira SKIPPED_MISSING_DATA.
  */
 export function tseInputFrom(cpf: string | null, result: CpfResult): TseInput | null {
-  const documento = (cpf ?? result.cpf ?? '').replace(/\D/g, '');
+  const documento = (cpf ?? '').replace(/\D/g, '');
   const nomeMae = (result.nomeMae ?? '').trim();
   const dataNascimento = toBirthDate(result.dataNascimento);
 

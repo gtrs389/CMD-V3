@@ -120,10 +120,32 @@ describe('consulta eleitoral', () => {
     });
   });
 
-  it('converte a data de nascimento para DD/MM/AAAA', () => {
-    expect(toBirthDate('1991-04-12')).toBe('12/04/1991');
-    expect(toBirthDate('12/04/1991')).toBe('12/04/1991');
+  it('normaliza a data de nascimento em todos os formatos aceitos', () => {
+    expect(toBirthDate('10/12/2003')).toBe('10/12/2003');
+    expect(toBirthDate('2003-12-10')).toBe('10/12/2003');
+    expect(toBirthDate('2003-12-10T00:00:00.000Z')).toBe('10/12/2003');
+    expect(toBirthDate('2003-12-10 00:00:00')).toBe('10/12/2003');
+    expect(toBirthDate('  2003-12-10  ')).toBe('10/12/2003');
+
     expect(toBirthDate(null)).toBeNull();
+    expect(toBirthDate('')).toBeNull();
+    expect(toBirthDate('10-12-2003')).toBeNull();
+    expect(toBirthDate('2003-13-10')).toBeNull();
+  });
+
+  it('usa nome da mãe e nascimento vindos da consulta de CPF', () => {
+    // O formulario do membro nao participa: so o CPF digitado e reaproveitado.
+    const doCpf = parseCpfResult({
+      ...CADASTRO,
+      nomeMae: '  Marta Ferreira  ',
+      dataNascimento: '2003-12-10T00:00:00.000Z',
+    });
+
+    expect(tseInputFrom('123.456.789-01', doCpf)).toEqual({
+      cpf: '12345678901',
+      nomeMae: 'Marta Ferreira',
+      dataNascimento: '10/12/2003',
+    });
   });
 
   it('sem nome da mãe ou nascimento, não há consulta ao TSE', () => {
@@ -135,8 +157,10 @@ describe('consulta eleitoral', () => {
     });
 
     expect(tseInputFrom('12345678901', { ...completo, nomeMae: null })).toBeNull();
+    expect(tseInputFrom('12345678901', { ...completo, nomeMae: '   ' })).toBeNull();
     expect(tseInputFrom('12345678901', { ...completo, dataNascimento: null })).toBeNull();
-    expect(tseInputFrom(null, { ...completo, cpf: null })).toBeNull();
+    expect(tseInputFrom('12345678901', { ...completo, dataNascimento: '10-12-2003' })).toBeNull();
+    expect(tseInputFrom(null, completo)).toBeNull();
   });
 
   it('etapa pulada deixa a verificação parcial, nunca completa', () => {
@@ -175,6 +199,7 @@ describe('chamadas ao fornecedor', () => {
 
     await consultCpf('123.456.789-01');
     await consultTse({ cpf: '12345678901', nomeMae: 'Ana de Souza', dataNascimento: '12/04/1991' });
+    await consultTse({ cpf: '12345678901', nomeMae: 'Marta Ferreira', dataNascimento: '10/12/2003' });
 
     expect(calls[0][0]).toBe(
       'https://app.fontedata.com/api/v1/consulta/cadastro-pf-plus?cpf=12345678901',
@@ -182,6 +207,10 @@ describe('chamadas ao fornecedor', () => {
     expect(calls[1][0]).toBe(
       'https://app.fontedata.com/api/v1/consulta/tse-titulo?cpf=12345678901&nome_mae=Ana+de+Souza&data_nascimento=12%2F04%2F1991',
     );
+
+    // Codificacao exigida no contrato: espaco vira "+" e a barra vira %2F.
+    expect(calls[2][0]).toContain('nome_mae=Marta+Ferreira');
+    expect(calls[2][0]).toContain('data_nascimento=10%2F12%2F2003');
 
     for (const [, init] of calls) {
       expect(init.headers).toMatchObject({ 'X-API-Key': CHAVE_API, Accept: 'application/json' });

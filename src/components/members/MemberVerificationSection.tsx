@@ -224,6 +224,14 @@ export function MemberVerificationSection({ member }: { member: Member | null })
             status={data.steps.tse}
             retrying={retrying === 'tse'}
             onRetry={() => retry('tse')}
+            /* Cadastro antigo marcado como pulado: o ADMIN pode consultar
+               agora, reusando a consulta de CPF ja guardada. */
+            allowWhenSkipped={
+              data.steps.cpf.status === 'SUCCESS' &&
+              Boolean(data.cadastro?.nomeMae) &&
+              Boolean(data.cadastro?.dataNascimento)
+            }
+            skippedLabel="Consultar dados eleitorais"
           >
             {data.eleitoral ? (
               <dl className="divide-y divide-line">
@@ -273,11 +281,25 @@ interface StepBlockProps {
   status: VerificationView['steps']['cpf'];
   retrying: boolean;
   onRetry: () => void;
+  /** Libera a acao quando a etapa ficou pulada mas ja ha dados para consultar. */
+  allowWhenSkipped?: boolean;
+  skippedLabel?: string;
   children: React.ReactNode;
 }
 
-/** Bloco de uma consulta, com o estado e a nova tentativa apenas em falha. */
-function StepBlock({ title, status, retrying, onRetry, children }: StepBlockProps) {
+/**
+ * Bloco de uma consulta. A acao aparece em falha e, quando liberado, tambem
+ * no estado pulado: em ambos os casos o aviso de cobranca acompanha.
+ */
+function StepBlock({
+  title,
+  status,
+  retrying,
+  onRetry,
+  allowWhenSkipped = false,
+  skippedLabel = 'Consultar',
+  children,
+}: StepBlockProps) {
   return (
     <div className="rounded-control border border-line p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -289,7 +311,20 @@ function StepBlock({ title, status, retrying, onRetry, children }: StepBlockProp
             Não consultado
           </span>
         ) : status.status === 'SKIPPED_MISSING_DATA' ? (
-          <span className="text-xs text-ink-500">Sem dados suficientes para consultar</span>
+          allowWhenSkipped ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={retrying}
+              title="Uma nova consulta pode gerar cobrança."
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-line-strong bg-surface px-2.5 text-xs font-medium text-ink-900 transition-colors hover:bg-ink-50 disabled:opacity-60"
+            >
+              {retrying ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
+              {skippedLabel}
+            </button>
+          ) : (
+            <span className="text-xs text-ink-500">Sem dados suficientes para consultar</span>
+          )
         ) : status.status === 'SUCCESS' ? (
           <span className="text-xs text-ink-500">
             {status.completedAt ? formatDateTime(status.completedAt) : 'Consultado'}
@@ -311,6 +346,10 @@ function StepBlock({ title, status, retrying, onRetry, children }: StepBlockProp
       {status.status === 'FAILED' ? (
         <p className="mt-1.5 text-xs text-danger-700">
           {status.error} Uma nova tentativa pode gerar cobrança.
+        </p>
+      ) : status.status === 'SKIPPED_MISSING_DATA' && allowWhenSkipped ? (
+        <p className="mt-1.5 text-xs text-ink-500">
+          Esta consulta não foi feita no cadastro. Uma nova consulta pode gerar cobrança.
         </p>
       ) : null}
 
