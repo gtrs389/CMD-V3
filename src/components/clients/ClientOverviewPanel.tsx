@@ -29,6 +29,7 @@ import { useOrigin } from '@/hooks/use-origin';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
+import { TeamAccessCard } from './TeamAccessCard';
 import { TeamChart, type TeamChartPoint } from './TeamChart';
 
 /** Abreviacao dos dias, na ordem devolvida por `getDay()`. */
@@ -101,6 +102,9 @@ export function ClientOverviewPanel({
   // calculada, porque a configuracao nem vem na resposta.
   const podeVerFormulario = can('form.view') && onOpenForm !== undefined;
   const podeEditarFormulario = can('form.manage');
+  // Link de acesso dos administradores: so o ADMIN geral consulta, copia e
+  // renova. `settings.manage` existe apenas nesse perfil.
+  const podeVerAcesso = can('settings.manage') && showPeopleCard;
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -229,6 +233,8 @@ export function ClientOverviewPanel({
             {showPeopleCard ? (
               <TeamPeopleCard people={client.people} onManage={onManagePeople} />
             ) : null}
+
+            {podeVerAcesso ? <TeamAccessCard clientId={client.id} /> : null}
 
             {form && onOpenForm ? (
               <FormCard

@@ -14,7 +14,7 @@ export type Role = (typeof ROLES)[number];
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   role: Role;
   createdAt: IsoDate;
 }
@@ -30,6 +30,13 @@ export const ACCESS_STATUS_LABELS: Record<AccessStatus, string> = {
   NO_EMAIL: 'E-mail necessário',
 };
 
+/** Time que ainda nao possui nenhum administrador cadastrado. */
+export interface CandidateWithoutAdmins {
+  clientId: string;
+  name: string;
+  photo: string | null;
+}
+
 /** Responsavel pelo cadastro, preservado mesmo se o usuario for excluido. */
 export interface Recruiter {
   /** Nulo quando o usuario responsavel deixou de existir. */
@@ -43,13 +50,20 @@ export interface Recruiter {
 export interface SystemUser {
   id: string;
   name: string;
-  email: string;
+  /** Nulo no Administrador do time: o acesso dele e por link + telefone. */
+  email: string | null;
+  /** Telefone de acesso. Preenchido somente no Administrador do time. */
+  phone: string | null;
+  /** Foto do administrador do time. */
+  photo: string | null;
   role: Role;
   status: AccessStatus;
   /** Time (operacao) do usuario. Nulo apenas no ADMIN. */
   candidate: { id: string; name: string; photo: string | null } | null;
   /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */
   memberId: string | null;
+  /** Administrador do time correspondente. */
+  teamPersonId: string | null;
   /** Quem cadastrou este usuario. Preenchido somente no perfil EQUIPE. */
   recruitedBy: Recruiter | null;
   lastLoginAt: IsoDate | null;
@@ -57,14 +71,6 @@ export interface SystemUser {
   createdAt: IsoDate;
   /** Marca a propria conta do ADMIN que esta consultando. */
   self: boolean;
-}
-
-/** Time que ainda nao possui usuario vinculado. */
-export interface CandidateWithoutAccess {
-  clientId: string;
-  name: string;
-  email: string;
-  photo: string | null;
 }
 
 /**
@@ -92,7 +98,7 @@ export interface MemberWithoutAccess {
 export interface GeneratedCredential {
   userId: string;
   name: string;
-  email: string;
+  email: string | null;
   password: string;
 }
 
@@ -100,7 +106,9 @@ export interface GeneratedCredential {
 export interface SessionUser {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
+  /** Foto do Administrador do time, quando houver. */
+  photo?: string | null;
   role: Role;
   /** Operacao do usuario. Preenchido em CANDIDATE e em EQUIPE. */
   candidateId: string | null;

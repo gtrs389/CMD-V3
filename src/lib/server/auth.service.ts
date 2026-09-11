@@ -12,6 +12,7 @@ import {
 } from '@/lib/auth/constants';
 import { TABLES, type SessionRow, type UserRow } from '@/lib/supabase/tables';
 import { callFunction, deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
+import { signedUrl } from '@/lib/supabase/storage';
 
 /**
  * Autenticacao propria do CMD.
@@ -33,14 +34,26 @@ export interface LoginOutcome {
 
 type SessionColumns = Pick<
   UserRow,
-  'id' | 'name' | 'email' | 'role' | 'client_id' | 'member_id' | 'must_change_password'
+  | 'id'
+  | 'name'
+  | 'email'
+  | 'role'
+  | 'client_id'
+  | 'member_id'
+  | 'team_person_id'
+  | 'must_change_password'
 >;
 
-function toSessionUser(row: SessionColumns): SessionUser {
+/** Colunas da sessao, na ordem usada por todas as consultas deste arquivo. */
+const SESSION_COLUMNS =
+  'id,name,email,role,client_id,member_id,team_person_id,must_change_password';
+
+function toSessionUser(row: SessionColumns, photo: string | null = null): SessionUser {
   return {
     id: row.id,
     name: row.name,
     email: row.email,
+    photo,
     role: row.role as Role,
     // O vinculo vem sempre do banco: o navegador nunca escolhe a operacao
     // nem o integrante. ADMIN nao pertence a nenhuma operacao.
@@ -127,7 +140,13 @@ export async function login(email: string, password: string): Promise<LoginOutco
 }
 
 interface SessionJoinRow extends SessionRow {
-  user: (SessionColumns & Pick<UserRow, 'is_active'>) | null;
+  user:
+    | (SessionColumns &
+        Pick<UserRow, 'is_active'> & {
+          /** Administrador do time correspondente, so para a foto do menu. */
+          team_person: { photo_path: string | null } | null;
+        })
+    | null;
 }
 
 /** Resolve o token bruto do cookie para o usuario da sessao. */
@@ -137,7 +156,8 @@ export async function resolveSession(token: string | undefined): Promise<Session
   const row = await selectOne<SessionJoinRow>(TABLES.sessions, {
     select:
       `id,expires_at,revoked_at,` +
-      `user:${TABLES.users}(id,name,email,role,client_id,member_id,must_change_password,is_active)`,
+      `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
+      `team_person:${TABLES.teamPeople}(photo_path))`,
     filters: { token_hash: `eq.${hashToken(token)}` },
   });
 
@@ -145,7 +165,10 @@ export async function resolveSession(token: string | undefined): Promise<Session
   if (row.revoked_at !== null) return null;
   if (new Date(row.expires_at).getTime() <= Date.now()) return null;
 
-  return toSessionUser(row.user);
+  // Somente o Administrador do time tem foto propria: nos demais perfis
+  // nenhuma assinatura e pedida ao Storage.
+  const photo = await signedUrl(row.user.team_person?.photo_path ?? null);
+  return toSessionUser(row.user, photo);
 }
 
 /** Encerra a sessao correspondente ao token. */

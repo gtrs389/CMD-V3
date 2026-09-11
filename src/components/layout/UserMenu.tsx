@@ -44,6 +44,10 @@ export function UserMenu() {
 
   if (!user) return null;
 
+  // O administrador do time entra por link + telefone: nao existe senha a
+  // trocar, entao a acao nem aparece.
+  const temSenha = Boolean(user.email);
+
   return (
     <div ref={containerRef} className="relative shrink-0">
       <button
@@ -54,12 +58,21 @@ export function UserMenu() {
         onClick={() => setOpen((state) => !state)}
         className="inline-flex min-h-10 items-center gap-2 rounded-pill border border-line bg-surface py-1 pr-2 pl-1 text-sm font-medium text-ink-900 shadow-card transition-colors hover:bg-ink-50"
       >
-        <span
-          aria-hidden="true"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-navy-900 text-[0.6875rem] font-semibold text-white"
-        >
-          {initials(user.name)}
-        </span>
+        {user.photo ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={user.photo}
+            alt=""
+            className="size-8 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-navy-900 text-[0.6875rem] font-semibold text-white"
+          >
+            {initials(user.name)}
+          </span>
+        )}
         <span className="hidden max-w-36 truncate sm:block">{user.name}</span>
         <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-ink-500" />
       </button>
@@ -71,7 +84,9 @@ export function UserMenu() {
         >
           <div className="border-b border-line px-3 py-2">
             <p className="truncate text-sm font-semibold text-ink-900">{user.name}</p>
-            <p className="truncate text-xs text-ink-500">{user.email}</p>
+            {user.email ? (
+              <p className="truncate text-xs text-ink-500">{user.email}</p>
+            ) : null}
             <p className="mt-1 text-xs font-medium text-ink-700">{ROLE_LABELS[user.role]}</p>
           </div>
 
@@ -87,18 +102,20 @@ export function UserMenu() {
             </Link>
           ) : null}
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              setChangingPassword(true);
-            }}
-            className="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm text-ink-700 transition-colors hover:bg-ink-100"
-          >
-            <KeyRound aria-hidden="true" className="size-4 shrink-0 text-ink-500" />
-            Alterar senha
-          </button>
+          {temSenha ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setChangingPassword(true);
+              }}
+              className="flex min-h-11 w-full items-center gap-2.5 px-3 text-left text-sm text-ink-700 transition-colors hover:bg-ink-100"
+            >
+              <KeyRound aria-hidden="true" className="size-4 shrink-0 text-ink-500" />
+              Alterar senha
+            </button>
+          ) : null}
 
           <button
             type="button"

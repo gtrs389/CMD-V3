@@ -11,9 +11,9 @@ const members = createLocalMemberRepository(driver);
 
 const clientInput = {
   name: 'Comite Central',
-  email: 'CONTATO@Exemplo.com',
   photo: null,
   notes: ' anotacao ',
+  people: [{ name: 'Paula Figueiredo', phone: '11987650101', photo: null }],
 };
 
 beforeEach(() => {
@@ -24,8 +24,8 @@ describe('repositorio de clientes', () => {
   it('cria com formulário padrão e convite ativo', async () => {
     const { client } = await clients.create(clientInput);
 
-    expect(client.email).toBe('contato@exemplo.com');
     expect(client.notes).toBe('anotacao');
+    expect(client.people).toHaveLength(1);
     expect(client.invite.active).toBe(true);
     expect(client.invite.token ?? '').toHaveLength(20);
     expect(client.form.fields).toHaveLength(14);
@@ -72,7 +72,7 @@ describe('repositorio de clientes', () => {
     const updated = await clients.update(client.id, { name: 'Novo nome' });
 
     expect(updated.name).toBe('Novo nome');
-    expect(updated.email).toBe(client.email);
+    expect(updated.notes).toBe(client.notes);
   });
 
   it('conta integrantes no resumo', async () => {
@@ -136,7 +136,7 @@ describe('repositorio de integrantes', () => {
 describe('isolamento entre clientes', () => {
   it('lista apenas os integrantes do próprio cliente', async () => {
     const { client: primeiro } = await clients.create(clientInput);
-    const { client: segundo } = await clients.create({ ...clientInput, email: 'outro@exemplo.com' });
+    const { client: segundo } = await clients.create({ ...clientInput, name: 'Outro Comite' });
 
     await members.create({
       clientId: primeiro.id,

@@ -20,7 +20,8 @@ export interface TeamOverview {
   profile: {
     memberId: string;
     name: string;
-    email: string;
+    /** Nulo apenas nos integrantes cadastrados antes do campo de e-mail. */
+    email: string | null;
     photo: StoredImage | null;
     /** Operacao a que ele pertence. */
     candidateName: string;

@@ -22,7 +22,8 @@ interface SeedMember {
 
 interface SeedClient {
   name: string;
-  email: string;
+  /** Administrador do time: ele entra com o link do time e este telefone. */
+  admin: { name: string; phone: string };
   notes: string;
   members: SeedMember[];
 }
@@ -30,7 +31,7 @@ interface SeedClient {
 const SEED: SeedClient[] = [
   {
     name: 'Coordenação Regional Norte',
-    email: 'coordenação.norte@exemplo.com',
+    admin: { name: 'Paula Figueiredo', phone: '11987650101' },
     notes: 'Equipe responsável pela articulação nos bairros do setor norte.',
     members: [
       {
@@ -61,7 +62,7 @@ const SEED: SeedClient[] = [
   },
   {
     name: 'Núcleo Zona Sul',
-    email: 'núcleo.sul@exemplo.com',
+    admin: { name: 'Rafael Andrade', phone: '11987650102' },
     notes: '',
     members: [
       {
@@ -132,9 +133,9 @@ export async function loadSampleData(): Promise<number> {
   for (const entry of SEED) {
     const { client }: { client: Client } = await clientRepository.create({
       name: entry.name,
-      email: entry.email,
       photo: null,
       notes: entry.notes,
+      people: [{ ...entry.admin, photo: null }],
     });
 
     const extras = buildExtraFields(client.form.fields.length);

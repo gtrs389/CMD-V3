@@ -164,7 +164,42 @@ export function ClientDetailView({
               {client.name}
             </h1>
 
-            <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{client.email}</p>
+            {/* No lugar do contato do time: quem administra a operacao. */}
+            {client.people.length > 0 ? (
+              <div className="mt-1.5 flex items-center gap-2">
+                <ul className="flex -space-x-2">
+                  {client.people.slice(0, 5).map((person) => (
+                    <li key={person.id} title={person.name}>
+                      {person.photo ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={person.photo}
+                          alt={`Foto de ${person.name}`}
+                          className="size-7 rounded-full object-cover ring-2 ring-surface"
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="flex size-7 items-center justify-center rounded-full bg-ink-100 text-[0.625rem] font-semibold text-ink-500 ring-2 ring-surface"
+                        >
+                          {initials(person.name)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <span className="truncate text-[0.8125rem] text-ink-500">
+                  {client.people.length}{' '}
+                  {client.people.length === 1
+                    ? 'administrador do time'
+                    : 'administradores do time'}
+                </span>
+              </div>
+            ) : (
+              <p className="mt-1 truncate text-[0.8125rem] text-ink-500">
+                Nenhum administrador cadastrado.
+              </p>
+            )}
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">

@@ -84,14 +84,16 @@ export function CredentialsModal({
                 </p>
 
                 <dl className="mt-2 space-y-2">
-                  <Linha
-                    label="E-mail"
-                    value={credential.email}
-                    copied={copied === `${credential.userId}-email`}
-                    onCopy={() =>
-                      copy('E-mail', credential.email, `${credential.userId}-email`)
-                    }
-                  />
+                  {credential.email ? (
+                    <Linha
+                      label="E-mail"
+                      value={credential.email}
+                      copied={copied === `${credential.userId}-email`}
+                      onCopy={() =>
+                        copy('E-mail', credential.email ?? '', `${credential.userId}-email`)
+                      }
+                    />
+                  ) : null}
                   <Linha
                     label="Senha temporária"
                     value={credential.password}

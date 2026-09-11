@@ -21,20 +21,21 @@ export const teamPersonSchema = z.object({
   photo: z.string().nullable(),
 });
 
+/**
+ * Cadastro do time.
+ *
+ * Sem e-mail: quem entra no painel do time e sempre um administrador, pelo
+ * link do time + telefone. Por isso todo time precisa de pelo menos um.
+ */
 export const clientSchema = z.object({
   name: z
     .string()
     .trim()
     .min(2, 'Informe o nome do time.')
     .max(80, 'Use no máximo 80 caracteres.'),
-  email: z
-    .string()
-    .trim()
-    .min(1, 'Informe o e-mail.')
-    .pipe(z.email('E-mail inválido.')),
   photo: z.string().nullable(),
   notes: z.string().trim().max(500, 'Use no máximo 500 caracteres.'),
-  people: z.array(teamPersonSchema),
+  people: z.array(teamPersonSchema).min(1, 'Cadastre pelo menos um administrador do time.'),
 });
 
 export type TeamPersonFormValues = z.infer<typeof teamPersonSchema>;

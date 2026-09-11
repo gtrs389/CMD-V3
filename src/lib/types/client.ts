@@ -27,21 +27,36 @@ export interface TeamPersonInput {
   photo: StoredImage | null;
 }
 
+/**
+ * Link de acesso dos administradores do time.
+ *
+ * So chega ao navegador do ADMIN geral: administradores do time e
+ * integrantes nunca recebem o token. Ele nao e o link de recrutamento: nao
+ * expira sozinho, nao e consumido e vale para todos os administradores
+ * ativos daquele time, ate o ADMIN geral renovar.
+ */
+export interface TeamAccessLink {
+  token: string;
+  active: boolean;
+  createdAt: IsoDate;
+  rotatedAt: IsoDate | null;
+}
+
 export interface Client extends Timestamped {
   id: string;
   name: string;
-  email: string;
+  /** Legado: nao e mais solicitado nem exibido (migration 016). */
+  email: string | null;
   photo: StoredImage | null;
   notes: string;
   invite: Invite;
   form: ClientFormConfig;
-  /** Pessoas do time, na ordem em que foram cadastradas. */
+  /** Administradores do time, na ordem em que foram cadastrados. */
   people: TeamPerson[];
 }
 
 export interface ClientInput {
   name: string;
-  email: string;
   photo: StoredImage | null;
   notes: string;
   /** Ausente: as pessoas do time nao sao alteradas. */

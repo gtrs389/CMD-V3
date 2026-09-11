@@ -16,7 +16,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { clientSchema, type ClientFormValues, type TeamPersonFormValues } from '@/lib/validation/client.schema';
 import { clientRepository } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories';
-import type { Client, GeneratedCredential } from '@/lib/types';
+import type { Client, TeamAccessLink } from '@/lib/types';
 import { maskPhone } from '@/lib/utils/phone';
 import { Button } from '@/components/ui/Button';
 import { Field, describedBy } from '@/components/ui/Field';
@@ -25,7 +25,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { PhotoUpload } from '@/components/common/PhotoUpload';
-import { CredentialsModal } from '@/components/settings/CredentialsModal';
+import { TeamAccessLinkField } from './TeamAccessLinkField';
 
 interface ClientFormModalProps {
   open: boolean;
@@ -35,7 +35,7 @@ interface ClientFormModalProps {
   onSaved?: (client: Client) => void;
 }
 
-const EMPTY: ClientFormValues = { name: '', email: '', photo: null, notes: '', people: [] };
+const EMPTY: ClientFormValues = { name: '', photo: null, notes: '', people: [] };
 
 /** Criacao e edicao de time. Mesma validacao nos dois modos. */
 export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormModalProps) {
@@ -43,15 +43,13 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
   const editing = Boolean(client);
 
   /**
-   * Acesso recem-criado do time.
+   * Time recem-criado.
    *
-   * A senha temporaria existe apenas neste estado e some ao fechar: nada e
-   * gravado em banco, log, URL ou armazenamento do navegador.
+   * O modal nao fecha na hora: primeiro o ADMIN copia o link de acesso dos
+   * administradores daquele time. O link continua disponivel depois, no
+   * cartao "Acesso dos administradores" da pagina do time.
    */
-  const [access, setAccess] = useState<{
-    credential: GeneratedCredential | null;
-    message: string | null;
-  } | null>(null);
+  const [created, setCreated] = useState<TeamAccessLink | null>(null);
 
   const {
     register,
@@ -74,13 +72,18 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
     remove: removePerson,
   } = useFieldArray({ control, name: 'people', keyName: '_fieldKey' });
 
+  /** Fechar sempre descarta a confirmacao: reabrir volta ao formulario. */
+  function close() {
+    setCreated(null);
+    onClose();
+  }
+
   useEffect(() => {
     if (!open) return;
     reset(
       client
         ? {
             name: client.name,
-            email: client.email,
             photo: client.photo,
             notes: client.notes,
             people: client.people.map((person) => ({
@@ -103,15 +106,15 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
         const saved = await clientRepository.update(client.id, values);
         toast.success('Time atualizado.');
         onSaved?.(saved);
-        onClose();
+        close();
         return;
       }
 
-      const created = await clientRepository.create(values);
-      toast.success('Time cadastrado.');
-      onSaved?.(created.client);
-      onClose();
-      setAccess({ credential: created.access, message: created.accessMessage });
+      const result = await clientRepository.create(values);
+      onSaved?.(result.client);
+      // O modal permanece aberto: o link de acesso dos administradores
+      // aparece aqui, para ser copiado antes de sair.
+      setCreated(result.accessLink);
     } catch (error) {
       if (error instanceof NetworkError) {
         toast.error(error.message);
@@ -121,11 +124,32 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
     }
   }
 
+  // Time recem-criado: o formulario da lugar a confirmacao com o link.
+  if (created !== null) {
+    return (
+      <Modal
+        open={open}
+        onClose={close}
+        title="Time criado com sucesso"
+        size="lg"
+        footer={<Button onClick={close}>Concluir</Button>}
+      >
+        <div className="space-y-4">
+          <TeamAccessLinkField
+            token={created.token}
+            label="Link de acesso dos administradores"
+          />
+          <p className="text-sm text-ink-500">Envie este link aos administradores do time.</p>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <>
       <Modal
         open={open}
-        onClose={onClose}
+        onClose={close}
         busy={isSubmitting}
         title={editing ? 'Editar time' : 'Novo time'}
         description={
@@ -136,7 +160,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+            <Button variant="secondary" onClick={close} disabled={isSubmitting}>
               Cancelar
             </Button>
             <Button form="form-cliente" type="submit" loading={isSubmitting}>
@@ -156,31 +180,16 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="cliente-nome" label="Nome do time" required error={errors.name?.message}>
-              <Input
-                id="cliente-nome"
-                placeholder="Nome do time"
-                autoComplete="off"
-                invalid={Boolean(errors.name)}
-                aria-describedby={describedBy('cliente-nome', undefined, errors.name?.message)}
-                {...register('name')}
-              />
-            </Field>
-
-            <Field id="cliente-email" label="E-mail" required error={errors.email?.message}>
-              <Input
-                id="cliente-email"
-                type="email"
-                inputMode="email"
-                autoCapitalize="none"
-                placeholder="contato@exemplo.com"
-                invalid={Boolean(errors.email)}
-                aria-describedby={describedBy('cliente-email', undefined, errors.email?.message)}
-                {...register('email')}
-              />
-            </Field>
-          </div>
+          <Field id="cliente-nome" label="Nome do time" required error={errors.name?.message}>
+            <Input
+              id="cliente-nome"
+              placeholder="Nome do time"
+              autoComplete="off"
+              invalid={Boolean(errors.name)}
+              aria-describedby={describedBy('cliente-nome', undefined, errors.name?.message)}
+              {...register('name')}
+            />
+          </Field>
 
           <Field
             id="cliente-notas"
@@ -206,13 +215,13 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
             <div>
               <h3 className="text-sm font-semibold text-ink-900">Administradores do time</h3>
               <p className="mt-0.5 text-xs text-ink-500">
-                Cadastre as pessoas que fazem parte deste time.
+                Eles entram no painel com o link de acesso do time e o próprio telefone.
               </p>
             </div>
 
             {peopleFields.length === 0 ? (
               <p className="rounded-control border border-dashed border-line-strong bg-ink-50 p-4 text-center text-sm text-ink-500">
-                Nenhuma pessoa adicionada.
+                {errors.people?.message ?? 'Nenhuma pessoa adicionada.'}
               </p>
             ) : (
               <div className="space-y-3">
@@ -242,13 +251,6 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
           </div>
         </form>
       </Modal>
-
-      <CredentialsModal
-        open={access !== null}
-        credentials={access?.credential ? [access.credential] : []}
-        message={access && !access.credential ? access.message : null}
-        onClose={() => setAccess(null)}
-      />
     </>
   );
 }

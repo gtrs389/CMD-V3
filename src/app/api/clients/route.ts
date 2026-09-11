@@ -3,7 +3,7 @@ import { requirePermission } from '@/lib/server/guard';
 import { jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { clientCreateSchema } from '@/lib/validation/server.schema';
 import { createClient, listClientSummaries } from '@/lib/server/client.service';
-import { createCandidateAccess, EMAIL_IN_USE } from '@/lib/server/user.service';
+import { getTeamAccessLink } from '@/lib/server/team-access.service';
 
 /** Listagem e criacao de clientes. Somente para sessao com permissao. */
 export async function GET() {
@@ -21,18 +21,12 @@ export async function POST(request: NextRequest) {
     const input = await readJson(request, clientCreateSchema);
     const client = await createClient(input);
 
-    // Acesso do time criado junto com o cadastro. A senha temporaria
-    // volta uma unica vez, nesta resposta, e nao e gravada em lugar nenhum.
-    const access = await createCandidateAccess({
-      id: client.id,
-      name: client.name,
-      email: client.email,
-    });
+    // O link de acesso dos administradores nasce com o time e volta aqui
+    // para o ADMIN geral copiar. Ele nunca expira sozinho e vale para todos
+    // os administradores ativos daquele time.
+    const accessLink = await getTeamAccessLink(client.id);
 
-    return jsonOk(
-      { client, access, accessMessage: access ? null : EMAIL_IN_USE },
-      201,
-    );
+    return jsonOk({ client, accessLink }, 201);
   } catch (error) {
     return toErrorResponse(error);
   }
