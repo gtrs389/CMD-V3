@@ -480,6 +480,30 @@ export function formatResponse(field: CustomField, value: FieldValue): string {
   }
 }
 
+/** Campo com algum valor informado. Vazio, `null` e lista vazia nao contam. */
+function isFilled(value: DynamicValue | undefined): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'boolean') return value;
+  return true;
+}
+
+/**
+ * Quanto do formulario ja foi preenchido, de 0 a 100.
+ *
+ * Conta os campos visiveis, obrigatorios ou nao: o numero serve para a pessoa
+ * enxergar o proprio avanco, nao para decidir se o envio e aceito — quem
+ * decide isso e a validacao, no envio.
+ */
+export function completionPercent(config: ClientFormConfig, values: DynamicFormValues): number {
+  const fields = visibleFields(config);
+  if (fields.length === 0) return 0;
+
+  const preenchidos = fields.filter((field) => isFilled(values[field.id])).length;
+  return Math.round((preenchidos / fields.length) * 100);
+}
+
 /**
  * Texto de leitura de um valor ainda em preenchimento.
  *

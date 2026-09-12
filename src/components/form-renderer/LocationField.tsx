@@ -18,24 +18,24 @@ interface LocationFieldProps {
 /** Textos de cada passo, para nao repetir rotulo em quatro lugares. */
 const TEXTS: Record<LocationKey, { placeholder: string; search: string; other: string; hint: string; manual: string }> = {
   city: {
-    placeholder: 'Selecione o município',
+    placeholder: 'Selecione seu município...',
     search: 'Buscar município',
     other: 'Outro município',
-    hint: 'Selecione o estado primeiro',
+    hint: 'Escolha o estado primeiro',
     manual: 'Digite o município',
   },
   district: {
-    placeholder: 'Selecione o bairro',
+    placeholder: 'Selecione seu bairro...',
     search: 'Buscar bairro',
     other: 'Outro bairro',
-    hint: 'Selecione o município primeiro',
+    hint: 'Escolha o município primeiro',
     manual: 'Digite o bairro',
   },
   street: {
-    placeholder: 'Selecione a rua',
+    placeholder: 'Selecione sua rua...',
     search: 'Buscar rua',
     other: 'Outra rua',
-    hint: 'Selecione o bairro primeiro',
+    hint: 'Escolha o bairro primeiro',
     manual: 'Digite a rua',
   },
 };
@@ -62,7 +62,7 @@ export function LocationField({ field, id, describedBy, invalid, disabled }: Loc
         id={id}
         value={chain.state}
         options={options}
-        placeholder="Selecione o estado"
+        placeholder="Selecione seu estado..."
         searchPlaceholder="Buscar estado"
         onChange={chain.selectState}
         disabled={disabled}

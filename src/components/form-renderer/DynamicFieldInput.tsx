@@ -1,5 +1,20 @@
 'use client';
 
+import type { ReactNode } from 'react';
+import {
+  AtSign,
+  Calendar,
+  CircleMinus,
+  Fingerprint,
+  Hash,
+  Home,
+  Landmark,
+  MapPin,
+  Phone,
+  Signpost,
+  User,
+  Users,
+} from 'lucide-react';
 import type { CustomField } from '@/lib/types';
 import type { DynamicValue } from '@/lib/validation/dynamic-form';
 import { maskPhone } from '@/lib/utils/phone';
@@ -42,6 +57,54 @@ interface DynamicFieldInputProps {
    */
   variant?: 'default' | 'invite';
 }
+
+/**
+ * Icone de cada campo, na pagina publica.
+ *
+ * Puramente decorativo: da uma pista rapida do que o campo pede sem substituir
+ * o rotulo. Campo personalizado do ADMIN nao recebe icone — inventar um
+ * simbolo para uma pergunta que so ele conhece diria mais errado do que certo.
+ */
+function fieldIcon(field: CustomField): ReactNode {
+  const classe = 'size-4';
+
+  switch (field.systemKey) {
+    case 'name':
+      return <User className={classe} />;
+    case 'phone':
+      return <Phone className={classe} />;
+    case 'cpf':
+      return <Fingerprint className={classe} />;
+    case 'voter_id':
+      return <Hash className={classe} />;
+    case 'zone':
+      return <MapPin className={classe} />;
+    case 'section':
+      return <Hash className={classe} />;
+    case 'city':
+      return <Landmark className={classe} />;
+    case 'district':
+      return <Home className={classe} />;
+    case 'street':
+      return <Signpost className={classe} />;
+    default:
+      break;
+  }
+
+  if (field.type === 'email') return <AtSign className={classe} />;
+  if (field.type === 'phone') return <Phone className={classe} />;
+  if (field.type === 'date') return <Calendar className={classe} />;
+  if (field.type === 'number') return <Hash className={classe} />;
+  return null;
+}
+
+/** Cartoes de genero: icone e cor de cada opcao, como no desenho. */
+const GENDER_TILES: Record<string, { icon: ReactNode; tone: 'sky' | 'rose' | 'violet' | 'neutral' }> = {
+  HOMEM: { icon: <User className="size-5" />, tone: 'sky' },
+  MULHER: { icon: <User className="size-5" />, tone: 'rose' },
+  OUTRO: { icon: <Users className="size-5" />, tone: 'violet' },
+  NAO_INFORMAR: { icon: <CircleMinus className="size-5" />, tone: 'neutral' },
+};
 
 /**
  * Renderiza um campo configurado pelo ADMIN.
@@ -91,14 +154,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'photo') {
     return (
-      <Field
-        id={id}
-        label={field.label}
-        help={help}
-        error={error}
-        required={field.required}
-        hideLabel={variant === 'invite'}
-      >
+      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
         <PhotoUpload
           value={typeof value === 'string' ? value : null}
           onChange={(next) => onChange(next)}
@@ -107,8 +163,6 @@ export function DynamicFieldInput({
           size="lg"
           showFormatHint={!help}
           appearance={variant === 'invite' ? 'invite' : 'default'}
-          title={variant === 'invite' ? field.label : undefined}
-          required={field.required}
           onError={onImageError}
         />
       </Field>
@@ -122,7 +176,12 @@ export function DynamicFieldInput({
         <RadioCardGroup
           idPrefix={id}
           label={field.label}
-          options={GENDER_OPTIONS}
+          appearance="tile"
+          options={GENDER_OPTIONS.map((option) => ({
+            ...option,
+            icon: GENDER_TILES[option.id]?.icon,
+            tone: GENDER_TILES[option.id]?.tone,
+          }))}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
           invalid={invalid}
@@ -268,6 +327,8 @@ export function DynamicFieldInput({
     invalid,
     placeholder: field.placeholder,
     'aria-describedby': described,
+    // Somente na pagina publica: o painel segue com os campos limpos.
+    leading: variant === 'invite' ? fieldIcon(field) : undefined,
   };
 
   if (
