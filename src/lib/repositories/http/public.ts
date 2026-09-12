@@ -49,6 +49,30 @@ export async function fetchPublicInvite(): Promise<PublicInviteOutcome> {
 }
 
 /**
+ * Complementacao unica dos sinais do aparelho do primeiro acesso.
+ *
+ * Enviada uma vez, logo depois de o formulario aparecer. O convite e a
+ * reserva vivem em cookies `HttpOnly`: nada de token ou identificador sai
+ * daqui. Sao os MESMOS sinais que o envio ja mandava — tipo de aparelho,
+ * navegador, sistema, plataforma, resolucao, fuso, idiomas e pontos de
+ * toque, todos derivados no servidor a partir deste coletor e do
+ * User-Agent.
+ *
+ * Nunca lanca: falhar nao pode bloquear o formulario, e o primeiro clique ja
+ * ficou registrado no servidor quando o link foi aberto.
+ */
+export async function sendInviteDeviceSignals(): Promise<void> {
+  try {
+    await api<{ ok: true }>('/api/public/convite/aparelho', {
+      method: 'POST',
+      body: { device: collectDeviceSignals() },
+    });
+  } catch {
+    // Silencio proposital: nenhum aviso na tela, nenhum bloqueio no envio.
+  }
+}
+
+/**
  * Envio do formulario publico.
  *
  * A operacao de destino e o responsavel pelo cadastro vem do token do link,

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getInviteContext } from '@/lib/server/client.service';
 import { claimInvite, expireDueInvites } from '@/lib/server/invite.service';
+import { recordInviteFirstAccess } from '@/lib/server/invite-access';
 import { attachClaimCookie, readOrCreateClaim } from '@/lib/server/invite-claim';
 import {
   attachInviteContext,
@@ -71,6 +72,13 @@ export async function GET(request: NextRequest, ctx: RouteContext<'/convite/[tok
     attachPublicState(response, 'convite-expirado');
     return response;
   }
+
+  // Primeiro clique registrado AQUI, com o horario do banco e os sinais que
+  // o servidor ja tem: User-Agent, idioma do cabecalho e o HMAC do IP quando
+  // `DEVICE_IP_HMAC_KEY` existe. Um registro por convite e geracao —
+  // atualizar a pagina no mesmo aparelho nao cria outro. Falhar aqui nao
+  // atrapalha a abertura do link.
+  await recordInviteFirstAccess(request, token);
 
   const { expiresAt } = context.client.invite;
   attachInviteContext(response, token, expiresAt);

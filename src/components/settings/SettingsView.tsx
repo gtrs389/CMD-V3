@@ -261,12 +261,13 @@ export function SettingsView() {
           Configurações
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Acessos do sistema, prazo dos links de recrutamento e histórico dos links.
+          Acessos do sistema, prazo dos links de recrutamento e rastreamento dos links.
         </p>
       </header>
 
-      {/* Duracao dos links e historico: exclusivos do ADMIN, como o resto
-          desta pagina. As rotas exigem `settings.view` e `settings.manage`. */}
+      {/* Duracao dos links e rastreamento: exclusivos do ADMIN geral, como o
+          resto desta pagina. As rotas exigem `settings.view` e
+          `settings.manage`, e o rastreamento exige tambem o perfil ADMIN. */}
       <InviteExpirationCard />
 
       <section

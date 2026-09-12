@@ -733,8 +733,15 @@ export async function setInviteActive(id: string, active: boolean): Promise<Clie
 /**
  * Gera um novo token para o link do time. O anterior deixa de valer;
  * os links pessoais dos integrantes continuam como estao.
+ *
+ * `generatedByUserId` e quem clicou — normalmente o ADMIN geral agindo em
+ * nome do Administrador do time. O DONO do link continua sendo o
+ * administrador do time, e e o nome dele que permanece em "Cadastrado por".
  */
-export async function regenerateInvite(id: string): Promise<Client> {
+export async function regenerateInvite(
+  id: string,
+  generatedByUserId?: string | null,
+): Promise<Client> {
   const row = await requireClientRow(id);
 
   // O link do time e sempre emitido por um administrador ATIVO, e nunca pelo
@@ -751,7 +758,7 @@ export async function regenerateInvite(id: string): Promise<Client> {
 
   // Sem link proprio ainda, o administrador adota o convite sem dono da
   // operacao: o endereco ja distribuido continua valendo ate a renovacao.
-  await ensurePersonalInvite(user.id, id);
-  await rotatePersonalInvite(user.id);
+  await ensurePersonalInvite(user.id, id, generatedByUserId);
+  await rotatePersonalInvite(user.id, generatedByUserId);
   return assemble(row);
 }
