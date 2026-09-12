@@ -269,15 +269,16 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
       {/* Unica coluna que rola no desktop; no celular e a pagina inteira. */}
       <div className="lg:h-dvh lg:flex-1 lg:overflow-y-auto">
-        {/* Celular: cartao azul-marinho horizontal, no topo. */}
-        <div className="safe-top px-4 pt-4 sm:px-6 lg:hidden">
+        {/* Celular: a faixa do convite sangra de ponta a ponta, colada no
+            topo da tela. */}
+        <div className="safe-top lg:hidden">
           <InviteOwnerBanner owner={owner} fallbackName={client.name} />
         </div>
 
         {/* Celular: assim que o cartao do convite sai da tela, esta faixa
             gruda no topo. E a unica orientacao necessaria durante a rolagem —
             onde a pessoa esta e quanto ja preencheu — e ela nunca some. */}
-        <div className="sticky top-0 z-30 mt-4 border-y border-line bg-surface/95 backdrop-blur lg:hidden">
+        <div className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur lg:hidden">
           <div className="mx-auto w-full max-w-2xl px-4 py-2.5 sm:px-6">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
