@@ -8,8 +8,6 @@ import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { useOrigin } from '@/hooks/use-origin';
 import { copyText } from '@/lib/utils/clipboard';
 import { teamAccessPath } from '@/lib/utils/url';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { GenerateClientInviteButton } from './GenerateClientInviteButton';
@@ -30,9 +28,10 @@ import { GenerateClientInviteButton } from './GenerateClientInviteButton';
  * administrador nao deixa um membro entrar, e o da equipe nao deixa um
  * administrador entrar.
  *
- * Copiar nunca gera endereco novo. Gerar um novo invalida o anterior daquele
- * publico na hora e desconecta so as pessoas dele; por isso a renovacao fica
- * no menu ao lado, atras de uma confirmacao.
+ * Os dois enderecos de acesso sao PERMANENTES e existem desde a criacao do
+ * time: aqui eles apenas sao copiados. Trocar o endereco de acesso
+ * derrubaria todo mundo daquele publico de uma vez e nao resolve problema
+ * nenhum do dia a dia, entao essa acao nao e oferecida.
  *
  * Exclusivo do ADMIN geral: a rota de acesso confere o perfil, e quem nao o
  * tem nao recebe nem os enderecos.
@@ -47,21 +46,17 @@ interface TeamLinksBarProps {
 /** Como cada link de acesso se apresenta. */
 const ACCESS: Record<
   TeamAccessAudience,
-  { label: string; icon: typeof ShieldCheck; copied: string; confirm: string }
+  { label: string; icon: typeof ShieldCheck; copied: string }
 > = {
   TEAM_ADMIN: {
     label: 'Link do administrador',
     icon: ShieldCheck,
     copied: 'Link do administrador do time copiado.',
-    confirm:
-      'O link atual dos administradores deixará de funcionar e eles serão desconectados. A equipe não é afetada.',
   },
   EQUIPE: {
     label: 'Link da equipe',
     icon: Users,
     copied: 'Link da equipe copiado.',
-    confirm:
-      'O link atual da equipe deixará de funcionar e os membros deste time serão desconectados. Os administradores não são afetados.',
   },
 };
 
@@ -76,8 +71,6 @@ export function TeamLinksBar({ client, showAccessLinks }: TeamLinksBarProps) {
   const { data, loading, error, reload } = useRepositoryQuery(loader);
 
   const [copied, setCopied] = useState<TeamAccessAudience | null>(null);
-  const [confirming, setConfirming] = useState<TeamAccessAudience | null>(null);
-  const [rotating, setRotating] = useState<TeamAccessAudience | null>(null);
 
   const links = data?.accessLinks ?? null;
 
@@ -90,26 +83,6 @@ export function TeamLinksBar({ client, showAccessLinks }: TeamLinksBarProps) {
     setCopied(audience);
     toast.success(ACCESS[audience].copied);
     window.setTimeout(() => setCopied((atual) => (atual === audience ? null : atual)), 2000);
-  }
-
-  async function rotate(audience: TeamAccessAudience) {
-    setRotating(audience);
-    try {
-      await api<{ accessLink: TeamAccessLink }>(`/api/clients/${client.id}/acesso`, {
-        method: 'POST',
-        body: { audience },
-      });
-      toast.success('Novo link gerado. O anterior deixou de funcionar.');
-      reload();
-    } catch (failure) {
-      toast.error(
-        failure instanceof Error && failure.message
-          ? failure.message
-          : 'Não foi possível gerar um novo link.',
-      );
-    } finally {
-      setRotating(null);
-    }
   }
 
   return (
@@ -133,45 +106,17 @@ export function TeamLinksBar({ client, showAccessLinks }: TeamLinksBarProps) {
             Recarregar links de acesso
           </button>
         ) : (
-          <>
-            {(['TEAM_ADMIN', 'EQUIPE'] as const).map((audience) => (
-              <AccessButton
-                key={audience}
-                audience={audience}
-                link={links[audience]}
-                copied={copied === audience}
-                onCopy={() => void copy(audience, links[audience])}
-              />
-            ))}
-
-            <div className="rounded-control border border-line bg-surface shadow-card">
-              <Menu
-                label="Gerar novos links de acesso"
-                actions={(['TEAM_ADMIN', 'EQUIPE'] as const).map((audience) => ({
-                  id: `rotate-${audience}`,
-                  label: `Gerar novo ${ACCESS[audience].label.toLowerCase()}`,
-                  icon: <RefreshCw className="size-4" />,
-                  disabled: rotating !== null,
-                  onSelect: () => setConfirming(audience),
-                }))}
-              />
-            </div>
-          </>
+          (['TEAM_ADMIN', 'EQUIPE'] as const).map((audience) => (
+            <AccessButton
+              key={audience}
+              audience={audience}
+              link={links[audience]}
+              copied={copied === audience}
+              onCopy={() => void copy(audience, links[audience])}
+            />
+          ))
         )
       ) : null}
-
-      <ConfirmDialog
-        open={confirming !== null}
-        title="Gerar novo link de acesso"
-        description={confirming ? ACCESS[confirming].confirm : ''}
-        confirmLabel="Gerar novo link"
-        onCancel={() => setConfirming(null)}
-        onConfirm={() => {
-          const audience = confirming;
-          setConfirming(null);
-          if (audience) void rotate(audience);
-        }}
-      />
     </div>
   );
 }

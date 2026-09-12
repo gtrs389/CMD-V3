@@ -24,6 +24,13 @@ interface ModalProps {
   footer?: ReactNode;
   /** Impede fechar por clique no fundo ou Escape (ex.: durante um envio). */
   busy?: boolean;
+  /**
+   * `default` separa cabecalho, conteudo e acoes por linhas.
+   * `plain` tira as linhas e deixa tudo respirar: usado nos dialogos curtos,
+   * de uma mensagem so, onde tres faixas empilhadas pesam mais do que
+   * ajudam.
+   */
+  chrome?: 'default' | 'plain';
 }
 
 const FOCUSABLE =
@@ -50,6 +57,7 @@ export function Modal({
   children,
   footer,
   busy = false,
+  chrome = 'default',
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -134,10 +142,22 @@ export function Modal({
         className={cn(
           'relative flex max-h-[92dvh] w-full flex-col bg-surface shadow-overlay',
           'animate-slide-up rounded-t-2xl sm:animate-scale-in sm:rounded-card',
+          'border border-line/70 sm:border-line',
           SIZES[size],
         )}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-4 sm:px-5">
+        {/* Alca do painel deslizante: so no celular, so como sinal visual de
+            que da para arrastar/fechar. */}
+        <span
+          aria-hidden="true"
+          className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-pill bg-ink-200 sm:hidden"
+        />
+        <div
+          className={cn(
+            'flex items-start justify-between gap-3 px-4 pt-4 sm:px-5',
+            chrome === 'plain' ? 'pb-1' : 'border-b border-line pb-4',
+          )}
+        >
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-ink-900">{title}</h2>
             {description ? <p className="mt-1 text-sm text-ink-500">{description}</p> : null}
@@ -151,12 +171,22 @@ export function Modal({
           />
         </div>
 
-        <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div
+          className={cn(
+            'scrollbar-slim min-h-0 flex-1 overflow-y-auto px-4 sm:px-5',
+            chrome === 'plain' ? 'py-5' : 'py-4',
+          )}
+        >
           {children}
         </div>
 
         {footer ? (
-          <div className="safe-bottom flex flex-col-reverse gap-2 border-t border-line px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
+          <div
+            className={cn(
+              'safe-bottom flex flex-col-reverse gap-2 px-4 pb-4 sm:flex-row sm:justify-end sm:px-5',
+              chrome === 'plain' ? 'pt-1' : 'border-t border-line pt-3',
+            )}
+          >
             {footer}
           </div>
         ) : null}
