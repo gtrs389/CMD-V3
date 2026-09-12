@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { appConfig } from '@/config/app.config';
 import type { PublicInviteOwner } from '@/lib/types';
@@ -151,9 +151,25 @@ function AsideMesh() {
             ))}
           </g>
 
-          <g fill="#9ecbff" opacity="0.34">
-            {pontos.map(([x, y]) => (
-              <ellipse key={`${x}-${y}`} cx={x} cy={y} rx={0.5} ry={0.25} />
+          <g fill="#9ecbff">
+            {pontos.map(([x, y], index) => (
+              <ellipse
+                key={`${x}-${y}`}
+                className="mesh-dot"
+                cx={x}
+                cy={y}
+                rx={0.5}
+                ry={0.25}
+                style={
+                  {
+                    // Atraso e duracao tirados da propria posicao: a malha
+                    // pisca fora de compasso sem depender de sorteio, que
+                    // mudaria entre o servidor e o navegador.
+                    '--mesh-delay': `${((grupo * 3 + index) % 7) * 0.8}s`,
+                    '--mesh-duration': `${5 + ((x + y) % 4)}s`,
+                  } as CSSProperties
+                }
+              />
             ))}
           </g>
         </g>
@@ -202,7 +218,7 @@ export function InviteOwnerAside({ owner, fallbackName, className }: OwnerProps)
           <OwnerAvatar
             owner={owner}
             fallbackName={fallbackName}
-            className="size-24 ring-4 ring-white/10"
+            className="size-32 ring-4 ring-white/10"
           />
         </div>
 
