@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CMD">
+  <!-- Placa azul-marinho da identidade: sem ela os traços brancos da marca
+       sumiriam na aba clara do navegador. -->
+  <rect width="512" height="512" rx="112" fill="#0f1e35" />
+
+  <!-- A marca do sistema, sem alteração: apenas encaixada na placa.
+       O `translate(20,30)` compensa a origem do viewBox original
+       ("-20 -30 840 520") antes da escala. -->
+  <g transform="translate(66 137.5) scale(0.4524) translate(20 30)">
+    <defs>
+      <mask id="cmd-gap-c">
+        <rect x="-20" y="-30" width="840" height="520" fill="white" />
+        <rect x="285" y="200" width="120" height="80" fill="black" />
+      </mask>
+      <mask id="cmd-gap-d">
+        <rect x="-20" y="-30" width="840" height="520" fill="white" />
+        <rect x="395" y="200" width="120" height="80" fill="black" />
+      </mask>
+    </defs>
+
+    <circle cx="175" cy="240" r="155" fill="none" stroke="#ffffff" stroke-width="70" mask="url(#cmd-gap-c)" />
+    <circle cx="625" cy="240" r="155" fill="none" stroke="#ffffff" stroke-width="70" mask="url(#cmd-gap-d)" />
+
+    <path d="M 470 155 A 155 155 0 0 1 702 108" fill="none" stroke="#0868ff" stroke-width="70" stroke-linecap="butt" />
+
+    <path
+      d="M 330 240 L 365 25 L 400 268 L 435 25 L 470 240"
+      fill="none"
+      stroke="#0868ff"
+      stroke-width="70"
+      stroke-linejoin="miter"
+      stroke-linecap="butt"
+    />
+
+    <polygon points="345,205 366,95 384,225" fill="#054fce" opacity="0.55" />
+  </g>
+</svg>
