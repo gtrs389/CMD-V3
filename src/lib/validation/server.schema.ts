@@ -332,3 +332,57 @@ export type ClientCreateInput = z.infer<typeof clientCreateSchema>;
 export type FormUpdateInput = z.infer<typeof formUpdateSchema>;
 export type MemberCreateInput = z.infer<typeof memberCreateSchema>;
 export type PublicSubmissionInput = z.infer<typeof publicSubmissionSchema>;
+
+/* -------------------------------------------------------------------------
+   Questionario do time (migration 023)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Pergunta do questionario.
+ *
+ * Sem `systemKey` e sem o tipo `photo`: toda pergunta e livre, e o
+ * questionario nao recebe arquivo. O banco recusa `photo` de qualquer forma;
+ * aqui a recusa chega com mensagem legivel.
+ */
+const surveyFieldSchema = z.object({
+  id: z.string().min(1).max(64),
+  // Sempre nulo, e aceito apenas para a tela poder reaproveitar o mesmo
+  // editor de campos do formulario de cadastro sem montar outro objeto.
+  systemKey: z.null().optional().default(null),
+  type: z.enum(FIELD_TYPES).refine((type) => type !== 'photo', 'O questionário não aceita imagem.'),
+  label: trimmed(80),
+  placeholder: trimmed(80),
+  helpText: trimmed(160),
+  required: z.boolean(),
+  enabled: z.boolean(),
+  order: z.number().int().min(0).max(999),
+  options: z.array(fieldOptionSchema).max(appConfig.limits.maxOptionsPerField),
+});
+
+/** Configuracao enviada pelo ADMIN geral. Tudo opcional: so o que mudou. */
+export const surveyUpdateSchema = z
+  .object({
+    active: z.boolean(),
+    title: z.string().trim().min(1, 'O questionário precisa de um título.').max(120),
+    introText: trimmed(2000),
+    successMessage: trimmed(400),
+    fields: z.array(surveyFieldSchema).max(appConfig.limits.maxFieldsPerForm),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+
+/**
+ * Resposta enviada pelo link publico.
+ *
+ * Nome e telefone de quem respondeu, e nada mais: o time, o remetente e o
+ * rotulo de cada pergunta sao resolvidos no servidor, a partir do token do
+ * link.
+ */
+export const surveyAnswerSchema = z.object({
+  name: z.string().trim().min(2, 'Informe seu nome.').max(120),
+  phone: z
+    .string()
+    .trim()
+    .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+  answers: responsesSchema,
+});

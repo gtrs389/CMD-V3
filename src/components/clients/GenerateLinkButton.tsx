@@ -10,6 +10,10 @@ interface GenerateLinkButtonProps {
   /** Gera (ou renova) o link e devolve o token novo, ou null se falhar. */
   generate: () => Promise<string | null>;
   label?: string;
+  /** Caminho do link. O padrao e o do convite de cadastro. */
+  buildPath?: (token: string) => string;
+  /** Texto do aviso de sucesso, quando nao e o link de cadastro. */
+  successTitle?: string;
 }
 
 /**
@@ -32,9 +36,11 @@ interface GenerateLinkButtonProps {
 export function GenerateLinkButton({
   generate,
   label = 'Gerar Link',
+  buildPath,
+  successTitle = 'Link gerado com sucesso',
 }: GenerateLinkButtonProps) {
   const { phase, generating, copied, handleGenerate, handleCopy, close } =
-    useGenerateLinkFlow(generate);
+    useGenerateLinkFlow(generate, buildPath);
 
   return (
     <>
@@ -54,7 +60,7 @@ export function GenerateLinkButton({
         open={phase === 'ready'}
         onClose={close}
         chrome="plain"
-        title="Link gerado com sucesso"
+        title={successTitle}
         size="sm"
         footer={
           <>

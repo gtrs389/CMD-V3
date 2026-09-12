@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LayoutList, Users } from 'lucide-react';
+import { ClipboardList, LayoutList, Users } from 'lucide-react';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
@@ -11,10 +11,17 @@ import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { ClientOverviewPanel } from '@/components/clients/ClientOverviewPanel';
 import { GenerateInviteButton } from '@/components/clients/GenerateInviteButton';
 import { MembersPanel } from '@/components/members/MembersPanel';
+import { SurveyPanel } from '@/components/survey/SurveyPanel';
 import { useTeamOverview } from '@/hooks/use-team';
 
-/** As abas do integrante: o formulario e area interna do ADMIN. */
-type TabId = 'visao-geral' | 'equipe';
+/**
+ * As abas do integrante: o formulario e area interna do ADMIN.
+ *
+ * "Questionário" e diferente do formulario: e a pesquisa que o integrante
+ * envia para outras pessoas. Ele nao monta as perguntas — quem monta e o
+ * ADMIN geral —, apenas gera o link e le as respostas dos PROPRIOS links.
+ */
+type TabId = 'visao-geral' | 'equipe' | 'questionario';
 
 /**
  * Pagina do integrante da equipe.
@@ -68,6 +75,11 @@ export function TeamDetailView() {
           {members.length}
         </span>
       ),
+    },
+    {
+      id: 'questionario',
+      label: 'Questionário',
+      icon: <ClipboardList className="size-4" />,
     },
   ];
 
@@ -139,6 +151,12 @@ export function TeamDetailView() {
 
       <TabPanel id="equipe" active={tab}>
         <MembersPanel client={client} members={members} loading={false} />
+      </TabPanel>
+
+      {/* Sem `clientId`: a rota resolve o time pela sessao, e devolve apenas
+          as respostas que chegaram pelos links deste integrante. */}
+      <TabPanel id="questionario" active={tab}>
+        <SurveyPanel />
       </TabPanel>
     </div>
   );

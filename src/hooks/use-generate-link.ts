@@ -31,7 +31,16 @@ function wait(ms: number): Promise<void> {
   });
 }
 
-export function useGenerateLinkFlow(generate: () => Promise<string | null>) {
+/**
+ * Caminho do link a partir do token.
+ *
+ * O padrao e o do convite de cadastro. O questionario passa o seu, porque e
+ * OUTRO link, para outra tela: quem o responde nao vira integrante.
+ */
+export function useGenerateLinkFlow(
+  generate: () => Promise<string | null>,
+  buildPath: (token: string) => string = invitePath,
+) {
   const toast = useToast();
   const [phase, setPhase] = useState<GenerateLinkPhase>('idle');
   const [url, setUrl] = useState<string | null>(null);
@@ -55,7 +64,7 @@ export function useGenerateLinkFlow(generate: () => Promise<string | null>) {
         return;
       }
 
-      setUrl(`${window.location.origin}${invitePath(token)}`);
+      setUrl(`${window.location.origin}${buildPath(token)}`);
       setPhase('ready');
     } catch (error) {
       // Sem este `catch` a recusa do servidor virava rejeicao nao tratada: o

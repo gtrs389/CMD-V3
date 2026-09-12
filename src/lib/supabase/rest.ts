@@ -160,7 +160,8 @@ export async function deleteRows<T>(
  */
 export async function callFunction<T>(
   name: string,
-  args: Record<string, QueryValue>,
+  // `object` cobre os argumentos `jsonb`, que chegam como array ou objeto.
+  args: Record<string, QueryValue | object>,
 ): Promise<T> {
   const { url } = supabaseEnv();
   return request<T>(`${url}/rest/v1/rpc/${name}`, {

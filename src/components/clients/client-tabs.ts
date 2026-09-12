@@ -6,9 +6,14 @@
  * exportada de um modulo cliente nao pode ser chamada no servidor.
  *
  * O convite deixou de ser aba: o link de cadastro abre em dialogo.
+ *
+ * "Formulário" e "Questionário" sao coisas diferentes: o primeiro e o
+ * cadastro, que transforma quem responde em integrante; o segundo e a
+ * pesquisa que a equipe envia para outras pessoas, e quem responde nao entra
+ * na equipe.
  */
 
-export const TAB_IDS = ['visao-geral', 'equipe', 'formulario'] as const;
+export const TAB_IDS = ['visao-geral', 'equipe', 'formulario', 'questionario'] as const;
 
 export type TabId = (typeof TAB_IDS)[number];
 

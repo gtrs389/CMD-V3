@@ -28,6 +28,14 @@ export const INVITE_CONTEXT_COOKIE = 'cmd_convite_ctx';
 /** Acesso ao painel pelo link do time, aguardando o telefone. */
 export const TEAM_ACCESS_CONTEXT_COOKIE = 'cmd_acesso_ctx';
 
+/**
+ * Questionario em andamento (migration 023).
+ *
+ * Contexto proprio, separado do convite de cadastro: sao dois formularios
+ * diferentes, e quem responde o questionario nao vira integrante.
+ */
+export const SURVEY_CONTEXT_COOKIE = 'cmd_questionario_ctx';
+
 /** Estado publico de erro, sem nenhum identificador. */
 export const PUBLIC_STATE_COOKIE = 'cmd_publico_estado';
 
@@ -50,6 +58,8 @@ export const PUBLIC_STATES = [
   'convite-indisponivel',
   'convite-reservado',
   'acesso-indisponivel',
+  'questionario-encerrado',
+  'questionario-indisponivel',
 ] as const;
 export type PublicState = (typeof PUBLIC_STATES)[number];
 
@@ -86,7 +96,12 @@ function remainingSeconds(expiresAt: string): number {
  * o contexto do link anterior, e um contexto invalido nao sobrevive.
  */
 export function clearPublicContext(response: NextResponse): void {
-  for (const name of [INVITE_CONTEXT_COOKIE, TEAM_ACCESS_CONTEXT_COOKIE, PUBLIC_STATE_COOKIE]) {
+  for (const name of [
+    INVITE_CONTEXT_COOKIE,
+    TEAM_ACCESS_CONTEXT_COOKIE,
+    SURVEY_CONTEXT_COOKIE,
+    PUBLIC_STATE_COOKIE,
+  ]) {
     response.cookies.set({ ...base(name, '', { maxAge: 0 }) });
   }
 }
@@ -99,6 +114,17 @@ export function attachInviteContext(
 ): void {
   response.cookies.set(
     base(INVITE_CONTEXT_COOKIE, token, { maxAge: remainingSeconds(expiresAt) }),
+  );
+}
+
+/** Guarda o questionario em andamento. O cookie morre junto com o link. */
+export function attachSurveyContext(
+  response: NextResponse,
+  token: string,
+  expiresAt: string,
+): void {
+  response.cookies.set(
+    base(SURVEY_CONTEXT_COOKIE, token, { maxAge: remainingSeconds(expiresAt) }),
   );
 }
 
@@ -128,6 +154,11 @@ export function readInviteContext(request: NextRequest): string | null {
   return request.cookies.get(INVITE_CONTEXT_COOKIE)?.value || null;
 }
 
+/** Token do questionario guardado no cookie, para as rotas limpas. */
+export function readSurveyContext(request: NextRequest): string | null {
+  return request.cookies.get(SURVEY_CONTEXT_COOKIE)?.value || null;
+}
+
 /** Token do acesso ao time guardado no cookie, para a rota limpa. */
 export function readTeamAccessContext(request: NextRequest): string | null {
   return request.cookies.get(TEAM_ACCESS_CONTEXT_COOKIE)?.value || null;
@@ -136,12 +167,13 @@ export function readTeamAccessContext(request: NextRequest): string | null {
 /** O que a rota `/` deve desenhar, a partir dos cookies da requisicao. */
 export type PublicScreen =
   | { kind: 'invite' }
+  | { kind: 'survey' }
   | { kind: 'team-access' }
   | { kind: 'state'; state: PublicState }
   | { kind: 'none' };
 
 /**
- * Ordem fixa: cadastro, acesso ao time, estado de erro.
+ * Ordem fixa: cadastro, questionario, acesso ao time, estado de erro.
  *
  * Recebe os cookies ja lidos (`cookies()` em Server Component), porque a
  * pagina `/` nao tem acesso a `NextRequest`.
@@ -150,6 +182,7 @@ export function publicScreenFrom(store: {
   get(name: string): { value: string } | undefined;
 }): PublicScreen {
   if (store.get(INVITE_CONTEXT_COOKIE)?.value) return { kind: 'invite' };
+  if (store.get(SURVEY_CONTEXT_COOKIE)?.value) return { kind: 'survey' };
   if (store.get(TEAM_ACCESS_CONTEXT_COOKIE)?.value) return { kind: 'team-access' };
 
   const state = store.get(PUBLIC_STATE_COOKIE)?.value;

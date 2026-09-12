@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Building2,
+  ClipboardList,
   FileText,
   Image as ImageIcon,
   LayoutList,
@@ -25,6 +26,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormBuilderPanel } from '@/components/fields/FormBuilderPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
+import { SurveyPanel } from '@/components/survey/SurveyPanel';
 import { BannerTagModal } from './BannerTagModal';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
@@ -94,9 +96,18 @@ export function ClientDetailView({
   // `?aba=formulario` e a configuracao dos campos nem chega nesta resposta.
   const mostrarFormulario = can('form.view') && can('form.manage');
 
+  // Questionario: o ADMIN geral monta as perguntas; o Administrador do time
+  // apenas envia o link e le as respostas. As rotas conferem de novo.
+  const mostrarQuestionario = can('survey.view');
+  const podeMontarQuestionario = can('survey.manage');
+
   // Perfil sem acesso ao formulario nunca fica preso na aba: qualquer
   // tentativa cai na visao geral.
-  const abaAtiva: TabId = tab === 'formulario' && !mostrarFormulario ? 'visao-geral' : tab;
+  const abaAtiva: TabId =
+    (tab === 'formulario' && !mostrarFormulario) ||
+    (tab === 'questionario' && !mostrarQuestionario)
+      ? 'visao-geral'
+      : tab;
 
   if (loading) return <DetailSkeleton />;
 
@@ -147,6 +158,15 @@ export function ClientDetailView({
     },
     ...(mostrarFormulario
       ? [{ id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> }]
+      : []),
+    ...(mostrarQuestionario
+      ? [
+          {
+            id: 'questionario',
+            label: 'Questionário',
+            icon: <ClipboardList className="size-4" />,
+          },
+        ]
       : []),
   ];
 
@@ -337,6 +357,14 @@ export function ClientDetailView({
       {mostrarFormulario ? (
         <TabPanel id="formulario" active={abaAtiva}>
           <FormBuilderPanel client={client} members={memberList} />
+        </TabPanel>
+      ) : null}
+
+      {/* Questionario: a pesquisa que a equipe envia para outras pessoas.
+          Quem responde nao vira integrante e nao aparece na aba Equipe. */}
+      {mostrarQuestionario ? (
+        <TabPanel id="questionario" active={abaAtiva}>
+          <SurveyPanel clientId={client.id} canManage={podeMontarQuestionario} />
         </TabPanel>
       ) : null}
 

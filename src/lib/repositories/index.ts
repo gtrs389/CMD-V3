@@ -24,4 +24,16 @@ export {
   type InviteCpfLookup,
   type InviteTituloLookup,
 } from './http/public';
+export {
+  fetchSurvey,
+  updateSurvey,
+  fetchSurveyResponses,
+  fetchOwnSurvey,
+  generateSurveyLink,
+  fetchPublicSurvey,
+  submitSurvey,
+  type OwnSurvey,
+  type PublicSurveyOutcome,
+  type SurveySubmissionInput,
+} from './http/survey';
 export { subscribeToData, notifyDataChanged } from './events';

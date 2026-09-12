@@ -37,6 +37,11 @@ interface FieldEditorModalProps {
   field: CustomField | null;
   onClose: () => void;
   onSave: (field: CustomField) => void;
+  /**
+   * Tipos oferecidos. O padrao sao todos. O questionario passa a lista sem
+   * `photo`: ele nao recebe arquivo, e o banco recusaria de qualquer forma.
+   */
+  allowedTypes?: readonly FieldType[];
 }
 
 interface DraftErrors {
@@ -50,18 +55,33 @@ interface DraftErrors {
  * O conteudo e remontado a cada campo aberto (via `key`), por isso o rascunho
  * pode ser inicializado direto do estado, sem efeitos de sincronizacao.
  */
-export function FieldEditorModal({ open, field, onClose, onSave }: FieldEditorModalProps) {
+export function FieldEditorModal({
+  open,
+  field,
+  onClose,
+  onSave,
+  allowedTypes = FIELD_TYPES,
+}: FieldEditorModalProps) {
   if (!open || !field) return null;
-  return <FieldEditorForm key={field.id} field={field} onClose={onClose} onSave={onSave} />;
+  return (
+    <FieldEditorForm
+      key={field.id}
+      field={field}
+      onClose={onClose}
+      onSave={onSave}
+      allowedTypes={allowedTypes}
+    />
+  );
 }
 
 interface FieldEditorFormProps {
   field: CustomField;
   onClose: () => void;
   onSave: (field: CustomField) => void;
+  allowedTypes: readonly FieldType[];
 }
 
-function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
+function FieldEditorForm({ field, onClose, onSave, allowedTypes }: FieldEditorFormProps) {
   const [draft, setDraft] = useState<CustomField>(field);
   const [errors, setErrors] = useState<DraftErrors>({});
 
@@ -90,8 +110,8 @@ function FieldEditorForm({ field, onClose, onSave }: FieldEditorFormProps) {
   }
 
   const typeOptions = useMemo(
-    () => FIELD_TYPES.map((type) => ({ value: type, label: FIELD_TYPE_LABELS[type] })),
-    [],
+    () => allowedTypes.map((type) => ({ value: type, label: FIELD_TYPE_LABELS[type] })),
+    [allowedTypes],
   );
 
   function patch(changes: Partial<CustomField>) {

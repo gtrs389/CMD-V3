@@ -5,3 +5,4 @@ export * from './invite';
 export * from './client';
 export * from './member';
 export * from './team';
+export * from './survey';

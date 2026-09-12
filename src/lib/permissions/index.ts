@@ -46,6 +46,17 @@ export const PERMISSIONS = [
   'settings.manage',
   /** Envio pelo link publico: nao exige autenticacao. */
   'invite.submit',
+  /**
+   * Questionario do time (migration 023). Formulario proprio, separado do
+   * cadastro: quem responde nao vira integrante.
+   *
+   * `survey.view`   ve a area do questionario e as respostas recebidas;
+   * `survey.manage` monta as perguntas — exclusivo do ADMIN geral;
+   * `survey.send`   gera o proprio link de uso unico para enviar.
+   */
+  'survey.view',
+  'survey.manage',
+  'survey.send',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -68,6 +79,8 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
   'invite.view',
   'invite.renew',
   'invite.submit',
+  'survey.view',
+  'survey.send',
 ];
 
 /**
@@ -91,6 +104,8 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'invite.view',
   'invite.renew',
   'map.view',
+  'survey.view',
+  'survey.send',
 ];
 
 const MATRIX: Record<Role, readonly Permission[]> = {
