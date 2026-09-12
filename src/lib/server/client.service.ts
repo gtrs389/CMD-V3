@@ -580,6 +580,16 @@ export async function updateClient(id: string, input: Partial<ClientInput>): Pro
     // Qualquer outro valor e a URL assinada devolvida antes: a foto nao mudou.
   }
 
+  if (input.bannerTag !== undefined) {
+    // Porcentagem da propria imagem, nunca pixel de tela: a estampa fica no
+    // mesmo ponto do banner em qualquer largura.
+    patch.banner_tag_left = input.bannerTag.left;
+    patch.banner_tag_width = input.bannerTag.width;
+    patch.banner_tag_top = input.bannerTag.top;
+    patch.banner_tag_size = input.bannerTag.size;
+    patch.banner_tag_color = input.bannerTag.color;
+  }
+
   if (input.people !== undefined) await syncTeamPeople(id, input.people);
 
   const [row] = await updateRows<ClientRow>(TABLES.clients, { id: `eq.${id}` }, patch);

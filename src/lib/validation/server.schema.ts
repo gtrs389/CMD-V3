@@ -57,7 +57,26 @@ export const clientCreateSchema = z.object({
     .max(MAX_TEAM_PEOPLE),
 });
 
-export const clientUpdateSchema = clientCreateSchema.partial();
+/**
+ * Estampa do banner: tudo em porcentagem da propria imagem.
+ *
+ * Os limites repetem os `check` da migration 022 — a tela nunca e a unica
+ * barreira, e o banco recusa de novo o que passar daqui.
+ */
+export const bannerTagSchema = z.object({
+  left: z.number().min(0).max(100),
+  width: z.number().min(1).max(100),
+  top: z.number().min(0).max(100),
+  size: z.number().min(0.3).max(20),
+  color: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Informe uma cor em hexadecimal, como #0b5c2c.'),
+});
+
+export const clientUpdateSchema = clientCreateSchema
+  .partial()
+  .extend({ bannerTag: bannerTagSchema.optional() });
 
 const fieldOptionSchema = z.object({
   id: z.string().min(1).max(64),

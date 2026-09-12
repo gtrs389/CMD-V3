@@ -276,6 +276,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
         <div className="safe-top md:hidden">
           <InviteBanner
             teamName={client.name}
+            tag={client.bannerTag}
             fallback={<InviteOwnerBanner owner={owner} fallbackName={client.name} />}
           />
         </div>

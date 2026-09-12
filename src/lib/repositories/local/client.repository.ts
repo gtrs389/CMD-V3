@@ -7,6 +7,7 @@ import type {
   TeamPerson,
   TeamPersonInput,
 } from '@/lib/types';
+import { DEFAULT_BANNER_TAG } from '@/lib/types';
 import { createDefaultFormConfig } from '@/lib/domain/form-config';
 import { DEFAULT_INVITE_SECONDS } from '@/lib/domain/invite-expiration';
 import { createId, createInviteToken } from '@/lib/utils/id';
@@ -123,6 +124,7 @@ export function createLocalClientRepository(
         email: null,
         photo: input.photo ?? null,
         notes: input.notes?.trim() ?? '',
+        bannerTag: { ...DEFAULT_BANNER_TAG },
         createdAt: timestamp,
         updatedAt: timestamp,
         invite: {

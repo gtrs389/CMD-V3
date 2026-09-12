@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Member, TeamOverview } from '@/lib/types';
+import { DEFAULT_BANNER_TAG } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
 import { TABLES, type ClientRow, type MemberRow } from '@/lib/supabase/tables';
 import { selectOne } from '@/lib/supabase/rest';
@@ -91,6 +92,8 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       email: member.email ?? session.email,
       photo,
       notes: '',
+      // O painel do integrante nao desenha banner: o valor de fabrica basta.
+      bannerTag: { ...DEFAULT_BANNER_TAG },
       createdAt: member.created_at,
       updatedAt: member.created_at,
       // "Pessoas do time" e area exclusiva do ADMIN: nunca consultada nem
