@@ -211,6 +211,35 @@ textarea {
   margin: 0;
 }
 
+/* Pontos da malha da coluna de convite: acendem e apagam fora de compasso.
+   Cada ponto recebe o proprio atraso e a propria duracao, entao a malha
+   respira sem nunca piscar junto. O bloco de "menos movimento", abaixo,
+   desliga tudo isso de uma vez. */
+@keyframes mesh-twinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.2);
+  }
+}
+
+.mesh-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0.3;
+  animation: mesh-twinkle var(--mesh-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--mesh-delay, 0s);
+  /* `both` aplica o primeiro quadro ja durante o atraso: sem isso o ponto
+     espera aceso, em opacidade cheia, e apaga de repente quando a animacao
+     comeca. Tambem e o que deixa a malha em repouso discreta quando o
+     sistema pede menos movimento. */
+  animation-fill-mode: both;
+}
+
 /* Revelacao progressiva durante a rolagem (ver componente Reveal) */
 [data-reveal] {
   opacity: 0;
