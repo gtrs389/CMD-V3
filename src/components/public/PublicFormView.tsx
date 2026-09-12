@@ -15,7 +15,12 @@ import {
   normalizeCpf,
   normalizeVoterId,
 } from '@/lib/utils/documents';
-import { CONSENT_KEY, toSubmission, visibleFields } from '@/lib/validation/dynamic-form';
+import {
+  CONSENT_KEY,
+  completionPercent,
+  toSubmission,
+  visibleFields,
+} from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
@@ -93,6 +98,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const form = useDynamicForm(client.form);
   const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
   const allFields = useMemo(() => visibleFields(client.form), [client.form]);
+  const percent = completionPercent(client.form, form.values);
 
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
   const phoneFieldId = allFields.find((field) => field.systemKey === 'phone')?.id;
@@ -252,11 +258,34 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
             <section className="mt-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:mt-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
               <div>
                 <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
-                  Faça seu cadastro
+                  Ficha de cadastro
                 </h1>
-                <p className="mt-1.5 text-sm text-ink-500">
-                  Preencha os campos abaixo e envie. É tudo em uma página só.
-                </p>
+                <p className="mt-1.5 text-sm text-ink-500">Leva menos de 2 minutos.</p>
+              </div>
+
+              {/* Quanto ja foi preenchido. Acompanha o que a pessoa digita e
+                  nao decide nada: quem aceita o envio e a validacao. */}
+              <div className="mt-4 border-y border-line py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
+                    Preenchimento
+                  </p>
+                  <p className="text-xs font-bold text-success-600 tabular-nums">{percent}%</p>
+                </div>
+
+                <div
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percent}
+                  aria-label={`Cadastro ${percent}% preenchido`}
+                  className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-ink-100"
+                >
+                  <span
+                    className="block h-full rounded-pill bg-success-600 transition-[width] duration-500"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
               </div>
 
               {client.form.introText ? (
