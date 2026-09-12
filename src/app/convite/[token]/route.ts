@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getInviteContext } from '@/lib/server/client.service';
-import { claimInvite, expireDueInvites } from '@/lib/server/invite.service';
-import { recordInviteFirstAccess } from '@/lib/server/invite-access';
+import { expireDueInvites } from '@/lib/server/invite.service';
 import { attachClaimCookie, readOrCreateClaim } from '@/lib/server/invite-claim';
 import {
   attachInviteContext,
@@ -18,13 +17,30 @@ import {
  * barra de endereco fica so com o dominio, sem token, slug, query nem
  * fragmento, e nunca chega a exibir a URL do convite.
  *
+ * Esta rota tambem NAO RESERVA o link.
+ *
+ * Ela e buscada por muita gente que nao e a pessoa convidada: ao enviar o
+ * endereco por WhatsApp, Telegram, Facebook, Slack ou e-mail, o servidor do
+ * aplicativo abre o link sozinho para montar a previa, e verificadores de
+ * seguranca fazem o mesmo. Nenhum deles guarda cookie. Se a reserva
+ * acontecesse aqui, o primeiro robo a passar ficaria com ela e a pessoa
+ * convidada receberia "Link nao disponivel" sem nunca ter aberto nada.
+ *
+ * Por isso a reserva foi para `GET /api/public/convite`, que so acontece
+ * quando o formulario carrega de verdade em um navegador: robo de previa nao
+ * executa JavaScript e nunca chega la. O uso unico e a reserva pelo primeiro
+ * aparelho continuam iguais, decididos de forma atomica no banco.
+ *
+ * O segredo da reserva continua nascendo aqui, no cookie `HttpOnly`, para o
+ * navegador ja chegar em `/` com ele. O cookie de um robo morre com o robo.
+ *
  * Nada e carregado antes do redirect: nenhuma imagem, script ou recurso
  * externo. A resposta tambem nao pode ser guardada em cache nem servir de
  * referer para lugar nenhum.
  *
- * Link vencido, consumido, revogado, reservado por outro aparelho ou
- * inexistente segue o mesmo caminho: o estado publico vai para o cookie e a
- * mensagem aparece em `/`, sem o token na barra.
+ * Link vencido, consumido, revogado ou inexistente segue o mesmo caminho: o
+ * estado publico vai para o cookie e a mensagem aparece em `/`, sem o token
+ * na barra.
  */
 export const dynamic = 'force-dynamic';
 
@@ -59,30 +75,16 @@ export async function GET(request: NextRequest, ctx: RouteContext<'/convite/[tok
     return response;
   }
 
-  // Reserva do primeiro acesso, com o MESMO segredo de sempre: o link vale
-  // para uma pessoa, e quem abriu primeiro continua sendo a dona dele.
-  const claim = readOrCreateClaim(request);
-  const outcome = await claimInvite(token, claim.hash).catch(() => 'GONE' as const);
-
-  if (outcome === 'TAKEN') {
-    attachPublicState(response, 'convite-reservado');
-    return response;
-  }
-  if (outcome === 'GONE') {
-    attachPublicState(response, 'convite-expirado');
-    return response;
-  }
-
-  // Primeiro clique registrado AQUI, com o horario do banco e os sinais que
-  // o servidor ja tem: User-Agent, idioma do cabecalho e o HMAC do IP quando
-  // `DEVICE_IP_HMAC_KEY` existe. Um registro por convite e geracao —
-  // atualizar a pagina no mesmo aparelho nao cria outro. Falhar aqui nao
-  // atrapalha a abertura do link.
-  await recordInviteFirstAccess(request, token);
-
   const { expiresAt } = context.client.invite;
-  attachInviteContext(response, token, expiresAt);
+
+  // Segredo da reserva do primeiro acesso, com o MESMO valor de sempre: o
+  // link vale para uma pessoa, e quem abrir o formulario primeiro continua
+  // sendo o dono dele. Aqui o segredo apenas nasce; quem reserva de fato e a
+  // rota que carrega o formulario.
+  const claim = readOrCreateClaim(request);
   if (claim.isNew) attachClaimCookie(response, claim.secret, expiresAt);
+
+  attachInviteContext(response, token, expiresAt);
 
   return response;
 }
