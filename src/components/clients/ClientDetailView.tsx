@@ -27,6 +27,7 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
+import { GenerateClientInviteButton } from './GenerateClientInviteButton';
 import { GenerateInviteButton } from './GenerateInviteButton';
 import { TeamLinksBar } from './TeamLinksBar';
 import { InviteLinkModal } from './InviteLinkModal';
@@ -53,7 +54,7 @@ export function ClientDetailView({
   initialMemberId = null,
 }: ClientDetailViewProps) {
   const router = useRouter();
-  const { can } = useSession();
+  const { can, user } = useSession();
   const { data: client, loading, error, reload } = useClient(clientId);
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
@@ -70,9 +71,20 @@ export function ClientDetailView({
   const podeEditar = can('client.update');
   const podeExcluir = can('client.delete');
   const podeGerenciarConvite = can('invite.manage');
-  // Links de acesso ao painel (administrador e equipe): so o ADMIN geral
-  // consulta, copia e renova. A rota confere o perfil de novo.
-  const podeVerAcesso = can('settings.manage');
+
+  // Enderecos de acesso ao painel oferecidos nesta tela:
+  //
+  //   ADMIN geral            os dois, para distribuir a quem for.
+  //   Administrador do time  so o da equipe, que e quem ele convida. O
+  //                          endereco dos administradores nao aparece: quem
+  //                          distribui acesso de administracao e o ADMIN.
+  //
+  // A rota confere o perfil de novo, entao esconder aqui nunca e a protecao.
+  const enderecosDeAcesso = can('settings.manage')
+    ? (['TEAM_ADMIN', 'EQUIPE'] as const)
+    : user?.role === 'CANDIDATE'
+      ? (['EQUIPE'] as const)
+      : [];
 
   // Area interna do formulario: exclusiva do ADMIN, e sempre completa. Sem
   // as duas permissoes nao ha aba, cartao nem previa, a pagina recusa
@@ -213,11 +225,17 @@ export function ClientDetailView({
                 administrador e equipe. Nada de endereco na tela — cada botao
                 copia o seu. Ligar/desligar o recrutamento e ver o token
                 atual continuam no menu, em "Configurações do link". */}
-            {podeGerenciarConvite ? (
-              <TeamLinksBar client={client} showAccessLinks={podeVerAcesso} />
-            ) : (
-              <GenerateInviteButton />
-            )}
+            <TeamLinksBar
+              clientId={client.id}
+              audiences={enderecosDeAcesso}
+              generateButton={
+                podeGerenciarConvite ? (
+                  <GenerateClientInviteButton client={client} label="Link de cadastro" />
+                ) : (
+                  <GenerateInviteButton label="Link de cadastro" />
+                )
+              }
+            />
 
             {podeEditar ? (
               <button

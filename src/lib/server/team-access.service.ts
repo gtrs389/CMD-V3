@@ -99,6 +99,14 @@ export async function ensureTeamAccessLink(
  * Cria o que faltar: um time cadastrado antes da migration 019 pode ainda
  * nao ter o endereco da equipe.
  */
+/** UM endereco, quando quem consulta so pode ver aquele publico. */
+export async function getTeamAccessLink(
+  clientId: string,
+  audience: TeamAccessAudience,
+): Promise<TeamAccessLink> {
+  return toAccessLink(await ensureTeamAccessLink(clientId, audience));
+}
+
 export async function getTeamAccessLinks(clientId: string): Promise<TeamAccessLinks> {
   const [admin, equipe] = await Promise.all([
     ensureTeamAccessLink(clientId, 'TEAM_ADMIN'),
