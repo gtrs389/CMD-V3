@@ -27,8 +27,8 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
-import { GenerateClientInviteButton } from './GenerateClientInviteButton';
 import { GenerateInviteButton } from './GenerateInviteButton';
+import { TeamLinksBar } from './TeamLinksBar';
 import { InviteLinkModal } from './InviteLinkModal';
 import type { TabId } from './client-tabs';
 
@@ -70,6 +70,9 @@ export function ClientDetailView({
   const podeEditar = can('client.update');
   const podeExcluir = can('client.delete');
   const podeGerenciarConvite = can('invite.manage');
+  // Links de acesso ao painel (administrador e equipe): so o ADMIN geral
+  // consulta, copia e renova. A rota confere o perfil de novo.
+  const podeVerAcesso = can('settings.manage');
 
   // Area interna do formulario: exclusiva do ADMIN, e sempre completa. Sem
   // as duas permissoes nao ha aba, cartao nem previa, a pagina recusa
@@ -205,15 +208,13 @@ export function ClientDetailView({
             )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {/* O link de cadastro vive aqui: nao ha mais aba "Convite". Um
-                clique em "Gerar Link" gera e ja copia, sem mostrar tela nem
-                endereco — vale tanto para o link do time (ADMIN) quanto
-                para o proprio link (time e equipe). Ligar/desligar o
-                recrutamento e ver o token atual ficam no menu, em
-                "Configurações do link". */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Os tres links do time ficam juntos e nomeados: cadastro,
+                administrador e equipe. Nada de endereco na tela — cada botao
+                copia o seu. Ligar/desligar o recrutamento e ver o token
+                atual continuam no menu, em "Configurações do link". */}
             {podeGerenciarConvite ? (
-              <GenerateClientInviteButton client={client} />
+              <TeamLinksBar client={client} showAccessLinks={podeVerAcesso} />
             ) : (
               <GenerateInviteButton />
             )}
@@ -290,11 +291,10 @@ export function ClientDetailView({
           // O link de cadastro fica no botao do cabecalho: o cartao
           // "Meu link de cadastro" sai da visao geral.
           showInviteCard={false}
-          // Conferir e cadastrar quem administra o time e trabalho do ADMIN
-          // geral. No painel do proprio Administrador do time o cartao sai:
-          // ele ja sabe quem administra e nao gerencia os colegas.
-          showPeopleCard={podeEditar}
-          onManagePeople={podeEditar ? () => setEditing(true) : undefined}
+          // Os cartoes "Administradores do time" e "Acesso ao sistema" saem
+          // da visao geral: quem administra aparece no cabecalho, ao lado do
+          // nome, e os dois links de acesso viraram botao la em cima. Editar
+          // quem administra continua em "Editar time".
         />
       </TabPanel>
 
