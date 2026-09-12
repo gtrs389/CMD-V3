@@ -1,4 +1,5 @@
 import type { InviteState } from '@/lib/domain/invite-expiration';
+import type { InviteClickOutcome } from '@/lib/domain/invite-tracking';
 import type { IsoDate } from './common';
 
 export interface Invite {
@@ -105,6 +106,35 @@ export interface InviteTrackingMember {
 }
 
 /**
+ * Uma abertura do link, como o ADMIN geral a ve (migration 021).
+ *
+ * Existe tambem para link expirado, reservado, consumido ou revogado. Nunca
+ * carrega hash do IP, hash do token, segredo da reserva ou a URL do convite.
+ */
+export interface InviteClickEntry {
+  id: string;
+  /** Numero do clique humano. Nulo na pre-visualizacao automatica. */
+  clickNumber: number | null;
+  preview: boolean;
+  occurredAt: IsoDate;
+  /** Situacao do link no instante da abertura. */
+  linkStatus: InviteState;
+  outcome: InviteClickOutcome;
+  deviceType: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+  userAgent: string | null;
+  screenWidth: number | null;
+  screenHeight: number | null;
+  viewportWidth: number | null;
+  viewportHeight: number | null;
+  timezone: string | null;
+  languages: string | null;
+  maxTouchPoints: number | null;
+}
+
+/**
  * Uma geracao de link no rastreamento.
  *
  * Todos os instantes e todas as duracoes vem do horario do banco. Nunca
@@ -138,4 +168,10 @@ export interface InviteTrackingEntry {
   msTotal: number | null;
   device: InviteAccessDevice | null;
   member: InviteTrackingMember | null;
+  /** Todas as aberturas daquela geracao, da mais antiga para a mais nova. */
+  clicks: InviteClickEntry[];
+  /** Quantos cliques humanos. Pre-visualizacao automatica nao entra na conta. */
+  humanClicks: number;
+  firstClickAt: IsoDate | null;
+  lastClickAt: IsoDate | null;
 }

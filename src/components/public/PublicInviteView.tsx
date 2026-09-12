@@ -6,6 +6,7 @@ import { visibleFields } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { InviteStateShell } from './InviteChrome';
+import { useInviteDeviceReport } from './use-invite-device-report';
 import { PublicFormView } from './PublicFormView';
 
 /** Mesmo texto para todos os casos de link encerrado. */
@@ -86,6 +87,10 @@ export function PublicInviteView() {
  * interno, da reserva, do aparelho ou de horario tecnico aparece.
  */
 export function InviteExpired({ reason = 'expired' }: { reason?: 'taken' | 'expired' }) {
+  // O clique existe mesmo com o link encerrado: aqui ele apenas ganha os
+  // dados do navegador. A tela nao muda e nada e dito a quem abriu.
+  useInviteDeviceReport();
+
   return (
     <InviteStateShell>
       <span
@@ -103,6 +108,8 @@ export function InviteExpired({ reason = 'expired' }: { reason?: 'taken' | 'expi
 }
 
 export function InviteUnavailable({ description }: { description: string }) {
+  useInviteDeviceReport();
+
   return (
     <InviteStateShell>
       <span

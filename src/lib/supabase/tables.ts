@@ -30,6 +30,8 @@ export const TABLES = {
   settings: 'cmd_settings',
   inviteEvents: 'cmd_invite_events',
   inviteAccessDevices: 'cmd_invite_access_devices',
+  inviteGenerations: 'cmd_invite_generations',
+  inviteClickAttempts: 'cmd_invite_click_attempts',
 } as const;
 
 export interface UserRow {
@@ -341,6 +343,81 @@ export interface InviteAccessDeviceRow {
   languages: string | null;
   max_touch_points: number | null;
   /** Momento da unica complementacao vinda da pagina. */
+  signals_at: string | null;
+}
+
+/**
+ * Registro imutavel de UMA geracao do link de cadastro (migration 021).
+ *
+ * `cmd_invites` guarda sempre a geracao corrente; renovar sobrescreve o
+ * hash. Esta linha preserva o hash de cada geracao, entao abrir o endereco
+ * de uma geracao anterior ainda reconhece o link e registra o clique — sem
+ * autorizar cadastro, porque a reserva e o envio continuam procurando o
+ * hash em `cmd_invites`.
+ */
+export interface InviteGenerationRow {
+  id: string;
+  invite_ref: string;
+  invite_id: string | null;
+  client_id: string;
+  generation: number;
+  /** SHA-256 do token daquela geracao. O token puro nunca e guardado. */
+  token_hash: string;
+  issued_at: string;
+  expires_at: string;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  owner_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  generated_by_user_id: string | null;
+  generated_by_name: string | null;
+  generated_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  created_at: string;
+}
+
+/** Desfecho de uma abertura do link (migration 021). */
+export type InviteClickOutcomeRow =
+  | 'PENDING'
+  | 'ALLOWED'
+  | 'EXPIRED'
+  | 'TAKEN'
+  | 'CONSUMED'
+  | 'REVOKED'
+  | 'UNAVAILABLE'
+  | 'PREVIEW';
+
+/**
+ * Uma abertura do link de cadastro (migration 021).
+ *
+ * Existe tambem quando o link ja estava expirado, reservado, consumido ou
+ * revogado: a linha so observa e nunca altera o convite. Pre-visualizacao
+ * automatica entra com `kind = 'PREVIEW'` e sem numero de clique.
+ */
+export interface InviteClickAttemptRow {
+  id: string;
+  invite_ref: string;
+  invite_id: string | null;
+  client_id: string;
+  generation: number;
+  kind: 'HUMAN' | 'PREVIEW';
+  click_number: number | null;
+  occurred_at: string;
+  link_status: InviteStatusRow;
+  outcome: InviteClickOutcomeRow;
+  user_agent: string | null;
+  accept_language: string | null;
+  /** HMAC do IP publico. Nunca chega ao navegador. */
+  ip_hash: string | null;
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  viewport_width: number | null;
+  viewport_height: number | null;
+  timezone: string | null;
+  languages: string | null;
+  max_touch_points: number | null;
   signals_at: string | null;
 }
 

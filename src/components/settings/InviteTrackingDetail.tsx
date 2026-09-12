@@ -1,9 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { Clock, MonitorSmartphone, Route, UserRound } from 'lucide-react';
-import type { InviteTrackingEntry } from '@/lib/types';
-import { formatDuration, trackingLabel } from '@/lib/domain/invite-tracking';
+import { Clock, MonitorSmartphone, MousePointerClick, Route, UserRound } from 'lucide-react';
+import type { InviteClickEntry, InviteTrackingEntry } from '@/lib/types';
+import {
+  clickAllowed,
+  clickLabel,
+  clickOutcomeLabel,
+  formatDuration,
+  trackingLabel,
+} from '@/lib/domain/invite-tracking';
 import { EMPTY } from '@/lib/domain/device-summary';
 import { ROLE_LABELS } from '@/lib/permissions';
 import { formatDateTime } from '@/lib/utils/date';
@@ -19,8 +25,8 @@ interface InviteTrackingDetailProps {
 /**
  * Detalhe de uma geracao de link, aberto ao clicar na linha.
  *
- * Quatro blocos: origem, linha do tempo, aparelho do primeiro acesso e a
- * pessoa cadastrada (somente depois da conclusao).
+ * Cinco blocos: origem, linha do tempo, cada abertura do link, aparelho do
+ * primeiro acesso e a pessoa cadastrada (somente depois da conclusao).
  *
  * O que NAO aparece aqui, de proposito: CPF, titulo de eleitor, qualquer
  * dado de consulta cadastral, hash do IP, hash do token, segredo do aparelho
@@ -84,6 +90,34 @@ function Conteudo({ entry }: { entry: InviteTrackingEntry }) {
         </p>
       </Bloco>
 
+      <Bloco
+        icon={<MousePointerClick className="size-4" />}
+        title={`Aberturas do link (${entry.humanClicks} ${entry.humanClicks === 1 ? 'clique' : 'cliques'})`}
+      >
+        {entry.clicks.length === 0 ? (
+          <p className="text-sm text-ink-500 sm:col-span-2">
+            Nenhuma abertura registrada para esta geração.
+          </p>
+        ) : (
+          <>
+            <Linha
+              label="Primeiro clique"
+              value={entry.firstClickAt ? formatDateTime(entry.firstClickAt) : EMPTY}
+            />
+            <Linha
+              label="Último clique"
+              value={entry.lastClickAt ? formatDateTime(entry.lastClickAt) : EMPTY}
+            />
+
+            <ol className="space-y-2 sm:col-span-2">
+              {entry.clicks.map((clique) => (
+                <Clique key={clique.id} clique={clique} />
+              ))}
+            </ol>
+          </>
+        )}
+      </Bloco>
+
       <Bloco icon={<MonitorSmartphone className="size-4" />} title="Aparelho do primeiro acesso">
         {device ? (
           <>
@@ -136,6 +170,78 @@ function Conteudo({ entry }: { entry: InviteTrackingEntry }) {
           </p>
         )}
       </Bloco>
+    </div>
+  );
+}
+
+/**
+ * Uma abertura do link.
+ *
+ * Mostra o numero do clique, o instante, a situacao encontrada, se o acesso
+ * foi liberado ou recusado e o aparelho daquela abertura. Pre-visualizacao
+ * automatica aparece separada, sem numero.
+ */
+function Clique({ clique }: { clique: InviteClickEntry }) {
+  const liberado = clickAllowed(clique.outcome);
+
+  return (
+    <li className="rounded-control border border-line p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-ink-900">
+          {clickLabel(clique.clickNumber)}
+          <span className="ml-2 text-xs font-normal text-ink-500">
+            {formatDateTime(clique.occurredAt)}
+          </span>
+        </p>
+
+        <span
+          className={
+            liberado
+              ? 'inline-flex shrink-0 items-center rounded-pill bg-success-50 px-2 py-1 text-[0.6875rem] font-semibold whitespace-nowrap text-success-600'
+              : 'inline-flex shrink-0 items-center rounded-pill bg-ink-100 px-2 py-1 text-[0.6875rem] font-semibold whitespace-nowrap text-ink-700'
+          }
+        >
+          {clickOutcomeLabel(clique.outcome)}
+        </span>
+      </div>
+
+      <p className="mt-1 text-xs text-ink-500">
+        Situação do link na abertura: {trackingLabel(clique.linkStatus)}
+      </p>
+
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+        <Mini label="Aparelho" value={aparelho(clique)} />
+        <Mini label="Plataforma" value={clique.platform ?? EMPTY} />
+        <Mini label="Resolução" value={resolucao(clique.screenWidth, clique.screenHeight)} />
+        <Mini label="Área visível" value={resolucao(clique.viewportWidth, clique.viewportHeight)} />
+        <Mini label="Fuso horário" value={clique.timezone ?? EMPTY} />
+        <Mini label="Idiomas" value={clique.languages ?? EMPTY} />
+        <Mini label="Pontos de toque" value={toque(clique.maxTouchPoints)} />
+      </dl>
+
+      {clique.userAgent ? (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs font-medium text-ink-700">User-Agent</summary>
+          <p className="mt-2 break-all rounded-control bg-ink-50 p-3 font-mono text-[0.6875rem] text-ink-700">
+            {clique.userAgent}
+          </p>
+        </details>
+      ) : null}
+    </li>
+  );
+}
+
+/** "Android / Chrome", ou o que estiver disponivel. */
+function aparelho(clique: InviteClickEntry): string {
+  const partes = [clique.os, clique.browser, clique.deviceType].filter(Boolean);
+  return partes.length > 0 ? partes.join(' / ') : EMPTY;
+}
+
+function Mini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-ink-500">{label}</dt>
+      <dd className="truncate font-medium text-ink-900">{value}</dd>
     </div>
   );
 }

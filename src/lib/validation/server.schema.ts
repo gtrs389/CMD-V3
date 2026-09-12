@@ -243,9 +243,21 @@ export const teamPhoneLoginSchema = z.object({
  * campo novo e aceito. O convite e a reserva vem dos cookies `HttpOnly`,
  * nunca do corpo.
  */
+const inviteClickSignalsSchema = deviceSignalsSchema
+  .extend({
+    /** Area visivel da pagina, em pixels. So existe no clique (migration 021). */
+    viewportWidth: z.number().int().min(1).max(100000),
+    viewportHeight: z.number().int().min(1).max(100000),
+    /** Idiomas do navegador, ja juntados pela pagina. */
+    languages: trimmed(128),
+  })
+  .partial();
+
 export const inviteDeviceSignalsSchema = z.object({
-  device: deviceSignalsSchema.optional(),
+  device: inviteClickSignalsSchema.optional(),
 });
+
+export type InviteClickSignalsInput = z.infer<typeof inviteClickSignalsSchema>;
 
 /**
  * Comprovantes cifrados da confirmacao de CPF e titulo, feita durante o

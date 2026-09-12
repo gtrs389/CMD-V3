@@ -56,6 +56,45 @@ function known(value: string): string | null {
 }
 
 /**
+ * Sinais que o SERVIDOR ja tem em maos na propria requisicao.
+ *
+ * Usado tanto pelo aparelho do primeiro acesso (migration 020) quanto pelo
+ * registro de cada clique (migration 021), para os dois lerem exatamente a
+ * mesma coisa dos mesmos cabecalhos, com os mesmos parsers.
+ */
+export interface ServerDeviceSignals {
+  userAgent: string | null;
+  acceptLanguage: string | null;
+  ipHash: string | null;
+  deviceType: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+}
+
+export function serverDeviceSignals(request: NextRequest): ServerDeviceSignals {
+  const userAgent = header(request, 'user-agent', 512);
+  const mobileHint = header(request, 'sec-ch-ua-mobile', 16);
+
+  return {
+    userAgent,
+    acceptLanguage: header(request, 'accept-language', 128),
+    ipHash: hashIp(clientIp(request)),
+    deviceType: known(
+      deviceType({
+        userAgent,
+        // `?1` e o unico valor que o cabecalho usa para "e celular".
+        isMobile: mobileHint ? mobileHint === '?1' : null,
+        maxTouchPoints: null,
+      }),
+    ),
+    browser: known(browserName(userAgent)),
+    os: osName(userAgent),
+    platform: header(request, 'sec-ch-ua-platform', 64)?.replace(/"/g, '') ?? null,
+  };
+}
+
+/**
  * Registro imediato, no proprio redirect.
  *
  * Chamado logo depois da reserva do primeiro acesso. Grava um unico registro
@@ -67,26 +106,17 @@ export async function recordInviteFirstAccess(
   token: string,
 ): Promise<void> {
   try {
-    const userAgent = header(request, 'user-agent', 512);
-    const platform = header(request, 'sec-ch-ua-platform', 64)?.replace(/"/g, '') ?? null;
-    const mobileHint = header(request, 'sec-ch-ua-mobile', 16);
+    const sinais = serverDeviceSignals(request);
 
     await callFunction<boolean>('cmd_invite_access_record', {
       p_token_hash: hashToken(token),
-      p_user_agent: userAgent,
-      p_accept_language: header(request, 'accept-language', 128),
-      p_ip_hash: hashIp(clientIp(request)),
-      p_device_type: known(
-        deviceType({
-          userAgent,
-          // `?1` e o unico valor que o cabecalho usa para "e celular".
-          isMobile: mobileHint ? mobileHint === '?1' : null,
-          maxTouchPoints: null,
-        }),
-      ),
-      p_browser: known(browserName(userAgent)),
-      p_os: osName(userAgent),
-      p_platform: platform,
+      p_user_agent: sinais.userAgent,
+      p_accept_language: sinais.acceptLanguage,
+      p_ip_hash: sinais.ipHash,
+      p_device_type: sinais.deviceType,
+      p_browser: sinais.browser,
+      p_os: sinais.os,
+      p_platform: sinais.platform,
     });
   } catch {
     // Sinal de auditoria: falhar aqui nao pode atrapalhar a abertura do link.

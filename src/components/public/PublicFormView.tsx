@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Send } from 'lucide-react';
 import type { Client, PublicInviteOwner } from '@/lib/types';
 import { PHONE_IN_USE } from '@/lib/types';
-import { sendInviteDeviceSignals, submitInvite } from '@/lib/repositories';
+import { submitInvite } from '@/lib/repositories';
 import { GoneError, NetworkError } from '@/lib/repositories/http/api';
 import { RepositoryError } from '@/lib/repositories/types';
 import {
@@ -33,6 +33,7 @@ import { InvitePrivacyNotice } from './InvitePrivacyNotice';
 import { InviteVerifyingModal } from './InviteVerifyingModal';
 import { InviteExpired } from './PublicInviteView';
 import { buildInviteSections, isWideField } from './invite-sections';
+import { useInviteDeviceReport } from './use-invite-device-report';
 import { useInviteVerification } from './use-invite-verification';
 
 /**
@@ -94,17 +95,11 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const [expired, setExpired] = useState<'taken' | 'expired' | null>(null);
   const submittedRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
-  const signalsSentRef = useRef(false);
 
-  // Complementacao UNICA dos sinais do aparelho do primeiro acesso. O clique
-  // no link ja foi registrado no servidor, com o horario do banco; aqui vai
-  // apenas o que so o navegador conhece. Nada bloqueia o formulario: a
-  // chamada nao lanca, nao mostra aviso e nao atrasa o preenchimento.
-  useEffect(() => {
-    if (signalsSentRef.current) return;
-    signalsSentRef.current = true;
-    void sendInviteDeviceSignals();
-  }, []);
+  // Complementacao UNICA dos dados do aparelho daquele clique. O clique ja
+  // foi registrado no servidor, com o horario do banco; aqui vai apenas o que
+  // so o navegador conhece, e nada disso bloqueia o formulario.
+  useInviteDeviceReport();
 
   const form = useDynamicForm(client.form);
   const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
