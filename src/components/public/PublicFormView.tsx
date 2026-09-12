@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Send } from 'lucide-react';
+import { Check, CheckCircle2, Send } from 'lucide-react';
 import type { Client, PublicInviteOwner } from '@/lib/types';
 import { PHONE_IN_USE } from '@/lib/types';
 import { submitInvite } from '@/lib/repositories';
@@ -18,9 +18,12 @@ import {
 import {
   CONSENT_KEY,
   completionPercent,
+  filledCount,
+  missingRequired,
   toSubmission,
   visibleFields,
 } from '@/lib/validation/dynamic-form';
+import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
@@ -105,6 +108,9 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
   const allFields = useMemo(() => visibleFields(client.form), [client.form]);
   const percent = completionPercent(client.form, form.values);
+  // Quanto falta para poder enviar. Numero de leitura: quem aceita o envio
+  // continua sendo a validacao.
+  const faltam = missingRequired(client.form, form.values);
 
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
   const phoneFieldId = allFields.find((field) => field.systemKey === 'phone')?.id;
@@ -228,18 +234,34 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
   if (done) return <SuccessScreen />;
 
-  // Uma acao so: o resumo para conferir vem depois, no modal de confirmacao.
+  // Desktop: a acao fica abaixo do formulario. No celular ela mora no rodape
+  // fixo, junto do que ainda falta.
   const actions = (
     <Button
       type="submit"
       form="cadastro-publico"
       variant="accent"
       loading={submitting}
-      className="flex-1 lg:flex-none"
     >
       {!submitting ? <Send aria-hidden="true" className="size-4" /> : null}
       Enviar cadastro
     </Button>
+  );
+
+  const barraDeAvanco = (
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      aria-label={`Cadastro ${percent}% preenchido`}
+      className="h-1.5 w-full overflow-hidden rounded-pill bg-ink-100"
+    >
+      <span
+        className="block h-full rounded-pill bg-success-600 transition-[width] duration-500"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
   );
 
   return (
@@ -259,66 +281,102 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
           <InviteOwnerBanner owner={owner} fallbackName={client.name} />
         </div>
 
+        {/* Celular: assim que o cartao do convite sai da tela, esta faixa
+            gruda no topo. E a unica orientacao necessaria durante a rolagem —
+            onde a pessoa esta e quanto ja preencheu — e ela nunca some. */}
+        <div className="sticky top-0 z-30 mt-4 border-y border-line bg-surface/95 backdrop-blur lg:hidden">
+          <div className="mx-auto w-full max-w-2xl px-4 py-2.5 sm:px-6">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
+                Preenchimento
+              </p>
+              <p className="shrink-0 text-xs font-bold text-success-600 tabular-nums">
+                {percent}%
+              </p>
+            </div>
+            <div className="mt-2">{barraDeAvanco}</div>
+          </div>
+        </div>
+
         <LocationProvider fields={allFields} values={form.values} setValue={form.setValue}>
-          <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-32 sm:px-6 lg:px-14 lg:py-12 lg:pb-16">
-            <section className="mt-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:mt-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-              <div>
-                <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
-                  Ficha de cadastro
-                </h1>
-                <p className="mt-1.5 text-sm text-ink-500">Leva menos de 2 minutos.</p>
-              </div>
+          <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-36 sm:px-6 lg:px-14 lg:py-12 lg:pb-16">
+            <div>
+              <h1 className="text-xl leading-tight font-bold tracking-tight text-ink-900 sm:text-[1.5rem] lg:text-[1.75rem]">
+                Ficha de cadastro
+              </h1>
+              <p className="mt-1.5 text-sm text-ink-500">Leva menos de 2 minutos.</p>
+            </div>
 
-              {/* Quanto ja foi preenchido. Acompanha o que a pessoa digita e
-                  nao decide nada: quem aceita o envio e a validacao. */}
-              <div className="mt-4 border-y border-line py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
-                    Preenchimento
-                  </p>
-                  <p className="text-xs font-bold text-success-600 tabular-nums">{percent}%</p>
-                </div>
-
-                <div
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={percent}
-                  aria-label={`Cadastro ${percent}% preenchido`}
-                  className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-ink-100"
-                >
-                  <span
-                    className="block h-full rounded-pill bg-success-600 transition-[width] duration-500"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              </div>
-
-              {client.form.introText ? (
-                <p className="mt-4 rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-700">
-                  {client.form.introText}
+            {/* Desktop: o avanco fica aqui. No celular ele vive na faixa do
+                topo, sempre a vista. */}
+            <div className="mt-4 hidden border-y border-line py-3 lg:block">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
+                  Preenchimento
                 </p>
-              ) : null}
+                <p className="text-xs font-bold text-success-600 tabular-nums">{percent}%</p>
+              </div>
+              <div className="mt-2">{barraDeAvanco}</div>
+            </div>
 
-              <form
-                id="cadastro-publico"
-                ref={formRef}
-                onSubmit={handleSubmit}
-                noValidate
-                className="contents"
-              >
-                {/* Todas as secoes, uma embaixo da outra: nada fica escondido
-                    atras de um "Continuar". */}
-                <div className="mt-5 space-y-7 animate-rise lg:mt-6">
-                  {sections.map((section) => (
-                    <section key={section.id} aria-labelledby={`secao-${section.id}`}>
-                      <h2
-                        id={`secao-${section.id}`}
-                        className="text-[0.9375rem] font-semibold text-ink-900"
-                      >
-                        {section.title}
-                      </h2>
-                      <p className="mt-1 text-[0.8125rem] text-ink-500">{section.description}</p>
+            {client.form.introText ? (
+              <p className="mt-4 rounded-control border border-line bg-surface p-3 text-sm text-ink-700 shadow-card lg:bg-ink-50 lg:shadow-none">
+                {client.form.introText}
+              </p>
+            ) : null}
+
+            <form
+              id="cadastro-publico"
+              ref={formRef}
+              onSubmit={handleSubmit}
+              noValidate
+              className="contents"
+            >
+              {/* Celular: cada secao e um cartao proprio, numerado. A rolagem
+                  ganha ritmo e a pessoa enxerga o tamanho do que falta em vez
+                  de encarar uma folha unica e interminavel.
+                  Desktop: os mesmos blocos, sem cartao, como sempre foram. */}
+              <div className="mt-5 animate-rise space-y-4 lg:mt-6 lg:space-y-7">
+                {sections.map((section, index) => {
+                  const total = section.fields.length;
+                  const preenchidos = filledCount(section.fields, form.values);
+                  const completa = total > 0 && preenchidos === total;
+
+                  return (
+                    <section
+                      key={section.id}
+                      aria-labelledby={`secao-${section.id}`}
+                      className="scroll-mt-24 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:scroll-mt-0 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold lg:hidden',
+                            completa
+                              ? 'bg-success-50 text-success-600'
+                              : 'bg-brand-50 text-brand-700',
+                          )}
+                        >
+                          {completa ? <Check className="size-4" /> : index + 1}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <h2
+                            id={`secao-${section.id}`}
+                            className="text-[0.9375rem] font-semibold text-ink-900"
+                          >
+                            {section.title}
+                          </h2>
+                          <p className="mt-1 text-[0.8125rem] text-ink-500">
+                            {section.description}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-pill bg-ink-50 px-2 py-1 text-[0.6875rem] font-semibold text-ink-500 tabular-nums lg:hidden">
+                          {preenchidos}/{total}
+                        </span>
+                      </div>
 
                       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-5">
                         {section.fields.map((field) => (
@@ -362,9 +420,11 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                         ))}
                       </div>
                     </section>
-                  ))}
+                  );
+                })}
 
-                  {/* Aviso e aceite ficam onde a pessoa termina de preencher. */}
+                {/* Aviso e aceite ficam onde a pessoa termina de preencher. */}
+                <div className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
                   <InvitePrivacyNotice
                     config={client.form}
                     accepted={form.values[CONSENT_KEY] === true}
@@ -374,25 +434,50 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                     onChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
                   />
                 </div>
+              </div>
 
-                {/* Desktop: acoes abaixo do formulario. */}
-                <div className="mt-7 hidden items-center justify-between gap-4 lg:flex">
-                  <p className="text-xs text-ink-500">{REQUIRED_HINT}</p>
-                  <div className="flex shrink-0 items-center gap-2">{actions}</div>
-                </div>
-              </form>
+              {/* Desktop: acoes abaixo do formulario. */}
+              <div className="mt-7 hidden items-center justify-between gap-4 lg:flex">
+                <p className="text-xs text-ink-500">{REQUIRED_HINT}</p>
+                <div className="flex shrink-0 items-center gap-2">{actions}</div>
+              </div>
+            </form>
 
-              <p className="mt-5 text-xs text-ink-500 lg:hidden">{REQUIRED_HINT}</p>
-            </section>
+            <p className="mt-5 text-center text-xs text-ink-500 lg:hidden">{REQUIRED_HINT}</p>
           </div>
         </LocationProvider>
       </div>
 
-      {/* Celular: o envio fica fixo no rodape, com area segura. O conteudo
-          reserva espaco equivalente para nunca ficar encoberto. */}
+      {/* Celular: o envio fica fixo no rodape, com area segura, e diz quanto
+          falta antes de a pessoa tentar enviar. O conteudo reserva espaco
+          equivalente para nunca ficar encoberto. */}
       <div className="safe-bottom safe-x fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-3 sm:px-6">
-          {actions}
+        <div className="mx-auto w-full max-w-2xl space-y-2 px-4 py-3 sm:px-6">
+          <p
+            aria-live="polite"
+            className={cn(
+              'text-center text-xs font-medium',
+              faltam === 0 ? 'text-success-600' : 'text-ink-500',
+            )}
+          >
+            {faltam === 0
+              ? 'Tudo pronto para enviar.'
+              : `Ainda ${faltam === 1 ? 'falta' : 'faltam'} ${faltam} ${
+                  faltam === 1 ? 'campo obrigatório' : 'campos obrigatórios'
+                }.`}
+          </p>
+
+          <Button
+            type="submit"
+            form="cadastro-publico"
+            variant="accent"
+            size="lg"
+            loading={submitting}
+            fullWidth
+          >
+            {!submitting ? <Send aria-hidden="true" className="size-4" /> : null}
+            Enviar cadastro
+          </Button>
         </div>
       </div>
 
@@ -446,7 +531,7 @@ function SuccessScreen() {
     <InviteStateShell>
       <span
         aria-hidden="true"
-        className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-success-50 text-success-600"
+        className="mx-auto mb-4 flex size-14 animate-pop items-center justify-center rounded-full bg-success-50 text-success-600"
       >
         <CheckCircle2 className="size-7" />
       </span>
