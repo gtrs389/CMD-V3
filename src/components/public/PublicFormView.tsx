@@ -487,20 +487,16 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
       <InviteConfirmValueModal
         open={verification.pending?.kind === 'cpf'}
-        title="Confirme seu CPF"
-        description={`Você digitou ${
-          verification.pending ? formatCpf(verification.pending.value) : ''
-        }. Está correto?`}
+        label="CPF"
+        value={verification.pending ? formatCpf(verification.pending.value) : ''}
         onCancel={verification.cancel}
         onConfirm={verification.confirm}
       />
 
       <InviteConfirmValueModal
         open={verification.pending?.kind === 'titulo'}
-        title="Confirme seu título de eleitor"
-        description={`Você digitou ${
-          verification.pending ? formatVoterId(verification.pending.value) : ''
-        }. Está correto?`}
+        label="título de eleitor"
+        value={verification.pending ? formatVoterId(verification.pending.value) : ''}
         onCancel={verification.cancel}
         onConfirm={verification.confirm}
       />
