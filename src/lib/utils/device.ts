@@ -12,9 +12,14 @@ export interface DeviceSignals {
   platform?: string;
   isMobile?: boolean;
   language?: string;
+  /** Todos os idiomas do navegador, em uma linha. */
+  languages?: string;
   timezone?: string;
   screenWidth?: number;
   screenHeight?: number;
+  /** Area visivel da pagina. Usada no registro de cliques (migration 021). */
+  viewportWidth?: number;
+  viewportHeight?: number;
   maxTouchPoints?: number;
 }
 
@@ -39,11 +44,17 @@ export function collectDeviceSignals(): DeviceSignals {
 
     if (navigator.language) signals.language = navigator.language.slice(0, 32);
 
+    if (Array.isArray(navigator.languages) && navigator.languages.length > 0) {
+      signals.languages = navigator.languages.join(', ').slice(0, 128);
+    }
+
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (timezone) signals.timezone = timezone.slice(0, 64);
 
     signals.screenWidth = positiveInt(window.screen?.width, 100000);
     signals.screenHeight = positiveInt(window.screen?.height, 100000);
+    signals.viewportWidth = positiveInt(window.innerWidth, 100000);
+    signals.viewportHeight = positiveInt(window.innerHeight, 100000);
     signals.maxTouchPoints = positiveInt(navigator.maxTouchPoints, 64);
 
     return signals;

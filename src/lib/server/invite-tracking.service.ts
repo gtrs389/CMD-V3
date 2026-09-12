@@ -1,11 +1,17 @@
 import 'server-only';
-import type { InviteAccessDevice, InviteTrackingEntry, InviteTrackingMember } from '@/lib/types';
+import type {
+  InviteAccessDevice,
+  InviteClickEntry,
+  InviteTrackingEntry,
+  InviteTrackingMember,
+} from '@/lib/types';
 import { effectiveState, type InviteState } from '@/lib/domain/invite-expiration';
 import { elapsedMs } from '@/lib/domain/invite-tracking';
 import {
   TABLES,
   type ClientRow,
   type InviteAccessDeviceRow,
+  type InviteClickAttemptRow,
   type InviteEventRow,
   type InviteRow,
   type MemberRow,
@@ -50,8 +56,17 @@ const DEVICE_COLUMNS =
   'invite_ref,generation,first_access_at,user_agent,accept_language,device_type,browser,os,' +
   'platform,screen_width,screen_height,timezone,languages,max_touch_points';
 
+/** Sem `ip_hash`: o HMAC do IP nunca chega ao navegador. */
+const CLICK_COLUMNS =
+  'id,invite_ref,generation,kind,click_number,occurred_at,link_status,outcome,' +
+  'user_agent,accept_language,device_type,browser,os,platform,screen_width,screen_height,' +
+  'viewport_width,viewport_height,timezone,languages,max_touch_points';
+
 /** Teto de leitura, igual ao do historico anterior. */
 const EVENT_LIMIT = 2000;
+
+/** Teto de aberturas lidas por consulta. */
+const CLICK_LIMIT = 5000;
 
 export interface InviteTrackingFilter {
   /** Time (operacao). */
@@ -102,6 +117,30 @@ function toDevice(row: InviteAccessDeviceRow): InviteAccessDevice {
     languages: row.languages ?? row.accept_language,
     maxTouchPoints: row.max_touch_points,
     firstAccessAt: row.first_access_at,
+  };
+}
+
+function toClick(row: InviteClickAttemptRow): InviteClickEntry {
+  return {
+    id: row.id,
+    clickNumber: row.click_number,
+    preview: row.kind === 'PREVIEW',
+    occurredAt: row.occurred_at,
+    linkStatus: row.link_status as InviteState,
+    outcome: row.outcome,
+    deviceType: row.device_type,
+    browser: row.browser,
+    os: row.os,
+    platform: row.platform,
+    userAgent: row.user_agent,
+    screenWidth: row.screen_width,
+    screenHeight: row.screen_height,
+    viewportWidth: row.viewport_width,
+    viewportHeight: row.viewport_height,
+    timezone: row.timezone,
+    // Sem a complementacao da pagina, vale o idioma do cabecalho.
+    languages: row.languages ?? row.accept_language,
+    maxTouchPoints: row.max_touch_points,
   };
 }
 
@@ -198,7 +237,7 @@ export async function listInviteTracking(
   const refs = [...new Set(list.map((draft) => draft.inviteRef))];
   const clientIds = [...new Set(list.map((draft) => draft.clientId))];
 
-  const [invites, clients, devices] = await Promise.all([
+  const [invites, clients, devices, clickRows] = await Promise.all([
     selectRows<InviteRow>(TABLES.invites, {
       select: INVITE_COLUMNS,
       filters: { id: inFilter(refs) },
@@ -211,6 +250,13 @@ export async function listInviteTracking(
       select: DEVICE_COLUMNS,
       filters: { invite_ref: inFilter(refs) },
     }),
+    // Todas as aberturas daquelas geracoes, da mais antiga para a mais nova.
+    selectRows<InviteClickAttemptRow>(TABLES.inviteClickAttempts, {
+      select: CLICK_COLUMNS,
+      filters: { invite_ref: inFilter(refs) },
+      order: 'occurred_at.asc',
+      limit: CLICK_LIMIT,
+    }),
   ]);
 
   const inviteById = new Map(invites.map((row) => [row.id, row]));
@@ -218,6 +264,14 @@ export async function listInviteTracking(
   const deviceByKey = new Map(
     devices.map((row) => [`${row.invite_ref}:${row.generation}`, row]),
   );
+
+  const clicksByKey = new Map<string, InviteClickEntry[]>();
+  for (const row of clickRows) {
+    const chave = `${row.invite_ref}:${row.generation}`;
+    const lista = clicksByKey.get(chave);
+    if (lista) lista.push(toClick(row));
+    else clicksByKey.set(chave, [toClick(row)]);
+  }
 
   // O convite corrente tambem conhece o integrante criado: serve para as
   // conclusoes anteriores a esta migration, cujo evento nao guardou o
@@ -260,6 +314,11 @@ export async function listInviteTracking(
     const corrente = invite && invite.generation === draft.generation ? invite : undefined;
     const state = stateOf(draft, invite);
 
+    const clicks = clicksByKey.get(draft.key) ?? [];
+    // Pre-visualizacao automatica nao e gente: ela nao entra na contagem nem
+    // define o primeiro e o ultimo clique.
+    const humanos = clicks.filter((clique) => !clique.preview);
+
     return {
       key: draft.key,
       generation: draft.generation,
@@ -282,6 +341,10 @@ export async function listInviteTracking(
       msToConsume: elapsedMs(draft.firstAccessAt, draft.consumedAt),
       msTotal: elapsedMs(draft.generatedAt, draft.consumedAt),
       device: deviceByKey.get(draft.key) ? toDevice(deviceByKey.get(draft.key)!) : null,
+      clicks,
+      humanClicks: humanos.length,
+      firstClickAt: humanos[0]?.occurredAt ?? null,
+      lastClickAt: humanos[humanos.length - 1]?.occurredAt ?? null,
       // A pessoa so aparece depois da conclusao.
       member: state === 'CONSUMED' && draft.memberId
         ? (memberById.get(draft.memberId) ?? null)

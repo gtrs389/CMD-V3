@@ -61,6 +61,52 @@ export function formatDuration(ms: number | null): string {
   return restoH > 0 ? `${days} d ${restoH} h` : `${days} d`;
 }
 
+/* -------------------------------------------------------------------------
+   Cliques no link (migration 021)
+   ------------------------------------------------------------------------- */
+
+/** Desfecho de uma abertura do link. */
+export type InviteClickOutcome =
+  | 'PENDING'
+  | 'ALLOWED'
+  | 'EXPIRED'
+  | 'TAKEN'
+  | 'CONSUMED'
+  | 'REVOKED'
+  | 'UNAVAILABLE'
+  | 'PREVIEW';
+
+/** Como cada desfecho e lido na auditoria. */
+export const CLICK_OUTCOME_LABELS: Record<InviteClickOutcome, string> = {
+  PENDING: 'Sem desfecho registrado',
+  ALLOWED: 'Acesso liberado',
+  EXPIRED: 'Link expirado',
+  TAKEN: 'Link já reservado',
+  CONSUMED: 'Cadastro já concluído',
+  REVOKED: 'Link revogado',
+  UNAVAILABLE: 'Link indisponível',
+  PREVIEW: 'Pré-visualização automática',
+};
+
+export function clickOutcomeLabel(outcome: InviteClickOutcome): string {
+  return CLICK_OUTCOME_LABELS[outcome] ?? CLICK_OUTCOME_LABELS.PENDING;
+}
+
+/** Somente o acesso liberado abriu o formulario. */
+export function clickAllowed(outcome: InviteClickOutcome): boolean {
+  return outcome === 'ALLOWED';
+}
+
+/**
+ * Como a abertura aparece na linha do tempo.
+ *
+ * Clique humano e numerado: "1º clique", "2º clique". Pre-visualizacao
+ * automatica nunca recebe numero, porque nao foi ninguem que abriu.
+ */
+export function clickLabel(clickNumber: number | null): string {
+  return clickNumber === null ? 'Pré-visualização automática' : `${clickNumber}º clique`;
+}
+
 /** Diferenca entre dois instantes ISO, em milissegundos. Null se faltar algum. */
 export function elapsedMs(from: string | null, to: string | null): number | null {
   if (!from || !to) return null;
