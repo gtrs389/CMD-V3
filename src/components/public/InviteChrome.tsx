@@ -12,7 +12,7 @@ import { initials } from '@/lib/utils/text';
  *
  * Desktop: coluna azul-marinho fixa a esquerda, com quem convidou, e o
  * formulario a direita, com rolagem propria.
- * Celular: cartao azul-marinho horizontal no topo e o formulario em uma
+ * Celular: faixa azul-marinho de ponta a ponta no topo e o formulario em uma
  * coluna, tudo rolando junto.
  *
  * Nao ha etapas, progresso nem pastilhas: o cadastro inteiro cabe em uma
@@ -61,26 +61,65 @@ interface OwnerProps {
   className?: string;
 }
 
-/** Cartao azul-marinho horizontal do celular. */
+/**
+ * Faixa azul-marinho do celular.
+ *
+ * Sangra de ponta a ponta, sem margem nem canto arredondado: e a primeira
+ * coisa que a pessoa ve ao abrir o link, e ocupar a largura inteira faz ela
+ * parecer o topo do proprio aplicativo, nao um cartao solto dentro da
+ * pagina.
+ *
+ * A foto ocupa toda a altura a esquerda, cortada de forma a manter os
+ * rostos no alto, e se dissolve no azul antes de encostar no texto. A
+ * direita, a hierarquia em tres degraus: de quem e o convite, quem convidou
+ * e o convite em si.
+ */
 export function InviteOwnerBanner({ owner, fallbackName, className }: OwnerProps) {
   const name = owner?.name ?? fallbackName;
+  const photo = owner?.photoUrl ?? null;
 
   return (
     <section
       aria-label="Quem enviou o convite"
-      className={cn('rounded-card bg-navy-900 p-3.5 shadow-overlay', className)}
+      className={cn(
+        'relative flex min-h-30 overflow-hidden bg-navy-900 shadow-overlay',
+        'bg-gradient-to-br from-navy-800 via-navy-900 to-navy-900',
+        className,
+      )}
     >
-      <div className="flex items-center gap-3">
-        <OwnerAvatar owner={owner} fallbackName={fallbackName} className="size-14" />
+      <div className="relative w-[38%] max-w-44 shrink-0 self-stretch">
+        {photo ? (
+          <img
+            src={photo}
+            alt={`Foto de ${name}`}
+            className="absolute inset-0 size-full object-cover object-top"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex size-full items-center justify-center bg-navy-700 text-2xl font-bold text-white"
+          >
+            {initials(name)}
+          </span>
+        )}
 
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[0.625rem] font-semibold tracking-[0.12em] text-navy-300 uppercase">
-            Convite de {name}
-          </p>
-          <p className="mt-1 text-[0.9375rem] leading-snug font-bold text-white">
-            Faça parte desta mobilização.
-          </p>
-        </div>
+        {/* A foto se dissolve no azul: sem corte duro entre imagem e texto. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 w-12 bg-gradient-to-r from-transparent to-navy-900"
+        />
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col justify-center px-4 py-4">
+        <p className="text-[0.5625rem] font-bold tracking-[0.18em] text-navy-300 uppercase">
+          Convite de
+        </p>
+        <p className="mt-0.5 truncate text-base leading-tight font-extrabold tracking-tight text-white uppercase">
+          {name}
+        </p>
+        <p className="mt-2.5 text-[0.9375rem] leading-snug font-bold text-balance text-white">
+          Faça parte desta mobilização.
+        </p>
       </div>
     </section>
   );
