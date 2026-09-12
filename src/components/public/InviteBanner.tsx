@@ -29,8 +29,20 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
  * em vez de deixar o topo da tela vazio.
  */
 
-/** Arquivo oficial, servido estaticamente a partir de `public/`. */
-export const INVITE_BANNER_SRC = '/banner/convite-mobile.png';
+/**
+ * Arquivo oficial do banner, exatamente como esta publicado.
+ *
+ * Servido do proprio Storage do projeto, no endereco publico entregue pela
+ * producao. O navegador baixa o arquivo original, byte a byte: nada aqui
+ * recorta, converte, recomprime ou passa a imagem por qualquer
+ * processamento.
+ *
+ * Para trocar o banner, troque o arquivo nesse endereco — ou publique um
+ * arquivo em `public/banner/` e aponte esta constante para ele. Nenhuma
+ * outra linha muda.
+ */
+export const INVITE_BANNER_SRC =
+  'https://zpfhqweydlujotqbuwse.supabase.co/storage/v1/object/public/imagem_url/00.png';
 
 /**
  * Posicao e tamanho da identificacao, em porcentagem da IMAGEM.
