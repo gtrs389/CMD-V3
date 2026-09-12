@@ -35,7 +35,8 @@ import {
 
 const INVITE_COLUMNS =
   'id,client_id,user_id,token,token_hash,active,created_at,rotated_at,' +
-  'issued_at,expires_at,status,claim_hash,claimed_at,consumed_at,revoked_at,generation';
+  'issued_at,expires_at,status,claim_hash,claimed_at,consumed_at,revoked_at,generation,' +
+  'owner_name,owner_role,generated_by_user_id,generated_by_name,generated_by_role,member_id';
 
 /** Dono do link, ja resolvido no servidor. */
 export interface InviteOwner {
@@ -183,13 +184,29 @@ interface IssueRow {
   expires_at: string;
 }
 
-export async function issuePersonalInvite(userId: string): Promise<IssuedInvite> {
+/**
+ * Gera o link de `userId`, registrando QUEM executou.
+ *
+ * `userId` e o DONO do link: a hierarquia que recebe o cadastro e o nome que
+ * permanece em "Cadastrado por". `generatedByUserId` e quem clicou — o
+ * proprio dono, ou o ADMIN geral agindo em nome dele. Sem esse segundo
+ * argumento o banco assume o proprio dono.
+ *
+ * O token nasce no servidor, com alta entropia e diferente a cada geracao. O
+ * historico guarda apenas o hash e o identificador da geracao: token, URL e
+ * segredo nunca entram no historico nem em log.
+ */
+export async function issuePersonalInvite(
+  userId: string,
+  generatedByUserId?: string | null,
+): Promise<IssuedInvite> {
   const token = createInviteToken();
 
   const rows = await callFunction<IssueRow[]>('cmd_invite_issue', {
     p_user_id: userId,
     p_token: token,
     p_token_hash: hashToken(token),
+    p_generated_by: generatedByUserId ?? null,
   });
 
   const row = Array.isArray(rows) ? rows[0] : (rows as unknown as IssueRow);
@@ -241,9 +258,19 @@ export async function releaseInviteSubmit(token: string, claimHash: string): Pro
   }).catch(() => undefined);
 }
 
-/** Fecha o link em definitivo, depois que o integrante foi salvo. */
-export async function consumeInvite(token: string): Promise<void> {
-  await callFunction<boolean>('cmd_invite_consume', { p_token_hash: hashToken(token) });
+/**
+ * Fecha o link em definitivo, depois que o integrante foi salvo.
+ *
+ * Vincula o convite ao integrante criado e registra o evento CONSUMED com o
+ * instante do banco. O dono do link permanece o responsavel imutavel em
+ * "Cadastrado por": nada aqui o altera. Repetir a chamada nao duplica nem o
+ * registro nem o evento.
+ */
+export async function consumeInvite(token: string, memberId?: string | null): Promise<void> {
+  await callFunction<boolean>('cmd_invite_consume', {
+    p_token_hash: hashToken(token),
+    p_member_id: memberId ?? null,
+  });
 }
 
 /** Marca como expirado o que passou do prazo. Sem cron: acontece na leitura. */
@@ -260,6 +287,7 @@ export async function expireDueInvites(): Promise<void> {
 export async function ensurePersonalInvite(
   userId: string,
   clientId: string,
+  generatedByUserId?: string | null,
 ): Promise<InviteRow> {
   const current = await findInviteByUser(userId);
   if (current) return current;
@@ -282,7 +310,7 @@ export async function ensurePersonalInvite(
   }
 
   // Primeiro link do usuario: nasce pela funcao SQL, ja com prazo e evento.
-  await issuePersonalInvite(userId);
+  await issuePersonalInvite(userId, generatedByUserId);
   const criado = await findInviteByUser(userId);
   if (criado) return criado;
 
@@ -357,8 +385,11 @@ export async function loadOperationInvites(
  * Gera um token novo para o link pessoal. O anterior deixa de valer na hora,
  * mesmo que ja estivesse reservado por alguem.
  */
-export async function rotatePersonalInvite(userId: string): Promise<InviteRow> {
-  await issuePersonalInvite(userId);
+export async function rotatePersonalInvite(
+  userId: string,
+  generatedByUserId?: string | null,
+): Promise<InviteRow> {
+  await issuePersonalInvite(userId, generatedByUserId);
   const row = await findInviteByUser(userId);
   if (!row) throw new Error('link nao encontrado depois da geracao');
   return row;

@@ -17,6 +17,7 @@ export * from './types';
 export { NetworkError } from './http/api';
 export {
   submitInvite,
+  sendInviteDeviceSignals,
   lookupInviteCpf,
   lookupInviteTitulo,
   type PublicSubmission,

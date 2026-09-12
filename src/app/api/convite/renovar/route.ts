@@ -20,7 +20,8 @@ export async function POST() {
       throw forbidden('Este perfil não tem link pessoal.');
     }
 
-    const issued = await issuePersonalInvite(user.id);
+    // Dono e gerador coincidem: o usuario renova o proprio link.
+    const issued = await issuePersonalInvite(user.id, user.id);
 
     // O token vai uma unica vez, para a propria pessoa copiar e compartilhar.
     return jsonOk({

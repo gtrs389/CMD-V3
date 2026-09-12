@@ -19,12 +19,15 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<'/api/client
 /**
  * Gera um novo token. O valor original volta uma unica vez, nesta resposta:
  * o banco guarda apenas o hash SHA-256.
+ *
+ * Quem clica fica registrado como gerador no historico; o dono do link
+ * continua sendo o Administrador do time.
  */
 export async function POST(_request: NextRequest, ctx: RouteContext<'/api/clients/[id]/invite'>) {
   try {
     const { id } = await ctx.params;
-    await requireClientAccess('invite.manage', id);
-    return jsonOk({ client: await regenerateInvite(id) });
+    const user = await requireClientAccess('invite.manage', id);
+    return jsonOk({ client: await regenerateInvite(id, user.id) });
   } catch (error) {
     return toErrorResponse(error);
   }

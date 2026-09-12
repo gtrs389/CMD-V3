@@ -65,17 +65,77 @@ export interface InviteExpirationSettings {
   updatedAt: IsoDate;
 }
 
-/** Uma geracao de link no historico. Sem token, segredo, senha, CPF ou IP. */
-export interface InviteHistoryEntry {
-  /** Chave de lista: convite + geracao. */
+
+/* -------------------------------------------------------------------------
+   Rastreamento dos links de recrutamento (migration 020)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Aparelho do primeiro acesso, como o ADMIN geral o ve.
+ *
+ * Somente sinais tecnicos. O HMAC do IP, o hash do token e o segredo da
+ * reserva ficam no servidor e nao existem neste formato.
+ */
+export interface InviteAccessDevice {
+  deviceType: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+  userAgent: string | null;
+  screenWidth: number | null;
+  screenHeight: number | null;
+  timezone: string | null;
+  languages: string | null;
+  maxTouchPoints: number | null;
+  firstAccessAt: IsoDate;
+}
+
+/**
+ * Pessoa cadastrada pelo link, exibida somente depois da conclusao.
+ *
+ * Apenas o basico para reconhecer quem se cadastrou e abrir a ficha: nada de
+ * CPF, titulo de eleitor ou retorno de consulta cadastral.
+ */
+export interface InviteTrackingMember {
+  id: string;
+  clientId: string;
+  name: string;
+  phone: string;
+  photoUrl: string | null;
+}
+
+/**
+ * Uma geracao de link no rastreamento.
+ *
+ * Todos os instantes e todas as duracoes vem do horario do banco. Nunca
+ * carrega token, URL do convite, hash de IP, hash de token, segredo do
+ * aparelho, CPF, titulo ou dado de consulta cadastral.
+ */
+export interface InviteTrackingEntry {
+  /** Chave de lista: geracao do convite. */
   key: string;
+  generation: number;
+  /** Dono do link: a hierarquia que recebe o cadastro. */
   ownerName: string;
   ownerRole: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
-  candidateName: string;
+  clientId: string | null;
+  clientName: string;
+  /** Quem clicou para gerar ou renovar. Pode ser o ADMIN geral. */
+  generatedByName: string;
+  generatedByRole: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
   generatedAt: IsoDate | null;
-  firstAccessAt: IsoDate | null;
   expiresAt: IsoDate | null;
+  firstAccessAt: IsoDate | null;
   consumedAt: IsoDate | null;
+  expiredAt: IsoDate | null;
   revokedAt: IsoDate | null;
   state: InviteState;
+  /** Geracao -> primeiro clique, em milissegundos. */
+  msToFirstAccess: number | null;
+  /** Primeiro clique -> conclusao, em milissegundos. */
+  msToConsume: number | null;
+  /** Geracao -> conclusao, em milissegundos. */
+  msTotal: number | null;
+  device: InviteAccessDevice | null;
+  member: InviteTrackingMember | null;
 }

@@ -237,6 +237,17 @@ export const teamPhoneLoginSchema = z.object({
 });
 
 /**
+ * Complementacao dos sinais do aparelho do primeiro acesso ao convite.
+ *
+ * Reaproveita exatamente o mesmo esquema do restante do sistema: nenhum
+ * campo novo e aceito. O convite e a reserva vem dos cookies `HttpOnly`,
+ * nunca do corpo.
+ */
+export const inviteDeviceSignalsSchema = z.object({
+  device: deviceSignalsSchema.optional(),
+});
+
+/**
  * Comprovantes cifrados da confirmacao de CPF e titulo, feita durante o
  * preenchimento. Opacos para o navegador: ele so devolve o que recebeu.
  */

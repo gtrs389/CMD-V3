@@ -41,6 +41,8 @@ interface ClientDetailViewProps {
    * atalho de "Recrutar" e os enderecos antigos (`?aba=convite`) caem aqui.
    */
   initialInvite?: boolean;
+  /** Ficha aberta ao entrar (`?integrante=`), vinda do Rastreamento de links. */
+  initialMemberId?: string | null;
 }
 
 /** Pagina individual do time, organizada em abas. */
@@ -48,6 +50,7 @@ export function ClientDetailView({
   clientId,
   initialTab,
   initialInvite = false,
+  initialMemberId = null,
 }: ClientDetailViewProps) {
   const router = useRouter();
   const { can } = useSession();
@@ -296,7 +299,12 @@ export function ClientDetailView({
       </TabPanel>
 
       <TabPanel id="equipe" active={abaAtiva}>
-        <MembersPanel client={client} members={memberList} loading={loadingMembers} />
+        <MembersPanel
+          client={client}
+          members={memberList}
+          loading={loadingMembers}
+          openMemberId={initialMemberId}
+        />
       </TabPanel>
 
       {mostrarFormulario ? (

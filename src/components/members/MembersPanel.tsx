@@ -32,13 +32,24 @@ interface MembersPanelProps {
   client: Client;
   members: Member[];
   loading: boolean;
+  /**
+   * Ficha aberta ao entrar, indicada pelo endereco (`?integrante=`). Usada
+   * pelo botao "Ver ficha completa" do Rastreamento de links. Abre uma unica
+   * vez: fechar o dialogo nao reabre.
+   */
+  openMemberId?: string | null;
 }
 
 /**
  * Gestao da equipe do time.
  * Tabela no desktop e cartoes no celular, sem rolagem horizontal.
  */
-export function MembersPanel({ client, members, loading }: MembersPanelProps) {
+export function MembersPanel({
+  client,
+  members,
+  loading,
+  openMemberId = null,
+}: MembersPanelProps) {
   const toast = useToast();
   // Perfil somente leitura nao recebe as acoes. O servidor recusa do mesmo
   // jeito: esconder o botao nunca e a protecao.
@@ -54,11 +65,23 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
   // chega da API ja vem limitado pela hierarquia, no servidor.
   const [recruiter, setRecruiter] = useState('todos');
   const [viewing, setViewing] = useState<Member | null>(null);
+  /** A ficha aberta pelo endereco so aparece ate ser fechada uma vez. */
+  const [deepLinkClosed, setDeepLinkClosed] = useState(false);
   const [editing, setEditing] = useState<Member | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
 
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
+
+  // A ficha indicada pelo endereco e derivada da lista, sem efeito: ela
+  // aparece assim que o integrante chega e some de vez quando o dialogo e
+  // fechado.
+  const deepLinkMember = useMemo(() => {
+    if (deepLinkClosed || !openMemberId) return null;
+    return members.find((member) => member.id === openMemberId) ?? null;
+  }, [deepLinkClosed, members, openMemberId]);
+
+  const shownMember = viewing ?? deepLinkMember;
 
   const responsaveis = useMemo(() => recruiterOptions(ordered), [ordered]);
 
@@ -340,10 +363,13 @@ export function MembersPanel({ client, members, loading }: MembersPanelProps) {
       )}
 
       <MemberDetailModal
-        open={viewing !== null}
+        open={shownMember !== null}
         client={client}
-        member={viewing}
-        onClose={() => setViewing(null)}
+        member={shownMember}
+        onClose={() => {
+          setViewing(null);
+          setDeepLinkClosed(true);
+        }}
         onEdit={openEdit}
       />
 

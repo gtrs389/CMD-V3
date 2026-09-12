@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       // Integrante salvo: o link esta consumido em definitivo. Se a resposta
       // ao navegador falhar depois daqui, o link segue consumido e nao gera
       // cadastro em duplicidade.
-      await consumeInvite(token);
+      await consumeInvite(token, member.id);
 
       // Prova da confirmacao final. Nunca pode impedir o cadastro, que ja
       // esta salvo.

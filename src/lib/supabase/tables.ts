@@ -29,6 +29,7 @@ export const TABLES = {
   memberLocations: 'cmd_member_locations',
   settings: 'cmd_settings',
   inviteEvents: 'cmd_invite_events',
+  inviteAccessDevices: 'cmd_invite_access_devices',
 } as const;
 
 export interface UserRow {
@@ -259,6 +260,22 @@ export interface InviteRow {
   revoked_at: string | null;
   /** Contador de geracoes do mesmo link pessoal. */
   generation: number;
+  /**
+   * Snapshot do dono no momento da geracao (migration 020). `user_id` e o
+   * dono do link; estas duas colunas preservam nome e perfil dele mesmo que
+   * o usuario seja excluido depois.
+   */
+  owner_name: string | null;
+  owner_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  /**
+   * Quem clicou para gerar ou renovar. Diferente do dono quando o ADMIN
+   * geral gera em nome de outra pessoa. Anulavel, com snapshot ao lado.
+   */
+  generated_by_user_id: string | null;
+  generated_by_name: string | null;
+  generated_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  /** Integrante criado por este convite. Anulavel: o historico nao depende dele. */
+  member_id: string | null;
 }
 
 /** Configuracao global: uma unica linha. */
@@ -274,7 +291,13 @@ export type InviteEventName = 'GENERATED' | 'CLAIMED' | 'CONSUMED' | 'EXPIRED' |
 /** Historico imutavel dos links. Sem token, segredo, senha, CPF ou IP. */
 export interface InviteEventRow {
   id: string;
-  invite_id: string;
+  /**
+   * Convite de origem. Vira nulo se o convite for excluido (migration 020):
+   * o historico se desliga em vez de morrer junto.
+   */
+  invite_id: string | null;
+  /** Identificador estavel da geracao. Nunca some: e ele que agrupa o historico. */
+  invite_ref: string;
   client_id: string;
   user_id: string | null;
   owner_name: string | null;
@@ -282,6 +305,43 @@ export interface InviteEventRow {
   generation: number;
   event: InviteEventName;
   occurred_at: string;
+  /** Quem executou a geracao (migration 020). Anulavel, com snapshot ao lado. */
+  generated_by_user_id: string | null;
+  generated_by_name: string | null;
+  generated_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  /** Integrante criado, gravado no evento CONSUMED. Anulavel. */
+  member_id: string | null;
+}
+
+/**
+ * Aparelho do PRIMEIRO acesso ao link de recrutamento (migration 020).
+ *
+ * Um registro por convite e geracao. Somente sinais que qualquer site ja
+ * enxerga: nada de MAC, IMEI, GPS, canvas ou IP em texto puro — o endereco
+ * aparece apenas como HMAC e nunca sai do servidor.
+ */
+export interface InviteAccessDeviceRow {
+  id: string;
+  invite_ref: string;
+  invite_id: string | null;
+  client_id: string;
+  generation: number;
+  first_access_at: string;
+  user_agent: string | null;
+  accept_language: string | null;
+  /** HMAC do IP publico. Nunca chega ao navegador. */
+  ip_hash: string | null;
+  device_type: string | null;
+  browser: string | null;
+  os: string | null;
+  platform: string | null;
+  screen_width: number | null;
+  screen_height: number | null;
+  timezone: string | null;
+  languages: string | null;
+  max_touch_points: number | null;
+  /** Momento da unica complementacao vinda da pagina. */
+  signals_at: string | null;
 }
 
 /**
