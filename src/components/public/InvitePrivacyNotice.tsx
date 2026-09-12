@@ -10,8 +10,6 @@ interface InvitePrivacyNoticeProps {
   disabled: boolean;
   error?: string;
   onChange: (accepted: boolean) => void;
-  /** Aviso curto sobre os sinais tecnicos registrados no envio. */
-  deviceNotice: string;
 }
 
 /**
@@ -21,8 +19,7 @@ interface InvitePrivacyNoticeProps {
  * inteiro em uma tela so, o aceite precisa estar onde a pessoa termina de
  * preencher. O texto e o rotulo do aceite sao os que o ADMIN escreveu.
  *
- * Sem aviso configurado sobra apenas a frase dos sinais tecnicos, que vale
- * sempre.
+ * Sem aviso configurado, nada e desenhado.
  */
 export function InvitePrivacyNotice({
   config,
@@ -30,11 +27,10 @@ export function InvitePrivacyNotice({
   disabled,
   error,
   onChange,
-  deviceNotice,
 }: InvitePrivacyNoticeProps) {
   const { privacy } = config;
 
-  if (!privacy.enabled) return <p className="text-xs text-ink-500">{deviceNotice}</p>;
+  if (!privacy.enabled) return null;
 
   return (
     <section
@@ -50,7 +46,6 @@ export function InvitePrivacyNotice({
       </h2>
 
       <p className="mt-1.5 text-xs whitespace-pre-line text-ink-700">{privacy.text}</p>
-      <p className="mt-1.5 text-xs text-ink-700">{deviceNotice}</p>
 
       {privacy.requireConsent ? (
         <>

@@ -39,13 +39,6 @@ import { buildInviteSections, isWideField } from './invite-sections';
 import { useInviteDeviceReport } from './use-invite-device-report';
 import { useInviteVerification } from './use-invite-verification';
 
-/**
- * Aviso curto sobre os sinais tecnicos registrados no envio.
- * Aparece sempre, independente do aviso de privacidade do cliente.
- */
-const DEVICE_NOTICE =
-  'Ao enviar, registramos dados técnicos do aparelho e da conexão para segurança e prevenção de fraude.';
-
 const REQUIRED_HINT = 'Campos marcados com * são obrigatórios.';
 
 interface PublicFormViewProps {
@@ -423,17 +416,19 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                   );
                 })}
 
-                {/* Aviso e aceite ficam onde a pessoa termina de preencher. */}
-                <div className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-                  <InvitePrivacyNotice
-                    config={client.form}
-                    accepted={form.values[CONSENT_KEY] === true}
-                    disabled={submitting}
-                    error={form.errors[CONSENT_KEY]}
-                    deviceNotice={DEVICE_NOTICE}
-                    onChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
-                  />
-                </div>
+                {/* Aviso e aceite ficam onde a pessoa termina de preencher.
+                    Sem aviso configurado pelo ADMIN, o cartao nem existe. */}
+                {client.form.privacy.enabled ? (
+                  <div className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+                    <InvitePrivacyNotice
+                      config={client.form}
+                      accepted={form.values[CONSENT_KEY] === true}
+                      disabled={submitting}
+                      error={form.errors[CONSENT_KEY]}
+                      onChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               {/* Desktop: acoes abaixo do formulario. */}
