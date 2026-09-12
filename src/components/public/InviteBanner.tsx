@@ -53,23 +53,27 @@ export const INVITE_BANNER_SRC =
  * proporcional.
  */
 const MARCA = {
-  /** Distancia da borda esquerda da imagem. */
-  left: '3.1%',
-  /** Distancia do topo da imagem. */
-  top: '58%',
-  /** Largura reservada para as duas linhas. */
-  width: '24%',
-  /** Corpo da primeira linha, proporcional a largura da imagem. */
-  titulo: 'max(9px, 2.9cqw)',
-  /** Corpo da segunda linha. */
-  codigo: 'max(8px, 2.5cqw)',
+  /**
+   * Faixa horizontal da camisa. O texto e centralizado dentro dela, entao o
+   * centro da estampa cai no meio do peito, em qualquer largura.
+   */
+  left: '1.5%',
+  width: '16%',
+  /** Altura do peito, abaixo da gola. */
+  top: '60%',
+  /**
+   * Corpo da estampa. Proporcional a largura da imagem, com piso em pixels
+   * para nao virar borrao no celular estreito.
+   */
+  titulo: 'max(7px, 1.45cqw)',
+  codigo: 'max(6px, 1.2cqw)',
 } as const;
 
 /** Verde-escuro da identidade, para o texto parecer impresso no tecido. */
 const VERDE = '#0b5c2c';
 
 interface InviteBannerProps {
-  /** Nome do time, exibido como `#TIME {NOME}`. */
+  /** Nome do time, exibido como `#{NOME}`. */
   teamName: string;
   /** Codigo visual daquele link, exibido como `#{CODIGO}`. Opcional. */
   code?: string | null;
@@ -103,7 +107,7 @@ export function InviteBanner({ teamName, code, fallback, className }: InviteBann
             borda ou adesivo. O `multiply` faz a tinta assentar no tecido em
             vez de flutuar por cima dele. */}
         <p
-          className="pointer-events-none absolute font-bold uppercase select-none"
+          className="pointer-events-none absolute text-center font-bold uppercase select-none"
           style={{
             left: MARCA.left,
             top: MARCA.top,
@@ -117,7 +121,7 @@ export function InviteBanner({ teamName, code, fallback, className }: InviteBann
             whiteSpace: 'nowrap',
           }}
         >
-          #TIME {teamName}
+          #{teamName}
           {code ? (
             <span
               className="block"
