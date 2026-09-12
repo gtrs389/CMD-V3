@@ -20,7 +20,6 @@ import { insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/res
 import { signedUrl } from '@/lib/supabase/storage';
 import type { DeviceSignalsInput } from '@/lib/validation/server.schema';
 import { bindAdminDevice } from './admin-device';
-import { revokeUserSessions } from './user.service';
 
 /**
  * Acesso ao sistema pelo link do time: link proprio + telefone.
@@ -114,59 +113,6 @@ const ROLE_OF_AUDIENCE: Record<TeamAccessAudience, 'CANDIDATE' | 'EQUIPE'> = {
   TEAM_ADMIN: 'CANDIDATE',
   EQUIPE: 'EQUIPE',
 };
-
-/**
- * Revoga as sessoes de quem entra pelo endereco renovado — e somente delas.
- *
- * Renovar o endereco da equipe nao derruba nenhum Administrador do time, e o
- * contrario tambem vale: os dois enderecos sao independentes.
- *
- * Os aparelhos autorizados NAO sao tocados: quem ja estava vinculado
- * continua vinculado e apenas precisa entrar de novo, pelo endereco novo.
- */
-async function revokeAudienceSessions(
-  clientId: string,
-  audience: TeamAccessAudience,
-): Promise<void> {
-  const users = await selectRows<Pick<UserRow, 'id'>>(TABLES.users, {
-    select: 'id',
-    filters: { client_id: `eq.${clientId}`, role: `eq.${ROLE_OF_AUDIENCE[audience]}` },
-  });
-  for (const user of users) await revokeUserSessions(user.id);
-}
-
-/**
- * Gera um endereco novo para UM publico.
- *
- * O anterior daquele publico para de funcionar na hora e as sessoes abertas
- * dele caem junto. O outro endereco do time continua exatamente como estava.
- * Os aparelhos autorizados permanecem: e preciso apenas entrar de novo, pelo
- * endereco novo.
- */
-export async function rotateTeamAccessLink(
-  clientId: string,
-  audience: TeamAccessAudience,
-): Promise<TeamAccessLink> {
-  const current = await ensureTeamAccessLink(clientId, audience);
-  const token = createAccessToken();
-
-  const [row] = await updateRows<TeamAccessLinkRow>(
-    TABLES.teamAccessLinks,
-    { id: `eq.${current.id}` },
-    {
-      token,
-      token_hash: hashToken(token),
-      active: true,
-      failed_attempts: 0,
-      locked_until: null,
-      rotated_at: new Date().toISOString(),
-    },
-    '*',
-  );
-
-  await revokeAudienceSessions(clientId, audience);
-  return toAccessLink(row ?? { ...current, token, token_hash: hashToken(token) });
-}
 
 /* -------------------------------------------------------------------------
    Pagina publica de acesso

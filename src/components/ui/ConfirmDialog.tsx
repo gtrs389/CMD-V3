@@ -48,15 +48,19 @@ export function ConfirmDialog({
       title={title}
       size="sm"
       busy={working}
+      // Aviso curto: sem as faixas divisorias ele respira e para de parecer
+      // tres blocos empilhados em um espaco apertado.
+      chrome="plain"
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel} disabled={working}>
+          <Button variant="secondary" onClick={onCancel} disabled={working} fullWidth>
             {cancelLabel}
           </Button>
           <Button
             variant={tone === 'danger' ? 'danger' : 'primary'}
             onClick={handleConfirm}
             loading={working}
+            fullWidth
           >
             {confirmLabel}
           </Button>

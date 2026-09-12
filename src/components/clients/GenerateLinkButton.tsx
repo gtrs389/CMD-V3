@@ -3,6 +3,7 @@
 import { Check, Copy, Link2 } from 'lucide-react';
 import { useGenerateLinkFlow } from '@/hooks/use-generate-link';
 import { Button } from '@/components/ui/Button';
+import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { Modal } from '@/components/ui/Modal';
 
 interface GenerateLinkButtonProps {
@@ -12,17 +13,27 @@ interface GenerateLinkButtonProps {
 }
 
 /**
- * Botao "Gerar Link".
+ * Botao do link de cadastro.
  *
- * Um clique gera o link e ja copia o endereco para a area de transferencia:
- * a pessoa nunca ve a tela do link nem o endereco em si, so um aviso
- * central confirmando o sucesso, com um botao para copiar de novo caso a
- * copia automatica nao tenha funcionado. Serve tanto para o link pessoal
- * (time e equipe) quanto para o link do time inteiro (ADMIN): quem chama
- * decide a geracao, este componente cuida so da copia e do aviso.
+ * Duas etapas, na ordem em que a pessoa pensa:
+ *
+ *   1. clicou -> a tela inteira mostra "Gerando link", com o anel girando.
+ *      Ninguem clica de novo e ninguem fica na duvida se funcionou;
+ *   2. pronto -> um aviso curto confirma, e o botao copia quando ela pedir.
+ *
+ * O endereco NUNCA aparece na tela: ele e um segredo de uso unico e nao tem
+ * por que ficar exposto em cima do painel, a vista de quem estiver por
+ * perto. Ele vai direto para a area de transferencia.
+ *
+ * Serve tanto para o link do time inteiro (ADMIN) quanto para o link pessoal
+ * (time e equipe): quem chama decide a geracao, este componente cuida da
+ * apresentacao.
  */
-export function GenerateLinkButton({ generate, label = 'Gerar Link' }: GenerateLinkButtonProps) {
-  const { generating, pendingUrl, copied, handleGenerate, handleCopyAgain, close } =
+export function GenerateLinkButton({
+  generate,
+  label = 'Gerar Link',
+}: GenerateLinkButtonProps) {
+  const { phase, generating, copied, handleGenerate, handleCopy, close } =
     useGenerateLinkFlow(generate);
 
   return (
@@ -30,42 +41,45 @@ export function GenerateLinkButton({ generate, label = 'Gerar Link' }: GenerateL
       <button
         type="button"
         onClick={handleGenerate}
-        disabled={generating}
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium text-white shadow-card transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={phase !== 'idle'}
+        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-accent-600 px-4 text-sm font-medium whitespace-nowrap text-white shadow-card transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Link2 aria-hidden="true" className="size-4" />
-        {generating ? 'Gerando...' : label}
+        {label}
       </button>
 
+      <LoadingOverlay open={generating} title="Gerando link" icon={<Link2 className="size-6" />} />
+
       <Modal
-        open={pendingUrl !== null}
+        open={phase === 'ready'}
         onClose={close}
+        chrome="plain"
         title="Link gerado com sucesso"
         size="sm"
         footer={
-          <Button variant="secondary" onClick={handleCopyAgain} fullWidth>
-            {copied ? (
-              <Check aria-hidden="true" className="size-4 text-success-600" />
-            ) : (
-              <Copy aria-hidden="true" className="size-4" />
-            )}
-            {copied ? 'Copiado' : 'Copiar'}
-          </Button>
+          <>
+            <Button variant="ghost" onClick={close} fullWidth>
+              Fechar
+            </Button>
+            <Button onClick={handleCopy} fullWidth>
+              {copied ? (
+                <Check aria-hidden="true" className="size-4" />
+              ) : (
+                <Copy aria-hidden="true" className="size-4" />
+              )}
+              {copied ? 'Link copiado' : 'Copiar link'}
+            </Button>
+          </>
         }
       >
-        <div className="flex flex-col items-center gap-3 py-2 text-center">
-          <span
-            aria-hidden="true"
-            className="flex size-12 items-center justify-center rounded-full bg-success-50 text-success-600"
-          >
-            <Check className="size-6" />
-          </span>
-          <p className="text-sm text-ink-700">
-            {copied
-              ? 'O link já foi copiado para a área de transferência. É só colar e enviar para a pessoa que você quer cadastrar.'
-              : 'O link foi gerado. Toque em "Copiar" e cole onde quiser enviar para a pessoa que você quer cadastrar.'}
-          </p>
-        </div>
+        {/* Um aviso so. A altura fica reservada para a confirmacao aparecer
+            sem empurrar os botoes. */}
+        <p
+          aria-live="polite"
+          className="min-h-5 text-center text-sm font-semibold text-success-600"
+        >
+          {copied ? 'Link copiado. É só colar e enviar.' : ''}
+        </p>
       </Modal>
     </>
   );

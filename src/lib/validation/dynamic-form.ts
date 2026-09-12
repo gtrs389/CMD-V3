@@ -481,7 +481,7 @@ export function formatResponse(field: CustomField, value: FieldValue): string {
 }
 
 /** Campo com algum valor informado. Vazio, `null` e lista vazia nao contam. */
-function isFilled(value: DynamicValue | undefined): boolean {
+export function isFilled(value: DynamicValue | undefined): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === 'string') return value.trim().length > 0;
   if (Array.isArray(value)) return value.length > 0;
@@ -502,6 +502,28 @@ export function completionPercent(config: ClientFormConfig, values: DynamicFormV
 
   const preenchidos = fields.filter((field) => isFilled(values[field.id])).length;
   return Math.round((preenchidos / fields.length) * 100);
+}
+
+/** Quantos campos de uma lista ja tem valor. Usado no avanco por secao. */
+export function filledCount(fields: CustomField[], values: DynamicFormValues): number {
+  return fields.filter((field) => isFilled(values[field.id])).length;
+}
+
+/**
+ * Campos obrigatorios que ainda faltam, incluindo o aceite do aviso.
+ *
+ * Numero de leitura, para a pessoa saber quanto falta. Quem decide se o
+ * envio e aceito continua sendo a validacao, no envio.
+ */
+export function missingRequired(config: ClientFormConfig, values: DynamicFormValues): number {
+  const faltando = visibleFields(config).filter(
+    (field) => field.required && !isFilled(values[field.id]),
+  ).length;
+
+  const { privacy } = config;
+  const aceite = privacy.enabled && privacy.requireConsent && values[CONSENT_KEY] !== true ? 1 : 0;
+
+  return faltando + aceite;
 }
 
 /**
