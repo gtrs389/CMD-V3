@@ -30,6 +30,7 @@ import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
+import { InviteBanner } from './InviteBanner';
 import { InviteOwnerAside, InviteOwnerBanner, InviteStateShell } from './InviteChrome';
 import { InviteConfirmValueModal } from './InviteConfirmValueModal';
 import { InvitePrivacyNotice } from './InvitePrivacyNotice';
@@ -269,9 +270,19 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
       {/* Unica coluna que rola no desktop; no celular e a pagina inteira. */}
       <div className="lg:h-dvh lg:flex-1 lg:overflow-y-auto">
-        {/* Celular: a faixa do convite sangra de ponta a ponta, colada no
-            topo da tela. */}
-        <div className="safe-top lg:hidden">
+        {/* Celular (abaixo de 768px): o banner oficial do time, servido como
+            arquivo, ocupando a largura inteira. Em tablet e desktop ele nao
+            e renderizado. */}
+        <div className="safe-top md:hidden">
+          <InviteBanner
+            teamName={client.name}
+            fallback={<InviteOwnerBanner owner={owner} fallbackName={client.name} />}
+          />
+        </div>
+
+        {/* Tablet (768px a 1023px): sem banner, a faixa de convite de sempre
+            continua dando o contexto de quem convidou. */}
+        <div className="safe-top hidden md:block lg:hidden">
           <InviteOwnerBanner owner={owner} fallbackName={client.name} />
         </div>
 
