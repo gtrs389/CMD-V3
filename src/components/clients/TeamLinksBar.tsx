@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Check, Copy, RefreshCw, ShieldCheck, Users } from 'lucide-react';
-import type { Client, TeamAccessAudience, TeamAccessLink, TeamAccessLinks } from '@/lib/types';
+import type { TeamAccessAudience, TeamAccessLink } from '@/lib/types';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { useOrigin } from '@/hooks/use-origin';
@@ -10,7 +10,6 @@ import { copyText } from '@/lib/utils/clipboard';
 import { teamAccessPath } from '@/lib/utils/url';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
-import { GenerateClientInviteButton } from './GenerateClientInviteButton';
 
 /**
  * Os tres links do time, juntos e nomeados, no cabecalho da pagina.
@@ -24,23 +23,34 @@ import { GenerateClientInviteButton } from './GenerateClientInviteButton';
  *  - "Link da equipe"          entrada no painel para os membros da equipe.
  *                              Tambem permanente.
  *
- * Os dois links de acesso so aceitam os telefones do proprio publico: o do
+ * Os links de acesso so aceitam os telefones do proprio publico: o do
  * administrador nao deixa um membro entrar, e o da equipe nao deixa um
  * administrador entrar.
  *
- * Os dois enderecos de acesso sao PERMANENTES e existem desde a criacao do
- * time: aqui eles apenas sao copiados. Trocar o endereco de acesso
- * derrubaria todo mundo daquele publico de uma vez e nao resolve problema
- * nenhum do dia a dia, entao essa acao nao e oferecida.
+ * Os enderecos de acesso sao PERMANENTES e existem desde a criacao do time:
+ * aqui eles apenas sao copiados. Trocar o endereco derrubaria todo mundo
+ * daquele publico de uma vez e nao resolve problema nenhum do dia a dia,
+ * entao essa acao nao e oferecida.
  *
- * Exclusivo do ADMIN geral: a rota de acesso confere o perfil, e quem nao o
- * tem nao recebe nem os enderecos.
+ * Quem chama decide QUAIS enderecos aparecem: o ADMIN geral ve os dois, e o
+ * Administrador do time ve apenas o da equipe, que e quem ele convida. A
+ * rota confere o perfil de novo — pedir aqui um endereco que o perfil nao
+ * alcanca nao traz nada na resposta.
  */
 
+/** O que a rota devolve: so os enderecos que o perfil pode ver. */
+type VisibleLinks = Partial<Record<TeamAccessAudience, TeamAccessLink>>;
+
 interface TeamLinksBarProps {
-  client: Client;
-  /** Liga os dois links de acesso ao painel. Somente o ADMIN geral os ve. */
-  showAccessLinks: boolean;
+  clientId: string;
+  /** Botao do link de cadastro: o do time (ADMIN) ou o proprio (Administrador). */
+  generateButton: ReactNode;
+  /**
+   * Enderecos de acesso oferecidos nesta tela. Lista vazia nem consulta a
+   * rota. O servidor confere de novo: pedir um publico que o perfil nao
+   * alcanca simplesmente nao vem na resposta.
+   */
+  audiences?: readonly TeamAccessAudience[];
 }
 
 /** Como cada link de acesso se apresenta. */
@@ -60,13 +70,17 @@ const ACCESS: Record<
   },
 };
 
-export function TeamLinksBar({ client, showAccessLinks }: TeamLinksBarProps) {
+export function TeamLinksBar({
+  clientId,
+  generateButton,
+  audiences = [],
+}: TeamLinksBarProps) {
   const toast = useToast();
   const origin = useOrigin();
 
   const loader = useCallback(
-    () => api<{ accessLinks: TeamAccessLinks }>(`/api/clients/${client.id}/acesso`),
-    [client.id],
+    () => api<{ accessLinks: VisibleLinks }>(`/api/clients/${clientId}/acesso`),
+    [clientId],
   );
   const { data, loading, error, reload } = useRepositoryQuery(loader);
 
@@ -88,9 +102,9 @@ export function TeamLinksBar({ client, showAccessLinks }: TeamLinksBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Recrutamento: o unico que gera um endereco novo a cada clique. */}
-      <GenerateClientInviteButton client={client} label="Link de cadastro" />
+      {generateButton}
 
-      {showAccessLinks ? (
+      {audiences.length > 0 ? (
         loading ? (
           <>
             <Skeleton className="h-11 w-44 rounded-pill" />
@@ -106,15 +120,20 @@ export function TeamLinksBar({ client, showAccessLinks }: TeamLinksBarProps) {
             Recarregar links de acesso
           </button>
         ) : (
-          (['TEAM_ADMIN', 'EQUIPE'] as const).map((audience) => (
-            <AccessButton
-              key={audience}
-              audience={audience}
-              link={links[audience]}
-              copied={copied === audience}
-              onCopy={() => void copy(audience, links[audience])}
-            />
-          ))
+          audiences.map((audience) => {
+            const link = links[audience];
+            if (!link) return null;
+
+            return (
+              <AccessButton
+                key={audience}
+                audience={audience}
+                link={link}
+                copied={copied === audience}
+                onCopy={() => void copy(audience, link)}
+              />
+            );
+          })
         )
       ) : null}
     </div>

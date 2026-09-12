@@ -1,32 +1,51 @@
 import type { NextRequest } from 'next/server';
+import type { TeamAccessLink, TeamAccessAudience } from '@/lib/types';
+import { canReachClient } from '@/lib/permissions';
 import { requirePermission } from '@/lib/server/guard';
 import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
-import { getTeamAccessLinks } from '@/lib/server/team-access.service';
+import { getTeamAccessLink, getTeamAccessLinks } from '@/lib/server/team-access.service';
 
 /**
  * Enderecos de acesso do time: um para os Administradores, outro para a
  * equipe.
  *
  * Os dois enderecos nascem com o time e sao PERMANENTES: esta rota apenas os
- * devolve para o ADMIN geral copiar. Nao existe troca de endereco de acesso —
- * ela derrubaria todo mundo daquele publico de uma vez sem resolver nada.
+ * devolve para quem pode distribui-los. Nao existe troca de endereco de
+ * acesso — ela derrubaria todo mundo daquele publico de uma vez sem resolver
+ * nada.
  *
- * Exclusivo do ADMIN geral: nem o administrador do time nem o membro
- * consultam ou copiam o endereco com que entram. `client.update` ja e uma
- * permissao so de ADMIN; o perfil e conferido de novo para o escopo nunca
- * depender apenas da matriz.
+ * Quem ve o que:
+ *
+ *   ADMIN geral            os dois enderecos, de qualquer time.
+ *   Administrador do time  somente o endereco da EQUIPE, e somente do
+ *                          PROPRIO time: e ele quem convida os membros para
+ *                          o painel. O endereco dos administradores fica de
+ *                          fora — distribuir acesso de administracao e
+ *                          decisao do ADMIN geral.
+ *   Equipe e publico       nada: 403.
+ *
+ * O recorte e feito aqui, no servidor. Trocar o identificador na URL nao
+ * amplia nada, porque o escopo da sessao e comparado com o time pedido.
  */
-async function requireGeneralAdmin() {
-  const user = await requirePermission('client.update');
-  if (user.role !== 'ADMIN') throw forbidden();
-  return user;
-}
+type Visiveis = Partial<Record<TeamAccessAudience, TeamAccessLink>>;
 
 export async function GET(_request: NextRequest, ctx: RouteContext<'/api/clients/[id]/acesso'>) {
   try {
     const { id } = await ctx.params;
-    await requireGeneralAdmin();
-    return jsonOk({ accessLinks: await getTeamAccessLinks(id) });
+    const user = await requirePermission('invite.view');
+
+    if (user.role === 'ADMIN') {
+      const accessLinks: Visiveis = await getTeamAccessLinks(id);
+      return jsonOk({ accessLinks });
+    }
+
+    // Administrador do proprio time: so o endereco da equipe.
+    if (user.role === 'CANDIDATE' && canReachClient(user, id)) {
+      const accessLinks: Visiveis = { EQUIPE: await getTeamAccessLink(id, 'EQUIPE') };
+      return jsonOk({ accessLinks });
+    }
+
+    throw forbidden();
   } catch (error) {
     return toErrorResponse(error);
   }
