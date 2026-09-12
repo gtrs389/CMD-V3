@@ -23,9 +23,14 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Uma casa decimal basta: mais do que isso ninguem enxerga no banner. */
+/** Uma casa decimal basta para posicao e largura. */
 function round(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/** O corpo da fonte pede mais precisao: duas casas. */
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 /**
@@ -164,10 +169,10 @@ export function BannerTagModal({ open, client, onClose }: BannerTagModalProps) {
               type="number"
               min={0.3}
               max={20}
-              step={0.05}
+              step={0.1}
               value={tag.size}
               onChange={(event) =>
-                patch({ size: round(clamp(Number(event.target.value), 0.3, 20) * 10) / 10 })
+                patch({ size: round2(clamp(Number(event.target.value), 0.3, 20)) })
               }
             />
           </Field>

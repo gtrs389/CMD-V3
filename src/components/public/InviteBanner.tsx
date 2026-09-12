@@ -18,8 +18,9 @@ import { DEFAULT_BANNER_TAG } from '@/lib/types';
  * time e o codigo visual daquele link. Ela vive em uma camada HTML
  * posicionada em PORCENTAGEM dentro da propria imagem, nunca da tela, entao
  * acompanha o banner quando ele encolhe. O tamanho da fonte usa unidades de
- * container (`cqw`), medidas na largura da imagem, com um piso em pixels
- * para continuar legivel em 320 px.
+ * container (`cqw`), medidas na largura da imagem: a estampa guarda sempre a
+ * mesma proporcao com o banner, entao o que o ADMIN ve na previa e o que
+ * aparece no celular.
  *
  * Posicao, tamanho e cor vem do proprio time (migration 022): cada banner
  * tem a camisa em um lugar, e quem ajusta e o ADMIN geral, pela pagina do
@@ -102,9 +103,12 @@ export function InviteBanner({
             top: `${tag.top}%`,
             width: `${tag.width}%`,
             color: tag.color,
-            // Piso em pixels: proporcional a imagem, mas nunca ilegivel no
-            // celular estreito.
-            fontSize: `max(7px, ${tag.size}cqw)`,
+            // Proporcional a LARGURA DA IMAGEM, e so a ela. Sem piso em
+            // pixels: o piso antigo travava o tamanho no celular — la o
+            // banner e estreito, entao o valor em `cqw` caia abaixo dele e
+            // mexer no ajuste nao mudava nada na tela de quem se cadastra,
+            // so na previa larga do computador.
+            fontSize: `${tag.size}cqw`,
             fontStretch: 'condensed',
             letterSpacing: '-0.01em',
             lineHeight: 1.05,
@@ -116,7 +120,7 @@ export function InviteBanner({
           {code ? (
             <span
               className="block"
-              style={{ fontSize: `max(6px, ${tag.size * 0.82}cqw)`, letterSpacing: '0.02em' }}
+              style={{ fontSize: `${tag.size * 0.82}cqw`, letterSpacing: '0.02em' }}
             >
               #{code}
             </span>
