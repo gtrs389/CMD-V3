@@ -2,6 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import type { BannerTag } from '@/lib/types';
+import { DEFAULT_BANNER_TAG } from '@/lib/types';
 
 /**
  * Banner oficial do convite, exclusivo do celular.
@@ -18,6 +20,10 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
  * acompanha o banner quando ele encolhe. O tamanho da fonte usa unidades de
  * container (`cqw`), medidas na largura da imagem, com um piso em pixels
  * para continuar legivel em 320 px.
+ *
+ * Posicao, tamanho e cor vem do proprio time (migration 022): cada banner
+ * tem a camisa em um lugar, e quem ajusta e o ADMIN geral, pela pagina do
+ * time, vendo o resultado na hora.
  *
  * Some por completo a partir de 768 px: em tablet e desktop o banner nao e
  * renderizado e nao deixa espaco alto nenhum. E exclusivo do formulario
@@ -44,37 +50,14 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 export const INVITE_BANNER_SRC =
   'https://zpfhqweydlujotqbuwse.supabase.co/storage/v1/object/public/imagem_url/00.png';
 
-/**
- * Posicao e tamanho da identificacao, em porcentagem da IMAGEM.
- *
- * Os quatro numeros abaixo sao o unico ponto de ajuste fino da camada: eles
- * colocam o texto sobre a camisa clara, a esquerda. Mexer aqui move a
- * identificacao inteira, em qualquer largura de tela, porque tudo o mais e
- * proporcional.
- */
-const MARCA = {
-  /**
-   * Faixa horizontal da camisa. O texto e centralizado dentro dela, entao o
-   * centro da estampa cai no meio do peito, em qualquer largura.
-   */
-  left: '1.5%',
-  width: '16%',
-  /** Altura do peito, abaixo da gola. */
-  top: '60%',
-  /**
-   * Corpo da estampa. Proporcional a largura da imagem, com piso em pixels
-   * para nao virar borrao no celular estreito.
-   */
-  titulo: 'max(7px, 1.45cqw)',
-  codigo: 'max(6px, 1.2cqw)',
-} as const;
-
-/** Verde-escuro da identidade, para o texto parecer impresso no tecido. */
-const VERDE = '#0b5c2c';
-
 interface InviteBannerProps {
   /** Nome do time, exibido como `#{NOME}`. */
   teamName: string;
+  /**
+   * Posicao, tamanho e cor da estampa, ajustados pelo ADMIN geral na pagina
+   * do time. Tudo em porcentagem da propria imagem.
+   */
+  tag?: BannerTag;
   /** Codigo visual daquele link, exibido como `#{CODIGO}`. Opcional. */
   code?: string | null;
   /** Desenhado quando o arquivo do banner ainda nao existe. */
@@ -82,7 +65,13 @@ interface InviteBannerProps {
   className?: string;
 }
 
-export function InviteBanner({ teamName, code, fallback, className }: InviteBannerProps) {
+export function InviteBanner({
+  teamName,
+  tag = DEFAULT_BANNER_TAG,
+  code,
+  fallback,
+  className,
+}: InviteBannerProps) {
   const [indisponivel, setIndisponivel] = useState(false);
   if (indisponivel) return <>{fallback ?? null}</>;
 
@@ -109,11 +98,13 @@ export function InviteBanner({ teamName, code, fallback, className }: InviteBann
         <p
           className="pointer-events-none absolute text-center font-bold uppercase select-none"
           style={{
-            left: MARCA.left,
-            top: MARCA.top,
-            width: MARCA.width,
-            color: VERDE,
-            fontSize: MARCA.titulo,
+            left: `${tag.left}%`,
+            top: `${tag.top}%`,
+            width: `${tag.width}%`,
+            color: tag.color,
+            // Piso em pixels: proporcional a imagem, mas nunca ilegivel no
+            // celular estreito.
+            fontSize: `max(7px, ${tag.size}cqw)`,
             fontStretch: 'condensed',
             letterSpacing: '-0.01em',
             lineHeight: 1.05,
@@ -125,7 +116,7 @@ export function InviteBanner({ teamName, code, fallback, className }: InviteBann
           {code ? (
             <span
               className="block"
-              style={{ fontSize: MARCA.codigo, letterSpacing: '0.02em' }}
+              style={{ fontSize: `max(6px, ${tag.size * 0.82}cqw)`, letterSpacing: '0.02em' }}
             >
               #{code}
             </span>

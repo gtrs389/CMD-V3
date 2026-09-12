@@ -61,6 +61,34 @@ export interface TeamAccessLink {
 /** Os dois enderecos de um time, como o ADMIN geral os ve. */
 export type TeamAccessLinks = Record<TeamAccessAudience, TeamAccessLink>;
 
+/**
+ * Estampa "#NOME DO TIME" sobre o banner do celular.
+ *
+ * Posicao e tamanho em PORCENTAGEM da propria imagem: e isso que mantem a
+ * estampa no mesmo ponto do banner quando ele encolhe na tela.
+ */
+export interface BannerTag {
+  /** Inicio da faixa, em % da largura. O texto e centralizado nela. */
+  left: number;
+  /** Largura da faixa, em % da largura da imagem. */
+  width: number;
+  /** Altura, em % da altura da imagem. */
+  top: number;
+  /** Corpo da fonte, em % da largura da imagem. */
+  size: number;
+  /** Cor do texto, em hexadecimal de 6 digitos. */
+  color: string;
+}
+
+/** Valores de fabrica, iguais aos `default` da migration 022. */
+export const DEFAULT_BANNER_TAG: BannerTag = {
+  left: 1.5,
+  width: 16,
+  top: 60,
+  size: 1.45,
+  color: '#0b5c2c',
+};
+
 export interface Client extends Timestamped {
   id: string;
   name: string;
@@ -72,6 +100,8 @@ export interface Client extends Timestamped {
   form: ClientFormConfig;
   /** Administradores do time, na ordem em que foram cadastrados. */
   people: TeamPerson[];
+  /** Estampa sobre o banner do celular (migration 022). */
+  bannerTag: BannerTag;
 }
 
 export interface ClientInput {
@@ -80,6 +110,8 @@ export interface ClientInput {
   notes: string;
   /** Ausente: as pessoas do time nao sao alteradas. */
   people?: TeamPersonInput[];
+  /** Ausente: a estampa do banner nao e alterada. */
+  bannerTag?: BannerTag;
 }
 
 /** Integrante resumido, usado na pilha de fotos do cartao de cliente. */

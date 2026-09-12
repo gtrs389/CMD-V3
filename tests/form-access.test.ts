@@ -3,6 +3,7 @@ import { can, permissionsOf } from '@/lib/permissions';
 import { createDefaultFormConfig, createField } from '@/lib/domain/form-config';
 import { clientForSession, hiddenFormConfig } from '@/lib/server/form-visibility';
 import type { Client, SessionUser } from '@/lib/types';
+import { DEFAULT_BANNER_TAG } from '@/lib/types';
 
 /**
  * Area interna do formulario: exclusiva do ADMIN.
@@ -62,6 +63,7 @@ function clienteComFormulario(): Client {
     email: 'candidata@exemplo.test',
     photo: null,
     notes: '',
+    bannerTag: { ...DEFAULT_BANNER_TAG },
     people: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-02T00:00:00.000Z',

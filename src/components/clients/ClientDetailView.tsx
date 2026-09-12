@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Building2,
   FileText,
+  Image as ImageIcon,
   LayoutList,
   Pencil,
   Settings,
@@ -24,6 +25,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormBuilderPanel } from '@/components/fields/FormBuilderPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
+import { BannerTagModal } from './BannerTagModal';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
@@ -60,6 +62,7 @@ export function ClientDetailView({
 
   const [tab, setTab] = useState<TabId>(initialTab ?? 'visao-geral');
   const [editing, setEditing] = useState(false);
+  const [banner, setBanner] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
 
@@ -271,6 +274,12 @@ export function ClientDetailView({
                             icon: <Pencil className="size-4" />,
                             onSelect: () => setEditing(true),
                           },
+                          {
+                            id: 'estampa',
+                            label: 'Estampa do banner',
+                            icon: <ImageIcon className="size-4" />,
+                            onSelect: () => setBanner(true),
+                          },
                         ]
                       : []),
                     ...(podeExcluir
@@ -339,6 +348,8 @@ export function ClientDetailView({
       />
 
       <ClientFormModal open={editing} client={client} onClose={() => setEditing(false)} />
+
+      <BannerTagModal open={banner} client={client} onClose={() => setBanner(false)} />
 
       <DeleteClientDialog
         open={deleting}

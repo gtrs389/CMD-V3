@@ -120,6 +120,15 @@ export interface ClientRow {
   privacy_consent_label: string;
   /** Interruptor da operacao: em false nenhum link daquele time aceita cadastro. */
   recruiting_active: boolean;
+  /**
+   * Estampa "#NOME DO TIME" sobre o banner do celular (migration 022).
+   * Tudo em porcentagem da propria imagem, nunca em pixels da tela.
+   */
+  banner_tag_left: number;
+  banner_tag_width: number;
+  banner_tag_top: number;
+  banner_tag_size: number;
+  banner_tag_color: string;
   form_updated_at: string;
   created_at: string;
   updated_at: string;
