@@ -414,13 +414,29 @@ export const surveyAnswerSchema = z.object({
  * viraria um redirecionamento perigoso em uma tela que qualquer pessoa
  * abre. O banco confere de novo, no `check` da coluna.
  */
-export const publicEntrySchema = z.object({
-  redirectUrl: z
-    .string()
-    .trim()
-    .max(2000)
-    .refine(
-      (value) => value === '' || /^https?:\/\/[^\s]+$/.test(value),
-      'Informe um endereço completo, começando com http:// ou https://.',
-    ),
-});
+export const publicEntrySchema = z
+  .object({
+    redirectUrl: z
+      .string()
+      .trim()
+      .max(2000)
+      .refine(
+        (value) => value === '' || /^https?:\/\/[^\s]+$/.test(value),
+        'Informe um endereço completo, começando com http:// ou https://.',
+      ),
+    /**
+     * Endereco publico usado nos links enviados. So esquema, dominio e, se
+     * houver, porta: um valor com caminho montaria um link quebrado em cada
+     * convite. Vazio manda deduzir do proprio painel.
+     */
+    linkOrigin: z
+      .string()
+      .trim()
+      .max(255)
+      .refine(
+        (value) => value === '' || /^https?:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?\/?$/.test(value),
+        'Informe apenas o endereço, como https://www.seudominio.com.br.',
+      ),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');

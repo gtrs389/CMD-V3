@@ -256,9 +256,9 @@ export function ClientDetailView({
               audiences={enderecosDeAcesso}
               generateButton={
                 podeGerenciarConvite ? (
-                  <GenerateClientInviteButton client={client} label="Copiar link do Formulário 1" />
+                  <GenerateClientInviteButton client={client} label="Gerar link" />
                 ) : (
-                  <GenerateInviteButton label="Copiar link do Formulário 1" />
+                  <GenerateInviteButton label="Gerar link" />
                 )
               }
             />

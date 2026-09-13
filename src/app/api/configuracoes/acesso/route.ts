@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest) {
   try {
     await requirePermission('settings.manage');
     const input = await readJson(request, publicEntrySchema);
-    return jsonOk({ entry: await updatePublicEntry(input.redirectUrl) });
+    return jsonOk({ entry: await updatePublicEntry(input) });
   } catch (error) {
     return toErrorResponse(error);
   }

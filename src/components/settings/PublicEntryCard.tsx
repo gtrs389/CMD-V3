@@ -30,6 +30,12 @@ import { useToast } from '@/components/ui/Toast';
  *
  * Em branco, ela ve apenas um aviso neutro: sem login, sem nome de time e
  * sem nada que identifique o sistema.
+ *
+ * O segundo campo e o outro lado da mesma moeda: qual endereco vai NOS
+ * LINKS enviados. Ele era montado com o endereco da aba aberta, e quem gera
+ * o link esta no painel — o link saia apontando para o painel, onde a
+ * pessoa convidada cai justamente na tela de saida. Em branco, o servidor
+ * deduz trocando `painel.` por `www.`; preenchido, manda sozinho.
  */
 export function PublicEntryCard() {
   const toast = useToast();
@@ -40,20 +46,24 @@ export function PublicEntryCard() {
   const { data, loading, error, reload } = useRepositoryQuery(loader);
 
   const [draft, setDraft] = useState<string | null>(null);
+  const [origem, setOrigem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const atual = data?.entry.redirectUrl ?? '';
+  const atualOrigem = data?.entry.linkOrigin ?? '';
   const valor = draft ?? atual;
-  const mudou = valor.trim() !== atual;
+  const valorOrigem = origem ?? atualOrigem;
+  const mudou = valor.trim() !== atual || valorOrigem.trim() !== atualOrigem;
 
   async function salvar() {
     setSaving(true);
     try {
       const { entry } = await api<{ entry: PublicEntrySettings }>('/api/configuracoes/acesso', {
         method: 'PATCH',
-        body: { redirectUrl: valor.trim() },
+        body: { redirectUrl: valor.trim(), linkOrigin: valorOrigem.trim() },
       });
       setDraft(null);
+      setOrigem(null);
       reload();
       toast.success(
         entry.redirectUrl
@@ -118,6 +128,23 @@ export function PublicEntryCard() {
                 value={valor}
                 disabled={saving}
                 onChange={(event) => setDraft(event.target.value)}
+              />
+            </Field>
+
+            <Field
+              id="origem-links"
+              label="Endereço dos links enviados"
+              help="Deixe em branco para deduzir do painel: painel.seudominio.com vira www.seudominio.com."
+            >
+              <Input
+                id="origem-links"
+                type="url"
+                inputMode="url"
+                spellCheck={false}
+                placeholder="https://www.seudominio.com.br"
+                value={valorOrigem}
+                disabled={saving}
+                onChange={(event) => setOrigem(event.target.value)}
               />
             </Field>
 

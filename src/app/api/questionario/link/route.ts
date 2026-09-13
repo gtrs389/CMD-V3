@@ -1,6 +1,9 @@
+import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/server/guard';
 import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
 import { issueSurveyLink } from '@/lib/server/survey.service';
+import { publicLink } from '@/lib/server/public-origin';
+import { surveyPath } from '@/lib/utils/url';
 
 /**
  * Gera ou renova o PROPRIO link do questionario.
@@ -15,7 +18,7 @@ import { issueSurveyLink } from '@/lib/server/survey.service';
  * pergunta ativa: nao existe link para um questionario que nao pergunta
  * nada.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const user = await requirePermission('survey.send');
     if (!user.candidateId || (user.role !== 'CANDIDATE' && user.role !== 'EQUIPE')) {
@@ -26,6 +29,7 @@ export async function POST() {
 
     return jsonOk({
       token: issued.token,
+      url: await publicLink(request, surveyPath(issued.token)),
       issuedAt: issued.issuedAt,
       expiresAt: issued.expiresAt,
     });

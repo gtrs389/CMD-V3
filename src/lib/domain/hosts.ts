@@ -11,13 +11,23 @@
  * pessoas recebem. No dominio publico, quem tenta abrir o painel e mandado
  * para um endereco escolhido pelo ADMIN.
  *
- * Qual e o endereco do painel vem da variavel de ambiente `CMD_PANEL_HOST`.
- * SEM ELA, NADA MUDA: todo endereco continua servindo tudo, como antes. E
- * proposital — uma instalacao que ainda nao separou os dominios nao pode
- * perder o proprio login por causa de uma configuracao ausente.
+ * COMO O PAINEL E RECONHECIDO, em ordem:
  *
- * Modulo comum, sem `server-only`: o middleware (Edge) e as paginas
- * (Node) leem as mesmas regras.
+ *   1. endereco de desenvolvimento ou de previa (localhost, 127.0.0.1,
+ *      *.vercel.app): e painel. Sao os enderecos usados para testar, e
+ *      trancar o login neles deixaria qualquer um sem entrada;
+ *   2. `CMD_PANEL_HOST`, quando configurada: manda sozinha;
+ *   3. sem ela, vale a convencao: o painel e o subdominio `painel.`.
+ *
+ * A regra 3 existe porque a versao anterior dependia SO da variavel — e ela
+ * e lida no Edge, onde o valor entra no pacote na hora do build. Configurar
+ * depois, ou esquecer, fazia a separacao simplesmente nao acontecer: a tela
+ * de login continuava aberta no endereco publico e nada avisava. Agora o
+ * caminho comum funciona sem configuracao nenhuma, e a variavel serve para
+ * quem usa outro subdominio.
+ *
+ * Modulo comum, sem `server-only`: o proxy (Edge) e as paginas (Node) leem
+ * as mesmas regras.
  */
 
 /** Compara hosts ignorando porta, maiusculas e o ponto final do FQDN. */
@@ -30,16 +40,35 @@ function normalize(host: string | null | undefined): string {
     .replace(/^www\./, '');
 }
 
+/** Subdominio do painel, quando nao ha variavel dizendo outra coisa. */
+const PANEL_PREFIX = 'painel.';
+
 /**
- * O endereco recebido e o do painel?
+ * Endereco de desenvolvimento ou de previa.
  *
- * Sem `CMD_PANEL_HOST` configurada, sempre verdadeiro: o comportamento
- * antigo continua valendo em qualquer endereco.
+ * Nao e o dominio publico de ninguem: e onde se testa. Trancar o login aqui
+ * deixaria sem entrada quem esta desenvolvendo ou revisando uma previa.
  */
+function isLocalOrPreview(host: string): boolean {
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '[::1]' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.vercel.app')
+  );
+}
+
+/** O endereco recebido e o do painel? */
 export function isPanelHost(host: string | null | undefined): boolean {
-  const painel = normalize(process.env.CMD_PANEL_HOST);
-  if (!painel) return true;
-  return normalize(host) === painel;
+  const atual = normalize(host);
+  if (!atual) return false;
+  if (isLocalOrPreview(atual)) return true;
+
+  const configurado = normalize(process.env.CMD_PANEL_HOST);
+  if (configurado) return atual === configurado;
+
+  return atual.startsWith(PANEL_PREFIX);
 }
 
 /**

@@ -69,10 +69,11 @@ export async function fetchOwnSurvey(): Promise<OwnSurvey> {
  *
  * O token volta uma unica vez: o banco guarda apenas o hash.
  */
-export async function generateSurveyLink(clientId?: string): Promise<string> {
+export async function generateSurveyLink(
+  clientId?: string,
+): Promise<{ token: string; url?: string | null }> {
   const path = clientId ? `/api/clients/${clientId}/questionario/link` : '/api/questionario/link';
-  const { token } = await api<{ token: string }>(path, { method: 'POST' });
-  return token;
+  return api<{ token: string; url?: string | null }>(path, { method: 'POST' });
 }
 
 /* -------------------------------------------------------------------------

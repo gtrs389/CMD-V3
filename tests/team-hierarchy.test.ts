@@ -179,7 +179,8 @@ describe('perfil EQUIPE', () => {
       'form.view',
       'form.manage',
       'invite.manage',
-      'member.create',
+      // Cadastrar a mao ELE PODE. Corrigir cadastro alheio e apagar
+      // historico continuam sendo decisao do ADMIN.
       'member.update',
       'member.delete',
       'verification.view',
@@ -192,6 +193,8 @@ describe('perfil EQUIPE', () => {
     ] as const;
 
     for (const permissao of proibidas) expect(can(JOAO, permissao)).toBe(false);
+
+    expect(can(JOAO, 'member.create')).toBe(true);
   });
 
   it('copia o próprio link, mas não ativa, desativa nem renova', () => {
@@ -447,5 +450,33 @@ describe('proteção no servidor', () => {
 
     expect(await statusOf(() => requireTeamSession())).toBe(403);
     expect(await statusOf(() => requireMemberAccess('member.view', 'm-ana'))).toBe(403);
+  });
+});
+
+/**
+ * Cadastrar a mao: o integrante da equipe registra quem esta na frente dele.
+ *
+ * O alcance nao vem da requisicao — o time e o responsavel saem da SESSAO.
+ * Se viessem do corpo, bastaria trocar o `clientId` para cadastrar em outra
+ * operacao, e o recorte da hierarquia deixaria de valer.
+ */
+describe('cadastro manual pelo integrante da equipe', () => {
+  it('alcança o próprio time, e nenhum outro', () => {
+    expect(can(JOAO, 'member.create')).toBe(true);
+
+    // O registro do TIME continua fora: cadastrar alguem da propria equipe
+    // nao e o mesmo que abrir a pagina do time.
+    expect(canReachClient(JOAO, JOAO.candidateId)).toBe(false);
+  });
+
+  it('o que ele cadastra fica com ele', () => {
+    // A hierarquia nao muda: o integrante continua alcancando somente quem
+    // se cadastrou por ele — agora inclusive quem ele mesmo registrou.
+    expect(
+      canReachMember(JOAO, { clientId: JOAO.candidateId!, recruitedByUserId: JOAO.id }),
+    ).toBe(true);
+    expect(
+      canReachMember(JOAO, { clientId: JOAO.candidateId!, recruitedByUserId: 'outro-usuario' }),
+    ).toBe(false);
   });
 });

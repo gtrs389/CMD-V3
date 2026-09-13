@@ -68,6 +68,14 @@ export interface PublicInviteOwner {
  */
 export interface PublicEntrySettings {
   redirectUrl: string;
+  /**
+   * Endereco publico usado nos links enviados.
+   *
+   * Vazio significa "deduza": o servidor troca o `painel.` do proprio
+   * endereco por `www.`. Preenchido, manda sozinho — e serve para corrigir o
+   * endereco sem publicar codigo.
+   */
+  linkOrigin: string;
   updatedAt: IsoDate;
 }
 

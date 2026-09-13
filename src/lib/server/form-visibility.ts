@@ -85,7 +85,7 @@ function readingLabels(form: ClientFormConfig): ClientFormConfig {
  * pede. O que continua fora sao os textos da tela publica, que pertencem ao
  * link de recrutamento e nao a este cadastro.
  */
-function fillableForm(form: ClientFormConfig): ClientFormConfig {
+export function fillableForm(form: ClientFormConfig): ClientFormConfig {
   return {
     fields: form.fields,
     privacy: form.privacy,

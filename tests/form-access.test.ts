@@ -148,11 +148,15 @@ describe('resposta enviada ao navegador', () => {
   });
 
   it('esconde a configuração de quem não cadastra nem administra', () => {
-    // Perfil sem `form.view` e sem `member.create` recebe apenas os rotulos
-    // usados para LER a ficha: nenhuma contagem de campos ativos ou
-    // obrigatorios pode ser refeita a partir dessa resposta.
+    // Sem `form.view` e sem `member.create` sobra apenas o necessario para
+    // LER a ficha: nenhuma contagem de campos ativos ou obrigatorios pode
+    // ser refeita a partir dessa resposta.
+    //
+    // Hoje todo perfil autenticado cadastra ou administra, entao o caso vivo
+    // e o visitante — e e justamente ele que nao pode receber configuracao
+    // nenhuma. O recorte continua sendo o padrao para qualquer perfil novo.
     const original = clienteComFormulario();
-    const visto = clientForSession(EQUIPE, original);
+    const visto = clientForSession(null, original);
 
     expect(visto.form.introText).toBe('');
     expect(visto.form.successMessage).toBe('');

@@ -2,6 +2,8 @@ import type { NextRequest } from 'next/server';
 import { requireClientAccess } from '@/lib/server/guard';
 import { jsonOk, toErrorResponse } from '@/lib/server/http';
 import { issueTeamSurveyLink } from '@/lib/server/survey.service';
+import { publicLink } from '@/lib/server/public-origin';
+import { surveyPath } from '@/lib/utils/url';
 
 /**
  * Gera o link do questionario DO TIME.
@@ -14,7 +16,7 @@ import { issueTeamSurveyLink } from '@/lib/server/survey.service';
  * enviado — e o mesmo comportamento do link de cadastro.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: RouteContext<'/api/clients/[id]/questionario/link'>,
 ) {
   try {
@@ -24,6 +26,7 @@ export async function POST(
 
     return jsonOk({
       token: issued.token,
+      url: await publicLink(request, surveyPath(issued.token)),
       issuedAt: issued.issuedAt,
       expiresAt: issued.expiresAt,
     });

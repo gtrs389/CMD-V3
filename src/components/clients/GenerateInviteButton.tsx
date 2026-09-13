@@ -15,7 +15,7 @@ export function GenerateInviteButton({ label }: { label?: string } = {}) {
       label={label}
       generate={async () => {
         const issued = await renew();
-        return issued?.token ?? null;
+        return issued ? { token: issued.token, url: issued.url } : null;
       }}
     />
   );

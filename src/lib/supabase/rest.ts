@@ -42,6 +42,22 @@ export class SupabaseRequestError extends Error {
   get isMissingSchema(): boolean {
     return this.code === '42703' || this.code === '42P01';
   }
+
+  /**
+   * Regra de negocio recusada por uma funcao do banco (`raise exception`).
+   *
+   * P0001 nao e defeito: e o banco dizendo "isso nao pode", com um texto
+   * curto escrito por nos na migration. Sem distinguir esse caso, a recusa
+   * prevista virava a mesma falha generica de sempre e a tela nao dizia o
+   * que fazer — quem clicou ficava sem saber que bastava ligar uma chave em
+   * Configuracoes.
+   *
+   * A traducao para o texto da tela fica em `http.ts`, por lista fechada: o
+   * texto do banco nunca e repassado ao navegador.
+   */
+  get isBusinessRule(): boolean {
+    return this.code === 'P0001';
+  }
 }
 
 type QueryValue = string | number | boolean | null | undefined;

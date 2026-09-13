@@ -15,7 +15,7 @@ interface GenerateSurveyLinkButtonProps {
 }
 
 /**
- * Botao "Gerar link do questionário".
+ * Botao "Gerar link" do Formulario 2.
  *
  * Mesma mecanica do link de cadastro — gera, revoga o anterior e copia
  * quando a pessoa pedir —, mas aponta para OUTRA tela: quem abre este link
@@ -26,13 +26,12 @@ interface GenerateSurveyLinkButtonProps {
  */
 export function GenerateSurveyLinkButton({
   clientId,
-  label = 'Copiar link do Formulário 2',
+  label = 'Gerar link',
 }: GenerateSurveyLinkButtonProps) {
   return (
     <GenerateLinkButton
       label={label}
       buildPath={surveyPath}
-      successTitle="Link do Formulário 2 gerado"
       generate={() => generateSurveyLink(clientId)}
     />
   );
