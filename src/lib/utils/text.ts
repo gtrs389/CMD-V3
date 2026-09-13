@@ -1,7 +1,13 @@
 import { appConfig } from '@/config/app.config';
 
-/** Remove acentos e normaliza para comparacao de busca. */
-export function normalizeSearch(value: string): string {
+/**
+ * Remove acentos e normaliza para comparacao de busca.
+ *
+ * Aceita nulo porque quase todo campo comparavel do sistema e opcional:
+ * cidade, bairro e zona chegam vazios com frequencia, e obrigar cada
+ * chamada a tratar isso so espalharia `?? ''` pelo codigo.
+ */
+export function normalizeSearch(value: string | null | undefined): string {
   return (value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

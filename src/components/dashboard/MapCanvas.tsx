@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import L from 'leaflet';
-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPin, PollingPlacePin } from '@/lib/domain/map-pin';
 import {
@@ -351,15 +351,18 @@ function PlaceVotes({ place }: { place: PollingPlacePin }) {
 function PlaceMarker({
   place,
   onOpen,
+  onReady,
 }: {
   place: PollingPlacePin;
   onOpen: (place: PollingPlacePin) => void;
+  /** Entrega o marcador ao mapa, para o ranking conseguir abri-lo. */
+  onReady?: (marker: L.Marker | null) => void;
 }) {
   // A fachada da escola no lugar do desenho; sem foto, fica o predio.
   const icon = useMemo(() => markerIcon('POLLING_PLACE', place.imageUrl), [place.imageUrl]);
 
   return (
-    <Marker position={[place.latitude, place.longitude]} icon={icon}>
+    <Marker ref={onReady} position={[place.latitude, place.longitude]} icon={icon}>
       <Popup>
         <div className="map-popup w-56 space-y-1.5">
           <PlaceImage place={place} />
@@ -387,19 +390,47 @@ function PlaceMarker({
   );
 }
 
+/** Local que o mapa deve enquadrar, pedido de fora (o ranking). */
+export interface MapFocus {
+  locationId: string;
+  latitude: number;
+  longitude: number;
+  /**
+   * Muda a cada pedido.
+   *
+   * Sem isso, clicar duas vezes no mesmo local nao faria nada: o alvo seria
+   * identico e o efeito nao rodaria de novo. E comum querer voltar ao local
+   * depois de arrastar o mapa.
+   */
+  nonce: number;
+}
+
 export default function MapCanvas({
   pins,
   places = [],
   onOpenPlace,
   onOpenMember,
+  focusPlace = null,
+  resizeKey,
 }: {
   pins: MapPin[];
   places?: PollingPlacePin[];
   onOpenPlace?: (place: PollingPlacePin) => void;
   /** Abre a ficha da pessoa sobre o mapa, sem sair dele. */
   onOpenMember?: (memberId: string) => void;
+  /** Leva o mapa ate um local e abre o balao dele. */
+  focusPlace?: MapFocus | null;
+  /**
+   * Muda quando o TAMANHO do mapa muda (entrar e sair da tela cheia).
+   *
+   * O Leaflet calcula os tiles a partir do tamanho do container e nao
+   * percebe sozinho que ele cresceu: sem este aviso, a tela cheia abre com
+   * metade do mapa cinza ate alguem arrastar.
+   */
+  resizeKey?: string | number;
 }) {
   const [zoom, setZoom] = useState(4);
+  const markers = useRef(new Map<string, L.Marker>());
   const clusters = useMemo(() => clusterPins(pins, zoom), [pins, zoom]);
   const focus = useMemo(
     () => [...pins, ...places.map((place) => ({ ...place }) as unknown as MapPin)],
@@ -414,12 +445,19 @@ export default function MapCanvas({
       preferCanvas
       // Sem a faixa de credito no canto do mapa.
       attributionControl={false}
+      // O + / - sai do canto superior esquerdo: la ficam os controles do
+      // proprio mapa (tela cheia, filtros, ranking). Embaixo a direita ele
+      // ainda fica na altura do polegar no celular.
+      zoomControl={false}
       className="h-full w-full"
     >
+      <ZoomControl position="bottomright" />
       <TileLayer url={TILE_URL} maxZoom={19} />
 
       <FitBounds pins={focus} />
       <ZoomWatcher onChange={setZoom} />
+      <FlyToPlace focus={focusPlace} markers={markers} />
+      <Resizer trigger={resizeKey} />
 
       {clusters.map((cluster) => (
         <ClusterMarker
@@ -430,7 +468,15 @@ export default function MapCanvas({
       ))}
 
       {places.map((place) => (
-        <PlaceMarker key={place.locationId} place={place} onOpen={onOpenPlace ?? (() => {})} />
+        <PlaceMarker
+          key={place.locationId}
+          place={place}
+          onOpen={onOpenPlace ?? (() => {})}
+          onReady={(marker) => {
+            if (marker) markers.current.set(place.locationId, marker);
+            else markers.current.delete(place.locationId);
+          }}
+        />
       ))}
     </MapContainer>
   );
@@ -448,6 +494,53 @@ function ZoomWatcher({ onChange }: { onChange: (zoom: number) => void }) {
       map.off('zoomend', update);
     };
   }, [map, onChange]);
+
+  return null;
+}
+
+/**
+ * Leva o mapa ate o local pedido pelo ranking.
+ *
+ * Aproxima sem nunca AFASTAR: quem ja estava olhando de perto nao perde o
+ * enquadramento por clicar em uma linha da lista. O balao abre junto, entao
+ * o clique na lista e o clique no pino chegam ao mesmo lugar.
+ */
+function FlyToPlace({
+  focus,
+  markers,
+}: {
+  focus: MapFocus | null;
+  markers: RefObject<Map<string, L.Marker>>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!focus) return;
+
+    map.flyTo([focus.latitude, focus.longitude], Math.max(map.getZoom(), 16), {
+      duration: 0.6,
+    });
+
+    // O balao so abre depois da animacao: aberto antes, ele viaja junto com
+    // o mapa e pisca na tela inteira.
+    const marker = markers.current.get(focus.locationId);
+    const timer = window.setTimeout(() => marker?.openPopup(), 650);
+    return () => window.clearTimeout(timer);
+  }, [focus, map, markers]);
+
+  return null;
+}
+
+/** Recalcula o tamanho do mapa quando o container muda (tela cheia). */
+function Resizer({ trigger }: { trigger?: string | number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    // Um quadro depois: o CSS da tela cheia ainda nao foi aplicado no
+    // instante em que o React avisa.
+    const timer = window.setTimeout(() => map.invalidateSize(), 60);
+    return () => window.clearTimeout(timer);
+  }, [map, trigger]);
 
   return null;
 }
