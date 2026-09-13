@@ -1,7 +1,8 @@
 'use client';
 
 /* eslint-disable @next/next/no-img-element */
-import { Pencil } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRightLeft, Pencil } from 'lucide-react';
 import type { Client, FieldOption, Member } from '@/lib/types';
 import { ACCESS_STATUS_LABELS } from '@/lib/types';
 import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
@@ -23,6 +24,7 @@ import { Modal } from '@/components/ui/Modal';
 import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
 import { RecruitedBy } from './RecruitedBy';
+import { TransferRecruiterModal } from './TransferRecruiterModal';
 
 interface MemberDetailModalProps {
   open: boolean;
@@ -140,6 +142,7 @@ export function MemberDetailModal({
   // Dados enriquecidos e sinais do aparelho sao exclusivos do ADMIN.
   const { can, user } = useSession();
   const podeEditar = can('member.update');
+  const [transferindo, setTransferindo] = useState(false);
   const podeVerificar = can('verification.view');
   const podeVerAparelho = can('device.view');
   // O integrante da equipe ve apenas nome, foto e telefone: o resto da
@@ -219,9 +222,34 @@ export function MemberDetailModal({
               {/* Origem do cadastro: o rotulo e o mesmo da lista. */}
               <div className="min-w-0 sm:col-span-2">
                 <dt className="text-xs text-ink-500">{RECRUITED_BY_LABEL}</dt>
-                <dd className="mt-0.5">
+                <dd className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <RecruitedBy recruiter={member.recruitedBy} />
+
+                  {/* Passar o cadastro para outro responsavel: decisao do
+                      ADMIN geral, e a rota confere de novo. */}
+                  {podeEditar ? (
+                    <button
+                      type="button"
+                      onClick={() => setTransferindo(true)}
+                      className="inline-flex min-h-9 items-center gap-1.5 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
+                    >
+                      <ArrowRightLeft aria-hidden="true" className="size-3.5" />
+                      Alterar responsável
+                    </button>
+                  ) : null}
                 </dd>
+
+                {/* A troca aparece na ficha: o total de cada responsavel e
+                    lido como resultado de trabalho, e mudar isso em silencio
+                    tornaria a mudanca indistinguivel do que sempre foi. */}
+                {member.recruiterChange ? (
+                  <dd className="mt-1 text-xs text-ink-500">
+                    Alterado em {formatDateTime(member.recruiterChange.changedAt)}
+                    {member.recruiterChange.previousName
+                      ? `. Antes era ${member.recruiterChange.previousName}.`
+                      : '.'}
+                  </dd>
+                ) : null}
               </div>
               <div className="min-w-0">
                 <dt className="text-xs text-ink-500">Cadastrado em</dt>
@@ -281,6 +309,12 @@ export function MemberDetailModal({
 
         {podeVerAparelho ? <MemberDeviceSection memberId={member.id} /> : null}
       </div>
+      {/* Fora do corpo da ficha: e um segundo dialogo, por cima dela. */}
+      <TransferRecruiterModal
+        open={transferindo}
+        member={member}
+        onClose={() => setTransferindo(false)}
+      />
     </Modal>
   );
 }

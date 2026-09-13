@@ -261,13 +261,22 @@ export interface MemberRow {
   consent_privacy_version: string | null;
   source: 'invite' | 'admin';
   /**
-   * Origem imutavel do cadastro (migration 012). O identificador vira nulo
-   * se o responsavel for excluido; o snapshot permanece, para o historico
+   * Responsavel pelo cadastro (migration 012). O identificador vira nulo se
+   * o responsavel for excluido; o snapshot permanece, para o historico
    * continuar existindo.
+   *
+   * Deixou de ser imutavel na migration 027: o ADMIN geral pode passar um
+   * cadastro para outro responsavel, e a troca fica registrada nas tres
+   * colunas abaixo. O historico dos LINKS nao muda — em cmd_invite_events
+   * continua registrado por qual link a pessoa entrou.
    */
   recruited_by_user_id: string | null;
   recruited_by_name: string | null;
   recruited_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  /** Ultima troca de responsavel (migration 027). Nulo enquanto nao houve. */
+  recruiter_changed_at: string | null;
+  recruiter_changed_by: string | null;
+  recruiter_previous_name: string | null;
   created_at: string;
   updated_at: string;
 }

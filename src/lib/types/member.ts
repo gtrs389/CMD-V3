@@ -10,6 +10,13 @@ export interface FieldResponse {
   value: FieldValue;
 }
 
+/** Registro de uma troca de responsavel. */
+export interface RecruiterChange {
+  changedAt: IsoDate;
+  /** Nome de quem era o responsavel antes. */
+  previousName: string | null;
+}
+
 export interface Member extends Timestamped {
   id: string;
   clientId: string;
@@ -53,6 +60,15 @@ export interface Member extends Timestamped {
    * Nulo somente nos registros anteriores ao rastreamento.
    */
   recruitedBy: Recruiter | null;
+  /**
+   * Ultima troca de responsavel, quando houve (migration 027).
+   *
+   * O sistema conta quantas pessoas cada um cadastrou, e esse numero e lido
+   * como resultado de trabalho: mover um cadastro muda o numero dos dois
+   * lados. Por isso a troca aparece na ficha, em vez de acontecer em
+   * silencio.
+   */
+  recruiterChange: RecruiterChange | null;
   /** Estado do acesso do proprio integrante ao CMD. */
   access: AccessStatus;
   /**

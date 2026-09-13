@@ -32,7 +32,7 @@ import {
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember, toRecruiter } from './mappers';
-import { forbidden, notFound } from './http';
+import { badRequest, forbidden, notFound } from './http';
 import { EMPTY_CONSENT, buildConsentEvidence } from './consent';
 
 /**
@@ -407,6 +407,104 @@ function recruiterColumns(recruitedBy?: RecruitedBy | null): Record<string, stri
     recruited_by_name: recruitedBy.name.trim().slice(0, 120),
     recruited_by_role: recruitedBy.role,
   };
+}
+
+/* -------------------------------------------------------------------------
+   Trocar o responsavel por um cadastro
+   ------------------------------------------------------------------------- */
+
+/** Quem pode receber um cadastro: alguem do MESMO time, ativo e que recruta. */
+export interface RecruiterOption {
+  userId: string;
+  name: string;
+  role: 'CANDIDATE' | 'EQUIPE';
+}
+
+/**
+ * Para quem um cadastro daquele time pode ser passado.
+ *
+ * So gente do proprio time e so quem de fato recruta: o Administrador do
+ * time e os integrantes da equipe. O ADMIN geral nao entra — ele administra
+ * o sistema, nao e ponta de uma hierarquia de recrutamento, e colocar o nome
+ * dele em "Cadastrado por" tiraria a pessoa da contagem de todo mundo.
+ */
+export async function listRecruiters(clientId: string): Promise<RecruiterOption[]> {
+  const rows = await selectRows<Pick<UserRow, 'id' | 'name' | 'role'>>(TABLES.users, {
+    select: 'id,name,role',
+    filters: { client_id: `eq.${clientId}`, is_active: 'is.true' },
+    order: 'name.asc',
+  });
+
+  return rows
+    .filter((row) => row.role === 'CANDIDATE' || row.role === 'EQUIPE')
+    .map((row) => ({ userId: row.id, name: row.name, role: row.role as 'CANDIDATE' | 'EQUIPE' }));
+}
+
+/**
+ * Passa um cadastro de um responsavel para outro.
+ *
+ * Quem se cadastra por um link fica ligado ao dono daquele link, e esse
+ * vinculo decide quem enxerga a pessoa, quem aparece em "Cadastrado por" e
+ * de quem e o numero no ranking. Na pratica isso precisa poder mudar — o
+ * responsavel saiu, dois trocaram de area, ou o link foi o errado.
+ *
+ * O destino tem de ser do MESMO time: mover um cadastro entre times
+ * mudaria a que operacao a pessoa pertence, o que nao e trocar responsavel
+ * e nao e o que esta sendo pedido aqui.
+ *
+ * A troca DEIXA RASTRO na propria ficha: quando mudou, quem mudou e de quem
+ * era antes. Sem isso ela ficaria indistinguivel do que sempre foi verdade,
+ * e ninguem conseguiria explicar por que um numero caiu.
+ *
+ * O historico dos LINKS nao e tocado: em `cmd_invite_events` continua
+ * registrado por qual link a pessoa entrou, e isso segue sendo verdade.
+ */
+export async function transferMember(
+  memberId: string,
+  toUserId: string,
+  changedByUserId: string,
+): Promise<Member> {
+  const atual = await selectOne<MemberRow>(TABLES.members, {
+    select: '*',
+    filters: { id: `eq.${memberId}` },
+  });
+  if (!atual) throw notFound('Integrante não encontrado.');
+
+  const destino = await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(
+    TABLES.users,
+    { select: 'id,name,role,client_id,is_active', filters: { id: `eq.${toUserId}` } },
+  );
+
+  if (!destino || !destino.is_active) throw notFound('Responsável não encontrado.');
+  if (destino.client_id !== atual.client_id) {
+    throw badRequest('O novo responsável precisa ser do mesmo time.');
+  }
+  if (destino.role !== 'CANDIDATE' && destino.role !== 'EQUIPE') {
+    throw badRequest('Este perfil não recebe cadastros.');
+  }
+  if (atual.recruited_by_user_id === destino.id) {
+    throw badRequest('O cadastro já está com este responsável.');
+  }
+
+  await updateRows<MemberRow>(
+    TABLES.members,
+    { id: `eq.${memberId}` },
+    {
+      recruited_by_user_id: destino.id,
+      recruited_by_name: destino.name.trim().slice(0, 120),
+      recruited_by_role: destino.role,
+      recruiter_changed_at: new Date().toISOString(),
+      recruiter_changed_by: changedByUserId,
+      // O nome de antes, e nao o identificador: ele continua legivel mesmo
+      // que aquele responsavel seja excluido depois.
+      recruiter_previous_name: atual.recruited_by_name,
+    },
+    'id',
+  );
+
+  const atualizado = await getMember(memberId);
+  if (!atualizado) throw notFound('Integrante não encontrado.');
+  return atualizado;
 }
 
 export async function createMember(
