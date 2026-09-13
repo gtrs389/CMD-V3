@@ -12,8 +12,10 @@ import { cn } from '@/lib/utils/cn';
  * so o mapa —, entao um botao que morasse no cabecalho simplesmente sumiria
  * junto com ele.
  *
- * Acima de tudo que o Leaflet desenha (`z-[1100]`): os paineis dele param em
- * 1000, e um controle que some atras de um balao aberto nao e um controle.
+ * Acima de tudo que o Leaflet desenha: os paineis dele param em 1000, e um
+ * controle que some atras de um balao aberto nao e um controle. Os botoes
+ * (1200) ficam ainda acima dos paineis flutuantes (1100) — um painel que
+ * cobre o proprio botao que o fecha e uma armadilha.
  */
 
 /** Botao redondo do canto do mapa. */
@@ -67,7 +69,14 @@ export function MapControlButton({
   );
 }
 
-/** Pilha de controles em um canto do mapa. */
+/**
+ * Fila de controles em um canto do mapa.
+ *
+ * EM LINHA, e nao empilhados: empilhados, eles desciam por baixo do painel
+ * flutuante e ficavam inalcancaveis — era impossivel abrir os filtros com o
+ * ranking aberto. Em linha, os botoes ocupam uma faixa so no topo e os
+ * paineis comecam abaixo dela.
+ */
 export function MapControlStack({
   corner,
   children,
@@ -82,8 +91,8 @@ export function MapControlStack({
       className={cn(
         // O contorno nao intercepta o mouse: arrastar o mapa continua
         // funcionando no espaco vazio entre os botoes.
-        'pointer-events-none absolute z-[1100] flex flex-col items-end gap-2',
-        corner === 'top-right' ? 'top-3 right-3' : 'top-3 left-3 items-start',
+        'pointer-events-none absolute z-[1200] flex flex-wrap items-center gap-2',
+        corner === 'top-right' ? 'top-3 right-3 justify-end' : 'top-3 left-3',
         className,
       )}
     >

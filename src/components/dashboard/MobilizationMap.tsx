@@ -65,14 +65,20 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const [query, setQuery] = useState<MapQuery>(DEFAULT_MAP_QUERY);
   const [resolving, setResolving] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  /** Coluna do ranking no CARTAO, onde ela tem espaco proprio. */
   const [showRanking, setShowRanking] = useState(true);
   /**
-   * Painel de filtros da tela cheia.
+   * Paineis flutuantes da TELA CHEIA: os dois comecam fechados.
    *
-   * Comeca fechado: quem clicou em "tela cheia" quer ver o MAPA. O botao
-   * carrega o numero de filtros ligados, entao nada fica escondido sem aviso.
+   * Quem clicou em "tela cheia" quer ver o MAPA — nao um painel cobrindo um
+   * terco dele. Os dois botoes ficam ali no canto, e o de filtros ainda
+   * carrega o numero de filtros ligados: nada fica escondido sem aviso.
+   *
+   * Sao estados PROPRIOS, separados da coluna do cartao: abrir o ranking em
+   * tela cheia nao mexe na coluna que o cartao mostra, e vice-versa.
    */
   const [showFilters, setShowFilters] = useState(false);
+  const [showRankingFull, setShowRankingFull] = useState(false);
 
   // Localizar cadastro pendente aciona consulta paga: exclusivo do ADMIN.
   // O Administrador do time abre o mapa somente para ver.
@@ -106,7 +112,7 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const pendentes = (totals?.pending ?? 0) + (totals?.notFound ?? 0);
   /** Sem local de votacao na visao, o ranking nao teria o que ordenar. */
   const rankingDisponivel = query.kind !== 'RESIDENCE';
-  const comRanking = rankingDisponivel && showRanking;
+  const comRanking = rankingDisponivel && (fullscreen ? showRankingFull : showRanking);
   const pronto = !loading && !error;
 
   // Tela cheia: a pagina atras nao rola, e Escape fecha. Sem isso, arrastar o
@@ -150,12 +156,16 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
     });
   }
 
-  /** Sair da tela cheia fecha os paineis dela: eles nao existem no cartao. */
+  /**
+   * Entrar e sair da tela cheia sempre comeca com o mapa limpo.
+   *
+   * Os paineis flutuantes sao da tela cheia, e cada abertura recomeca sem
+   * eles: o mapa e o motivo de estar ali.
+   */
   function alternarTelaCheia() {
-    setFullscreen((atual) => {
-      if (atual) setShowFilters(false);
-      return !atual;
-    });
+    setShowFilters(false);
+    setShowRankingFull(false);
+    setFullscreen((atual) => !atual);
   }
 
   const painelRanking = (
@@ -293,7 +303,7 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
           {pronto ? (
             <MapControlStack corner="top-right">
               <MapControlButton
-                label={fullscreen ? 'Fechar tela cheia' : 'Tela cheia'}
+                label={fullscreen ? 'Fechar' : 'Tela cheia'}
                 icon={fullscreen ? <X className="size-4" /> : <Maximize2 className="size-4" />}
                 active={fullscreen}
                 onClick={alternarTelaCheia}
@@ -315,8 +325,8 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
                 <MapControlButton
                   label="Ranking"
                   icon={<Trophy className="size-4" />}
-                  active={showRanking}
-                  onClick={() => setShowRanking((atual) => !atual)}
+                  active={showRankingFull}
+                  onClick={() => setShowRankingFull((atual) => !atual)}
                 />
               ) : null}
             </MapControlStack>
@@ -324,7 +334,7 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
 
           {/* Filtros flutuantes: so existem em tela cheia. */}
           {fullscreen && pronto && showFilters ? (
-            <MapPanel side="left" className="top-3 max-h-[calc(100%-1.5rem)]">
+            <MapPanel side="left" className="top-16 max-h-[calc(100%-5rem)]">
               <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
                   <MapPinIcon aria-hidden="true" className="size-4 text-brand-700" />
