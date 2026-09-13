@@ -31,6 +31,7 @@ import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
+import { FieldHint, type FieldHintKind } from './FieldHint';
 import { InviteConfirmValueModal } from './InviteConfirmValueModal';
 import { InvitePrivacyNotice } from './InvitePrivacyNotice';
 import { InviteVerifyingModal } from './InviteVerifyingModal';
@@ -146,6 +147,25 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   /** Campo ainda trancado pela ordem, ou fechado pela consulta eleitoral. */
   const bloqueado = (field: (typeof ordemDaTela)[number]): boolean =>
     daJusticaEleitoral(field) || (posicao.get(field.id) ?? 0) > liberadoAte;
+
+  /**
+   * O que dizer ao lado do rotulo de cada campo.
+   *
+   * A ordem das perguntas importa: a consulta eleitoral manda sobre tudo,
+   * depois o cadeado da vez, depois o que ja foi preenchido. Um campo, um
+   * aviso — e so UM campo por vez carrega o pedido "preencha este campo".
+   */
+  const aviso = (field: (typeof ordemDaTela)[number]): FieldHintKind => {
+    if (daJusticaEleitoral(field)) return 'conferido';
+
+    const indice = posicao.get(field.id) ?? 0;
+    if (indice > liberadoAte) return 'aguarde';
+    if (isFilled(form.values[field.id])) return 'pronto';
+    if (indice === liberadoAte) return 'agora';
+
+    // Aberto, vazio e ja ultrapassado: e um opcional que a pessoa dispensou.
+    return 'opcional';
+  };
 
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
   const phoneFieldId = allFields.find((field) => field.systemKey === 'phone')?.id;
@@ -340,7 +360,9 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
               encarar uma folha unica e interminavel.
               Desktop: os mesmos blocos, sem cartao, como sempre foram. */}
           <p className="mt-4 text-[0.8125rem] text-ink-500">
-            Preencha na ordem: o próximo campo abre quando você terminar o anterior.
+            Preencha na ordem. O campo marcado com{' '}
+            <span className="font-semibold text-accent-700">Preencha este campo</span> é a sua vez;
+            os seguintes abrem quando você terminar.
           </p>
 
           <div className="mt-4 animate-rise space-y-4 lg:mt-5 lg:space-y-7">
@@ -374,6 +396,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                       }
                       idPrefix="publico"
                       variant="invite"
+                      aside={<FieldHint kind={aviso(field)} />}
                       allowCamera
                       disabled={submitting || bloqueado(field)}
                       value={form.values[field.id] ?? null}

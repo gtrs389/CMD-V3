@@ -56,6 +56,13 @@ interface DynamicFieldInputProps {
    * com `default`.
    */
   variant?: 'default' | 'invite';
+  /**
+   * Aviso curto a direita do rotulo, na mesma linha.
+   *
+   * Quem monta a tela decide o que dizer: o renderizador so o entrega ao
+   * `Field`, valendo para qualquer tipo de campo.
+   */
+  aside?: ReactNode;
 }
 
 /**
@@ -123,6 +130,7 @@ export function DynamicFieldInput({
   allowCamera = false,
   onImageError,
   variant = 'default',
+  aside,
 }: DynamicFieldInputProps) {
   const id = `${idPrefix}-${field.id}`;
   const help = field.helpText || undefined;
@@ -140,7 +148,7 @@ export function DynamicFieldInput({
       field.systemKey === 'street')
   ) {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <LocationField
           field={field}
           id={id}
@@ -154,7 +162,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'photo') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <PhotoUpload
           value={typeof value === 'string' ? value : null}
           onChange={(next) => onChange(next)}
@@ -172,7 +180,7 @@ export function DynamicFieldInput({
   // Genero na pagina publica: cartoes de escolha, como no desenho do convite.
   if (variant === 'invite' && field.systemKey === 'gender') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <RadioCardGroup
           idPrefix={id}
           label={field.label}
@@ -194,7 +202,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'checkbox') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} hideLabel>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside} hideLabel>
         <Checkbox
           id={id}
           label={
@@ -221,7 +229,7 @@ export function DynamicFieldInput({
   if (field.type === 'multiselect') {
     const selected = Array.isArray(value) ? value : [];
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <div
           role="group"
           aria-labelledby={id}
@@ -254,7 +262,7 @@ export function DynamicFieldInput({
 
   if (field.systemKey === 'relationship') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <RelationshipPicker
           idPrefix={id}
           label={field.label}
@@ -284,7 +292,7 @@ export function DynamicFieldInput({
         : field.placeholder || 'Selecione uma opção';
 
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <Select
           id={id}
           value={typeof value === 'string' ? value : ''}
@@ -306,7 +314,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'textarea') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <Textarea
           id={id}
           rows={4}
@@ -346,7 +354,7 @@ export function DynamicFieldInput({
             ? normalizeZone
             : normalizeSection;
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <Input
           {...common}
           type="text"
@@ -362,7 +370,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'phone') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <Input
           {...common}
           type="tel"
@@ -385,7 +393,7 @@ export function DynamicFieldInput({
   const config = typeMap[field.type] ?? typeMap.text;
 
   return (
-    <Field id={id} label={field.label} help={help} error={error} required={field.required}>
+    <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
       <Input
         {...common}
         type={config.type}
