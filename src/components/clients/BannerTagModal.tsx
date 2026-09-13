@@ -141,11 +141,15 @@ export function BannerTagModal({ open, client, onClose }: BannerTagModalProps) {
           onPointerMove={drag}
           className="relative cursor-crosshair touch-none overflow-hidden rounded-control border border-line select-none"
         >
-          <InviteBanner teamName={client.name} tag={tag} />
+          {/* O codigo e um exemplo: cada link gera o seu. Ele entra na
+              previa para o ajuste levar em conta as DUAS linhas da estampa,
+              e nao so o nome. */}
+          <InviteBanner teamName={client.name} tag={tag} code="H03" />
         </div>
 
         <p className="text-xs text-ink-500">
           Toque ou clique sobre a imagem para posicionar. O ponto marcado vira o centro da estampa.
+          O código abaixo do nome é um exemplo: cada link gera o seu.
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">

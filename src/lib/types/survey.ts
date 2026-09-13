@@ -86,6 +86,8 @@ export interface PublicSurvey {
   bannerTag: BannerTag;
   /** Quem enviou o link: apenas nome, foto e perfil. */
   owner: PublicInviteOwner | null;
+  /** Codigo visual daquele link (`H03`), impresso na estampa do banner. */
+  linkCode: string | null;
   title: string;
   introText: string;
   successMessage: string;

@@ -59,7 +59,11 @@ interface InviteBannerProps {
    * do time. Tudo em porcentagem da propria imagem.
    */
   tag?: BannerTag;
-  /** Codigo visual daquele link, exibido como `#{CODIGO}`. Opcional. */
+  /**
+   * Codigo visual daquele link (`H03`), impresso em uma segunda linha, logo
+   * abaixo do nome. Sem `#`: a cerquilha e do nome do time, e repeti-la
+   * faria o codigo parecer um segundo time. Opcional.
+   */
   code?: string | null;
   /** Desenhado quando o arquivo do banner ainda nao existe. */
   fallback?: ReactNode;
@@ -120,9 +124,9 @@ export function InviteBanner({
           {code ? (
             <span
               className="block"
-              style={{ fontSize: `${tag.size * 0.82}cqw`, letterSpacing: '0.02em' }}
+              style={{ fontSize: `${tag.size * 0.82}cqw`, letterSpacing: '0.08em' }}
             >
-              #{code}
+              {code}
             </span>
           ) : null}
         </p>

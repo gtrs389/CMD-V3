@@ -10,6 +10,7 @@ import type {
 } from '@/lib/types';
 import { DEFAULT_SURVEY_SUCCESS, DEFAULT_SURVEY_TITLE } from '@/lib/types';
 import { createInviteToken, hashToken } from '@/lib/auth/tokens';
+import { linkCode } from '@/lib/domain/link-code';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
@@ -386,6 +387,7 @@ export async function resolveSurveyLink(token: string): Promise<SurveyLinkState>
         color: row.banner_tag_color,
       },
       owner: await surveyOwner(invite, photo),
+      linkCode: linkCode(token),
       title: row.survey_title || DEFAULT_SURVEY_TITLE,
       introText: row.survey_intro_text,
       successMessage: row.survey_success_message || DEFAULT_SURVEY_SUCCESS,

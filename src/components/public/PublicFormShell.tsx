@@ -143,6 +143,8 @@ interface PublicFormShellProps {
   teamName: string;
   /** Estampa do banner do celular, ajustada pelo ADMIN (migration 022). */
   bannerTag?: BannerTag;
+  /** Codigo visual daquele link, impresso abaixo do nome do time. */
+  linkCode?: string | null;
   title: string;
   subtitle: string;
   introText: string;
@@ -167,6 +169,7 @@ export function PublicFormShell({
   owner,
   teamName,
   bannerTag,
+  linkCode,
   title,
   subtitle,
   introText,
@@ -198,6 +201,7 @@ export function PublicFormShell({
           <InviteBanner
             teamName={teamName}
             tag={bannerTag}
+            code={linkCode}
             fallback={<InviteOwnerBanner owner={owner} fallbackName={teamName} />}
           />
         </div>

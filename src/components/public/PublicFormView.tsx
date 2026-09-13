@@ -15,6 +15,7 @@ import {
   normalizeCpf,
   normalizeVoterId,
 } from '@/lib/utils/documents';
+import { linkCode } from '@/lib/domain/link-code';
 import {
   CONSENT_KEY,
   completionPercent,
@@ -226,6 +227,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
       owner={owner}
       teamName={client.name}
       bannerTag={client.bannerTag}
+      linkCode={linkCode(client.invite.token)}
       title="Ficha de cadastro"
       subtitle="Leva menos de 2 minutos."
       introText={client.form.introText}
