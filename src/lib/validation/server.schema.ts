@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
+import { API_KEY_NAME_MAX } from '@/lib/domain/api-key';
 import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
 import {
   GENDER_VALUES,
@@ -440,3 +441,33 @@ export const publicEntrySchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+
+/* -------------------------------------------------------------------------
+   API de links de cadastro (migration 029)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Apelido da chave da API.
+ *
+ * Serve para o ADMIN reconhecer a chave na lista e revogar a certa. O
+ * segredo nao passa por aqui: ele nasce no servidor.
+ */
+export const apiKeyCreateSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Dê um nome para identificar a chave.')
+    .max(API_KEY_NAME_MAX, `O nome deve ter até ${API_KEY_NAME_MAX} caracteres.`),
+});
+
+/**
+ * Pedido de geracao de link.
+ *
+ * `donoId` e opcional: sem ele vale o administrador ativo mais antigo do
+ * time. O vinculo entre dono e time e conferido no BANCO — mandar o dono de
+ * outro time nao gera link nenhum.
+ */
+export const apiLinkCreateSchema = z.object({
+  timeId: z.string().trim().min(1, 'Informe o time.').max(64, 'Identificador inválido.'),
+  donoId: z.string().trim().min(1).max(64, 'Identificador inválido.').optional(),
+});

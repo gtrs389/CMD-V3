@@ -36,6 +36,7 @@ export const TABLES = {
   surveyInvites: 'cmd_survey_invites',
   surveyResponses: 'cmd_survey_responses',
   surveyResponseValues: 'cmd_survey_response_values',
+  apiKeys: 'cmd_api_keys',
 } as const;
 
 export interface UserRow {
@@ -627,4 +628,26 @@ export interface MemberLocationRow {
   lock_token: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Chave da API de links de cadastro (migration 029).
+ *
+ * Somente o SHA-256 do segredo e guardado. `prefix` e a parte publica, usada
+ * para reconhecer a chave na tela; `created_by` e a identidade com que ela
+ * age — deixando de ser um ADMIN ativo, a chave para de autenticar.
+ */
+export interface ApiKeyRow {
+  id: string;
+  name: string;
+  prefix: string;
+  token_hash: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  request_count: number;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  revoked_by_name: string | null;
 }

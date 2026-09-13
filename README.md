@@ -41,6 +41,7 @@ variáveis na Vercel.
 | `cmd_members` | Integrantes cadastrados |
 | `cmd_member_responses` | Respostas por campo. Chaves estrangeiras compostas impedem vínculo entre clientes diferentes |
 | `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
+| `cmd_api_keys` | Chaves da API de links de cadastro. Guarda apenas o hash SHA-256 do segredo |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -183,11 +184,55 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/members/[id]` | ADMIN | Atualiza e exclui um integrante |
 | `/api/public/convite/[token]` | Pública | Resolve o convite pelo token do link |
 | `/api/public/convite/[token]/membros` | Pública | Recebe o cadastro do formulário |
+| `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API |
+| `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
+| `/api/v1/links` | ADMIN geral | Gera e lista links de cadastro |
+| `/api/v1/links/[id]` | ADMIN geral | Consulta e revoga um link |
+| `/api/v1/times` | ADMIN geral | Times e administradores, para gerar o link |
 
 O token do convite é opaco e aleatório: **nenhum dado pessoal vai para a URL**.
 O banco guarda apenas o hash SHA-256 dele, por isso o endereço completo aparece
 uma única vez, no momento em que é gerado. Para obter um link visível de novo,
 use **Gerar novo token** — o anterior deixa de funcionar na hora.
+
+---
+
+## API de links de cadastro
+
+O link de cadastro — o endereço que o Administrador do time envia para as
+pessoas se cadastrarem — também pode ser gerado por programa, em `/api/v1`.
+
+É a **mesma operação do painel**, e não um segundo sistema de links: mesmo
+convite único por usuário, mesmo prazo configurado em Configurações, mesmo
+token opaco gerado no servidor, mesma geração anterior derrubada na hora e
+mesmo histórico imutável. O que a API acrescenta é o pedido por programa e a
+revogação avulsa (`DELETE /api/v1/links/[id]`), que derruba um link enviado por
+engano sem colocar outro no lugar.
+
+**Exclusiva do ADMIN geral.** A autenticação é uma chave no cabeçalho
+`Authorization: Bearer cmd_...`, criada em **Configurações**; a sessão do painel
+também é aceita, desde que seja a de um ADMIN, para o próprio administrador
+testar um endpoint a partir da documentação. A chave age em nome do ADMIN que a
+criou: desativado esse acesso, todas as chaves dele param de valer no mesmo
+instante. A API não cria nem revoga chaves — isso só acontece na tela, com
+sessão —, então uma chave vazada não consegue criar outra.
+
+O segredo aparece **uma única vez**, na criação: o banco guarda apenas o
+SHA-256 e o prefixo público (`cmd_` + 8 caracteres) usado para identificar a
+chave na lista. Perdido o valor, revogue e crie outra.
+
+A documentação completa — endpoints, parâmetros, exemplos de requisição e de
+resposta, estados do link e tabela de erros — fica em **Configurações**, na
+própria tela do sistema, e nasce de `src/lib/domain/api-docs.ts`. Ela é
+conferida por teste (`tests/api-docs.test.ts`): endpoint documentado precisa
+existir como rota e exportar o método descrito, e todo exemplo de resposta
+precisa ser JSON válido.
+
+A API é servida no endereço do **painel**. O domínio público não a serve — ele
+só serve os links enviados. Já os links que ela devolve apontam para o domínio
+público, que é o endereço que as pessoas recebem.
+
+Requer a migration `029_api_links_cadastro.sql`.
 
 ---
 
@@ -253,6 +298,9 @@ src/
 | `src/lib/server/consent.ts` | Texto canônico e evidência do consentimento |
 | `scripts/configurar-storage.mjs` | Criação idempotente do bucket pela API oficial |
 | `src/lib/validation/server.schema.ts` | Zod de tudo que chega ao servidor |
+| `src/lib/domain/api-docs.ts` | Documentação da API exibida em Configurações e conferida por teste |
+| `src/lib/server/api-guard.ts` | Porta da API: chave `Bearer` ou sessão, sempre ADMIN geral |
+| `src/lib/server/api-link.service.ts` | Geração, consulta e revogação dos links pela API |
 | `supabase/migrations/001_cmd_initial.sql` | Estrutura completa do banco |
 | `src/proxy.ts` | Redirecionamento das rotas administrativas |
 

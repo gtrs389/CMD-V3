@@ -97,6 +97,16 @@ const REGRAS_DO_BANCO: Record<string, { status: number; message: string }> = {
     status: 404,
     message: 'Time não encontrado.',
   },
+  'link nao encontrado': {
+    status: 404,
+    message: 'Link não encontrado.',
+  },
+  'link ja concluido': {
+    status: 409,
+    message:
+      'Este link já foi usado para um cadastro e não pode ser revogado. ' +
+      'Gere um link novo se precisar de outro endereço.',
+  },
 };
 
 /**
