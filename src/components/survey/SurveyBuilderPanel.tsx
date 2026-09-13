@@ -1,11 +1,18 @@
 'use client';
 
-import { Lock } from 'lucide-react';
+import { useState } from 'react';
+import { Copy, Lock } from 'lucide-react';
 import type { CustomField, FieldType, SurveyConfig, SurveyConfigInput } from '@/lib/types';
 import { FIELD_TYPES } from '@/lib/types';
 import { updateSurvey } from '@/lib/repositories';
-import { SURVEY_IDENTITY_FIELDS, toSurveyFormConfig } from '@/lib/domain/survey-config';
+import {
+  copyFromRegistration,
+  SURVEY_IDENTITY_FIELDS,
+  toSurveyFormConfig,
+} from '@/lib/domain/survey-config';
+import { Button } from '@/components/ui/Button';
 import { Card, CardBody, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { FieldsBuilder } from '@/components/fields/FieldsBuilder';
 import { FormPreview } from '@/components/fields/FormPreview';
@@ -35,6 +42,8 @@ interface SurveyBuilderPanelProps {
   clientId: string;
   teamName: string;
   teamPhoto: string | null;
+  /** Campos do Formulario 1, para copiar de la como ponto de partida. */
+  registrationFields: readonly CustomField[];
   survey: SurveyConfig;
   /** Chamado depois de cada gravacao, com a configuracao ja atualizada. */
   onChange: (survey: SurveyConfig) => void;
@@ -46,12 +55,14 @@ export function SurveyBuilderPanel({
   clientId,
   teamName,
   teamPhoto,
+  registrationFields,
   survey,
   onChange,
   saving,
   onSavingChange,
 }: SurveyBuilderPanelProps) {
   const toast = useToast();
+  const [copiando, setCopiando] = useState(false);
 
   async function persist(changes: SurveyConfigInput, message: string) {
     onSavingChange(true);
@@ -75,7 +86,26 @@ export function SurveyBuilderPanel({
       busy={saving}
       allowedTypes={SURVEY_FIELD_TYPES}
       onPersist={(next: CustomField[], message) => void persist({ fields: next }, message)}
-      lockedNotice={<IdentityNotice />}
+      lockedNotice={
+        <>
+          <IdentityNotice />
+          <CopyFromRegistration
+            total={registrationFields.filter((field) => field.enabled).length}
+            atual={survey.fields.length}
+            saving={saving}
+            open={copiando}
+            onAsk={() => setCopiando(true)}
+            onCancel={() => setCopiando(false)}
+            onConfirm={() => {
+              setCopiando(false);
+              void persist(
+                { fields: copyFromRegistration(registrationFields) },
+                'Campos copiados do Formulário 1.',
+              );
+            }}
+          />
+        </>
+      }
       preview={
         <FormPreview
           config={toSurveyFormConfig(survey)}
@@ -113,6 +143,77 @@ export function SurveyBuilderPanel({
         </p>
       )}
     />
+  );
+}
+
+/**
+ * Copia os campos do Formulario 1 como ponto de partida.
+ *
+ * Copiar NAO liga os dois formularios: depois disso, mexer em um nao toca no
+ * outro. Nome, telefone e foto nao vem junto — os dois primeiros ja sao
+ * campos fixos aqui, e o Formulario 2 nao recebe arquivo.
+ */
+function CopyFromRegistration({
+  total,
+  atual,
+  saving,
+  open,
+  onAsk,
+  onCancel,
+  onConfirm,
+}: {
+  total: number;
+  atual: number;
+  saving: boolean;
+  open: boolean;
+  onAsk: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="min-w-0">
+            <CardTitle>Começar a partir do Formulário 1</CardTitle>
+            <CardDescription>
+              Traz os campos ativos do Formulário 1 para cá. É só um ponto de partida: depois da
+              cópia, mexer em um não altera o outro.
+            </CardDescription>
+          </div>
+          <Button variant="secondary" onClick={onAsk} disabled={saving || total === 0}>
+            <Copy aria-hidden="true" className="size-4" />
+            Copiar campos do Formulário 1
+          </Button>
+        </CardHeader>
+      </Card>
+
+      <ConfirmDialog
+        open={open}
+        title="Copiar campos do Formulário 1"
+        description={
+          atual > 0
+            ? `Os ${atual} ${atual === 1 ? 'campo atual' : 'campos atuais'} do Formulário 2 serão substituídos pelos do Formulário 1.`
+            : 'Os campos ativos do Formulário 1 serão copiados para o Formulário 2.'
+        }
+        confirmLabel="Copiar campos"
+        onCancel={onCancel}
+        onConfirm={onConfirm}
+        details={
+          <div className="space-y-2">
+            <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
+              Nome e telefone não vêm junto: o Formulário 2 já pede os dois como campos fixos.
+              Foto também não, porque ele não recebe arquivo.
+            </p>
+            <p className="rounded-control bg-warning-50 p-3 text-sm text-warning-600">
+              CPF, título de eleitor e endereço viram campos de texto comuns. O Formulário 2 não
+              faz consulta: não há verificação de CPF, preenchimento automático de zona e seção
+              nem lista encadeada de município e bairro.
+            </p>
+          </div>
+        }
+      />
+    </>
   );
 }
 

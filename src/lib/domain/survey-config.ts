@@ -1,4 +1,6 @@
-import type { ClientFormConfig, CustomField } from '@/lib/types';
+import type { ClientFormConfig, CustomField, FieldOption } from '@/lib/types';
+import { GENDER_OPTIONS, UF_OPTIONS } from '@/lib/utils/documents';
+import { createId } from '@/lib/utils/id';
 import { visibleFields } from '@/lib/validation/dynamic-form';
 
 /**
@@ -145,4 +147,57 @@ export function buildSurveySections(config: ClientFormConfig): SurveySection[] {
   }
 
   return sections;
+}
+
+/* -------------------------------------------------------------------------
+   Copiar os campos do Formulario 1
+   ------------------------------------------------------------------------- */
+
+/**
+ * Os campos do Formulario 1, convertidos para o Formulario 2.
+ *
+ * Os dois sao formularios SEPARADOS: copiar e um ponto de partida, nao um
+ * vinculo. Depois da copia, mexer em um nao toca no outro.
+ *
+ * A conversao nao e literal, porque o Formulario 2 nao tem a maquinaria do
+ * cadastro:
+ *
+ *   - nome e telefone ficam de fora: o Formulario 2 ja pede os dois como
+ *     campos fixos de identificacao da resposta;
+ *   - foto fica de fora: o Formulario 2 nao recebe arquivo, e o banco recusa;
+ *   - os demais campos padrao viram campos comuns. Perdem a verificacao de
+ *     CPF e de titulo, o preenchimento automatico de zona e secao e as
+ *     listas encadeadas de endereco — nada disso existe no Formulario 2;
+ *   - genero e estado tem lista fixa do sistema, que o cadastro injeta na
+ *     hora de desenhar. Como campos comuns eles ficariam sem opcao nenhuma,
+ *     entao a lista e materializada aqui.
+ */
+export function copyFromRegistration(fields: readonly CustomField[]): CustomField[] {
+  const FORA: readonly (string | null)[] = ['name', 'phone'];
+
+  return [...fields]
+    .filter((field) => field.enabled)
+    .filter((field) => field.type !== 'photo')
+    .filter((field) => !FORA.includes(field.systemKey))
+    .sort((a, b) => a.order - b.order)
+    .map((field, index) => ({
+      ...field,
+      id: createId('fld'),
+      // Toda pergunta do Formulario 2 e livre: sem `system_key` nao ha
+      // verificacao, mascara de documento nem consulta pendurada nela.
+      systemKey: null,
+      options: optionsFor(field),
+      order: index,
+    }));
+}
+
+/** Lista de opcoes de um campo que, no cadastro, o sistema preenchia. */
+function optionsFor(field: CustomField): FieldOption[] {
+  if (field.systemKey === 'gender') {
+    return GENDER_OPTIONS.map((option) => ({ id: option.id, label: option.label }));
+  }
+  if (field.systemKey === 'state') {
+    return UF_OPTIONS.map((option) => ({ id: option.id, label: option.label }));
+  }
+  return field.options;
 }

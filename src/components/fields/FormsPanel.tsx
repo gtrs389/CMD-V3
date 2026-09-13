@@ -104,6 +104,7 @@ export function FormsPanel({ client, members }: FormsPanelProps) {
           clientId={client.id}
           canManage
           showGenerate={false}
+          registrationFields={client.form.fields}
           teamName={client.name}
           teamPhoto={client.photo}
         />

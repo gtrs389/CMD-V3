@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import type { SurveyConfig, SurveyResponse } from '@/lib/types';
+import type { CustomField, SurveyConfig, SurveyResponse } from '@/lib/types';
 import { fetchOwnSurvey, fetchSurvey, fetchSurveyResponses } from '@/lib/repositories';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -36,6 +36,8 @@ interface SurveyPanelProps {
   /** Nome e foto do time, usados na previa do construtor. */
   teamName?: string;
   teamPhoto?: string | null;
+  /** Campos do Formulario 1, para copiar de la como ponto de partida. */
+  registrationFields?: readonly CustomField[];
   /** Desenha o botao de gerar o link. Falso quando ele ja vive no cabecalho. */
   showGenerate?: boolean;
 }
@@ -50,6 +52,7 @@ export function SurveyPanel({
   canManage = false,
   teamName = '',
   teamPhoto = null,
+  registrationFields = [],
   showGenerate = true,
 }: SurveyPanelProps) {
   const loader = useCallback(async (): Promise<SurveyData> => {
@@ -105,6 +108,7 @@ export function SurveyPanel({
           clientId={clientId}
           teamName={teamName}
           teamPhoto={teamPhoto}
+          registrationFields={registrationFields}
           survey={survey}
           onChange={setDraft}
           saving={saving}
