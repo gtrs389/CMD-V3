@@ -52,6 +52,31 @@ export async function requireClientAccess(
 }
 
 /**
+ * Quem pode cadastrar um integrante naquele time.
+ *
+ * `requireClientAccess` nao serve aqui: ele usa `canReachClient`, que recusa
+ * o perfil EQUIPE de proposito — o integrante nao alcanca o REGISTRO do
+ * time, e isso continua valendo. O que ele alcanca e a propria equipe, e e
+ * disso que se trata ao cadastrar alguem.
+ *
+ * O alcance de cada perfil:
+ *
+ *   ADMIN      qualquer time;
+ *   CANDIDATE  o proprio time;
+ *   EQUIPE     o proprio time, resolvido pela SESSAO.
+ *
+ * O `clientId` que chega na requisicao nunca amplia nada: fora do ADMIN ele
+ * tem de bater com o da sessao.
+ */
+export async function requireMemberCreation(clientId: string): Promise<SessionUser> {
+  const user = await requirePermission('member.create');
+  if (user.role === 'ADMIN') return user;
+
+  if (!user.candidateId || user.candidateId !== clientId) throw forbidden();
+  return user;
+}
+
+/**
  * Sessao do perfil EQUIPE, com a operacao ja resolvida pelo banco.
  *
  * O identificador da operacao e do integrante vem sempre da sessao, nunca

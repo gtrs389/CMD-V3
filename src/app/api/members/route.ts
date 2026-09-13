@@ -1,6 +1,6 @@
 import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { requireClientAccess, requirePermission } from '@/lib/server/guard';
+import { requireMemberCreation, requirePermission } from '@/lib/server/guard';
 import { badRequest, jsonOk, notFound, readJson, toErrorResponse } from '@/lib/server/http';
 import { memberCreateSchema } from '@/lib/validation/server.schema';
 import { createMember, listAllMembers, rollbackMember } from '@/lib/server/member.service';
@@ -28,7 +28,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const input = await readJson(request, memberCreateSchema);
-    const user = await requireClientAccess('member.create', input.clientId);
+    const user = await requireMemberCreation(input.clientId);
 
     const client = await getClient(input.clientId);
     if (!client) throw notFound('Time não encontrado.');

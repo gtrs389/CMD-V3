@@ -17,10 +17,14 @@ describe('permissoes', () => {
     expect(can(equipe, 'member.view')).toBe(true);
     expect(can(equipe, 'invite.view')).toBe(true);
 
-    // O registro do candidato, as escritas e a gestao do convite continuam fora.
+    // Cadastrar a mao ELE PODE: nem toda pessoa se cadastra sozinha pelo
+    // link, e o integrante precisa registrar quem esta na frente dele.
+    expect(can(equipe, 'member.create')).toBe(true);
+
+    // O registro do candidato, as demais escritas e a gestao do convite
+    // continuam fora.
     expect(can(equipe, 'client.view')).toBe(false);
     expect(can(equipe, 'client.list')).toBe(false);
-    expect(can(equipe, 'member.create')).toBe(false);
     expect(can(equipe, 'member.update')).toBe(false);
     expect(can(equipe, 'member.delete')).toBe(false);
     // A area interna do formulario e exclusiva do ADMIN: nem ver, nem mexer.

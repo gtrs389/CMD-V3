@@ -2,10 +2,11 @@ import 'server-only';
 import type { Member, TeamOverview } from '@/lib/types';
 import { DEFAULT_BANNER_TAG } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
-import { TABLES, type ClientRow, type MemberRow } from '@/lib/supabase/tables';
-import { selectOne } from '@/lib/supabase/rest';
+import { TABLES, type ClientRow, type FormFieldRow, type MemberRow } from '@/lib/supabase/tables';
+import { selectOne, selectRows } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
-import { hiddenFormConfig } from './form-visibility';
+import { fillableForm } from './form-visibility';
+import { toFormConfig } from './mappers';
 import { listMembersRecruitedBy } from './member.service';
 import { findInviteByUser } from './invite.service';
 import { notFound } from './http';
@@ -68,10 +69,16 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
   });
   if (!client) throw notFound('Time não encontrado.');
 
-  const [members, photo, invite] = await Promise.all([
+  const [members, photo, invite, campos] = await Promise.all([
     listMembersRecruitedBy(session.id, session.candidateId),
     signedUrl(member.photo_path),
     findInviteByUser(session.id),
+    // Os campos do formulario: o integrante cadastra a mao pelo painel.
+    selectRows<FormFieldRow>(TABLES.formFields, {
+      select: '*',
+      filters: { client_id: `eq.${session.candidateId}` },
+      order: 'position.asc',
+    }),
   ]);
 
   return {
@@ -114,9 +121,16 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
         issuedAt: invite?.issued_at ?? member.created_at,
         expiresAt: invite?.expires_at ?? member.created_at,
       },
-      // Nenhuma configuracao de formulario: nem campos, nem opcoes, nem
-      // textos, nem contagem de campos ativos ou obrigatorios.
-      form: hiddenFormConfig(),
+      // O formulario PARA PREENCHER, e nada alem disso.
+      //
+      // O integrante cadastra a mao pelo painel, e para isso precisa dos
+      // campos de verdade: quais estao ativos, quais sao obrigatorios, as
+      // opcoes de cada um e o aviso de privacidade — sem ele o aceite que o
+      // servidor exige nunca seria coletado e o envio seria recusado.
+      //
+      // O que continua fora sao os textos da tela publica, que pertencem ao
+      // link de cadastro e nao a este formulario do painel.
+      form: fillableForm(toFormConfig(client, campos)),
     },
 
     members: members.map(redactForEquipe),

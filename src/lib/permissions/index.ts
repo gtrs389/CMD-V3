@@ -64,9 +64,16 @@ export type Permission = (typeof PERMISSIONS)[number];
 const ADMIN_PERMISSIONS: readonly Permission[] = PERMISSIONS;
 
 /**
- * Integrante da equipe: leitura, e sempre restrita a quem ele mesmo
- * cadastrou. Nao edita time, integrante nem convite, e nao ativa,
- * desativa ou renova o proprio link.
+ * Integrante da equipe: leitura restrita a quem ele mesmo cadastrou, e um
+ * unico poder de escrita.
+ *
+ * `member.create` existe pela mesma razao que no Administrador do time: nem
+ * toda pessoa se cadastra sozinha pelo link, e ele precisa poder registrar
+ * quem esta na frente dele. O cadastro fica com o nome dele em "Cadastrado
+ * por" e no proprio time — o servidor resolve os dois pela SESSAO, e nao
+ * pelo corpo da requisicao.
+ *
+ * Editar e excluir integrante continuam fora, como estavam.
  *
  * A area interna do formulario fica inteiramente fora: sem `form.view` nao
  * ha aba, cartao, previa nem configuracao de campos, e as rotas recusam com
@@ -76,6 +83,7 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
   'team.access',
   'member.view',
+  'member.create',
   'invite.view',
   'invite.renew',
   'invite.submit',
