@@ -81,6 +81,14 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
    */
   const [daConsulta, setDaConsulta] = useState({ zona: false, secao: false });
   /**
+   * A consulta do titulo aconteceu e NAO trouxe aquele dado.
+   *
+   * E diferente de "ainda nao consultou": aqui a Justica Eleitoral ja
+   * respondeu e nao informou o numero, entao ele nunca vai chegar sozinho —
+   * quem preenche precisa saber disso e digitar.
+   */
+  const [semResposta, setSemResposta] = useState({ zona: false, secao: false });
+  /**
    * Campos em que a pessoa ja entrou.
    *
    * Existe por causa dos campos opcionais: eles nao se resolvem preenchendo
@@ -144,6 +152,30 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
     (field.systemKey === 'zone' && daConsulta.zona) ||
     (field.systemKey === 'section' && daConsulta.secao);
 
+  /**
+   * Ajuda propria de zona e secao, conforme o que a consulta respondeu.
+   *
+   * Fora desses dois casos o campo mantem a ajuda que o ADMIN escreveu.
+   */
+  const comAjuda = (field: (typeof ordemDaTela)[number]) => {
+    if (daJusticaEleitoral(field)) {
+      return { ...field, helpText: 'Preenchido pela consulta do seu título de eleitor.' };
+    }
+
+    const naoVeio =
+      (field.systemKey === 'zone' && semResposta.zona) ||
+      (field.systemKey === 'section' && semResposta.secao);
+
+    if (naoVeio) {
+      return {
+        ...field,
+        helpText: 'Não localizamos no seu título. Digite o número, se souber.',
+      };
+    }
+
+    return field;
+  };
+
   /** Campo ainda trancado pela ordem, ou fechado pela consulta eleitoral. */
   const bloqueado = (field: (typeof ordemDaTela)[number]): boolean =>
     daJusticaEleitoral(field) || (posicao.get(field.id) ?? 0) > liberadoAte;
@@ -177,14 +209,21 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
     onNameCorrection: (nome) => {
       if (nameFieldId) setValue(nameFieldId, nome);
     },
-    onZonaSecaoFilled: (zona, secao) => {
+    onZonaSecaoFilled: (zona, secao, origem) => {
       if (zoneFieldId) setValue(zoneFieldId, zona ?? '');
       if (sectionFieldId) setValue(sectionFieldId, secao ?? '');
+
       // Cada um tranca por si: a consulta pode devolver a zona e nao a
-      // secao, e trancar a secao vazia deixaria a pessoa sem saida. Sem
-      // resposta — ou quando a troca de CPF invalida o titulo — os campos
-      // voltam a ser dela.
+      // secao, e trancar a secao vazia deixaria a pessoa sem saida.
       setDaConsulta({ zona: Boolean(zona), secao: Boolean(secao) });
+
+      // O que a consulta nao trouxe volta a ser da pessoa, e o campo passa a
+      // dizer isso. Em um 'reset' — a troca de CPF invalidando o titulo — nao
+      // ha nada a anunciar: os campos so voltam a ficar abertos.
+      setSemResposta({
+        zona: origem === 'consulta' && !zona,
+        secao: origem === 'consulta' && !secao,
+      });
     },
   });
 
@@ -386,14 +425,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                     className={isWideField(field) ? 'sm:col-span-2' : undefined}
                   >
                     <DynamicFieldInput
-                      field={
-                        daJusticaEleitoral(field)
-                          ? {
-                              ...field,
-                              helpText: 'Preenchido pela consulta do seu título de eleitor.',
-                            }
-                          : field
-                      }
+                      field={comAjuda(field)}
                       idPrefix="publico"
                       variant="invite"
                       aside={<FieldHint kind={aviso(field)} />}
