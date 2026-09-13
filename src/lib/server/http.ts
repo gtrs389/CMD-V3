@@ -48,6 +48,58 @@ export function jsonOk<T>(data: T, status = 200): NextResponse {
 }
 
 /**
+ * Recusas previstas das funcoes do banco (`raise exception`, codigo P0001).
+ *
+ * A chave e o texto exato escrito na migration; o valor e o que a pessoa le
+ * na tela. A lista e FECHADA de proposito: o texto do banco nunca e
+ * repassado ao navegador, e o que nao estiver aqui continua virando a falha
+ * generica.
+ *
+ * Isso existe porque "nao pode" nao e defeito. Gerar o link do Formulario 2
+ * com ele desligado, por exemplo, e uma recusa correta do banco — mas ate
+ * agora chegava na tela como "Não foi possível concluir a operação.", sem
+ * dizer que bastava ligar a chave em Configuracoes.
+ *
+ * O texto das migrations ja executadas nao muda (elas sao imutaveis), e por
+ * isso algumas chaves ainda dizem "questionario": e o nome antigo do
+ * Formulario 2 dentro do banco. Na tela, so aparece o nome novo.
+ */
+const REGRAS_DO_BANCO: Record<string, { status: number; message: string }> = {
+  'questionario desligado para este time': {
+    status: 409,
+    message:
+      'O Formulário 2 está desligado para este time. ' +
+      'Peça ao administrador do sistema para ativá-lo em Configurações.',
+  },
+  'questionario sem perguntas': {
+    status: 409,
+    message:
+      'O Formulário 2 ainda não tem nenhum campo ativo. ' +
+      'Peça ao administrador do sistema para montá-lo em Configurações.',
+  },
+  'perfil sem link de questionario': {
+    status: 403,
+    message: 'Este perfil não tem link do Formulário 2.',
+  },
+  'perfil sem link pessoal': {
+    status: 403,
+    message: 'Este perfil não tem link de cadastro.',
+  },
+  'usuario sem operacao': {
+    status: 403,
+    message: 'Este acesso não está ligado a nenhum time.',
+  },
+  'usuario inativo': {
+    status: 403,
+    message: 'Este acesso está desativado.',
+  },
+  'time nao encontrado': {
+    status: 404,
+    message: 'Time não encontrado.',
+  },
+};
+
+/**
  * Converte qualquer falha em resposta segura.
  * Nenhuma mensagem interna do banco ou do Storage chega ao navegador.
  */
@@ -71,6 +123,13 @@ export function toErrorResponse(error: unknown): NextResponse {
         503,
         'A estrutura do banco está desatualizada: falta executar a migration mais recente no Supabase.',
       );
+    }
+
+    // Recusa prevista de uma funcao do banco: a tela recebe o motivo, nao a
+    // falha generica. O texto vem da lista fechada acima.
+    if (error.isBusinessRule) {
+      const regra = REGRAS_DO_BANCO[error.message.trim().toLowerCase()];
+      if (regra) return jsonError(regra.status, regra.message);
     }
 
     if (error.status === 503) {
