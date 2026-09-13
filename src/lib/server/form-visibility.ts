@@ -59,8 +59,6 @@ function labelOnly(field: CustomField): CustomField {
     helpText: '',
     required: false,
     enabled: true,
-    requiredEquipe: false,
-    enabledEquipe: true,
   };
 }
 

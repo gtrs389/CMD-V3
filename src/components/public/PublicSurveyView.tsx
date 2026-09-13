@@ -72,7 +72,7 @@ export function PublicSurveyView() {
         setError(
           falha instanceof NetworkError
             ? falha.message
-            : 'Não foi possível carregar o questionário.',
+            : 'Não foi possível carregar o Formulário 2.',
         );
         setLoading(false);
       });
@@ -93,7 +93,7 @@ export function PublicSurveyView() {
       <InviteStateShell>
         <span className="mx-auto flex flex-col items-center gap-3 text-ink-500">
           <Spinner className="size-6 text-brand-700" />
-          <p className="text-sm">Carregando questionário...</p>
+          <p className="text-sm">Carregando formulário...</p>
         </span>
       </InviteStateShell>
     );
@@ -156,7 +156,7 @@ export function SurveyClosed() {
       <StateIcon>
         <Clock className="size-6" />
       </StateIcon>
-      <h1 className="text-lg font-semibold text-ink-900">Questionário encerrado</h1>
+      <h1 className="text-lg font-semibold text-ink-900">Formulário encerrado</h1>
       <p className="mt-2 text-sm text-balance text-ink-500">
         Este link não está mais disponível. Solicite um novo link à pessoa que o enviou.
       </p>
@@ -170,9 +170,9 @@ export function SurveyUnavailable() {
       <StateIcon>
         <Link2Off className="size-6" />
       </StateIcon>
-      <h1 className="text-lg font-semibold text-ink-900">Questionário indisponível</h1>
+      <h1 className="text-lg font-semibold text-ink-900">Formulário indisponível</h1>
       <p className="mt-2 text-sm text-balance text-ink-500">
-        Este questionário não está ativo no momento. Fale com a pessoa que enviou o link.
+        Este formulário não está ativo no momento. Fale com a pessoa que enviou o link.
       </p>
     </InviteStateShell>
   );

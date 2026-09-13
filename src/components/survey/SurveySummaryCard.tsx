@@ -21,8 +21,8 @@ export function SurveySummaryCard({ survey }: { survey: SurveyConfig }) {
           <CardTitle>{survey.title}</CardTitle>
           <CardDescription>
             {survey.active
-              ? `${perguntas} ${perguntas === 1 ? 'pergunta' : 'perguntas'}, além de nome e telefone. Gere um link e envie para quem você quer ouvir.`
-              : 'O questionário está desligado. Fale com a administração para ativá-lo.'}
+              ? `${perguntas} ${perguntas === 1 ? 'campo' : 'campos'}, além de nome e telefone. Gere um link e envie para quem deve preencher.`
+              : 'O Formulário 2 está desligado. Fale com a administração para ativá-lo.'}
           </CardDescription>
         </div>
       </CardHeader>

@@ -62,7 +62,7 @@ export function SurveyBuilderPanel({
       toast.error(
         error instanceof Error && error.message
           ? error.message
-          : 'Não foi possível salvar o questionário.',
+          : 'Não foi possível salvar o Formulário 2.',
       );
     } finally {
       onSavingChange(false);
@@ -96,19 +96,19 @@ export function SurveyBuilderPanel({
         />
       }
       texts={{
-        noun: 'pergunta',
-        nounPlural: 'perguntas',
-        cardTitle: 'Perguntas do questionário',
+        noun: 'campo',
+        nounPlural: 'campos',
+        cardTitle: 'Campos do Formulário 2',
         cardDescription: 'Arraste para reordenar no computador ou use as setas no celular.',
-        emptyTitle: 'Nenhuma pergunta ainda',
+        emptyTitle: 'Nenhum campo ainda',
         emptyDescription:
-          'Sem pelo menos uma pergunta ativa, o link do questionário não pode ser gerado.',
+          'Sem pelo menos um campo ativo, o link do Formulário 2 não pode ser gerado.',
         removeDescription: (label) =>
-          `A pergunta "${label}" sai do questionário. As respostas já recebidas continuam guardadas.`,
+          `O campo "${label}" sai do Formulário 2. As respostas já recebidas continuam guardadas.`,
       }}
       removeDetails={() => (
         <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
-          Cada resposta guarda a própria cópia do texto da pergunta: excluir aqui não apaga nem
+          Cada resposta guarda a própria cópia do texto do campo: excluir aqui não apaga nem
           altera nada do que já foi respondido.
         </p>
       )}

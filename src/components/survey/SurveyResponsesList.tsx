@@ -37,7 +37,7 @@ export function SurveyResponsesList({ responses }: { responses: SurveyResponse[]
             compact
             icon={<MessageSquareText className="size-5" />}
             title="Nenhuma resposta ainda"
-            description="Gere o link do questionário e envie para as pessoas que você quer ouvir."
+            description="Gere o link do Formulário 2 e envie para as pessoas que devem preencher."
           />
         ) : (
           <ul className="space-y-3">

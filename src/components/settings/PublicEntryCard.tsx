@@ -83,7 +83,7 @@ export function PublicEntryCard() {
           </CardTitle>
           <CardDescription>
             O domínio público é o que vai nos links enviados. Ele atende o formulário de
-            cadastro, o questionário e o acesso do time — a tela de login não fica exposta
+            cadastro, o Formulário 2 e o acesso do time — a tela de login não fica exposta
             nele. Escolha para onde mandar quem chegar sem um link válido.
           </CardDescription>
         </div>

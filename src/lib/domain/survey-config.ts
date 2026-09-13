@@ -40,9 +40,6 @@ export const SURVEY_IDENTITY_FIELDS: readonly CustomField[] = [
     helpText: '',
     required: true,
     enabled: true,
-    // O questionario tem UM link so: os dois pares andam sempre juntos.
-    requiredEquipe: true,
-    enabledEquipe: true,
     order: -2,
     options: [],
   },
@@ -55,8 +52,6 @@ export const SURVEY_IDENTITY_FIELDS: readonly CustomField[] = [
     helpText: '',
     required: true,
     enabled: true,
-    requiredEquipe: true,
-    enabledEquipe: true,
     order: -1,
     options: [],
   },
@@ -142,11 +137,9 @@ export function buildSurveySections(config: ClientFormConfig): SurveySection[] {
 
     sections.push({
       id: `perguntas-${bloco + 1}`,
-      title: blocos > 1 ? `Perguntas (${bloco + 1} de ${blocos})` : 'Perguntas',
+      title: blocos > 1 ? `Seus dados (${bloco + 1} de ${blocos})` : 'Seus dados',
       description:
-        bloco === 0
-          ? 'Responda com o que você pensa. Não há resposta certa.'
-          : 'Continuando.',
+        bloco === 0 ? 'Preencha os campos abaixo.' : 'Continuando.',
       fields,
     });
   }

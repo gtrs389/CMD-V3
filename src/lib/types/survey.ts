@@ -32,7 +32,7 @@ export interface SurveyConfig {
   updatedAt: IsoDate;
 }
 
-export const DEFAULT_SURVEY_TITLE = 'Questionário';
+export const DEFAULT_SURVEY_TITLE = 'Formulário 2';
 export const DEFAULT_SURVEY_SUCCESS = 'Obrigado por responder!';
 
 /** O que o ADMIN pode alterar. Tudo opcional: a tela envia so o que mudou. */

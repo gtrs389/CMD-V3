@@ -19,7 +19,7 @@ export async function POST() {
   try {
     const user = await requirePermission('survey.send');
     if (!user.candidateId || (user.role !== 'CANDIDATE' && user.role !== 'EQUIPE')) {
-      throw forbidden('Este perfil não tem link de questionário.');
+      throw forbidden('Este perfil não tem link do Formulário 2.');
     }
 
     const issued = await issueSurveyLink(user.id, user.id);

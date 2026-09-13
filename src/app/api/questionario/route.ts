@@ -16,7 +16,7 @@ import { getSurvey, listSurveyResponses } from '@/lib/server/survey.service';
 export async function GET() {
   try {
     const user = await requirePermission('survey.view');
-    if (!user.candidateId) throw forbidden('Este perfil não tem questionário.');
+    if (!user.candidateId) throw forbidden('Este perfil não tem Formulário 2.');
 
     const [survey, responses] = await Promise.all([
       getSurvey(user.candidateId),

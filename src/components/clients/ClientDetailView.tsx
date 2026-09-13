@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Building2,
-  ClipboardList,
   FileText,
   Image as ImageIcon,
   LayoutList,
@@ -24,9 +23,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
-import { FormBuilderPanel } from '@/components/fields/FormBuilderPanel';
+import { FormsPanel } from '@/components/fields/FormsPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
-import { SurveyPanel } from '@/components/survey/SurveyPanel';
 import { BannerTagModal } from './BannerTagModal';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
@@ -113,20 +111,15 @@ export function ClientDetailView({
   // Area interna do formulario: exclusiva do ADMIN, e sempre completa. Sem
   // as duas permissoes nao ha aba, cartao nem previa, a pagina recusa
   // `?aba=formulario` e a configuracao dos campos nem chega nesta resposta.
+  // Area de configuracao dos DOIS formularios do time: exclusiva do ADMIN
+  // geral, e sempre completa. Sem as duas permissoes nao ha aba, cartao nem
+  // previa, a pagina recusa `?aba=formulario` e a configuracao dos campos nem
+  // chega nesta resposta.
   const mostrarFormulario = can('form.view') && can('form.manage');
-
-  // Questionario: o ADMIN geral monta as perguntas; o Administrador do time
-  // apenas envia o link e le as respostas. As rotas conferem de novo.
-  const mostrarQuestionario = can('survey.view');
-  const podeMontarQuestionario = can('survey.manage');
 
   // Perfil sem acesso ao formulario nunca fica preso na aba: qualquer
   // tentativa cai na visao geral.
-  const abaAtiva: TabId =
-    (tab === 'formulario' && !mostrarFormulario) ||
-    (tab === 'questionario' && !mostrarQuestionario)
-      ? 'visao-geral'
-      : tab;
+  const abaAtiva: TabId = tab === 'formulario' && !mostrarFormulario ? 'visao-geral' : tab;
 
   if (loading) return <DetailSkeleton />;
 
@@ -176,16 +169,7 @@ export function ClientDetailView({
       ),
     },
     ...(mostrarFormulario
-      ? [{ id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> }]
-      : []),
-    ...(mostrarQuestionario
-      ? [
-          {
-            id: 'questionario',
-            label: 'Questionário',
-            icon: <ClipboardList className="size-4" />,
-          },
-        ]
+      ? [{ id: 'formulario', label: 'Formulários', icon: <FileText className="size-4" /> }]
       : []),
   ];
 
@@ -272,9 +256,9 @@ export function ClientDetailView({
               audiences={enderecosDeAcesso}
               generateButton={
                 podeGerenciarConvite ? (
-                  <GenerateClientInviteButton client={client} label="Link de cadastro" />
+                  <GenerateClientInviteButton client={client} label="Copiar link do Formulário 1" />
                 ) : (
-                  <GenerateInviteButton label="Link de cadastro" />
+                  <GenerateInviteButton label="Copiar link do Formulário 1" />
                 )
               }
             />
@@ -378,20 +362,7 @@ export function ClientDetailView({
 
       {mostrarFormulario ? (
         <TabPanel id="formulario" active={abaAtiva}>
-          <FormBuilderPanel client={client} members={memberList} />
-        </TabPanel>
-      ) : null}
-
-      {/* Questionario: a pesquisa que a equipe envia para outras pessoas.
-          Quem responde nao vira integrante e nao aparece na aba Equipe. */}
-      {mostrarQuestionario ? (
-        <TabPanel id="questionario" active={abaAtiva}>
-          <SurveyPanel
-            clientId={client.id}
-            canManage={podeMontarQuestionario}
-            teamName={client.name}
-            teamPhoto={client.photo}
-          />
+          <FormsPanel client={client} members={memberList} />
         </TabPanel>
       ) : null}
 

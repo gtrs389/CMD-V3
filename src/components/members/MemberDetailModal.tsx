@@ -254,10 +254,7 @@ export function MemberDetailModal({
                     <div key={field.id} className="grid gap-1 py-2.5 sm:grid-cols-3 sm:gap-3">
                       <dt className="text-sm text-ink-500 sm:col-span-1">
                         {field.label}
-                        {/* Desativado nos DOIS links (migration 025). Um
-                            campo que so um deles pede continua sendo um campo
-                            em uso — dize-lo desativado seria mentira. */}
-                        {!field.enabled && !field.enabledEquipe ? (
+                        {!field.enabled ? (
                           <span className="ml-1 text-xs text-ink-400">(desativado)</span>
                         ) : null}
                       </dt>

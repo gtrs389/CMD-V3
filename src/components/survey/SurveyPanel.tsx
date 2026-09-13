@@ -36,6 +36,8 @@ interface SurveyPanelProps {
   /** Nome e foto do time, usados na previa do construtor. */
   teamName?: string;
   teamPhoto?: string | null;
+  /** Desenha o botao de gerar o link. Falso quando ele ja vive no cabecalho. */
+  showGenerate?: boolean;
 }
 
 interface SurveyData {
@@ -48,6 +50,7 @@ export function SurveyPanel({
   canManage = false,
   teamName = '',
   teamPhoto = null,
+  showGenerate = true,
 }: SurveyPanelProps) {
   const loader = useCallback(async (): Promise<SurveyData> => {
     if (!clientId) return fetchOwnSurvey();
@@ -81,7 +84,7 @@ export function SurveyPanel({
         role="alert"
         className="rounded-card border border-danger-200 bg-danger-50 px-4 py-3 text-sm text-danger-700"
       >
-        <p>{error ?? 'Não foi possível carregar o questionário.'}</p>
+        <p>{error ?? 'Não foi possível carregar o Formulário 2.'}</p>
         <Button variant="secondary" size="sm" className="mt-3" onClick={reload}>
           Tentar novamente
         </Button>
@@ -91,9 +94,11 @@ export function SurveyPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <GenerateSurveyLinkButton clientId={clientId} />
-      </div>
+      {showGenerate ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <GenerateSurveyLinkButton clientId={clientId} />
+        </div>
+      ) : null}
 
       {canManage && clientId ? (
         <SurveyBuilderPanel

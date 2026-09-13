@@ -4,7 +4,6 @@ import type {
   CustomField,
   FieldOption,
   FieldType,
-  FormAudience,
   Member,
   SystemFieldKey,
 } from '@/lib/types';
@@ -180,10 +179,6 @@ export function createSystemFields(): CustomField[] {
     helpText: defaults.helpText,
     required: defaults.required,
     enabled: true,
-    // Os dois links nascem pedindo a mesma coisa. O ADMIN separa depois, se
-    // quiser: e ele quem decide o que cada link pergunta.
-    requiredEquipe: defaults.required,
-    enabledEquipe: true,
     order: index,
     // O vinculo nasce com as tres opcoes iniciais; os demais nao tem opcao.
     options: defaults.systemKey === 'relationship' ? defaultRelationshipOptions() : [],
@@ -220,8 +215,6 @@ export function createField(type: FieldType): CustomField {
     helpText: '',
     required: false,
     enabled: true,
-    requiredEquipe: false,
-    enabledEquipe: true,
     order: 0,
     options: type === 'select' || type === 'multiselect' ? [createOption(''), createOption('')] : [],
   };
@@ -298,71 +291,4 @@ export function countResponses(members: Member[], fieldId: string): number {
 
 export function canAddField(fields: CustomField[]): boolean {
   return fields.length < appConfig.limits.maxFieldsPerForm;
-}
-
-/* -------------------------------------------------------------------------
-   Os dois links de cadastro (migration 025)
-   ------------------------------------------------------------------------- */
-
-/**
- * O formulario COMO AQUELE LINK o apresenta.
- *
- * Cada campo guarda duas decisoes — uma para o link do Administrador do
- * time, outra para o link da equipe. Esta funcao resolve o par do publico
- * pedido e devolve uma configuracao comum, com `enabled` e `required` ja
- * decididos.
- *
- * E de proposito que o resultado seja uma `ClientFormConfig` igual a
- * qualquer outra: a validacao, o desenho dos campos, a revisao antes do
- * envio e a montagem do cadastro continuam sem saber que existem dois links.
- * A escolha acontece em um lugar so, na borda — em `getInviteContext`, que
- * conhece o dono do link.
- */
-export function formForAudience(
-  config: ClientFormConfig,
-  audience: FormAudience,
-): ClientFormConfig {
-  if (audience === 'CANDIDATE') return config;
-
-  return {
-    ...config,
-    fields: config.fields.map((field) => ({
-      ...field,
-      enabled: field.enabledEquipe,
-      required: field.requiredEquipe,
-    })),
-  };
-}
-
-/**
- * Escreve de volta a decisao de UM link, preservando a do outro.
- *
- * O construtor edita um link por vez: o que a tela devolve sao os campos com
- * `enabled`/`required` daquele publico. Aqui eles voltam para o par certo, e
- * o par do outro link permanece exatamente como estava — sem isso, abrir a
- * aba de um link e salvar apagaria os ajustes do outro.
- */
-export function applyAudience(
-  base: CustomField | undefined,
-  edited: CustomField,
-  audience: FormAudience,
-): CustomField {
-  if (audience === 'CANDIDATE') {
-    return {
-      ...edited,
-      requiredEquipe: base?.requiredEquipe ?? edited.required,
-      enabledEquipe: base?.enabledEquipe ?? edited.enabled,
-    };
-  }
-
-  return {
-    ...edited,
-    required: base?.required ?? edited.required,
-    // Campo criado dentro do link da equipe nasce DESLIGADO no outro: quem o
-    // adicionou estava montando um formulario so, e o outro link nao pode
-    // passar a pedir uma coisa que ninguem pediu ali.
-    enabled: base?.enabled ?? false,
-    requiredEquipe: edited.required,
-    enabledEquipe: edited.enabled,
-  };
 }

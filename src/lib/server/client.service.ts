@@ -9,7 +9,7 @@ import type {
   TeamPersonInput,
 } from '@/lib/types';
 import { appConfig } from '@/config/app.config';
-import { createSystemFields, formForAudience } from '@/lib/domain/form-config';
+import { createSystemFields } from '@/lib/domain/form-config';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
@@ -106,8 +106,6 @@ async function insertDefaultFields(clientId: string): Promise<FormFieldRow[]> {
       help_text: field.helpText,
       required: field.required,
       enabled: field.enabled,
-      required_equipe: field.required,
-      enabled_equipe: field.enabled,
       position: field.order,
       options: field.options,
     })),
@@ -326,7 +324,7 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
 
   const [fields, photo] = await Promise.all([loadFields([row.id]), signedUrl(row.photo_path)]);
 
-  const montado = toClient(row, {
+  const client = toClient(row, {
     fields: fields.get(row.id) ?? [],
     // O estado exibido e o do proprio link, ja cruzado com o interruptor da
     // operacao pelo mapeador. O prazo vem do banco, no horario do servidor.
@@ -339,20 +337,6 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
     photoUrl: photo,
     inviteToken: token,
   });
-
-  /**
-   * Cada link tem o proprio formulario (migration 025).
-   *
-   * A escolha acontece AQUI, e em nenhum outro lugar: o dono do link diz de
-   * qual dos dois formularios esta pagina e feita, e dali para frente tudo —
-   * validacao, desenho, revisao e gravacao — trabalha com uma configuracao
-   * comum, sem saber que existem dois. Link sem dono registrado cai no
-   * formulario do Administrador do time, que e o do proprio time.
-   */
-  const client = {
-    ...montado,
-    form: formForAudience(montado.form, resolved.owner?.role ?? 'CANDIDATE'),
-  };
 
   return {
     client,
@@ -677,10 +661,6 @@ async function syncFields(clientId: string, fields: CustomField[]): Promise<void
       // corpo da requisicao: o telefone e o que cria o acesso do integrante.
       required: LOCKED_REQUIRED.includes(systemKey ?? '') ? true : field.required,
       enabled: LOCKED_ENABLED.includes(systemKey ?? '') ? true : field.enabled,
-      // O mesmo campo no link da equipe (migration 025). A trava vale para
-      // os dois links pela mesma razao: sem telefone nao ha acesso.
-      required_equipe: LOCKED_REQUIRED.includes(systemKey ?? '') ? true : field.requiredEquipe,
-      enabled_equipe: LOCKED_ENABLED.includes(systemKey ?? '') ? true : field.enabledEquipe,
       position: index,
       options: field.options,
     };

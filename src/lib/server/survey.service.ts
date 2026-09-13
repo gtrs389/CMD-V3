@@ -98,9 +98,6 @@ function toSurveyField(row: SurveyFieldRow): CustomField {
     helpText: row.help_text,
     required: row.required,
     enabled: row.enabled,
-    // O questionario tem UM link so: nao ha publico para separar aqui.
-    requiredEquipe: row.required,
-    enabledEquipe: row.enabled,
     order: row.position,
     options: Array.isArray(row.options) ? row.options : [],
   };
@@ -170,7 +167,7 @@ export async function updateSurvey(
   if (input.active !== undefined) patch.survey_active = input.active;
   if (input.title !== undefined) {
     const titulo = input.title.trim();
-    if (!titulo) throw badRequest('O questionário precisa de um título.');
+    if (!titulo) throw badRequest('O Formulário 2 precisa de um título.');
     patch.survey_title = titulo;
   }
   if (input.introText !== undefined) patch.survey_intro_text = input.introText;
@@ -180,7 +177,7 @@ export async function updateSurvey(
 
   if (input.fields) {
     if (input.fields.some((field) => field.type === 'photo')) {
-      throw badRequest('O questionário não aceita perguntas com envio de imagem.');
+      throw badRequest('O Formulário 2 não aceita campos com envio de imagem.');
     }
     await persistFields(clientId, input.fields);
   }

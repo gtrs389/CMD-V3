@@ -26,13 +26,13 @@ interface GenerateSurveyLinkButtonProps {
  */
 export function GenerateSurveyLinkButton({
   clientId,
-  label = 'Link do questionário',
+  label = 'Copiar link do Formulário 2',
 }: GenerateSurveyLinkButtonProps) {
   return (
     <GenerateLinkButton
       label={label}
       buildPath={surveyPath}
-      successTitle="Link do questionário gerado"
+      successTitle="Link do Formulário 2 gerado"
       generate={() => generateSurveyLink(clientId)}
     />
   );

@@ -58,14 +58,14 @@ export function SurveySettingsCard({ survey, saving, onSave }: SurveySettingsCar
         </CardHeader>
         <CardBody>
           <Switch
-            label="Questionário ativo"
+            label="Formulário 2 ativo"
             description="Enquanto estiver desligado, o link não pode nem ser gerado."
             checked={survey.active}
             disabled={saving}
             onChange={(checked) =>
               onSave(
                 { active: checked },
-                checked ? 'Questionário ligado.' : 'Questionário desligado.',
+                checked ? 'Formulário 2 ligado.' : 'Formulário 2 desligado.',
               )
             }
           />
@@ -75,7 +75,7 @@ export function SurveySettingsCard({ survey, saving, onSave }: SurveySettingsCar
       <Card>
         <CardHeader>
           <div className="min-w-0">
-            <CardTitle>Textos do questionário</CardTitle>
+            <CardTitle>Textos do Formulário 2</CardTitle>
             <CardDescription>Aparecem na página pública de quem responde.</CardDescription>
           </div>
         </CardHeader>
@@ -138,7 +138,7 @@ export function SurveySettingsCard({ survey, saving, onSave }: SurveySettingsCar
           onClick={() =>
             onSave(
               { title, introText: intro, successMessage: success },
-              'Textos do questionário salvos.',
+              'Textos do Formulário 2 salvos.',
             )
           }
         >

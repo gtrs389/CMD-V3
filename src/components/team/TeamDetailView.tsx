@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { ClientOverviewPanel } from '@/components/clients/ClientOverviewPanel';
-import { GenerateInviteButton } from '@/components/clients/GenerateInviteButton';
+import { GenerateSurveyLinkButton } from '@/components/survey/GenerateSurveyLinkButton';
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { SurveyPanel } from '@/components/survey/SurveyPanel';
 import { useTeamOverview } from '@/hooks/use-team';
@@ -17,11 +17,12 @@ import { useTeamOverview } from '@/hooks/use-team';
 /**
  * As abas do integrante: o formulario e area interna do ADMIN.
  *
- * "Questionário" e diferente do formulario: e a pesquisa que o integrante
- * envia para outras pessoas. Ele nao monta as perguntas — quem monta e o
- * ADMIN geral —, apenas gera o link e le as respostas dos PROPRIOS links.
+ * "Formulário 2" e o formulario que ESTE lider envia adiante. Ele nao monta
+ * os campos — quem monta e o ADMIN geral —, apenas gera o link e le as
+ * respostas dos PROPRIOS links. Quem responde nao vira integrante, nao
+ * recebe acesso ao painel e nao ganha link proprio.
  */
-type TabId = 'visao-geral' | 'equipe' | 'questionario';
+type TabId = 'visao-geral' | 'equipe' | 'formulario-2';
 
 /**
  * Pagina do integrante da equipe.
@@ -77,8 +78,8 @@ export function TeamDetailView() {
       ),
     },
     {
-      id: 'questionario',
-      label: 'Questionário',
+      id: 'formulario-2',
+      label: 'Formulário 2',
       icon: <ClipboardList className="size-4" />,
     },
   ];
@@ -121,11 +122,12 @@ export function TeamDetailView() {
             </p>
           </div>
 
-          {/* Mesma logica da pagina do time: o link de cadastro vive no
-              cabecalho. Um clique gera e ja copia o link, sem mostrar o
-              endereco nem abrir outra tela. */}
+          {/* O lider envia o FORMULARIO 2, e so ele. O Formulario 1 e do
+              administrador do time: e por ele que o proprio lider entrou aqui,
+              e quem responde o 2 nao recebe acesso ao painel nem link
+              proprio. Por isso nao existe botao do Formulario 1 nesta tela. */}
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <GenerateInviteButton />
+            <GenerateSurveyLinkButton />
           </div>
         </div>
       </header>
@@ -154,9 +156,10 @@ export function TeamDetailView() {
       </TabPanel>
 
       {/* Sem `clientId`: a rota resolve o time pela sessao, e devolve apenas
-          as respostas que chegaram pelos links deste integrante. */}
-      <TabPanel id="questionario" active={tab}>
-        <SurveyPanel />
+          as respostas que chegaram pelos links deste lider. O botao de gerar
+          fica no cabecalho, entao aqui ele nao se repete. */}
+      <TabPanel id="formulario-2" active={tab}>
+        <SurveyPanel showGenerate={false} />
       </TabPanel>
     </div>
   );
