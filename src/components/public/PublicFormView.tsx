@@ -19,8 +19,10 @@ import { linkCode } from '@/lib/domain/link-code';
 import {
   CONSENT_KEY,
   completionPercent,
+  isFilled,
   missingRequired,
   toSubmission,
+  unlockedUpTo,
   visibleFields,
 } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
@@ -69,6 +71,23 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const [done, setDone] = useState(false);
   /** Link encerrado durante o preenchimento: o envio nao acontece. */
   const [expired, setExpired] = useState<'taken' | 'expired' | null>(null);
+  /**
+   * Zona e secao vieram da consulta eleitoral e nao se editam mais.
+   *
+   * Elas sao o que a Justica Eleitoral respondeu para aquele titulo: deixar
+   * a pessoa digitar por cima transformaria um dado conferido em um dado
+   * digitado, sem ninguem perceber a diferenca depois.
+   */
+  const [daConsulta, setDaConsulta] = useState({ zona: false, secao: false });
+  /**
+   * Campos em que a pessoa ja entrou.
+   *
+   * Existe por causa dos campos opcionais: eles nao se resolvem preenchendo
+   * — podem ficar vazios de proposito —, entao o que libera o proximo e ter
+   * passado por eles. Sem isso, um opcional vazio trancaria o formulario
+   * para sempre.
+   */
+  const [visitados, setVisitados] = useState<ReadonlySet<string>>(() => new Set());
   const submittedRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -85,6 +104,49 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   // continua sendo a validacao.
   const faltam = missingRequired(client.form, form.values);
 
+  /**
+   * Preenchimento na ordem, um campo por vez.
+   *
+   * A lista segue exatamente a ordem em que a tela desenha — as secoes, uma
+   * apos a outra. Um campo obrigatorio se resolve quando e preenchido; um
+   * opcional, quando e preenchido OU quando a pessoa passa por ele e segue
+   * em frente. So entao o proximo abre.
+   */
+  const ordemDaTela = useMemo(() => sections.flatMap((section) => section.fields), [sections]);
+  const posicao = useMemo(
+    () => new Map(ordemDaTela.map((field, index) => [field.id, index])),
+    [ordemDaTela],
+  );
+  const liberadoAte = unlockedUpTo(
+    ordemDaTela,
+    (field) => isFilled(form.values[field.id]) || (!field.required && visitados.has(field.id)),
+  );
+
+  /** Marca que a pessoa entrou no campo. Repetir nao recria o conjunto. */
+  function visitar(fieldId: string) {
+    setVisitados((atual) => {
+      if (atual.has(fieldId)) return atual;
+      const proximo = new Set(atual);
+      proximo.add(fieldId);
+      return proximo;
+    });
+  }
+
+  /**
+   * Campo fechado porque a consulta eleitoral ja respondeu por ele.
+   *
+   * Zona e secao sao o que a Justica Eleitoral devolveu para aquele titulo.
+   * Deixar digitar por cima transformaria um dado conferido em um dado
+   * digitado, e depois ninguem distinguiria os dois.
+   */
+  const daJusticaEleitoral = (field: (typeof ordemDaTela)[number]): boolean =>
+    (field.systemKey === 'zone' && daConsulta.zona) ||
+    (field.systemKey === 'section' && daConsulta.secao);
+
+  /** Campo ainda trancado pela ordem, ou fechado pela consulta eleitoral. */
+  const bloqueado = (field: (typeof ordemDaTela)[number]): boolean =>
+    daJusticaEleitoral(field) || (posicao.get(field.id) ?? 0) > liberadoAte;
+
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
   const phoneFieldId = allFields.find((field) => field.systemKey === 'phone')?.id;
   const zoneFieldId = allFields.find((field) => field.systemKey === 'zone')?.id;
@@ -98,6 +160,11 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
     onZonaSecaoFilled: (zona, secao) => {
       if (zoneFieldId) setValue(zoneFieldId, zona ?? '');
       if (sectionFieldId) setValue(sectionFieldId, secao ?? '');
+      // Cada um tranca por si: a consulta pode devolver a zona e nao a
+      // secao, e trancar a secao vazia deixaria a pessoa sem saida. Sem
+      // resposta — ou quando a troca de CPF invalida o titulo — os campos
+      // voltam a ser dela.
+      setDaConsulta({ zona: Boolean(zona), secao: Boolean(secao) });
     },
   });
 
@@ -272,7 +339,11 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
               ganha ritmo e a pessoa enxerga o tamanho do que falta em vez de
               encarar uma folha unica e interminavel.
               Desktop: os mesmos blocos, sem cartao, como sempre foram. */}
-          <div className="mt-5 animate-rise space-y-4 lg:mt-6 lg:space-y-7">
+          <p className="mt-4 text-[0.8125rem] text-ink-500">
+            Preencha na ordem: o próximo campo abre quando você terminar o anterior.
+          </p>
+
+          <div className="mt-4 animate-rise space-y-4 lg:mt-5 lg:space-y-7">
             {sections.map((section, index) => (
               <PublicFormSection
                 key={section.id}
@@ -284,13 +355,27 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                 values={form.values}
               >
                 {section.fields.map((field) => (
-                  <div key={field.id} className={isWideField(field) ? 'sm:col-span-2' : undefined}>
+                  <div
+                    key={field.id}
+                    // Captura no contorno do campo: vale para qualquer
+                    // controle dentro dele — caixa de texto, lista, cartao de
+                    // escolha ou envio de foto — sem cada um precisar avisar.
+                    onFocusCapture={() => visitar(field.id)}
+                    className={isWideField(field) ? 'sm:col-span-2' : undefined}
+                  >
                     <DynamicFieldInput
-                      field={field}
+                      field={
+                        daJusticaEleitoral(field)
+                          ? {
+                              ...field,
+                              helpText: 'Preenchido pela consulta do seu título de eleitor.',
+                            }
+                          : field
+                      }
                       idPrefix="publico"
                       variant="invite"
                       allowCamera
-                      disabled={submitting}
+                      disabled={submitting || bloqueado(field)}
                       value={form.values[field.id] ?? null}
                       error={form.errors[field.id]}
                       onChange={(value) => form.setValue(field.id, value)}
@@ -327,7 +412,9 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
                 <InvitePrivacyNotice
                   config={client.form}
                   accepted={form.values[CONSENT_KEY] === true}
-                  disabled={submitting}
+                  // O aceite e o ultimo passo: so abre com o formulario
+                  // inteiro preenchido.
+                  disabled={submitting || liberadoAte < ordemDaTela.length}
                   error={form.errors[CONSENT_KEY]}
                   onChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
                 />
