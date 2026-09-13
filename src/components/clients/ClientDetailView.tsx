@@ -63,10 +63,29 @@ export function ClientDetailView({
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
   const [tab, setTab] = useState<TabId>(initialTab ?? 'visao-geral');
+
   const [editing, setEditing] = useState(false);
   const [banner, setBanner] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
+  /**
+   * Aba pedida pelo endereco, depois que a pagina ja esta aberta.
+   *
+   * O mapa da visao geral leva para ESTA MESMA rota, so trocando o
+   * `?integrante=`. Como o componente continua montado, o `useState` acima
+   * ignora o novo valor inicial: a aba ficava na visao geral, o painel da
+   * equipe nem chegava a existir — `TabPanel` nao desenha aba inativa — e a
+   * ficha nunca abria. Era esse o "Ver ficha completa nao faz nada".
+   *
+   * O ajuste acontece durante a renderizacao, comparando com o ultimo valor
+   * visto, e nao em um efeito: assim a aba certa ja sai na primeira pintura,
+   * sem um quadro intermediario na aba errada.
+   */
+  const [abaDaUrl, setAbaDaUrl] = useState(initialTab);
+  if (initialTab !== abaDaUrl) {
+    setAbaDaUrl(initialTab);
+    if (initialTab) setTab(initialTab);
+  }
 
   const memberList = members ?? [];
 
@@ -351,6 +370,9 @@ export function ClientDetailView({
           members={memberList}
           loading={loadingMembers}
           openMemberId={initialMemberId}
+          // Fechou a ficha: o endereco volta a ser o do time. Assim, pedir a
+          // mesma ficha de novo muda a URL outra vez e ela reabre.
+          onDeepLinkClose={() => router.replace(`/candidatos/${clientId}`, { scroll: false })}
         />
       </TabPanel>
 

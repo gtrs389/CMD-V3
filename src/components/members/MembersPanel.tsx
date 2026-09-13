@@ -38,6 +38,15 @@ interface MembersPanelProps {
    * vez: fechar o dialogo nao reabre.
    */
   openMemberId?: string | null;
+  /**
+   * Avisa que a ficha aberta pelo endereco foi fechada.
+   *
+   * Serve para quem chamou limpar o `?integrante=` da barra de endereco.
+   * Sem isso, pedir a MESMA ficha de novo — clicar outra vez no mesmo pino
+   * do mapa — nao muda o endereco, o Next nao renderiza nada e o clique
+   * parece nao funcionar.
+   */
+  onDeepLinkClose?: () => void;
 }
 
 /**
@@ -49,6 +58,7 @@ export function MembersPanel({
   members,
   loading,
   openMemberId = null,
+  onDeepLinkClose,
 }: MembersPanelProps) {
   const toast = useToast();
   // Perfil somente leitura nao recebe as acoes. O servidor recusa do mesmo
@@ -65,8 +75,15 @@ export function MembersPanel({
   // chega da API ja vem limitado pela hierarquia, no servidor.
   const [recruiter, setRecruiter] = useState('todos');
   const [viewing, setViewing] = useState<Member | null>(null);
-  /** A ficha aberta pelo endereco so aparece ate ser fechada uma vez. */
-  const [deepLinkClosed, setDeepLinkClosed] = useState(false);
+  /**
+   * Ficha do endereco que a pessoa ja fechou.
+   *
+   * Guarda QUAL ficha foi fechada, e nao apenas que alguma foi: pedir a
+   * ficha de outra pessoa em seguida — outro pino do mapa, outro clique no
+   * rastreamento — precisa abrir de novo. Com um sim/nao, a segunda ficha
+   * nunca mais aparecia.
+   */
+  const [deepLinkClosed, setDeepLinkClosed] = useState<string | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
@@ -77,7 +94,7 @@ export function MembersPanel({
   // aparece assim que o integrante chega e some de vez quando o dialogo e
   // fechado.
   const deepLinkMember = useMemo(() => {
-    if (deepLinkClosed || !openMemberId) return null;
+    if (!openMemberId || deepLinkClosed === openMemberId) return null;
     return members.find((member) => member.id === openMemberId) ?? null;
   }, [deepLinkClosed, members, openMemberId]);
 
@@ -368,7 +385,8 @@ export function MembersPanel({
         member={shownMember}
         onClose={() => {
           setViewing(null);
-          setDeepLinkClosed(true);
+          setDeepLinkClosed(openMemberId);
+          if (openMemberId) onDeepLinkClose?.();
         }}
         onEdit={openEdit}
       />
