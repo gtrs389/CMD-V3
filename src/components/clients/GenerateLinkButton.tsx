@@ -1,14 +1,14 @@
 'use client';
 
 import { Check, Copy, Link2 } from 'lucide-react';
-import { useGenerateLinkFlow } from '@/hooks/use-generate-link';
+import { useGenerateLinkFlow, type GeneratedLink } from '@/hooks/use-generate-link';
 import { Button } from '@/components/ui/Button';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { Modal } from '@/components/ui/Modal';
 
 interface GenerateLinkButtonProps {
-  /** Gera (ou renova) o link e devolve o token novo, ou null se falhar. */
-  generate: () => Promise<string | null>;
+  /** Gera (ou renova) o link e devolve o endereco novo, ou null se falhar. */
+  generate: () => Promise<GeneratedLink | null>;
   label?: string;
   /** Caminho do link. O padrao e o do convite de cadastro. */
   buildPath?: (token: string) => string;

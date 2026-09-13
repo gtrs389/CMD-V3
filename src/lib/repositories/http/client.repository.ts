@@ -73,3 +73,23 @@ export function createHttpClientRepository(): ClientRepository {
     },
   };
 }
+
+/**
+ * Gera o link de cadastro do TIME e devolve o endereco pronto.
+ *
+ * O endereco vem montado do servidor, com o dominio publico: quem gera o
+ * link esta no painel, e o painel nao e o endereco que se divulga.
+ *
+ * Separada de `clientRepository` porque a interface do repositorio devolve
+ * o time, e aqui interessa tambem o endereco.
+ */
+export async function regenerateTeamInvite(
+  id: string,
+): Promise<{ client: Client; url: string | null }> {
+  const resposta = await api<{ client: Client; url: string | null }>(
+    `/api/clients/${id}/invite`,
+    { method: 'POST' },
+  );
+  notifyDataChanged();
+  return resposta;
+}

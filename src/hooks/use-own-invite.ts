@@ -7,6 +7,8 @@ import { api } from '@/lib/repositories/http/api';
 /** Resposta da rota ao gerar ou renovar o proprio link. */
 export interface IssuedOwnInvite {
   token: string;
+  /** Endereco completo, montado no servidor com o dominio publico. */
+  url?: string | null;
   issuedAt: string;
   expiresAt: string;
 }

@@ -387,6 +387,8 @@ export interface SettingsRow {
   team_invite_seconds: number;
   /** Destino de quem chega ao dominio publico sem link (migration 024). */
   public_redirect_url: string;
+  /** Endereco publico dos links enviados (migration 028). Vazio: deduzido. */
+  public_link_origin: string;
   updated_at: string;
 }
 

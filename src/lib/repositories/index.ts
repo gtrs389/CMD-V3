@@ -24,6 +24,7 @@ export {
   type InviteCpfLookup,
   type InviteTituloLookup,
 } from './http/public';
+export { regenerateTeamInvite } from './http/client.repository';
 export {
   fetchSurvey,
   updateSurvey,

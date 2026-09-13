@@ -1,6 +1,9 @@
+import type { NextRequest } from 'next/server';
 import { requirePermission } from '@/lib/server/guard';
 import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
 import { issuePersonalInvite } from '@/lib/server/invite.service';
+import { publicLink } from '@/lib/server/public-origin';
+import { invitePath } from '@/lib/utils/url';
 
 /**
  * Gera ou renova o PROPRIO link de recrutamento.
@@ -13,7 +16,7 @@ import { issuePersonalInvite } from '@/lib/server/invite.service';
  * Gerar um link novo revoga o anterior na hora, mesmo que ja esteja
  * reservado por alguem.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
     const user = await requirePermission('invite.renew');
     if (!user.candidateId || (user.role !== 'CANDIDATE' && user.role !== 'EQUIPE')) {
@@ -24,8 +27,11 @@ export async function POST() {
     const issued = await issuePersonalInvite(user.id, user.id);
 
     // O token vai uma unica vez, para a propria pessoa copiar e compartilhar.
+    // O endereco completo e montado AQUI, com o dominio publico: quem gera o
+    // link esta no painel, e o painel nao e o endereco que se divulga.
     return jsonOk({
       token: issued.token,
+      url: await publicLink(request, invitePath(issued.token)),
       issuedAt: issued.issuedAt,
       expiresAt: issued.expiresAt,
     });

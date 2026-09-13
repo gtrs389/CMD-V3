@@ -25,6 +25,13 @@ const MIN_GENERATING_MS = 700;
 
 export type GenerateLinkPhase = 'idle' | 'generating' | 'ready';
 
+/** O que a rota devolve: o endereco pronto e, como reserva, o token. */
+export interface GeneratedLink {
+  token: string;
+  /** Endereco completo, montado no servidor com o dominio publico. */
+  url?: string | null;
+}
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -32,13 +39,19 @@ function wait(ms: number): Promise<void> {
 }
 
 /**
- * Caminho do link a partir do token.
+ * Quem gera devolve o ENDERECO COMPLETO, montado no servidor.
  *
- * O padrao e o do convite de cadastro. O questionario passa o seu, porque e
- * OUTRO link, para outra tela: quem o responde nao vira integrante.
+ * O endereco nao pode sair do navegador: quem gera o link esta no painel, e
+ * o painel nao e o endereco que se divulga — o link sairia apontando para
+ * `painel.<dominio>`, onde a pessoa convidada cai na tela de saida. Quem
+ * conhece o dominio publico e o servidor.
+ *
+ * `buildPath` continua existindo como ultimo recurso: se a rota nao mandar
+ * o endereco, o link e montado com o da aba aberta, que e melhor do que
+ * nenhum.
  */
 export function useGenerateLinkFlow(
-  generate: () => Promise<string | null>,
+  generate: () => Promise<GeneratedLink | null>,
   buildPath: (token: string) => string = invitePath,
 ) {
   const toast = useToast();
@@ -55,16 +68,16 @@ export function useGenerateLinkFlow(
 
     const inicio = Date.now();
     try {
-      const token = await generate();
+      const gerado = await generate();
       await wait(Math.max(0, MIN_GENERATING_MS - (Date.now() - inicio)));
 
-      if (!token) {
+      if (!gerado) {
         toast.error('Não foi possível gerar o link. Tente novamente.');
         setPhase('idle');
         return;
       }
 
-      setUrl(`${window.location.origin}${buildPath(token)}`);
+      setUrl(gerado.url ?? `${window.location.origin}${buildPath(gerado.token)}`);
       setPhase('ready');
     } catch (error) {
       // Sem este `catch` a recusa do servidor virava rejeicao nao tratada: o

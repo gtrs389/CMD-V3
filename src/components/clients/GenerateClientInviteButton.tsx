@@ -1,7 +1,7 @@
 'use client';
 
 import type { Client } from '@/lib/types';
-import { clientRepository } from '@/lib/repositories';
+import { regenerateTeamInvite } from '@/lib/repositories';
 import { GenerateLinkButton } from './GenerateLinkButton';
 
 interface GenerateClientInviteButtonProps {
@@ -25,8 +25,8 @@ export function GenerateClientInviteButton({
     <GenerateLinkButton
       label={label}
       generate={async () => {
-        const updated = await clientRepository.regenerateInviteToken(client.id);
-        return updated.invite.token;
+        const { client: updated, url } = await regenerateTeamInvite(client.id);
+        return updated.invite.token ? { token: updated.invite.token, url } : null;
       }}
     />
   );

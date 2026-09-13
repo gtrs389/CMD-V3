@@ -17,7 +17,7 @@ import { badRequest } from './http';
  */
 
 const SETTINGS_COLUMNS =
-  'id,candidate_invite_seconds,team_invite_seconds,public_redirect_url,updated_at';
+  'id,candidate_invite_seconds,team_invite_seconds,public_redirect_url,public_link_origin,updated_at';
 
 /**
  * Endereco aceito como destino: absoluto e http(s).
@@ -98,26 +98,55 @@ export async function getPublicEntry(): Promise<PublicEntrySettings> {
 
   return {
     redirectUrl: row?.public_redirect_url ?? '',
+    linkOrigin: row?.public_link_origin ?? '',
     updatedAt: row?.updated_at ?? new Date().toISOString(),
   };
 }
 
-/** Grava o destino. Texto vazio desliga o redirecionamento. */
-export async function updatePublicEntry(redirectUrl: string): Promise<PublicEntrySettings> {
-  const destino = (redirectUrl ?? '').trim();
-  if (destino && !URL_ACEITA.test(destino)) {
-    throw badRequest('Informe um endereço completo, começando com http:// ou https://.');
+/** Endereco sem caminho: so esquema, dominio e, quando houver, porta. */
+const ORIGEM_ACEITA = /^https?:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?$/;
+
+export interface PublicEntryInput {
+  redirectUrl?: string;
+  linkOrigin?: string;
+}
+
+/**
+ * Grava a entrada pelo dominio publico.
+ *
+ * `redirectUrl` vazio desliga o redirecionamento; `linkOrigin` vazio manda
+ * deduzir o endereco dos links a partir do proprio painel.
+ */
+export async function updatePublicEntry(input: PublicEntryInput): Promise<PublicEntrySettings> {
+  const patch: Record<string, string> = { updated_at: new Date().toISOString() };
+
+  if (input.redirectUrl !== undefined) {
+    const destino = input.redirectUrl.trim();
+    if (destino && !URL_ACEITA.test(destino)) {
+      throw badRequest('Informe um endereço completo, começando com http:// ou https://.');
+    }
+    patch.public_redirect_url = destino;
+  }
+
+  if (input.linkOrigin !== undefined) {
+    // Sem barra no fim: o caminho do link e concatenado direto.
+    const origem = input.linkOrigin.trim().replace(/\/$/, '');
+    if (origem && !ORIGEM_ACEITA.test(origem)) {
+      throw badRequest('Informe apenas o endereço, como https://www.seudominio.com.br.');
+    }
+    patch.public_link_origin = origem;
   }
 
   const [row] = await updateRows<SettingsRow>(
     TABLES.settings,
     { id: 'eq.true' },
-    { public_redirect_url: destino, updated_at: new Date().toISOString() },
+    patch,
     SETTINGS_COLUMNS,
   );
 
   return {
-    redirectUrl: row?.public_redirect_url ?? destino,
+    redirectUrl: row?.public_redirect_url ?? '',
+    linkOrigin: row?.public_link_origin ?? '',
     updatedAt: row?.updated_at ?? new Date().toISOString(),
   };
 }
