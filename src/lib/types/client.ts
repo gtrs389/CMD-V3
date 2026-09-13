@@ -56,6 +56,14 @@ export interface TeamAccessLink {
   active: boolean;
   createdAt: IsoDate;
   rotatedAt: IsoDate | null;
+  /**
+   * Endereco completo, montado no SERVIDOR com o dominio publico.
+   *
+   * Montar no navegador punha ali o endereco da aba aberta — o painel, ou
+   * pior, o endereco exclusivo do ADMIN, que iria por WhatsApp em cada link
+   * copiado. Ausente apenas no repositorio local, sem servidor.
+   */
+  url?: string | null;
 }
 
 /** Os dois enderecos de um time, como o ADMIN geral os ve. */

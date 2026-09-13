@@ -10,7 +10,7 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
 } from '@/lib/auth/constants';
-import { isAdminHost } from '@/lib/domain/hosts';
+import { isAdminHost, servesAdminLogin } from '@/lib/domain/hosts';
 import { TABLES, type SessionRow, type UserRow } from '@/lib/supabase/tables';
 import { callFunction, deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
@@ -255,10 +255,15 @@ export async function purgeExpiredSessions(): Promise<void> {
 /**
  * Le a sessao atual a partir dos cookies da requisicao.
  *
- * Aqui tambem mora a regra do ENDERECO EXCLUSIVO DO ADMIN: naquele endereco,
- * uma sessao que nao seja do ADMIN geral simplesmente nao existe. A conta
- * continua valendo no endereco dela — o que muda e que este endereco nao
- * atende esse perfil.
+ * Aqui tambem mora a regra dos ENDERECOS, e ela vale nos dois sentidos:
+ *
+ *   - no endereco exclusivo do ADMIN, uma sessao que nao seja do ADMIN geral
+ *     simplesmente nao existe;
+ *   - fora dele, uma sessao do ADMIN geral tambem nao. O ADMIN entra por UM
+ *     endereco: deixar a sessao dele valer em `painel.` manteria de pe
+ *     exatamente o que a separacao veio desfazer.
+ *
+ * Nenhuma conta e derrubada: cada uma continua valendo no endereco dela.
  *
  * A conferencia fica NESTA funcao, e nao em cada tela, porque e por ela que
  * passam o layout do painel, todas as paginas e todas as rotas de API: uma
@@ -278,7 +283,10 @@ export async function currentUser(): Promise<SessionUser | null> {
   );
   if (!user) return null;
 
-  if (user.role !== 'ADMIN' && isAdminHost((await headers()).get('host'))) return null;
+  const host = (await headers()).get('host');
+
+  if (user.role === 'ADMIN' && !servesAdminLogin(host)) return null;
+  if (user.role !== 'ADMIN' && isAdminHost(host)) return null;
 
   return user;
 }

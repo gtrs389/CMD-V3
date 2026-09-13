@@ -13,13 +13,27 @@ import { useToast } from '@/components/ui/Toast';
  * Copiar nunca gera um link novo: o endereco exibido e sempre o que ja esta
  * valendo. So o ADMIN geral chega ate aqui.
  */
-export function TeamAccessLinkField({ token, label }: { token: string; label: string }) {
+export function TeamAccessLinkField({
+  token,
+  label,
+  url: doServidor,
+}: {
+  token: string;
+  label: string;
+  /**
+   * Endereco pronto, montado no servidor com o dominio publico.
+   *
+   * Sem ele o endereco da aba aberta vira o link — e a aba aberta e o
+   * painel. O caminho relativo continua como ultimo recurso.
+   */
+  url?: string | null;
+}) {
   const toast = useToast();
   const origin = useOrigin();
   const [copied, setCopied] = useState(false);
 
   const path = teamAccessPath(token);
-  const url = origin ? `${origin}${path}` : path;
+  const url = doServidor ?? (origin ? `${origin}${path}` : path);
 
   async function handleCopy() {
     const ok = await copyText(url);

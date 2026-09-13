@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   isAdminHost,
+  isAdminOnlyPath,
   isPanelHost,
   isPublicEntryPath,
   isPublicPath,
   publicHostFrom,
+  servesAdminLogin,
 } from '@/lib/domain/hosts';
 
 /**
@@ -198,5 +200,46 @@ describe('endereço público deduzido do painel', () => {
     expect(publicHostFrom('convitetimebezerra.com')).toBe(null);
     expect(publicHostFrom('localhost:3000')).toBe(null);
     expect(publicHostFrom(null)).toBe(null);
+  });
+});
+
+
+describe('porta de entrada do ADMIN geral', () => {
+  it('só existe no endereço exclusivo', () => {
+    // Digitar `painel.` e cair na tela de login do ADMIN e exatamente o que
+    // a separacao veio desfazer: e por ela que um ataque comeca, e aquele
+    // endereco e conhecido.
+    delete process.env.CMD_ADMIN_HOST;
+    delete process.env.CMD_PANEL_HOST;
+
+    expect(servesAdminLogin(ADMIN_HOST)).toBe(true);
+
+    expect(servesAdminLogin('painel.convitetimebezerra.com')).toBe(false);
+    expect(servesAdminLogin('www.convitetimebezerra.com')).toBe(false);
+    expect(servesAdminLogin(null)).toBe(false);
+  });
+
+  it('desenvolvimento e prévia continuam aceitando: é a saída de emergência', () => {
+    // Se o DNS do endereco exclusivo cair ou ainda nao estiver no ar, o
+    // endereco da propria publicacao continua aceitando o login do ADMIN.
+    delete process.env.CMD_ADMIN_HOST;
+
+    expect(servesAdminLogin('localhost:3000')).toBe(true);
+    expect(servesAdminLogin('cmd-git-branch-conta.vercel.app')).toBe(true);
+  });
+
+  it('reconhece os caminhos de e-mail e senha', () => {
+    expect(isAdminOnlyPath('/login')).toBe(true);
+    expect(isAdminOnlyPath('/login/')).toBe(true);
+    expect(isAdminOnlyPath('/api/auth/login')).toBe(true);
+    // Prefixo nao e pedaco de palavra: `/loginfalso` nao e a porta do ADMIN.
+    expect(isAdminOnlyPath('/loginfalso')).toBe(false);
+
+    // O resto do painel nao entra na lista: a sessao do ADMIN ja nao vale em
+    // outro endereco, e quem decide isso e o servidor, contra o banco.
+    expect(isAdminOnlyPath('/dashboard')).toBe(false);
+    expect(isAdminOnlyPath('/minha-mobilizacao')).toBe(false);
+    expect(isAdminOnlyPath('/api/auth/logout')).toBe(false);
+    expect(isAdminOnlyPath('/acesso/time/abc')).toBe(false);
   });
 });

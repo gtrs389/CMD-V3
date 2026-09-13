@@ -138,6 +138,42 @@ export function isPublicPath(pathname: string): boolean {
 }
 
 /**
+ * O endereco serve a porta de entrada do ADMIN geral?
+ *
+ * E-mail e senha sao so do ADMIN geral, e essa porta agora mora em UM
+ * endereco. Em `painel.` ela nao existe mais: quem digita aquele endereco
+ * nao pode cair na tela de login do ADMIN — e por ela que um ataque
+ * comeca, e aquele endereco e conhecido.
+ *
+ * Desenvolvimento e previa continuam servindo a porta. Alem de nao trancar
+ * quem testa, isso e a SAIDA DE EMERGENCIA: se o DNS do endereco exclusivo
+ * cair ou ainda nao estiver no ar, o endereco `*.vercel.app` da propria
+ * publicacao continua aceitando o login do ADMIN.
+ */
+export function servesAdminLogin(host: string | null | undefined): boolean {
+  const atual = normalize(host);
+  if (!atual) return false;
+  if (isLocalOrPreview(atual)) return true;
+  return isAdminHost(atual);
+}
+
+/**
+ * Caminhos que SO o endereco do ADMIN geral serve.
+ *
+ * Curta de proposito: sao as duas portas de e-mail e senha. O resto do
+ * painel do ADMIN nao precisa entrar aqui porque a sessao dele ja nao vale
+ * em outro endereco — e quem decide isso e o servidor, contra o banco, e
+ * nao esta lista.
+ */
+const ADMIN_ONLY_PREFIXES = ['/login', '/api/auth/login'] as const;
+
+export function isAdminOnlyPath(pathname: string): boolean {
+  return ADMIN_ONLY_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+/**
  * Portas de entrada de link enviado, que o endereco do ADMIN NAO serve.
  *
  * Link de cadastro, Formulario 2 e acesso do time pertencem ao dominio

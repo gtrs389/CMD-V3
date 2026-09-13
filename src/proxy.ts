@@ -2,11 +2,20 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { LOGIN_PATH, PROTECTED_PREFIXES, SESSION_COOKIE } from '@/lib/auth/constants';
 import {
   isAdminHost,
+  isAdminOnlyPath,
   isPanelHost,
   isPublicEntryPath,
   isPublicPath,
+  servesAdminLogin,
   PUBLIC_EXIT_PATH,
 } from '@/lib/domain/hosts';
+
+/** Manda para a saida que o ADMIN configurou, sem cache. */
+function paraSaida(request: NextRequest): NextResponse {
+  const saida = NextResponse.redirect(new URL(PUBLIC_EXIT_PATH, request.url), 307);
+  saida.headers.set('Cache-Control', 'no-store');
+  return saida;
+}
 
 /**
  * Duas decisoes tomadas antes de qualquer pagina ser desenhada.
@@ -45,18 +54,19 @@ export function proxy(request: NextRequest) {
   // link de cadastro colado neste endereco nao abre formulario nenhum — ele
   // pertence ao dominio publico, e e de la que as pessoas o recebem.
   if (isAdminHost(host) && isPublicEntryPath(pathname)) {
-    const saida = NextResponse.redirect(new URL(PUBLIC_EXIT_PATH, request.url), 307);
-    saida.headers.set('Cache-Control', 'no-store');
-    return saida;
+    return paraSaida(request);
   }
 
-  // 1b. Dominio publico: so as portas de entrada dos links enviados.
+  // 1b. A porta do ADMIN geral — e-mail e senha — existe em UM endereco. Em
+  // `painel.` e no dominio publico ela nao e servida: quem digita aqueles
+  // enderecos nao pode cair na tela de login do ADMIN.
+  if (isAdminOnlyPath(pathname) && !servesAdminLogin(host)) {
+    return paraSaida(request);
+  }
+
+  // 1c. Dominio publico: so as portas de entrada dos links enviados.
   if (!isPanelHost(host)) {
-    if (!isPublicPath(pathname)) {
-      const saida = NextResponse.redirect(new URL(PUBLIC_EXIT_PATH, request.url), 307);
-      saida.headers.set('Cache-Control', 'no-store');
-      return saida;
-    }
+    if (!isPublicPath(pathname)) return paraSaida(request);
     return NextResponse.next();
   }
 
@@ -69,6 +79,10 @@ export function proxy(request: NextRequest) {
   const hasCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
   if (!hasCookie) {
+    // Sem porta de login neste endereco, mandar para `/login` so trocaria um
+    // redirecionamento por outro: vai direto para a saida.
+    if (!servesAdminLogin(host)) return paraSaida(request);
+
     const url = request.nextUrl.clone();
     url.pathname = LOGIN_PATH;
     url.search = '';
