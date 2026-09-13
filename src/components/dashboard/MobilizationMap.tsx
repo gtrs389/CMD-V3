@@ -12,6 +12,7 @@ import {
   type MapOverviewPayload,
   type PollingPlacePin,
 } from '@/lib/domain/map-pin';
+import { MemberSheetModal } from './MemberSheetModal';
 import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
@@ -57,6 +58,14 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const { data, loading, error, reload } = useRepositoryQuery<MapOverviewPayload>(loader);
 
   const [openPlace, setOpenPlace] = useState<PollingPlacePin | null>(null);
+  /**
+   * Ficha aberta SOBRE o mapa.
+   *
+   * O pino e a lista da escola abrem a ficha aqui, e nao na pagina do time:
+   * sair do mapa custaria a posicao, o zoom, o filtro e a propria escola
+   * aberta — e a ficha e uma leitura rapida no meio da analise.
+   */
+  const [openMember, setOpenMember] = useState<string | null>(null);
 
   // Moradia continua sendo um pino por pessoa; local de votacao, um por escola.
   const pins = useMemo(
@@ -161,7 +170,12 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
         ) : (
           <>
             {/* O mapa fica sempre na tela, mesmo sem pino no filtro. */}
-            <MapCanvas pins={pins} places={places} onOpenPlace={setOpenPlace} />
+            <MapCanvas
+              pins={pins}
+              places={places}
+              onOpenPlace={setOpenPlace}
+              onOpenMember={setOpenMember}
+            />
 
             {pins.length === 0 && places.length === 0 ? (
               <p className="pointer-events-none absolute inset-x-3 top-3 z-[500] rounded-control border border-line bg-surface/95 px-3 py-2 text-center text-xs text-ink-700 shadow-card">
@@ -173,8 +187,16 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
       </div>
 
       {openPlace ? (
-        <PlaceMembersPanel place={openPlace} onClose={() => setOpenPlace(null)} />
+        <PlaceMembersPanel
+          place={openPlace}
+          onOpenMember={setOpenMember}
+          onClose={() => setOpenPlace(null)}
+        />
       ) : null}
+
+      {/* A ficha fica por cima de tudo: fechar devolve o mapa exatamente como
+          estava, com a escola ainda aberta se era de la que ela veio. */}
+      <MemberSheetModal memberId={openMember} onClose={() => setOpenMember(null)} />
     </section>
   );
 }

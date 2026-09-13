@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -189,7 +188,7 @@ function PinPhoto({ pin }: { pin: MapPin }) {
 }
 
 /** Cartao da pessoa. Telefone e e-mail so aparecem quando existem. */
-function PinDetails({ pin }: { pin: MapPin }) {
+function PinDetails({ pin, onOpenMember }: { pin: MapPin; onOpenMember: (memberId: string) => void }) {
   const local = [pin.place, pin.district].filter(Boolean).join(' - ');
   const municipio = [pin.city, pin.state].filter(Boolean).join('/');
 
@@ -211,18 +210,28 @@ function PinDetails({ pin }: { pin: MapPin }) {
 
         <p className="text-[0.6875rem] text-ink-500 italic">{precisionLabel(pin)}</p>
 
-        <Link
-          href={`/candidatos/${pin.clientId}?integrante=${pin.memberId}`}
+        {/* Abre a ficha SOBRE o mapa. Navegar para a pagina do time custava
+            a posicao, o zoom, o filtro e a escola aberta — e a ficha e uma
+            leitura rapida no meio da analise, nao um destino. */}
+        <button
+          type="button"
+          onClick={() => onOpenMember(pin.memberId)}
           className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-brand-700 hover:text-brand-800"
         >
           Ver ficha completa
-        </Link>
+        </button>
       </div>
     </div>
   );
 }
 
-function ClusterMarker({ cluster }: { cluster: PinCluster }) {
+function ClusterMarker({
+  cluster,
+  onOpenMember,
+}: {
+  cluster: PinCluster;
+  onOpenMember: (memberId: string) => void;
+}) {
   const map = useMap();
   const single = cluster.pins.length === 1 ? cluster.pins[0] : null;
 
@@ -240,7 +249,7 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
     return (
       <Marker position={[single.latitude, single.longitude]} icon={icon}>
         <Popup>
-          <PinDetails pin={single} />
+          <PinDetails pin={single} onOpenMember={onOpenMember} />
         </Popup>
       </Marker>
     );
@@ -260,7 +269,11 @@ function ClusterMarker({ cluster }: { cluster: PinCluster }) {
             {cluster.pins.length} integrantes neste ponto
           </p>
           {cluster.pins.map((pin) => (
-            <PinDetails key={`${pin.memberId}-${pin.locationKind}`} pin={pin} />
+            <PinDetails
+              key={`${pin.memberId}-${pin.locationKind}`}
+              pin={pin}
+              onOpenMember={onOpenMember}
+            />
           ))}
         </div>
       </Popup>
@@ -378,10 +391,13 @@ export default function MapCanvas({
   pins,
   places = [],
   onOpenPlace,
+  onOpenMember,
 }: {
   pins: MapPin[];
   places?: PollingPlacePin[];
   onOpenPlace?: (place: PollingPlacePin) => void;
+  /** Abre a ficha da pessoa sobre o mapa, sem sair dele. */
+  onOpenMember?: (memberId: string) => void;
 }) {
   const [zoom, setZoom] = useState(4);
   const clusters = useMemo(() => clusterPins(pins, zoom), [pins, zoom]);
@@ -406,7 +422,11 @@ export default function MapCanvas({
       <ZoomWatcher onChange={setZoom} />
 
       {clusters.map((cluster) => (
-        <ClusterMarker key={cluster.id} cluster={cluster} />
+        <ClusterMarker
+          key={cluster.id}
+          cluster={cluster}
+          onOpenMember={onOpenMember ?? (() => {})}
+        />
       ))}
 
       {places.map((place) => (

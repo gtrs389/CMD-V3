@@ -29,7 +29,11 @@ interface MemberDetailModalProps {
   client: Client;
   member: Member | null;
   onClose: () => void;
-  onEdit: (member: Member) => void;
+  /**
+   * Abre a edicao. Ausente esconde o botao: no mapa a ficha e leitura, e
+   * editar continua sendo da pagina do time.
+   */
+  onEdit?: (member: Member) => void;
 }
 
 /** Circulo colorido com o icone da opcao. */
@@ -157,7 +161,7 @@ export function MemberDetailModal({
           <Button variant="secondary" onClick={onClose}>
             Fechar
           </Button>
-          {podeEditar ? (
+          {podeEditar && onEdit ? (
             <Button
               onClick={() => {
                 onClose();

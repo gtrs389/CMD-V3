@@ -24,9 +24,12 @@ import { Skeleton } from '@/components/ui/Skeleton';
  */
 export function PlaceMembersPanel({
   place,
+  onOpenMember,
   onClose,
 }: {
   place: PollingPlacePin;
+  /** Abre a ficha da pessoa sobre o mapa, sem sair dele. */
+  onOpenMember: (memberId: string) => void;
   onClose: () => void;
 }) {
   const [term, setTerm] = useState('');
@@ -173,7 +176,7 @@ export function PlaceMembersPanel({
             <ul className="space-y-1.5">
               {data?.items.map((member) => (
                 <li key={member.memberId}>
-                  <PersonRow member={member} />
+                  <PersonRow member={member} onOpenMember={onOpenMember} />
                 </li>
               ))}
             </ul>
@@ -209,11 +212,20 @@ export function PlaceMembersPanel({
 }
 
 /** Uma pessoa. Sem telefone ou e-mail, a linha simplesmente nao aparece. */
-function PersonRow({ member }: { member: PlaceMember }) {
+function PersonRow({
+  member,
+  onOpenMember,
+}: {
+  member: PlaceMember;
+  onOpenMember: (memberId: string) => void;
+}) {
   return (
-    <a
-      href={`/candidatos/${member.clientId}?integrante=${member.memberId}`}
-      className="flex items-center gap-3 rounded-control border border-line p-2.5 transition-colors hover:bg-ink-50"
+    <button
+      type="button"
+      onClick={() => onOpenMember(member.memberId)}
+      // Abre a ficha sobre o mapa. Sair da tela custaria a posicao, o zoom, o
+      // filtro e esta propria escola aberta.
+      className="flex w-full items-center gap-3 rounded-control border border-line p-2.5 text-left transition-colors hover:bg-ink-50"
     >
       {member.photo ? (
         /* eslint-disable-next-line @next/next/no-img-element */
@@ -249,6 +261,6 @@ function PersonRow({ member }: { member: PlaceMember }) {
           </p>
         ) : null}
       </div>
-    </a>
+    </button>
   );
 }
