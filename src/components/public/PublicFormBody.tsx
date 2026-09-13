@@ -14,16 +14,18 @@ import type { DynamicFormState } from '@/components/form-renderer/use-dynamic-fo
 import { FieldHint, type FieldHintKind } from './FieldHint';
 import { InvitePrivacyNotice } from './InvitePrivacyNotice';
 import { PublicFormSection } from './PublicFormShell';
+import { isWideField } from './invite-sections';
 
 /**
- * O corpo do cadastro: as secoes, os campos e as regras de preenchimento.
+ * O corpo das telas de preenchimento: secoes, campos e regras.
  *
- * E UMA implementacao, usada pelo link publico e pelo cadastro manual do
- * painel. Os dois preenchem a MESMA ficha, entao precisam ter o mesmo
- * desenho e o mesmo comportamento: cartoes numerados por secao, contagem do
- * que ja foi preenchido, aviso em cada campo, preenchimento na ordem e o
- * aviso de privacidade no fim. Corrigir qualquer uma dessas coisas aqui
- * corrige nas duas telas.
+ * E UMA implementacao, usada pelo Formulario 1 (o link publico e o cadastro
+ * manual do painel) e pelo Formulario 2. As tres telas pedem que a pessoa
+ * preencha uma ficha, entao precisam do mesmo desenho e do mesmo
+ * comportamento: cartoes numerados por secao, contagem do que ja foi
+ * preenchido, aviso ao lado de cada campo, preenchimento na ordem — um campo
+ * por vez — e o aviso de privacidade no fim. Corrigir qualquer uma dessas
+ * coisas aqui corrige nas tres.
  *
  * O que e proprio de cada tela fica de fora e entra por propriedade: a
  * moldura (banner, coluna do convite, rodape fixo), o botao de envio e as
@@ -66,22 +68,6 @@ interface PublicFormBodyProps {
   onImageError?: (message: string) => void;
   /** Desenhado entre a frase de orientacao e a primeira secao. */
   children?: ReactNode;
-}
-
-/**
- * Campo que ocupa a linha inteira.
- *
- * Foto, nome, texto longo, vinculo, genero e escolhas multiplas pedem
- * largura total; os demais entram em duas colunas no desktop.
- */
-function isWideField(field: CustomField): boolean {
-  if (field.type === 'photo' || field.type === 'textarea') return true;
-  if (field.type === 'multiselect' || field.type === 'checkbox') return true;
-  return (
-    field.systemKey === 'name' ||
-    field.systemKey === 'gender' ||
-    field.systemKey === 'relationship'
-  );
 }
 
 export function PublicFormBody({

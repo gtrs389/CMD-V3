@@ -16,16 +16,10 @@ import { completionPercent, missingRequired } from '@/lib/validation/dynamic-for
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
-import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 import { InviteStateShell } from './InviteChrome';
-import {
-  PublicFormSection,
-  PublicFormShell,
-  PublicSuccessScreen,
-  focusFirstInvalid,
-} from './PublicFormShell';
-import { isWideField } from './invite-sections';
+import { PublicFormBody } from './PublicFormBody';
+import { PublicFormShell, PublicSuccessScreen, focusFirstInvalid } from './PublicFormShell';
 
 /**
  * Questionario publico.
@@ -292,36 +286,18 @@ function SurveyForm({ survey }: { survey: PublicSurvey }) {
       desktopAction={submitButton(false)}
       mobileAction={submitButton(true)}
     >
-      <form id="questionario-publico" ref={formRef} onSubmit={handleSubmit} noValidate>
-        <div className="mt-5 animate-rise space-y-4 lg:mt-6 lg:space-y-7">
-          {sections.map((section, index) => (
-            <PublicFormSection
-              key={section.id}
-              id={section.id}
-              index={index}
-              title={section.title}
-              description={section.description}
-              fields={section.fields}
-              values={form.values}
-            >
-              {section.fields.map((field) => (
-                <div key={field.id} className={isWideField(field) ? 'sm:col-span-2' : undefined}>
-                  <DynamicFieldInput
-                    field={field}
-                    idPrefix="questionario"
-                    variant="invite"
-                    allowCamera
-                    disabled={submitting}
-                    value={form.values[field.id] ?? null}
-                    error={form.errors[field.id]}
-                    onChange={(value) => form.setValue(field.id, value)}
-                  />
-                </div>
-              ))}
-            </PublicFormSection>
-          ))}
-        </div>
-      </form>
+      <PublicFormBody
+        config={config}
+        form={form}
+        sections={sections}
+        formId="questionario-publico"
+        idPrefix="questionario"
+        submitting={submitting}
+        onSubmit={handleSubmit}
+        formRef={formRef}
+        allowCamera
+        onImageError={(message) => toast.error(message)}
+      />
     </PublicFormShell>
   );
 }
