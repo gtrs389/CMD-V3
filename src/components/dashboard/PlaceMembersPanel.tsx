@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Phone, Search, X } from 'lucide-react';
 import type { PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
+import { PlaceSections } from './PlaceSections';
 import {
   estimatedVotes,
   voteBreakdown,
@@ -128,6 +129,8 @@ export function PlaceMembersPanel({
                 </div>
               ))}
             </dl>
+
+            <PlaceSections place={place} />
 
             <p className="mt-1 text-[0.6875rem] text-ink-500 italic">{ESTIMATED_VOTES_HINT}</p>
           </section>

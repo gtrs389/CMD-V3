@@ -16,6 +16,7 @@ import {
   type PinCluster,
 } from '@/lib/domain/map-pin';
 import { formatPhone } from '@/lib/utils/phone';
+import { PlaceSections } from './PlaceSections';
 import { formatNumber } from '@/lib/utils/text';
 import { initials } from '@/lib/utils/text';
 
@@ -320,6 +321,8 @@ function PlaceVotes({ place }: { place: PollingPlacePin }) {
           </div>
         ))}
       </dl>
+
+      <PlaceSections place={place} compact />
 
       <p className="mt-1 text-[0.625rem] text-ink-500 italic">{ESTIMATED_VOTES_HINT}</p>
     </section>
