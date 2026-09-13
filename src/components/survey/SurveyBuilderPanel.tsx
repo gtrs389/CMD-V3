@@ -1,0 +1,262 @@
+'use client';
+
+import { useState } from 'react';
+import { Copy, Lock } from 'lucide-react';
+import type { CustomField, SurveyConfig, SurveyConfigInput } from '@/lib/types';
+import { updateSurvey } from '@/lib/repositories';
+import {
+  copyFromRegistration,
+  SURVEY_IDENTITY_FIELDS,
+  toSurveyFormConfig,
+} from '@/lib/domain/survey-config';
+import { Button } from '@/components/ui/Button';
+import { Card, CardBody, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/Toast';
+import { FieldsBuilder } from '@/components/fields/FieldsBuilder';
+import { FormPreview } from '@/components/fields/FormPreview';
+import { SurveySettingsCard } from './SurveySettingsCard';
+
+/**
+ * Construtor do questionario do time.
+ *
+ * EXCLUSIVO DO ADMIN GERAL. A rota confere `survey.manage`, que nenhum outro
+ * perfil tem: esconder o painel nao protegeria nada sozinho.
+ *
+ * A edicao e literalmente a mesma do formulario de cadastro: `FieldsBuilder`
+ * traz as abas, a lista, o arrastar e soltar, as setas do celular, o editor
+ * de campo, a duplicacao e a confirmacao de exclusao; `FormPreview` traz a
+ * previa, desenhada com os mesmos componentes da tela publica. Nao existe um
+ * segundo construtor.
+ *
+ * O que e proprio daqui: o Formulario 2 aceita os MESMOS campos do
+ * Formulario 1 — foto, nome, telefone, CPF, endereco, vinculo —, mas nao faz
+ * consulta externa nenhuma. CPF e titulo mantem a mascara e a validacao de
+ * formato; a verificacao e o preenchimento automatico de zona e secao
+ * pertencem ao cadastro e continuam so la.
+ */
+
+interface SurveyBuilderPanelProps {
+  clientId: string;
+  teamName: string;
+  teamPhoto: string | null;
+  /** Campos do Formulario 1, para copiar de la como ponto de partida. */
+  registrationFields: readonly CustomField[];
+  survey: SurveyConfig;
+  /** Chamado depois de cada gravacao, com a configuracao ja atualizada. */
+  onChange: (survey: SurveyConfig) => void;
+  saving: boolean;
+  onSavingChange: (saving: boolean) => void;
+}
+
+export function SurveyBuilderPanel({
+  clientId,
+  teamName,
+  teamPhoto,
+  registrationFields,
+  survey,
+  onChange,
+  saving,
+  onSavingChange,
+}: SurveyBuilderPanelProps) {
+  const toast = useToast();
+  const [copiando, setCopiando] = useState(false);
+
+  async function persist(changes: SurveyConfigInput, message: string) {
+    onSavingChange(true);
+    try {
+      onChange(await updateSurvey(clientId, changes));
+      toast.success(message);
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Não foi possível salvar o Formulário 2.',
+      );
+    } finally {
+      onSavingChange(false);
+    }
+  }
+
+  return (
+    <FieldsBuilder
+      fields={survey.fields}
+      busy={saving}
+      onPersist={(next: CustomField[], message) => void persist({ fields: next }, message)}
+      lockedNotice={
+        <>
+          {/* Enquanto o ADMIN nao tiver os proprios campos de nome e
+              telefone, o Formulario 2 usa os fixos — sem eles nao ha como
+              saber de quem e a resposta. */}
+          {survey.fields.some((field) => field.systemKey === 'name') &&
+          survey.fields.some((field) => field.systemKey === 'phone') ? null : (
+            <IdentityNotice />
+          )}
+          <CopyFromRegistration
+            total={registrationFields.length}
+            atual={survey.fields.length}
+            saving={saving}
+            open={copiando}
+            onAsk={() => setCopiando(true)}
+            onCancel={() => setCopiando(false)}
+            onConfirm={() => {
+              setCopiando(false);
+              const { fields, leftOut } = copyFromRegistration(registrationFields);
+              void persist(
+                { fields },
+                leftOut.length > 0
+                  ? `${fields.length} ${fields.length === 1 ? 'campo copiado' : 'campos copiados'}. Fora: ${leftOut.join(', ')}.`
+                  : `${fields.length} ${fields.length === 1 ? 'campo copiado' : 'campos copiados'} do Formulário 1.`,
+              );
+            }}
+          />
+        </>
+      }
+      preview={
+        <FormPreview
+          config={toSurveyFormConfig(survey)}
+          teamName={teamName}
+          photo={teamPhoto}
+          subtitle={survey.title}
+          submitLabel="Enviar resposta"
+        />
+      }
+      settings={
+        <SurveySettingsCard
+          // Remonta a cada gravacao: o rascunho dos textos recomeca do que
+          // acabou de ser salvo, sem efeito de sincronizacao.
+          key={survey.updatedAt}
+          survey={survey}
+          saving={saving}
+          onSave={(changes, message) => void persist(changes, message)}
+        />
+      }
+      texts={{
+        noun: 'campo',
+        nounPlural: 'campos',
+        cardTitle: 'Campos do Formulário 2',
+        cardDescription: 'Arraste para reordenar no computador ou use as setas no celular.',
+        emptyTitle: 'Nenhum campo ainda',
+        emptyDescription:
+          'Sem pelo menos um campo ativo, o link do Formulário 2 não pode ser gerado.',
+        removeDescription: (label) =>
+          `O campo "${label}" sai do Formulário 2. As respostas já recebidas continuam guardadas.`,
+      }}
+      removeDetails={() => (
+        <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
+          Cada resposta guarda a própria cópia do texto do campo: excluir aqui não apaga nem
+          altera nada do que já foi respondido.
+        </p>
+      )}
+    />
+  );
+}
+
+/**
+ * Copia os campos do Formulario 1 como ponto de partida.
+ *
+ * Copiar NAO liga os dois formularios: depois disso, mexer em um nao toca no
+ * outro. Nome, telefone e foto nao vem junto — os dois primeiros ja sao
+ * campos fixos aqui, e o Formulario 2 nao recebe arquivo.
+ */
+function CopyFromRegistration({
+  total,
+  atual,
+  saving,
+  open,
+  onAsk,
+  onCancel,
+  onConfirm,
+}: {
+  total: number;
+  atual: number;
+  saving: boolean;
+  open: boolean;
+  onAsk: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="min-w-0">
+            <CardTitle>Começar a partir do Formulário 1</CardTitle>
+            <CardDescription>
+              Traz os campos do Formulário 1 para cá, na mesma ordem. É só um ponto de partida:
+              depois da cópia, mexer em um não altera o outro.
+            </CardDescription>
+          </div>
+          <Button variant="secondary" onClick={onAsk} disabled={saving || total === 0}>
+            <Copy aria-hidden="true" className="size-4" />
+            Copiar campos do Formulário 1
+          </Button>
+        </CardHeader>
+      </Card>
+
+      <ConfirmDialog
+        open={open}
+        title="Copiar campos do Formulário 1"
+        description={
+          atual > 0
+            ? `Os ${atual} ${atual === 1 ? 'campo atual' : 'campos atuais'} do Formulário 2 serão substituídos pelos do Formulário 1.`
+            : 'Os campos ativos do Formulário 1 serão copiados para o Formulário 2.'
+        }
+        confirmLabel="Copiar campos"
+        onCancel={onCancel}
+        onConfirm={onConfirm}
+        details={
+          <div className="space-y-2">
+            <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
+              Vêm todos os campos — foto, nome, telefone, CPF, endereço, vínculo e as perguntas —
+              na mesma ordem e com o mesmo obrigatório/opcional. Inclusive os desativados lá, que
+              chegam desativados aqui.
+            </p>
+            <p className="rounded-control bg-warning-50 p-3 text-sm text-warning-600">
+              O Formulário 2 não faz consulta externa: CPF e título de eleitor continuam com
+              máscara e validação de formato, mas sem a verificação que o Formulário 1 faz, e sem
+              o preenchimento automático de zona e seção.
+            </p>
+          </div>
+        }
+      />
+    </>
+  );
+}
+
+/**
+ * Os dois campos que sempre existem.
+ *
+ * Nome e telefone identificam a resposta e nao sao perguntas do ADMIN: nao
+ * ficam na lista, nao se excluem e nao se reordenam. Mostra-los assim evita
+ * a duvida de "por que nao consigo apagar" e de "preciso criar um campo de
+ * nome?".
+ */
+function IdentityNotice() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="min-w-0">
+          <CardTitle>Campos fixos</CardTitle>
+          <CardDescription>
+            Sempre aparecem primeiro, em toda resposta. Não podem ser editados nem excluídos.
+          </CardDescription>
+        </div>
+      </CardHeader>
+      <CardBody>
+        <ul className="flex flex-wrap gap-2">
+          {SURVEY_IDENTITY_FIELDS.map((field) => (
+            <li
+              key={field.id}
+              className="inline-flex items-center gap-1.5 rounded-pill border border-line bg-ink-50 px-3 py-1.5 text-[0.8125rem] font-medium text-ink-700"
+            >
+              <Lock aria-hidden="true" className="size-3.5 text-ink-400" />
+              {field.label}
+              <span className="text-danger-600">*</span>
+            </li>
+          ))}
+        </ul>
+      </CardBody>
+    </Card>
+  );
+}

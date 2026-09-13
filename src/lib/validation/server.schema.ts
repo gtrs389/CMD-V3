@@ -332,3 +332,95 @@ export type ClientCreateInput = z.infer<typeof clientCreateSchema>;
 export type FormUpdateInput = z.infer<typeof formUpdateSchema>;
 export type MemberCreateInput = z.infer<typeof memberCreateSchema>;
 export type PublicSubmissionInput = z.infer<typeof publicSubmissionSchema>;
+
+/* -------------------------------------------------------------------------
+   Questionario do time (migration 023)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Pergunta do questionario.
+ *
+ * Sem `systemKey` e sem o tipo `photo`: toda pergunta e livre, e o
+ * questionario nao recebe arquivo. O banco recusa `photo` de qualquer forma;
+ * aqui a recusa chega com mensagem legivel.
+ */
+const surveyFieldSchema = z.object({
+  id: z.string().min(1).max(64),
+  // Campo padrao correspondente (migration 026). No Formulario 2 ele decide
+  // apenas o desenho e a validacao — mascara, lista de genero e de UF, envio
+  // da foto. Nenhuma consulta externa e acionada.
+  systemKey: z.enum(SYSTEM_FIELD_KEYS).nullable().optional().default(null),
+  type: z.enum(FIELD_TYPES),
+  label: trimmed(80),
+  placeholder: trimmed(80),
+  helpText: trimmed(160),
+  required: z.boolean(),
+  enabled: z.boolean(),
+  order: z.number().int().min(0).max(999),
+  options: z.array(fieldOptionSchema).max(appConfig.limits.maxOptionsPerField),
+});
+
+/** Configuracao enviada pelo ADMIN geral. Tudo opcional: so o que mudou. */
+export const surveyUpdateSchema = z
+  .object({
+    active: z.boolean(),
+    title: z.string().trim().min(1, 'O Formulário 2 precisa de um título.').max(120),
+    introText: trimmed(2000),
+    successMessage: trimmed(400),
+    fields: z.array(surveyFieldSchema).max(appConfig.limits.maxFieldsPerForm),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+
+/**
+ * Valor de uma resposta do Formulario 2.
+ *
+ * Igual ao do cadastro, com uma diferenca: o texto pode ser uma imagem
+ * embutida (data URL) quando o campo e de foto. Por isso o limite de
+ * tamanho e o da imagem, e nao o de um texto comum — com 4.000 caracteres o
+ * envio de qualquer foto seria recusado antes de chegar ao servidor.
+ */
+const surveyValueSchema = z.union([
+  z.string().max(Math.ceil(appConfig.limits.maxStoredImageBytes * 1.4)),
+  z.number(),
+  z.boolean(),
+  z.array(z.string().max(200)).max(appConfig.limits.maxOptionsPerField),
+  z.null(),
+]);
+
+/**
+ * Resposta enviada pelo link publico.
+ *
+ * Nome e telefone de quem respondeu, e nada mais: o time, o remetente e o
+ * rotulo de cada campo sao resolvidos no servidor, a partir do token do
+ * link.
+ */
+export const surveyAnswerSchema = z.object({
+  name: z.string().trim().min(2, 'Informe seu nome.').max(120),
+  phone: z
+    .string()
+    .trim()
+    .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+  answers: z
+    .array(z.object({ fieldId: z.string().min(1).max(64), value: surveyValueSchema }))
+    .max(appConfig.limits.maxFieldsPerForm),
+});
+
+/**
+ * Destino de quem chega ao dominio publico sem um link valido.
+ *
+ * Vazio desliga o redirecionamento. Preenchido, tem de ser um endereco
+ * absoluto `http(s)`: qualquer outro esquema — `javascript:`, `data:` —
+ * viraria um redirecionamento perigoso em uma tela que qualquer pessoa
+ * abre. O banco confere de novo, no `check` da coluna.
+ */
+export const publicEntrySchema = z.object({
+  redirectUrl: z
+    .string()
+    .trim()
+    .max(2000)
+    .refine(
+      (value) => value === '' || /^https?:\/\/[^\s]+$/.test(value),
+      'Informe um endereço completo, começando com http:// ou https://.',
+    ),
+});

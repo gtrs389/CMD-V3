@@ -51,6 +51,26 @@ export interface PollingPlacePin {
   women: number;
   /** Outro, prefiro nao informar ou sem genero declarado. Fecha o total. */
   others: number;
+  /**
+   * A mesma estimativa, quebrada por zona e secao eleitoral.
+   *
+   * Uma escola atende varias secoes, e e a secao que decide onde cada
+   * cabine fica e quantos mesarios a campanha precisa. Sem essa quebra, o
+   * numero da escola nao diz onde a forca esta dentro dela.
+   *
+   * A soma das secoes fecha com o total: quem nao tem zona ou secao no
+   * cadastro entra em uma linha propria, em vez de sumir da conta.
+   */
+  sections: SectionVotes[];
+}
+
+/** Votos de uma secao eleitoral dentro de um local de votacao. */
+export interface SectionVotes {
+  /** Zona eleitoral do cadastro. Nulo quando nao foi informado. */
+  zone: string | null;
+  /** Secao eleitoral do cadastro. Nulo quando nao foi informada. */
+  section: string | null;
+  total: number;
 }
 
 /**
@@ -82,6 +102,46 @@ export function voteBreakdown(
     { label: 'Mulheres', value: place.women },
     { label: 'Não informado', value: place.others },
   ];
+}
+
+/** Rotulo da secao na tela. Sem zona nem secao, diz isso em vez de mentir. */
+export function sectionLabel(row: Pick<SectionVotes, 'zone' | 'section'>): string {
+  const partes: string[] = [];
+  if (row.zone) partes.push(`Zona ${row.zone}`);
+  if (row.section) partes.push(`Seção ${row.section}`);
+  return partes.length > 0 ? partes.join(' · ') : 'Sem zona/seção informada';
+}
+
+/**
+ * Chave de agrupamento de uma secao dentro da escola.
+ *
+ * Zona e secao sao guardadas como texto no cadastro, entao "07" e "7" sao a
+ * mesma secao escrita de dois jeitos. Sem normalizar, a mesma secao
+ * apareceria duas vezes na lista, com o voto dividido entre elas.
+ */
+export function sectionKey(row: Pick<SectionVotes, 'zone' | 'section'>): string {
+  const limpa = (value: string | null) => {
+    const texto = (value ?? '').trim().replace(/^0+(?=\d)/, '');
+    return texto || '-';
+  };
+  return `${limpa(row.zone)}/${limpa(row.section)}`;
+}
+
+/**
+ * As secoes de uma escola, da maior para a menor.
+ *
+ * Empate desempata pelo rotulo, para a lista nao trocar de ordem a cada
+ * leitura. A linha sem zona/secao vai sempre para o fim: ela e o resto, nao
+ * um resultado.
+ */
+export function sectionVotes(place: Pick<PollingPlacePin, 'sections'>): SectionVotes[] {
+  return [...place.sections].sort((a, b) => {
+    const semA = !a.zone && !a.section;
+    const semB = !b.zone && !b.section;
+    if (semA !== semB) return semA ? 1 : -1;
+    if (b.total !== a.total) return b.total - a.total;
+    return sectionLabel(a).localeCompare(sectionLabel(b), 'pt-BR', { numeric: true });
+  });
 }
 
 /** Chave de agrupamento: place_id, senao data_id, senao coordenada + titulo. */

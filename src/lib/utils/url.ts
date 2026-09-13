@@ -11,6 +11,16 @@ export function invitePath(token: string): string {
 }
 
 /**
+ * Caminho do link do questionario.
+ *
+ * Mesma disciplina do convite: so o token opaco. E um link diferente do de
+ * cadastro — quem o responde nao vira integrante.
+ */
+export function surveyPath(token: string): string {
+  return `/questionario/${token}`;
+}
+
+/**
  * Caminho do link de acesso dos administradores do time.
  *
  * Tambem carrega apenas um identificador opaco: nome, telefone e qualquer

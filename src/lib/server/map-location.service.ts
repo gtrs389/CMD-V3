@@ -13,6 +13,7 @@ import {
 import {
   genderBucket,
   pollingPlaceKey,
+  sectionKey,
   type MapOverviewPayload,
   type MapPin,
   type PlaceMember,
@@ -414,7 +415,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
       filters: { id: inFilter(locationIds) },
     }),
     selectRows<MemberRow>(TABLES.members, {
-      select: 'id,client_id,name,phone,gender,photo_path,street,district,city,state',
+      select: 'id,client_id,name,phone,gender,photo_path,street,district,city,state,zone,section',
       filters: { id: inFilter(memberIds) },
     }),
   ]);
@@ -503,6 +504,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
         men: 0,
         women: 0,
         others: 0,
+        sections: [],
       } satisfies PollingPlacePin);
 
     // Uma pessoa cadastrada que vota ali, um voto: e daqui que sai a
@@ -510,6 +512,19 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
     current.total += 1;
     // Genero declarado no cadastro; o que a consulta externa devolveu nao entra.
     current[genderBucket(member.gender)] += 1;
+
+    // A mesma estimativa, quebrada por secao. Zona e secao saem do CADASTRO,
+    // e nao do retorno da consulta: e o que a pessoa informou e confirmou.
+    // Quem nao tem os dois entra em uma linha propria, para a soma das
+    // secoes continuar fechando com o total da escola.
+    const zona = member.zone?.trim() || null;
+    const secao = member.section?.trim() || null;
+    const chaveSecao = sectionKey({ zone: zona, section: secao });
+    const secoes = current.sections;
+    const existente = secoes.find((row) => sectionKey(row) === chaveSecao);
+
+    if (existente) existente.total += 1;
+    else secoes.push({ zone: zona, section: secao, total: 1 });
 
     grouped.set(key, current);
   }

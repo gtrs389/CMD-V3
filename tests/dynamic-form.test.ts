@@ -181,6 +181,7 @@ describe('conversao para persistencia', () => {
       source: 'invite' as const,
       email: null,
       recruitedBy: null,
+    recruiterChange: null,
       access: 'NO_PHONE' as const,
     userId: null,
       createdAt: '2024-01-01T00:00:00.000Z',

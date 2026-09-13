@@ -21,6 +21,15 @@ import type { NextRequest, NextResponse } from 'next/server';
 
 export const CLAIM_COOKIE = 'cmd_convite';
 
+/**
+ * Reserva do questionario (migration 023).
+ *
+ * Cookie PROPRIO, e nao o mesmo do cadastro: os dois links podem estar
+ * abertos no mesmo navegador, e um segredo compartilhado faria a reserva de
+ * um derrubar a do outro. Mesmas regras, escopo separado.
+ */
+export const SURVEY_CLAIM_COOKIE = 'cmd_questionario';
+
 /** Segredo da reserva: 32 bytes aleatorios em base64url. */
 const SECRET_SHAPE = /^[A-Za-z0-9_-]{20,64}$/;
 
@@ -36,8 +45,11 @@ function sha256(value: string): string {
 }
 
 /** Le o segredo do cookie, ou cria um novo quando ausente ou malformado. */
-export function readOrCreateClaim(request: NextRequest): ClaimSecret {
-  const current = request.cookies.get(CLAIM_COOKIE)?.value;
+export function readOrCreateClaim(
+  request: NextRequest,
+  cookie: string = CLAIM_COOKIE,
+): ClaimSecret {
+  const current = request.cookies.get(cookie)?.value;
   if (current && SECRET_SHAPE.test(current)) {
     return { secret: current, hash: sha256(current), isNew: false };
   }
@@ -47,8 +59,11 @@ export function readOrCreateClaim(request: NextRequest): ClaimSecret {
 }
 
 /** Segredo que o navegador enviou, sem criar nenhum novo. */
-export function readClaim(request: NextRequest): ClaimSecret | null {
-  const current = request.cookies.get(CLAIM_COOKIE)?.value;
+export function readClaim(
+  request: NextRequest,
+  cookie: string = CLAIM_COOKIE,
+): ClaimSecret | null {
+  const current = request.cookies.get(cookie)?.value;
   if (!current || !SECRET_SHAPE.test(current)) return null;
   return { secret: current, hash: sha256(current), isNew: false };
 }
@@ -64,11 +79,12 @@ export function attachClaimCookie(
   response: NextResponse,
   secret: string,
   expiresAt: string,
+  cookie: string = CLAIM_COOKIE,
 ): void {
   const remaining = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
 
   response.cookies.set({
-    name: CLAIM_COOKIE,
+    name: cookie,
     value: secret,
     httpOnly: true,
     sameSite: 'lax',

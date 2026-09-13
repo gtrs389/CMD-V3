@@ -8,8 +8,23 @@ export type PendingConfirmation = { kind: 'cpf' | 'titulo'; value: string } | nu
 interface UseInviteVerificationOptions {
   /** Corrige o campo "Nome completo" silenciosamente, sem avisar a pessoa. */
   onNameCorrection: (nome: string) => void;
-  /** Preenche zona e secao com o que a consulta eleitoral devolveu. */
-  onZonaSecaoFilled: (zona: string | null, secao: string | null) => void;
+  /**
+   * Preenche zona e secao com o que a consulta eleitoral devolveu.
+   *
+   * `origem` distingue os dois motivos de chegar aqui vazio, que pedem
+   * tratamentos opostos na tela:
+   *
+   *   'consulta' a consulta ACONTECEU. Veio vazio significa que a Justica
+   *              Eleitoral nao respondeu aquele dado, e a pessoa precisa
+   *              digitar;
+   *   'reset'    a consulta anterior deixou de valer (a pessoa trocou o
+   *              CPF). Nao ha nada a dizer: os campos so voltam a ser dela.
+   */
+  onZonaSecaoFilled: (
+    zona: string | null,
+    secao: string | null,
+    origem: 'consulta' | 'reset',
+  ) => void;
 }
 
 /**
@@ -64,7 +79,7 @@ export function useInviteVerification({
           // deixam de valer ate a pessoa confirmar o titulo de novo.
           confirmedTituloRef.current = null;
           tseTokenRef.current = null;
-          onZonaSecaoFilled(null, null);
+          onZonaSecaoFilled(null, null, 'reset');
         }
 
         const result = await lookupInviteCpf(value).catch(() => ({
@@ -82,7 +97,7 @@ export function useInviteVerification({
           token: null,
         }));
         tseTokenRef.current = result.token;
-        onZonaSecaoFilled(result.zona, result.secao);
+        onZonaSecaoFilled(result.zona, result.secao, 'consulta');
       }
     } finally {
       setLoading(false);

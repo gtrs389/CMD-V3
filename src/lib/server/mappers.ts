@@ -176,6 +176,14 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
     consentAt: row.consent_at,
     source: row.source,
     recruitedBy: options.recruitedBy,
+    // Troca de responsavel (migration 027). Sem instante gravado, o cadastro
+    // continua com quem o recebeu.
+    recruiterChange: row.recruiter_changed_at
+      ? {
+          changedAt: row.recruiter_changed_at,
+          previousName: row.recruiter_previous_name,
+        }
+      : null,
     access: options.access,
     userId: options.userId,
     createdAt: row.created_at,

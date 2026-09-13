@@ -60,6 +60,17 @@ export interface PublicInviteOwner {
  * Dois prazos independentes, em segundos. Somente o ADMIN le e altera; a
  * conversao para intervalo acontece no banco, a partir do inteiro.
  */
+/**
+ * Destino de quem chega ao dominio publico sem um link valido.
+ *
+ * Vazio significa "nao configurado": a pessoa ve apenas um aviso neutro,
+ * sem login e sem nada que identifique o sistema.
+ */
+export interface PublicEntrySettings {
+  redirectUrl: string;
+  updatedAt: IsoDate;
+}
+
 export interface InviteExpirationSettings {
   candidateSeconds: number;
   teamSeconds: number;

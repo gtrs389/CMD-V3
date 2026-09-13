@@ -515,6 +515,28 @@ export function filledCount(fields: CustomField[], values: DynamicFormValues): n
  * Numero de leitura, para a pessoa saber quanto falta. Quem decide se o
  * envio e aceito continua sendo a validacao, no envio.
  */
+/**
+ * Ate onde o preenchimento esta liberado.
+ *
+ * O formulario publico e preenchido NA ORDEM, um campo por vez: o proximo so
+ * abre quando o anterior ja foi resolvido. O corte e o PRIMEIRO campo ainda
+ * nao resolvido — quem decide o que conta como resolvido e quem chama, pela
+ * funcao `isResolved`, porque um campo obrigatorio so se resolve
+ * preenchendo, e um opcional tambem se resolve ao ser dispensado.
+ *
+ * Devolve o indice do ultimo campo liberado. Com tudo resolvido, devolve o
+ * tamanho da lista: nada fica travado.
+ *
+ * `fields` precisa estar na MESMA ordem em que a tela desenha.
+ */
+export function unlockedUpTo(
+  fields: readonly CustomField[],
+  isResolved: (field: CustomField) => boolean,
+): number {
+  const travado = fields.findIndex((field) => !isResolved(field));
+  return travado === -1 ? fields.length : travado;
+}
+
 export function missingRequired(config: ClientFormConfig, values: DynamicFormValues): number {
   const faltando = visibleFields(config).filter(
     (field) => field.required && !isFilled(values[field.id]),

@@ -1,7 +1,7 @@
 'use client';
 
 import { Smartphone } from 'lucide-react';
-import type { Client } from '@/lib/types';
+import type { ClientFormConfig } from '@/lib/types';
 import { visibleFields, CONSENT_KEY } from '@/lib/validation/dynamic-form';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -11,17 +11,32 @@ import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 
 interface FormPreviewProps {
-  client: Client;
+  /** Configuracao a desenhar: a do cadastro ou a do questionario. */
+  config: ClientFormConfig;
+  teamName: string;
+  photo: string | null;
+  /** Linha abaixo do nome do time. Diz o que a pessoa esta preenchendo. */
+  subtitle?: string;
+  submitLabel?: string;
 }
 
 /**
  * Pre-visualizacao fiel do formulario publico.
- * Usa exatamente os mesmos componentes da pagina de convite.
+ *
+ * Usa exatamente os mesmos componentes da pagina publica, e serve aos dois
+ * construtores: o do cadastro e o do questionario. O que muda entre eles e
+ * so a configuracao recebida e os rotulos.
  */
-export function FormPreview({ client }: FormPreviewProps) {
-  const form = useDynamicForm(client.form);
-  const fields = visibleFields(client.form);
-  const { privacy } = client.form;
+export function FormPreview({
+  config,
+  teamName,
+  photo,
+  subtitle = 'Cadastro de equipe',
+  submitLabel = 'Enviar cadastro',
+}: FormPreviewProps) {
+  const form = useDynamicForm(config);
+  const fields = visibleFields(config);
+  const { privacy } = config;
 
   return (
     <div className="space-y-3">
@@ -33,15 +48,15 @@ export function FormPreview({ client }: FormPreviewProps) {
       <div className="mx-auto w-full max-w-md rounded-card border border-line bg-surface-muted p-3 sm:p-4">
         <div className="rounded-control bg-surface p-4 shadow-card">
           <div className="flex items-center gap-3 border-b border-line pb-4">
-            <Avatar name={client.name} src={client.photo} size="md" />
+            <Avatar name={teamName} src={photo} size="md" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-ink-900">{client.name}</p>
-              <p className="truncate text-xs text-ink-500">Cadastro de equipe</p>
+              <p className="truncate text-sm font-semibold text-ink-900">{teamName}</p>
+              <p className="truncate text-xs text-ink-500">{subtitle}</p>
             </div>
           </div>
 
-          {client.form.introText ? (
-            <p className="mt-4 text-sm text-ink-700">{client.form.introText}</p>
+          {config.introText ? (
+            <p className="mt-4 text-sm whitespace-pre-line text-ink-700">{config.introText}</p>
           ) : null}
 
           <div className="mt-4 space-y-4">
@@ -75,7 +90,7 @@ export function FormPreview({ client }: FormPreviewProps) {
             ) : null}
 
             <Button fullWidth size="lg" onClick={() => form.validate()}>
-              Enviar cadastro
+              {submitLabel}
             </Button>
 
             <p className="text-center text-xs text-ink-500">

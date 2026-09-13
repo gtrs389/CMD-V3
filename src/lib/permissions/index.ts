@@ -46,6 +46,17 @@ export const PERMISSIONS = [
   'settings.manage',
   /** Envio pelo link publico: nao exige autenticacao. */
   'invite.submit',
+  /**
+   * Questionario do time (migration 023). Formulario proprio, separado do
+   * cadastro: quem responde nao vira integrante.
+   *
+   * `survey.view`   ve a area do questionario e as respostas recebidas;
+   * `survey.manage` monta as perguntas — exclusivo do ADMIN geral;
+   * `survey.send`   gera o proprio link de uso unico para enviar.
+   */
+  'survey.view',
+  'survey.manage',
+  'survey.send',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -68,16 +79,27 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
   'invite.view',
   'invite.renew',
   'invite.submit',
+  'survey.view',
+  'survey.send',
 ];
 
 /**
- * Time: leitura apenas, e sempre da propria operacao.
+ * Time: a propria operacao, com um unico poder de escrita.
  *
  * Enxerga toda a equipe, em qualquer nivel, porque o vinculo e o time.
  *
- * A area interna do formulario e do ADMIN: sem `form.view` o time nao
- * ve aba, cartao, contagem de campos nem previa, e a configuracao dos campos
- * nao chega nem ao navegador.
+ * `member.create` existe porque nem toda pessoa se cadastra sozinha pelo
+ * link: o Administrador do time precisa poder registrar alguem a mao, ali
+ * na frente dele. O cadastro fica com o nome dele em "Cadastrado por", como
+ * qualquer outro, e o alcance continua sendo so o proprio time —
+ * `requireClientAccess` confere as duas coisas.
+ *
+ * Editar e excluir integrante continuam fora: corrigir um cadastro alheio e
+ * apagar historico sao decisoes do ADMIN.
+ *
+ * A area interna do formulario tambem e do ADMIN: sem `form.view` o time nao
+ * ve aba, cartao nem previa. O que ele recebe do formulario e apenas o
+ * necessario para PREENCHER o cadastro manual — ver `form-visibility.ts`.
  *
  * O mapa entra apenas como leitura: `map.view` mostra os cadastros da
  * propria operacao — o servidor forca esse recorte, o `clientId` da URL nao
@@ -88,9 +110,12 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
   'client.view',
   'member.view',
+  'member.create',
   'invite.view',
   'invite.renew',
   'map.view',
+  'survey.view',
+  'survey.send',
 ];
 
 const MATRIX: Record<Role, readonly Permission[]> = {

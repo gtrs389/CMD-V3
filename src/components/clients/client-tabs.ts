@@ -6,6 +6,11 @@
  * exportada de um modulo cliente nao pode ser chamada no servidor.
  *
  * O convite deixou de ser aba: o link de cadastro abre em dialogo.
+ *
+ * A aba "Formulário" configura OS DOIS formularios do time — o 1, que o
+ * administrador envia para quem sera lider, e o 2, que o lider envia
+ * adiante. Eles nao viram abas separadas: e o mesmo lugar de configuracao,
+ * com a troca entre um e outro la dentro.
  */
 
 export const TAB_IDS = ['visao-geral', 'equipe', 'formulario'] as const;

@@ -32,6 +32,10 @@ export const TABLES = {
   inviteAccessDevices: 'cmd_invite_access_devices',
   inviteGenerations: 'cmd_invite_generations',
   inviteClickAttempts: 'cmd_invite_click_attempts',
+  surveyFields: 'cmd_survey_fields',
+  surveyInvites: 'cmd_survey_invites',
+  surveyResponses: 'cmd_survey_responses',
+  surveyResponseValues: 'cmd_survey_response_values',
 } as const;
 
 export interface UserRow {
@@ -129,6 +133,12 @@ export interface ClientRow {
   banner_tag_top: number;
   banner_tag_size: number;
   banner_tag_color: string;
+  /** Questionario do time (migration 023). Formulario proprio, separado do cadastro. */
+  survey_active: boolean;
+  survey_title: string;
+  survey_intro_text: string;
+  survey_success_message: string;
+  survey_updated_at: string;
   form_updated_at: string;
   created_at: string;
   updated_at: string;
@@ -148,6 +158,78 @@ export interface FormFieldRow {
   options: { id: string; label: string }[];
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Pergunta do questionario do time (migration 023).
+ *
+ * Mesma forma de `FormFieldRow`, sem `system_key`: toda pergunta e livre. O
+ * tipo `photo` e recusado pelo banco — o questionario nao recebe arquivo.
+ */
+export interface SurveyFieldRow {
+  id: string;
+  client_id: string;
+  /** Campo padrao correspondente (migration 026). Nulo em campo livre. */
+  system_key: SystemFieldKey | null;
+  type: FieldType;
+  label: string;
+  placeholder: string;
+  help_text: string;
+  required: boolean;
+  enabled: boolean;
+  position: number;
+  options: { id: string; label: string }[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** Link de uso unico do questionario, um por usuario (migration 023). */
+export interface SurveyInviteRow {
+  id: string;
+  client_id: string;
+  user_id: string | null;
+  owner_name: string | null;
+  owner_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  generated_by_user_id: string | null;
+  generated_by_name: string | null;
+  generated_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  token: string | null;
+  token_hash: string;
+  active: boolean;
+  status: 'ACTIVE' | 'CLAIMED' | 'SUBMITTING' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
+  generation: number;
+  issued_at: string;
+  expires_at: string;
+  claim_hash: string | null;
+  claimed_at: string | null;
+  consumed_at: string | null;
+  response_id: string | null;
+  created_at: string;
+}
+
+/** Resposta de quem respondeu o questionario. Nunca e um integrante. */
+export interface SurveyResponseRow {
+  id: string;
+  client_id: string;
+  invite_id: string | null;
+  sender_user_id: string | null;
+  sender_name: string | null;
+  sender_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  name: string;
+  phone: string;
+  answered_at: string;
+  created_at: string;
+}
+
+/** Um valor respondido, com o rotulo e o tipo copiados do envio. */
+export interface SurveyResponseValueRow {
+  id: string;
+  response_id: string;
+  field_id: string | null;
+  field_label: string;
+  field_type: FieldType;
+  position: number;
+  value: FieldValue;
 }
 
 export interface MemberRow {
@@ -179,13 +261,22 @@ export interface MemberRow {
   consent_privacy_version: string | null;
   source: 'invite' | 'admin';
   /**
-   * Origem imutavel do cadastro (migration 012). O identificador vira nulo
-   * se o responsavel for excluido; o snapshot permanece, para o historico
+   * Responsavel pelo cadastro (migration 012). O identificador vira nulo se
+   * o responsavel for excluido; o snapshot permanece, para o historico
    * continuar existindo.
+   *
+   * Deixou de ser imutavel na migration 027: o ADMIN geral pode passar um
+   * cadastro para outro responsavel, e a troca fica registrada nas tres
+   * colunas abaixo. O historico dos LINKS nao muda — em cmd_invite_events
+   * continua registrado por qual link a pessoa entrou.
    */
   recruited_by_user_id: string | null;
   recruited_by_name: string | null;
   recruited_by_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
+  /** Ultima troca de responsavel (migration 027). Nulo enquanto nao houve. */
+  recruiter_changed_at: string | null;
+  recruiter_changed_by: string | null;
+  recruiter_previous_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -294,6 +385,8 @@ export interface SettingsRow {
   id: boolean;
   candidate_invite_seconds: number;
   team_invite_seconds: number;
+  /** Destino de quem chega ao dominio publico sem link (migration 024). */
+  public_redirect_url: string;
   updated_at: string;
 }
 

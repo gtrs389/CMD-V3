@@ -1,8 +1,8 @@
 'use client';
 
-import { Undo2 } from 'lucide-react';
+import { PencilLine, Undo2 } from 'lucide-react';
 import type { CustomField } from '@/lib/types';
-import { OTHER_OPTION, withCurrentValue } from '@/lib/domain/location';
+import { withCurrentValue } from '@/lib/domain/location';
 import { Input } from '@/components/ui/Input';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { useLocationChain, type LocationKey } from './location-context';
@@ -16,11 +16,15 @@ interface LocationFieldProps {
 }
 
 /** Textos de cada passo, para nao repetir rotulo em quatro lugares. */
-const TEXTS: Record<LocationKey, { placeholder: string; search: string; other: string; hint: string; manual: string }> = {
+const TEXTS: Record<
+  LocationKey,
+  { placeholder: string; search: string; other: string; notFound: string; hint: string; manual: string }
+> = {
   city: {
     placeholder: 'Selecione seu município...',
     search: 'Buscar município',
     other: 'Outro município',
+    notFound: 'Não encontrei meu município',
     hint: 'Escolha o estado primeiro',
     manual: 'Digite o município',
   },
@@ -28,6 +32,7 @@ const TEXTS: Record<LocationKey, { placeholder: string; search: string; other: s
     placeholder: 'Selecione seu bairro...',
     search: 'Buscar bairro',
     other: 'Outro bairro',
+    notFound: 'Não encontrei meu bairro',
     hint: 'Escolha o município primeiro',
     manual: 'Digite o bairro',
   },
@@ -35,6 +40,7 @@ const TEXTS: Record<LocationKey, { placeholder: string; search: string; other: s
     placeholder: 'Selecione sua rua...',
     search: 'Buscar rua',
     other: 'Outra rua',
+    notFound: 'Não encontrei minha rua',
     hint: 'Escolha o bairro primeiro',
     manual: 'Digite a rua',
   },
@@ -44,8 +50,14 @@ const TEXTS: Record<LocationKey, { placeholder: string; search: string; other: s
  * Estado, Municipio, Bairro e Rua encadeados.
  *
  * O que e gravado nao muda: sigla da UF e os nomes. Valores antigos que a API
- * nao conhece mais seguem visiveis, e a opcao "Outro" permite digitar quando a
- * lista nao tem a localidade (ou nem existe lista).
+ * nao conhece mais seguem visiveis, e sempre existe um caminho para digitar
+ * quando a lista nao tem a localidade (ou nem existe lista).
+ *
+ * Esse caminho fica FORA da lista, em um botao logo abaixo do campo. Dentro
+ * do menu ele se perdia: quem nao achava a propria rua rolava a lista, nao
+ * encontrava, e nao tinha como saber que a saida estava no fim daquelas
+ * centenas de nomes — a pessoa desistia achando que o cadastro nao aceitava
+ * o endereco dela.
  */
 export function LocationField({ field, id, describedBy, invalid, disabled }: LocationFieldProps) {
   const chain = useLocationChain();
@@ -140,40 +152,48 @@ export function LocationField({ field, id, describedBy, invalid, disabled }: Loc
     );
   }
 
-  // A opcao de digitar fica sempre no fim, mesmo com a lista vazia ou com
-  // falha na consulta: nada impede o cadastro de continuar.
-  const options = [
-    ...withCurrentValue(
-      step.names.map((name) => ({ value: name, label: name })),
-      step.value,
-    ),
-    { value: OTHER_OPTION, label: texts.other },
-  ];
+  // Somente as localidades. A saida para digitar nao entra aqui: ela e o
+  // botao abaixo do campo.
+  const options = withCurrentValue(
+    step.names.map((name) => ({ value: name, label: name })),
+    step.value,
+  );
 
   return (
-    <SearchableSelect
-      id={id}
-      value={step.value}
-      options={options}
-      placeholder={texts.placeholder}
-      searchPlaceholder={texts.search}
-      onChange={(next) => {
-        if (next === OTHER_OPTION) {
-          step.select('');
-          chain.setManual(key, true);
-          return;
-        }
-        step.select(next);
-      }}
-      disabled={disabled || step.blocked}
-      disabledHint={step.blocked ? texts.hint : undefined}
-      loading={step.list.loading}
-      error={step.list.error}
-      onRetry={step.list.retry}
-      onFallback={() => chain.setManual(key, true)}
-      fallbackLabel={texts.other}
-      invalid={invalid}
-      describedBy={describedBy}
-    />
+    <div className="space-y-1.5">
+      <SearchableSelect
+        id={id}
+        value={step.value}
+        options={options}
+        placeholder={texts.placeholder}
+        searchPlaceholder={texts.search}
+        onChange={step.select}
+        disabled={disabled || step.blocked}
+        disabledHint={step.blocked ? texts.hint : undefined}
+        loading={step.list.loading}
+        error={step.list.error}
+        onRetry={step.list.retry}
+        onFallback={() => chain.setManual(key, true)}
+        fallbackLabel={texts.other}
+        invalid={invalid}
+        describedBy={describedBy}
+      />
+
+      {/* Sempre a vista, e nunca dentro do menu. Enquanto o passo anterior
+          nao foi escolhido nao ha o que digitar, entao ele nao aparece. */}
+      {step.blocked || disabled ? null : (
+        <button
+          type="button"
+          onClick={() => {
+            step.select('');
+            chain.setManual(key, true);
+          }}
+          className="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-brand-700 transition-colors hover:text-brand-800"
+        >
+          <PencilLine aria-hidden="true" className="size-3.5" />
+          {texts.notFound}
+        </button>
+      )}
+    </div>
   );
 }

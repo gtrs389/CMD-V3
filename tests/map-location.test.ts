@@ -18,6 +18,9 @@ import {
   pinLabel,
   pollingPlaceKey,
   precisionLabel,
+  sectionKey,
+  sectionLabel,
+  sectionVotes,
   voteBreakdown,
   ESTIMATED_VOTES_LABEL,
   type MapPin,
@@ -447,12 +450,45 @@ describe('estimativa de votos da escola', () => {
     men: 5,
     women: 6,
     others: 1,
+    sections: [
+      { zone: '012', section: '0345', total: 5 },
+      { zone: '012', section: '0120', total: 5 },
+      { zone: null, section: null, total: 2 },
+    ],
   };
 
   it('uma pessoa cadastrada que vota ali, um voto', () => {
     expect(ESTIMATED_VOTES_LABEL).toBe('Estimativa de votos');
     expect(estimatedVotes(escola)).toBe(escola.total);
     expect(estimatedVotes({ total: 0 })).toBe(0);
+  });
+
+  it('a quebra por seção fecha a estimativa e põe o resto no fim', () => {
+    const linhas = sectionVotes(escola);
+
+    // A soma das secoes fecha com o total: quem nao informou zona ou secao
+    // entra em uma linha propria, em vez de sumir da conta.
+    expect(linhas.reduce((soma, linha) => soma + linha.total, 0)).toBe(estimatedVotes(escola));
+
+    // Empate desempata pelo rotulo, e a linha sem zona/secao vai para o fim:
+    // ela e o resto, nao um resultado.
+    expect(linhas.map(sectionLabel)).toEqual([
+      'Zona 012 · Seção 0120',
+      'Zona 012 · Seção 0345',
+      'Sem zona/seção informada',
+    ]);
+  });
+
+  it('a mesma seção escrita de dois jeitos é uma seção só', () => {
+    // Zona e secao sao texto no cadastro: "07" e "7" sao a mesma secao.
+    expect(sectionKey({ zone: '07', section: '0345' })).toBe(
+      sectionKey({ zone: '7', section: '345' }),
+    );
+    expect(sectionKey({ zone: '07', section: '0345' })).not.toBe(
+      sectionKey({ zone: '07', section: '0346' }),
+    );
+    // Vazio e ausente sao a mesma coisa: o resto.
+    expect(sectionKey({ zone: null, section: null })).toBe(sectionKey({ zone: '', section: '  ' }));
   });
 
   it('a composição por gênero fecha a estimativa', () => {

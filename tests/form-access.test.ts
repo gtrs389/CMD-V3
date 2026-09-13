@@ -124,9 +124,35 @@ describe('resposta enviada ao navegador', () => {
     expect(clientForSession(ADMIN, client)).toBe(client);
   });
 
-  it('não envia configuração, opções de ajuste nem estatística ao candidato', () => {
+  it('entrega ao candidato o formulário para preencher, sem os textos da tela pública', () => {
+    // O Administrador do time cadastra pessoas a mao pelo painel, entao
+    // precisa do formulario de verdade: campo ativo, obrigatoriedade, opcoes
+    // e o aviso de privacidade — sem ele, o aceite que o servidor exige
+    // nunca seria coletado e o envio seria recusado.
     const original = clienteComFormulario();
     const visto = clientForSession(CANDIDATO, original);
+
+    expect(visto.form.fields).toEqual(original.form.fields);
+    expect(visto.form.privacy).toEqual(original.form.privacy);
+
+    // O que fica de fora sao os textos da tela publica, que pertencem ao
+    // link de recrutamento e nao a este cadastro.
+    expect(visto.form.introText).toBe('');
+    expect(visto.form.successMessage).toBe('');
+    expect(visto.form.updatedAt).toBe('');
+
+    // O original nao e alterado.
+    const extra = original.form.fields.find((field) => field.id === 'fld-extra');
+    expect(extra?.required).toBe(true);
+    expect(extra?.enabled).toBe(false);
+  });
+
+  it('esconde a configuração de quem não cadastra nem administra', () => {
+    // Perfil sem `form.view` e sem `member.create` recebe apenas os rotulos
+    // usados para LER a ficha: nenhuma contagem de campos ativos ou
+    // obrigatorios pode ser refeita a partir dessa resposta.
+    const original = clienteComFormulario();
+    const visto = clientForSession(EQUIPE, original);
 
     expect(visto.form.introText).toBe('');
     expect(visto.form.successMessage).toBe('');
@@ -139,24 +165,12 @@ describe('resposta enviada ao navegador', () => {
       consentLabel: '',
     });
 
-    // Nenhuma contagem de campos ativos ou obrigatorios pode ser refeita:
-    // todos os campos chegam com o mesmo valor.
     expect(visto.form.fields.every((field) => field.required === false)).toBe(true);
     expect(visto.form.fields.every((field) => field.enabled === true)).toBe(true);
     expect(visto.form.fields.every((field) => field.placeholder === '')).toBe(true);
     expect(visto.form.fields.every((field) => field.helpText === '')).toBe(true);
 
-    // O original nao e alterado: o ADMIN continua vendo o campo desativado
-    // e obrigatorio como ele configurou.
-    const extra = original.form.fields.find((field) => field.id === 'fld-extra');
-    expect(extra?.required).toBe(true);
-    expect(extra?.enabled).toBe(false);
-  });
-
-  it('mantém apenas os rótulos que o candidato usa para ler a ficha da equipe', () => {
-    const original = clienteComFormulario();
-    const visto = clientForSession(CANDIDATO, original);
-
+    // Os rotulos ficam: sao eles que dao nome ao que a equipe respondeu.
     const vinculo = visto.form.fields.find((field) => field.systemKey === 'relationship');
     expect(vinculo?.label).toBe(
       original.form.fields.find((field) => field.systemKey === 'relationship')?.label,

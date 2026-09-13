@@ -42,6 +42,7 @@ import { useToast } from '@/components/ui/Toast';
 import { CredentialsModal } from './CredentialsModal';
 import { InviteExpirationCard } from './InviteExpirationCard';
 import { InviteHistoryCard } from './InviteHistoryCard';
+import { PublicEntryCard } from './PublicEntryCard';
 
 interface Payload {
   users: SystemUser[];
@@ -269,6 +270,8 @@ export function SettingsView() {
           resto desta pagina. As rotas exigem `settings.view` e
           `settings.manage`, e o rastreamento exige tambem o perfil ADMIN. */}
       <InviteExpirationCard />
+
+      <PublicEntryCard />
 
       <section
         aria-labelledby="usuarios-do-sistema"

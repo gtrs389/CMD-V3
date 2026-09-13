@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
-import { FormBuilderPanel } from '@/components/fields/FormBuilderPanel';
+import { FormsPanel } from '@/components/fields/FormsPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { BannerTagModal } from './BannerTagModal';
 import { ClientFormModal } from './ClientFormModal';
@@ -61,10 +61,29 @@ export function ClientDetailView({
   const { data: members, loading: loadingMembers } = useMembers(clientId);
 
   const [tab, setTab] = useState<TabId>(initialTab ?? 'visao-geral');
+
   const [editing, setEditing] = useState(false);
   const [banner, setBanner] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
+  /**
+   * Aba pedida pelo endereco, depois que a pagina ja esta aberta.
+   *
+   * O mapa da visao geral leva para ESTA MESMA rota, so trocando o
+   * `?integrante=`. Como o componente continua montado, o `useState` acima
+   * ignora o novo valor inicial: a aba ficava na visao geral, o painel da
+   * equipe nem chegava a existir — `TabPanel` nao desenha aba inativa — e a
+   * ficha nunca abria. Era esse o "Ver ficha completa nao faz nada".
+   *
+   * O ajuste acontece durante a renderizacao, comparando com o ultimo valor
+   * visto, e nao em um efeito: assim a aba certa ja sai na primeira pintura,
+   * sem um quadro intermediario na aba errada.
+   */
+  const [abaDaUrl, setAbaDaUrl] = useState(initialTab);
+  if (initialTab !== abaDaUrl) {
+    setAbaDaUrl(initialTab);
+    if (initialTab) setTab(initialTab);
+  }
 
   const memberList = members ?? [];
 
@@ -92,6 +111,10 @@ export function ClientDetailView({
   // Area interna do formulario: exclusiva do ADMIN, e sempre completa. Sem
   // as duas permissoes nao ha aba, cartao nem previa, a pagina recusa
   // `?aba=formulario` e a configuracao dos campos nem chega nesta resposta.
+  // Area de configuracao dos DOIS formularios do time: exclusiva do ADMIN
+  // geral, e sempre completa. Sem as duas permissoes nao ha aba, cartao nem
+  // previa, a pagina recusa `?aba=formulario` e a configuracao dos campos nem
+  // chega nesta resposta.
   const mostrarFormulario = can('form.view') && can('form.manage');
 
   // Perfil sem acesso ao formulario nunca fica preso na aba: qualquer
@@ -146,7 +169,7 @@ export function ClientDetailView({
       ),
     },
     ...(mostrarFormulario
-      ? [{ id: 'formulario', label: 'Formulário', icon: <FileText className="size-4" /> }]
+      ? [{ id: 'formulario', label: 'Formulários', icon: <FileText className="size-4" /> }]
       : []),
   ];
 
@@ -233,9 +256,9 @@ export function ClientDetailView({
               audiences={enderecosDeAcesso}
               generateButton={
                 podeGerenciarConvite ? (
-                  <GenerateClientInviteButton client={client} label="Link de cadastro" />
+                  <GenerateClientInviteButton client={client} label="Copiar link do Formulário 1" />
                 ) : (
-                  <GenerateInviteButton label="Link de cadastro" />
+                  <GenerateInviteButton label="Copiar link do Formulário 1" />
                 )
               }
             />
@@ -331,12 +354,15 @@ export function ClientDetailView({
           members={memberList}
           loading={loadingMembers}
           openMemberId={initialMemberId}
+          // Fechou a ficha: o endereco volta a ser o do time. Assim, pedir a
+          // mesma ficha de novo muda a URL outra vez e ela reabre.
+          onDeepLinkClose={() => router.replace(`/candidatos/${clientId}`, { scroll: false })}
         />
       </TabPanel>
 
       {mostrarFormulario ? (
         <TabPanel id="formulario" active={abaAtiva}>
-          <FormBuilderPanel client={client} members={memberList} />
+          <FormsPanel client={client} members={memberList} />
         </TabPanel>
       ) : null}
 
