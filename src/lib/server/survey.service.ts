@@ -98,6 +98,9 @@ function toSurveyField(row: SurveyFieldRow): CustomField {
     helpText: row.help_text,
     required: row.required,
     enabled: row.enabled,
+    // O questionario tem UM link so: nao ha publico para separar aqui.
+    requiredEquipe: row.required,
+    enabledEquipe: row.enabled,
     order: row.position,
     options: Array.isArray(row.options) ? row.options : [],
   };

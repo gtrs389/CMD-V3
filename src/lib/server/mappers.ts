@@ -36,6 +36,10 @@ export function toField(row: FormFieldRow): CustomField {
     helpText: row.help_text,
     required: row.required,
     enabled: row.enabled,
+    // Migration 025. `??` cobre a janela entre publicar o codigo e rodar a
+    // migration: sem as colunas, o link da equipe segue o do administrador.
+    requiredEquipe: row.required_equipe ?? row.required,
+    enabledEquipe: row.enabled_equipe ?? row.enabled,
     order: row.position,
     options: Array.isArray(row.options) ? row.options : [],
   };

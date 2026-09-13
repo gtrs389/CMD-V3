@@ -40,6 +40,9 @@ export const SURVEY_IDENTITY_FIELDS: readonly CustomField[] = [
     helpText: '',
     required: true,
     enabled: true,
+    // O questionario tem UM link so: os dois pares andam sempre juntos.
+    requiredEquipe: true,
+    enabledEquipe: true,
     order: -2,
     options: [],
   },
@@ -52,6 +55,8 @@ export const SURVEY_IDENTITY_FIELDS: readonly CustomField[] = [
     helpText: '',
     required: true,
     enabled: true,
+    requiredEquipe: true,
+    enabledEquipe: true,
     order: -1,
     options: [],
   },

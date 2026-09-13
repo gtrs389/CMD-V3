@@ -152,8 +152,12 @@ export interface FormFieldRow {
   label: string;
   placeholder: string;
   help_text: string;
+  /** Obrigatorio e visivel no link do Administrador do time. */
   required: boolean;
   enabled: boolean;
+  /** O mesmo campo, no link da equipe (migration 025). */
+  required_equipe: boolean;
+  enabled_equipe: boolean;
   position: number;
   options: { id: string; label: string }[];
   created_at: string;

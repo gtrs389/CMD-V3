@@ -43,6 +43,24 @@ export interface FieldOption {
   color?: string;
 }
 
+/**
+ * Os dois links de cadastro do time.
+ *
+ * `CANDIDATE` e o link do Administrador do time, que ele mesmo envia.
+ * `EQUIPE` e o link de cada integrante, enviado adiante pela equipe.
+ *
+ * Eles recrutam gente diferente, entao cada um tem o proprio formulario: o
+ * mesmo conjunto de campos, com o ADMIN decidindo, para cada link, quais
+ * aparecem e quais sao obrigatorios.
+ */
+export const FORM_AUDIENCES = ['CANDIDATE', 'EQUIPE'] as const;
+export type FormAudience = (typeof FORM_AUDIENCES)[number];
+
+export const FORM_AUDIENCE_LABELS: Record<FormAudience, string> = {
+  CANDIDATE: 'Link do administrador do time',
+  EQUIPE: 'Link da equipe',
+};
+
 export interface CustomField {
   /** ID interno estavel. Nunca muda, mesmo que o titulo seja editado. */
   id: string;
@@ -52,8 +70,13 @@ export interface CustomField {
   label: string;
   placeholder: string;
   helpText: string;
+  /** Obrigatorio no link do Administrador do time. */
   required: boolean;
+  /** Aparece no link do Administrador do time. */
   enabled: boolean;
+  /** O mesmo campo, no link da equipe. */
+  requiredEquipe: boolean;
+  enabledEquipe: boolean;
   /** Posicao na tela publica. Menor valor aparece primeiro. */
   order: number;
   options: FieldOption[];

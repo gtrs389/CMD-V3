@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { appConfig } from '@/config/app.config';
-import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
+import { z } from "zod";
+import { appConfig } from "@/config/app.config";
+import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from "@/lib/types";
 import {
   GENDER_VALUES,
   SECTION_MAX_LENGTH,
@@ -8,8 +8,8 @@ import {
   ZONE_MAX_LENGTH,
   isValidCpf,
   isValidVoterId,
-} from '@/lib/utils/documents';
-import { isValidPhone } from '@/lib/utils/phone';
+} from "@/lib/utils/documents";
+import { isValidPhone } from "@/lib/utils/phone";
 
 /**
  * Validacao de tudo que chega ao servidor.
@@ -21,7 +21,10 @@ import { isValidPhone } from '@/lib/utils/phone';
 /** Data URL de imagem ja comprimida, ou a URL assinada devolvida antes. */
 const photoValue = z
   .string()
-  .max(Math.ceil(appConfig.limits.maxStoredImageBytes * 1.4), 'Imagem muito grande.')
+  .max(
+    Math.ceil(appConfig.limits.maxStoredImageBytes * 1.4),
+    "Imagem muito grande.",
+  )
   .nullable();
 
 const trimmed = (max: number) => z.string().trim().max(max);
@@ -34,10 +37,10 @@ const MAX_TEAM_PEOPLE = 200;
 
 const teamPersonSchema = z.object({
   id: z.string().trim().min(1).max(64).optional(),
-  name: trimmed(120).min(2, 'Informe o nome da pessoa.'),
+  name: trimmed(120).min(2, "Informe o nome da pessoa."),
   phone: trimmed(30)
-    .min(1, 'Informe o telefone.')
-    .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+    .min(1, "Informe o telefone.")
+    .refine((value) => isValidPhone(value), "Telefone inválido."),
   photo: photoValue,
 });
 
@@ -48,12 +51,12 @@ const teamPersonSchema = z.object({
  * link do time + telefone. Por isso todo time novo precisa de pelo menos um.
  */
 export const clientCreateSchema = z.object({
-  name: trimmed(80).min(2, 'Informe o nome do time.'),
+  name: trimmed(80).min(2, "Informe o nome do time."),
   photo: photoValue.default(null),
-  notes: trimmed(500).default(''),
+  notes: trimmed(500).default(""),
   people: z
     .array(teamPersonSchema)
-    .min(1, 'Cadastre pelo menos um administrador do time.')
+    .min(1, "Cadastre pelo menos um administrador do time.")
     .max(MAX_TEAM_PEOPLE),
 });
 
@@ -71,7 +74,10 @@ export const bannerTagSchema = z.object({
   color: z
     .string()
     .trim()
-    .regex(/^#[0-9a-fA-F]{6}$/, 'Informe uma cor em hexadecimal, como #0b5c2c.'),
+    .regex(
+      /^#[0-9a-fA-F]{6}$/,
+      "Informe uma cor em hexadecimal, como #0b5c2c.",
+    ),
 });
 
 export const clientUpdateSchema = clientCreateSchema
@@ -83,20 +89,35 @@ const fieldOptionSchema = z.object({
   label: trimmed(80),
 });
 
-const customFieldSchema = z.object({
-  id: z.string().min(1).max(64),
-  // O servidor preserva o `system_key` gravado: o valor enviado nunca troca
-  // um campo padrao de lugar. A lista completa fica em SYSTEM_FIELD_KEYS.
-  systemKey: z.enum(SYSTEM_FIELD_KEYS).nullable(),
-  type: z.enum(FIELD_TYPES),
-  label: trimmed(80),
-  placeholder: trimmed(80),
-  helpText: trimmed(160),
-  required: z.boolean(),
-  enabled: z.boolean(),
-  order: z.number().int().min(0).max(999),
-  options: z.array(fieldOptionSchema).max(appConfig.limits.maxOptionsPerField),
-});
+const customFieldSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    // O servidor preserva o `system_key` gravado: o valor enviado nunca troca
+    // um campo padrao de lugar. A lista completa fica em SYSTEM_FIELD_KEYS.
+    systemKey: z.enum(SYSTEM_FIELD_KEYS).nullable(),
+    type: z.enum(FIELD_TYPES),
+    label: trimmed(80),
+    placeholder: trimmed(80),
+    helpText: trimmed(160),
+    required: z.boolean(),
+    enabled: z.boolean(),
+    // Migration 025: o mesmo campo no link da equipe. Opcional para nao
+    // recusar um envio de antes da separacao — nesse caso ele segue o link do
+    // administrador, como sempre seguiu.
+    requiredEquipe: z.boolean().optional(),
+    enabledEquipe: z.boolean().optional(),
+    order: z.number().int().min(0).max(999),
+    options: z
+      .array(fieldOptionSchema)
+      .max(appConfig.limits.maxOptionsPerField),
+  })
+  // Ausentes, os dois seguem o link do administrador: e o que valia antes de
+  // os links terem formularios separados.
+  .transform((field) => ({
+    ...field,
+    requiredEquipe: field.requiredEquipe ?? field.required,
+    enabledEquipe: field.enabledEquipe ?? field.enabled,
+  }));
 
 const privacySchema = z.object({
   enabled: z.boolean(),
@@ -114,7 +135,7 @@ export const formUpdateSchema = z
     successMessage: trimmed(200),
   })
   .partial()
-  .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+  .refine((value) => Object.keys(value).length > 0, "Nada para atualizar.");
 
 export const inviteActiveSchema = z.object({ active: z.boolean() });
 
@@ -127,7 +148,9 @@ const fieldValueSchema = z.union([
 ]);
 
 const responsesSchema = z
-  .array(z.object({ fieldId: z.string().min(1).max(64), value: fieldValueSchema }))
+  .array(
+    z.object({ fieldId: z.string().min(1).max(64), value: fieldValueSchema }),
+  )
   .max(appConfig.limits.maxFieldsPerForm);
 
 const UF_CODES = UF_OPTIONS.map((option) => option.id) as [string, ...string[]];
@@ -135,9 +158,9 @@ const UF_CODES = UF_OPTIONS.map((option) => option.id) as [string, ...string[]];
 /** Vazio conta como nao informado, e nao como valor invalido. */
 const opcional = <T extends z.ZodType>(schema: T) =>
   z
-    .union([schema, z.literal(''), z.null()])
+    .union([schema, z.literal(""), z.null()])
     .optional()
-    .transform((value) => (value === '' || value === undefined ? null : value));
+    .transform((value) => (value === "" || value === undefined ? null : value));
 
 /** Campos padrao com regra brasileira. Todos opcionais. */
 const standardMemberFields = {
@@ -147,34 +170,40 @@ const standardMemberFields = {
       .string()
       .trim()
       .max(20)
-      .refine((value) => isValidCpf(value), 'CPF inválido.'),
+      .refine((value) => isValidCpf(value), "CPF inválido."),
   ),
   voterId: opcional(
     z
       .string()
       .trim()
       .max(20)
-      .refine((value) => isValidVoterId(value), 'Título de eleitor inválido.'),
+      .refine((value) => isValidVoterId(value), "Título de eleitor inválido."),
   ),
   zone: opcional(
     z
       .string()
       .trim()
-      .regex(/^\d+$/, 'Zona eleitoral inválida.')
-      .max(ZONE_MAX_LENGTH, 'Zona eleitoral inválida.'),
+      .regex(/^\d+$/, "Zona eleitoral inválida.")
+      .max(ZONE_MAX_LENGTH, "Zona eleitoral inválida."),
   ),
   section: opcional(
     z
       .string()
       .trim()
-      .regex(/^\d+$/, 'Seção eleitoral inválida.')
-      .max(SECTION_MAX_LENGTH, 'Seção eleitoral inválida.'),
+      .regex(/^\d+$/, "Seção eleitoral inválida.")
+      .max(SECTION_MAX_LENGTH, "Seção eleitoral inválida."),
   ),
   state: opcional(z.string().trim().toUpperCase().pipe(z.enum(UF_CODES))),
-  city: opcional(z.string().trim().min(2, 'Município muito curto.').max(120)),
-  district: opcional(z.string().trim().min(2, 'Bairro muito curto.').max(120)),
-  street: opcional(z.string().trim().min(2, 'Rua muito curta.').max(120)),
-  relationshipOptionId: opcional(z.string().trim().max(64).regex(/^[A-Za-z0-9_-]+$/)),
+  city: opcional(z.string().trim().min(2, "Município muito curto.").max(120)),
+  district: opcional(z.string().trim().min(2, "Bairro muito curto.").max(120)),
+  street: opcional(z.string().trim().min(2, "Rua muito curta.").max(120)),
+  relationshipOptionId: opcional(
+    z
+      .string()
+      .trim()
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/),
+  ),
   relationshipLabel: opcional(z.string().trim().min(1).max(80)),
 };
 
@@ -189,13 +218,13 @@ const standardMemberFields = {
  * enderecos ja gravados sao preservados, mas nao autenticam ninguem.
  */
 const memberPhone = trimmed(30)
-  .min(1, 'Informe o telefone.')
-  .refine((value) => isValidPhone(value), 'Telefone inválido.');
+  .min(1, "Informe o telefone.")
+  .refine((value) => isValidPhone(value), "Telefone inválido.");
 
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */
 const memberBase = {
   ...standardMemberFields,
-  name: trimmed(120).min(2, 'Informe o nome completo.'),
+  name: trimmed(120).min(2, "Informe o nome completo."),
   phone: memberPhone,
   photo: photoValue.default(null),
   responses: responsesSchema.default([]),
@@ -203,21 +232,21 @@ const memberBase = {
 };
 
 export const memberCreateSchema = z.object({
-  clientId: z.uuid('Time inválido.'),
+  clientId: z.uuid("Time inválido."),
   ...memberBase,
 });
 
 export const memberUpdateSchema = z
   .object({
     ...standardMemberFields,
-    name: trimmed(120).min(2, 'Informe o nome completo.'),
+    name: trimmed(120).min(2, "Informe o nome completo."),
     phone: memberPhone,
     photo: photoValue,
     responses: responsesSchema,
     consentAt: z.iso.datetime().nullable(),
   })
   .partial()
-  .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+  .refine((value) => Object.keys(value).length > 0, "Nada para atualizar.");
 
 /**
  * Sinais tecnicos do aparelho enviados pela pagina publica.
@@ -246,7 +275,7 @@ export const deviceSignalsSchema = z
  * normalizado no servidor antes de qualquer comparacao.
  */
 export const teamPhoneLoginSchema = z.object({
-  phone: trimmed(30).min(1, 'Informe o telefone.'),
+  phone: trimmed(30).min(1, "Informe o telefone."),
   /**
    * Sinais do aparelho, apenas para auditoria do vinculo. Quem autoriza o
    * acesso e a credencial secreta do cookie: nada daqui decide nada, e
@@ -282,7 +311,12 @@ export type InviteClickSignalsInput = z.infer<typeof inviteClickSignalsSchema>;
  * Comprovantes cifrados da confirmacao de CPF e titulo, feita durante o
  * preenchimento. Opacos para o navegador: ele so devolve o que recebeu.
  */
-const verificationTokenSchema = z.string().min(1).max(4000).nullable().optional();
+const verificationTokenSchema = z
+  .string()
+  .min(1)
+  .max(4000)
+  .nullable()
+  .optional();
 
 /** Confirmacao do CPF, durante o preenchimento do link publico. */
 export const inviteCpfLookupSchema = z.object({
@@ -290,7 +324,7 @@ export const inviteCpfLookupSchema = z.object({
     .string()
     .trim()
     .max(20)
-    .refine((value) => isValidCpf(value), 'CPF inválido.'),
+    .refine((value) => isValidCpf(value), "CPF inválido."),
 });
 
 /** Confirmacao do titulo de eleitor: usa o token da confirmacao do CPF. */
@@ -316,15 +350,17 @@ export const publicSubmissionSchema = z.object({
 export const inviteExpirationSchema = z.object({
   candidate: z.object({
     amount: z.number().int().min(1).max(525_600),
-    unit: z.enum(['minutes', 'hours', 'days']),
+    unit: z.enum(["minutes", "hours", "days"]),
   }),
   team: z.object({
     amount: z.number().int().min(1).max(525_600),
-    unit: z.enum(['minutes', 'hours', 'days']),
+    unit: z.enum(["minutes", "hours", "days"]),
   }),
 });
 
-export type InviteExpirationInputSchema = z.infer<typeof inviteExpirationSchema>;
+export type InviteExpirationInputSchema = z.infer<
+  typeof inviteExpirationSchema
+>;
 
 export type DeviceSignalsInput = z.infer<typeof deviceSignalsSchema>;
 
@@ -344,32 +380,47 @@ export type PublicSubmissionInput = z.infer<typeof publicSubmissionSchema>;
  * questionario nao recebe arquivo. O banco recusa `photo` de qualquer forma;
  * aqui a recusa chega com mensagem legivel.
  */
-const surveyFieldSchema = z.object({
-  id: z.string().min(1).max(64),
-  // Sempre nulo, e aceito apenas para a tela poder reaproveitar o mesmo
-  // editor de campos do formulario de cadastro sem montar outro objeto.
-  systemKey: z.null().optional().default(null),
-  type: z.enum(FIELD_TYPES).refine((type) => type !== 'photo', 'O questionário não aceita imagem.'),
-  label: trimmed(80),
-  placeholder: trimmed(80),
-  helpText: trimmed(160),
-  required: z.boolean(),
-  enabled: z.boolean(),
-  order: z.number().int().min(0).max(999),
-  options: z.array(fieldOptionSchema).max(appConfig.limits.maxOptionsPerField),
-});
+const surveyFieldSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    // Sempre nulo, e aceito apenas para a tela poder reaproveitar o mesmo
+    // editor de campos do formulario de cadastro sem montar outro objeto.
+    systemKey: z.null().optional().default(null),
+    type: z
+      .enum(FIELD_TYPES)
+      .refine((type) => type !== "photo", "O questionário não aceita imagem."),
+    label: trimmed(80),
+    placeholder: trimmed(80),
+    helpText: trimmed(160),
+    required: z.boolean(),
+    enabled: z.boolean(),
+    order: z.number().int().min(0).max(999),
+    options: z
+      .array(fieldOptionSchema)
+      .max(appConfig.limits.maxOptionsPerField),
+  })
+  // O questionario tem UM link so: nao ha publico para separar aqui.
+  .transform((field) => ({
+    ...field,
+    requiredEquipe: field.required,
+    enabledEquipe: field.enabled,
+  }));
 
 /** Configuracao enviada pelo ADMIN geral. Tudo opcional: so o que mudou. */
 export const surveyUpdateSchema = z
   .object({
     active: z.boolean(),
-    title: z.string().trim().min(1, 'O questionário precisa de um título.').max(120),
+    title: z
+      .string()
+      .trim()
+      .min(1, "O questionário precisa de um título.")
+      .max(120),
     introText: trimmed(2000),
     successMessage: trimmed(400),
     fields: z.array(surveyFieldSchema).max(appConfig.limits.maxFieldsPerForm),
   })
   .partial()
-  .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+  .refine((value) => Object.keys(value).length > 0, "Nada para atualizar.");
 
 /**
  * Resposta enviada pelo link publico.
@@ -379,11 +430,11 @@ export const surveyUpdateSchema = z
  * link.
  */
 export const surveyAnswerSchema = z.object({
-  name: z.string().trim().min(2, 'Informe seu nome.').max(120),
+  name: z.string().trim().min(2, "Informe seu nome.").max(120),
   phone: z
     .string()
     .trim()
-    .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+    .refine((value) => isValidPhone(value), "Telefone inválido."),
   answers: responsesSchema,
 });
 
@@ -401,7 +452,7 @@ export const publicEntrySchema = z.object({
     .trim()
     .max(2000)
     .refine(
-      (value) => value === '' || /^https?:\/\/[^\s]+$/.test(value),
-      'Informe um endereço completo, começando com http:// ou https://.',
+      (value) => value === "" || /^https?:\/\/[^\s]+$/.test(value),
+      "Informe um endereço completo, começando com http:// ou https://.",
     ),
 });
