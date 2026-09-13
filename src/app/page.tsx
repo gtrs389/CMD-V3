@@ -3,7 +3,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/server';
 import { homePathFor, LOGIN_PATH } from '@/lib/auth/constants';
-import { isPanelHost, PUBLIC_EXIT_PATH } from '@/lib/domain/hosts';
+import { isPanelHost, servesAdminLogin, PUBLIC_EXIT_PATH } from '@/lib/domain/hosts';
 import { publicScreenFrom } from '@/lib/server/public-context';
 import { PublicInviteView, InviteExpired, InviteUnavailable } from '@/components/public/PublicInviteView';
 import {
@@ -68,11 +68,24 @@ export default async function HomePage() {
     }
   }
 
-  // Dominio publico sem contexto nenhum: nao ha o que desenhar aqui, e a
-  // tela de login nao mora neste endereco. Quem chegou assim vai para a
-  // saida que o ADMIN configurou.
-  if (!isPanelHost((await headers()).get('host'))) redirect(PUBLIC_EXIT_PATH);
+  const host = (await headers()).get('host');
+
+  // Dominio publico sem contexto nenhum: nao ha o que desenhar aqui, e
+  // nenhuma porta de entrada mora neste endereco. Quem chegou assim vai para
+  // a saida que o ADMIN configurou.
+  if (!isPanelHost(host)) redirect(PUBLIC_EXIT_PATH);
 
   const user = await getCurrentUser();
-  redirect(user ? homePathFor(user) : LOGIN_PATH);
+  if (user) redirect(homePathFor(user));
+
+  // Sem sessao, o endereco decide QUAL porta desenhar:
+  //
+  //   - endereco exclusivo do ADMIN -> a tela de e-mail e senha;
+  //   - `painel.` -> a porta do time. O Administrador do time e a equipe
+  //     entram pelo link do proprio time, e e aqui que eles digitam o
+  //     endereco quando a sessao vence. Manda-los para a saida os empurraria
+  //     para FORA do sistema, no endereco que existe justamente para eles.
+  if (!servesAdminLogin(host)) return <TeamAccessScreen available={false} />;
+
+  redirect(LOGIN_PATH);
 }

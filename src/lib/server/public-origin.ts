@@ -1,6 +1,6 @@
 import 'server-only';
 import type { NextRequest } from 'next/server';
-import { publicHostFrom } from '@/lib/domain/hosts';
+import { panelHostFrom, publicHostFrom } from '@/lib/domain/hosts';
 import { getPublicEntry } from './settings.service';
 
 /**
@@ -56,4 +56,29 @@ export async function publicOrigin(request: NextRequest): Promise<string> {
 /** Endereco completo de um link publico, pronto para copiar e enviar. */
 export async function publicLink(request: NextRequest, path: string): Promise<string> {
   return `${await publicOrigin(request)}${path}`;
+}
+
+/**
+ * Endereco do PAINEL, para o link de acesso do time.
+ *
+ * Nem todo link enviado vai para o dominio publico. O do Formulario 1 e o do
+ * Formulario 2 vao: quem os recebe preenche um cadastro e nao entra no
+ * sistema. Ja o link de ACESSO leva o Administrador do time e a equipe para
+ * dentro do painel — e o painel deles e `painel.`.
+ *
+ * Mandar esse link para o dominio publico autenticaria a pessoa e, no passo
+ * seguinte, a jogaria na saida; monta-lo no navegador o faria sair com o
+ * endereco da aba aberta, que pode ser o endereco exclusivo do ADMIN.
+ */
+export function panelLink(request: NextRequest, path: string): string {
+  const origin = requestOrigin(request);
+
+  try {
+    const url = new URL(origin);
+    const painel = panelHostFrom(url.hostname);
+    if (painel) url.hostname = painel;
+    return `${url.origin}${path}`;
+  } catch {
+    return `${origin}${path}`;
+  }
 }
