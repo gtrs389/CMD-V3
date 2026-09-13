@@ -63,6 +63,16 @@ export function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof SupabaseRequestError) {
     console.error('[cmd] Erro no banco:', error.code, error.message);
     if (error.isUniqueViolation) return jsonError(409, 'Já existe um registro com estes dados.');
+
+    // Coluna ou tabela que o codigo espera e o banco nao tem: e sempre uma
+    // migration pendente. Dizer isso na tela evita procurar bug onde nao ha.
+    if (error.isMissingSchema) {
+      return jsonError(
+        503,
+        'A estrutura do banco está desatualizada: falta executar a migration mais recente no Supabase.',
+      );
+    }
+
     if (error.status === 503) {
       return jsonError(503, 'Falha de conexão com o banco. Tente novamente.');
     }

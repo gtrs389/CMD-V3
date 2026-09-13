@@ -28,6 +28,20 @@ export class SupabaseRequestError extends Error {
   get isUniqueViolation(): boolean {
     return this.code === '23505';
   }
+
+  /**
+   * O banco nao tem a coluna ou a tabela que o codigo pediu.
+   *
+   * Na pratica isso significa UMA coisa: a migration correspondente ainda
+   * nao foi executada. Sem distinguir esse caso, toda falha assim vira a
+   * mesma mensagem generica de erro e a tela nao diz o que fazer — o que
+   * transforma um `alter table` esquecido em uma caca ao bug.
+   *
+   * 42703 = coluna inexistente; 42P01 = tabela inexistente.
+   */
+  get isMissingSchema(): boolean {
+    return this.code === '42703' || this.code === '42P01';
+  }
 }
 
 type QueryValue = string | number | boolean | null | undefined;
