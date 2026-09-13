@@ -1,22 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { Send } from 'lucide-react';
 import type { Client, Member } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories';
 import {
-  CONSENT_KEY,
+  completionPercent,
+  missingRequired,
   toSubmission,
   valuesFromMember,
-  visibleFields,
 } from '@/lib/validation/dynamic-form';
+import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
-import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
+import { PublicFormBody } from '@/components/public/PublicFormBody';
+import { focusFirstInvalid } from '@/components/public/PublicFormShell';
+import { buildInviteSections } from '@/components/public/invite-sections';
 
 interface MemberFormModalProps {
   open: boolean;
@@ -26,14 +28,31 @@ interface MemberFormModalProps {
 }
 
 /**
- * Edicao de integrante pelo painel.
- * Usa o mesmo formulario configurado para o link publico.
+ * Cadastro manual e edicao de integrante, pelo painel.
+ *
+ * E a MESMA ficha do link publico, desenhada pelos mesmos componentes:
+ * secoes em cartoes numerados, contagem do que ja foi preenchido, aviso em
+ * cada campo, preenchimento na ordem, barra de avanco no topo e, no rodape,
+ * quanto ainda falta. Quem cadastra a mao e quem se cadastra pelo link veem
+ * a mesma coisa — antes esta tela era uma lista corrida de campos dentro de
+ * um dialogo apertado, e nao se parecia em nada com o formulario de
+ * verdade.
+ *
+ * O que nao vem junto e o que pertence ao link: banner do time, quem
+ * convidou e a confirmacao de CPF e de titulo de eleitor, que dependem do
+ * contexto do convite para autorizar a consulta.
+ *
+ * Na EDICAO o preenchimento na ordem fica desligado: quem corrige um campo
+ * de uma ficha ja existente nao pode ser obrigado a percorrer tudo de novo.
  */
 export function MemberFormModal({ open, client, member, onClose }: MemberFormModalProps) {
   const toast = useToast();
   const form = useDynamicForm(client.form);
-  const fields = visibleFields(client.form);
-  const { privacy } = client.form;
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
+  const percent = completionPercent(client.form, form.values);
+  const faltam = missingRequired(client.form, form.values);
 
   const { reset } = form;
 
@@ -42,10 +61,16 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
     reset(member ? valuesFromMember(client.form, member) : undefined);
   }, [open, member, client.form, reset]);
 
-  async function handleSubmit() {
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    void salvar();
+  }
+
+  async function salvar() {
     const values = form.validate();
     if (!values) {
       toast.error('Revise os campos destacados.');
+      window.requestAnimationFrame(() => focusFirstInvalid(formRef.current));
       return;
     }
 
@@ -65,7 +90,7 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           state: payload.state,
           city: payload.city,
           district: payload.district,
-        relationshipOptionId: payload.relationshipOptionId,
+          relationshipOptionId: payload.relationshipOptionId,
           relationshipLabel: payload.relationshipLabel,
           responses: payload.responses,
           consentAt: payload.consentAt ?? member.consentAt,
@@ -85,7 +110,7 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           state: payload.state,
           city: payload.city,
           district: payload.district,
-        relationshipOptionId: payload.relationshipOptionId,
+          relationshipOptionId: payload.relationshipOptionId,
           relationshipLabel: payload.relationshipLabel,
           responses: payload.responses,
           consentAt: payload.consentAt,
@@ -111,51 +136,81 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
     <Modal
       open={open}
       onClose={onClose}
+      size="lg"
       title={member ? 'Editar integrante' : 'Novo integrante'}
       description={
         member
           ? 'Atualize os dados cadastrados pela pessoa.'
-          : 'Cadastro manual, com os mesmos campos do formulário público.'
+          : 'A mesma ficha do link de cadastro, preenchida por você.'
       }
       footer={
         <>
+          {/* O rodape do dialogo empilha invertido no celular. `order-last`
+              coloca este aviso no TOPO da pilha, acima dos botoes — e no
+              desktop ele volta para a esquerda, como no formulario publico. */}
+          <p
+            aria-live="polite"
+            className={cn(
+              'order-last flex-1 text-center text-xs font-medium sm:order-first sm:text-left',
+              faltam === 0 ? 'text-success-600' : 'text-ink-500',
+            )}
+          >
+            {faltam === 0
+              ? 'Tudo pronto para salvar.'
+              : `Ainda ${faltam === 1 ? 'falta' : 'faltam'} ${faltam} ${
+                  faltam === 1 ? 'campo obrigatório' : 'campos obrigatórios'
+                }.`}
+          </p>
+
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit}>{member ? 'Salvar alterações' : 'Cadastrar'}</Button>
+          <Button type="submit" form="cadastro-painel" variant="accent">
+            <Send aria-hidden="true" className="size-4" />
+            {member ? 'Salvar alterações' : 'Cadastrar'}
+          </Button>
         </>
       }
     >
-      <div className="space-y-4">
-        <LocationProvider fields={fields} values={form.values} setValue={form.setValue}>
-          {fields.map((field) => (
-            <DynamicFieldInput
-              key={field.id}
-              field={field}
-              idPrefix="integrante"
-              value={form.values[field.id] ?? null}
-              error={form.errors[field.id]}
-              onChange={(value) => form.setValue(field.id, value)}
-              onImageError={(message) => toast.error(message)}
-            />
-          ))}
-        </LocationProvider>
-
-        {privacy.enabled && privacy.requireConsent ? (
-          <Checkbox
-            id="integrante-consentimento"
-            label={privacy.consentLabel}
-            checked={form.values[CONSENT_KEY] === true}
-            onChange={(event) => form.setValue(CONSENT_KEY, event.target.checked)}
-          />
-        ) : null}
-
-        {form.errors[CONSENT_KEY] ? (
-          <p role="alert" className="text-xs font-medium text-danger-600">
-            {form.errors[CONSENT_KEY]}
+      {/* Mesma faixa de avanco do formulario publico: gruda no topo da area
+          que rola e diz, o tempo todo, quanto ja foi preenchido. */}
+      <div className="sticky -top-4 z-10 -mx-4 border-b border-line bg-surface/95 px-4 pt-1 pb-2.5 backdrop-blur sm:-mx-5 sm:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
+            Preenchimento
           </p>
-        ) : null}
+          <p className="shrink-0 text-xs font-bold text-success-600 tabular-nums">{percent}%</p>
+        </div>
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          aria-label={`Ficha ${percent}% preenchida`}
+          className="mt-2 h-1.5 w-full overflow-hidden rounded-pill bg-ink-100"
+        >
+          <span
+            className="block h-full rounded-pill bg-success-600 transition-[width] duration-500"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
       </div>
+
+      <PublicFormBody
+        config={client.form}
+        form={form}
+        sections={sections}
+        formId="cadastro-painel"
+        idPrefix="integrante"
+        submitting={false}
+        onSubmit={handleSubmit}
+        formRef={formRef}
+        allowCamera
+        // Ficha nova segue a mesma ordem do link. Correcao de ficha existente
+        // abre tudo: nao se percorre o cadastro inteiro para mudar um campo.
+        sequential={!member}
+        onImageError={(message) => toast.error(message)}
+      />
     </Modal>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
-import type { Client, PublicInviteOwner } from '@/lib/types';
+import type { Client, CustomField, PublicInviteOwner } from '@/lib/types';
 import { PHONE_IN_USE } from '@/lib/types';
 import { submitInvite } from '@/lib/repositories';
 import { GoneError, NetworkError } from '@/lib/repositories/http/api';
@@ -17,32 +17,21 @@ import {
 } from '@/lib/utils/documents';
 import { linkCode } from '@/lib/domain/link-code';
 import {
-  CONSENT_KEY,
   completionPercent,
-  isFilled,
   missingRequired,
   toSubmission,
-  unlockedUpTo,
   visibleFields,
 } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmSubmissionModal } from './ConfirmSubmissionModal';
-import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
-import { LocationProvider } from '@/components/form-renderer/location-context';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
-import { FieldHint, type FieldHintKind } from './FieldHint';
 import { InviteConfirmValueModal } from './InviteConfirmValueModal';
-import { InvitePrivacyNotice } from './InvitePrivacyNotice';
 import { InviteVerifyingModal } from './InviteVerifyingModal';
 import { InviteExpired } from './PublicInviteView';
-import {
-  PublicFormSection,
-  PublicFormShell,
-  PublicSuccessScreen,
-  focusFirstInvalid,
-} from './PublicFormShell';
-import { buildInviteSections, isWideField } from './invite-sections';
+import { PublicFormBody } from './PublicFormBody';
+import { PublicFormShell, PublicSuccessScreen, focusFirstInvalid } from './PublicFormShell';
+import { buildInviteSections } from './invite-sections';
 import { useInviteDeviceReport } from './use-invite-device-report';
 import { useInviteVerification } from './use-invite-verification';
 
@@ -88,15 +77,6 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
    * quem preenche precisa saber disso e digitar.
    */
   const [semResposta, setSemResposta] = useState({ zona: false, secao: false });
-  /**
-   * Campos em que a pessoa ja entrou.
-   *
-   * Existe por causa dos campos opcionais: eles nao se resolvem preenchendo
-   * — podem ficar vazios de proposito —, entao o que libera o proximo e ter
-   * passado por eles. Sem isso, um opcional vazio trancaria o formulario
-   * para sempre.
-   */
-  const [visitados, setVisitados] = useState<ReadonlySet<string>>(() => new Set());
   const submittedRef = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
 
@@ -114,41 +94,13 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   const faltam = missingRequired(client.form, form.values);
 
   /**
-   * Preenchimento na ordem, um campo por vez.
-   *
-   * A lista segue exatamente a ordem em que a tela desenha — as secoes, uma
-   * apos a outra. Um campo obrigatorio se resolve quando e preenchido; um
-   * opcional, quando e preenchido OU quando a pessoa passa por ele e segue
-   * em frente. So entao o proximo abre.
-   */
-  const ordemDaTela = useMemo(() => sections.flatMap((section) => section.fields), [sections]);
-  const posicao = useMemo(
-    () => new Map(ordemDaTela.map((field, index) => [field.id, index])),
-    [ordemDaTela],
-  );
-  const liberadoAte = unlockedUpTo(
-    ordemDaTela,
-    (field) => isFilled(form.values[field.id]) || (!field.required && visitados.has(field.id)),
-  );
-
-  /** Marca que a pessoa entrou no campo. Repetir nao recria o conjunto. */
-  function visitar(fieldId: string) {
-    setVisitados((atual) => {
-      if (atual.has(fieldId)) return atual;
-      const proximo = new Set(atual);
-      proximo.add(fieldId);
-      return proximo;
-    });
-  }
-
-  /**
    * Campo fechado porque a consulta eleitoral ja respondeu por ele.
    *
    * Zona e secao sao o que a Justica Eleitoral devolveu para aquele titulo.
    * Deixar digitar por cima transformaria um dado conferido em um dado
    * digitado, e depois ninguem distinguiria os dois.
    */
-  const daJusticaEleitoral = (field: (typeof ordemDaTela)[number]): boolean =>
+  const daJusticaEleitoral = (field: CustomField): boolean =>
     (field.systemKey === 'zone' && daConsulta.zona) ||
     (field.systemKey === 'section' && daConsulta.secao);
 
@@ -157,46 +109,14 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
    *
    * Fora desses dois casos o campo mantem a ajuda que o ADMIN escreveu.
    */
-  const comAjuda = (field: (typeof ordemDaTela)[number]) => {
-    if (daJusticaEleitoral(field)) {
-      return { ...field, helpText: 'Preenchido pela consulta do seu título de eleitor.' };
-    }
+  const ajuda = (field: CustomField): string | undefined => {
+    if (daJusticaEleitoral(field)) return 'Preenchido pela consulta do seu título de eleitor.';
 
     const naoVeio =
       (field.systemKey === 'zone' && semResposta.zona) ||
       (field.systemKey === 'section' && semResposta.secao);
 
-    if (naoVeio) {
-      return {
-        ...field,
-        helpText: 'Não localizamos no seu título. Digite o número, se souber.',
-      };
-    }
-
-    return field;
-  };
-
-  /** Campo ainda trancado pela ordem, ou fechado pela consulta eleitoral. */
-  const bloqueado = (field: (typeof ordemDaTela)[number]): boolean =>
-    daJusticaEleitoral(field) || (posicao.get(field.id) ?? 0) > liberadoAte;
-
-  /**
-   * O que dizer ao lado do rotulo de cada campo.
-   *
-   * A ordem das perguntas importa: a consulta eleitoral manda sobre tudo,
-   * depois o cadeado da vez, depois o que ja foi preenchido. Um campo, um
-   * aviso — e so UM campo por vez carrega o pedido "preencha este campo".
-   */
-  const aviso = (field: (typeof ordemDaTela)[number]): FieldHintKind => {
-    if (daJusticaEleitoral(field)) return 'conferido';
-
-    const indice = posicao.get(field.id) ?? 0;
-    if (indice > liberadoAte) return 'aguarde';
-    if (isFilled(form.values[field.id])) return 'pronto';
-    if (indice === liberadoAte) return 'agora';
-
-    // Aberto, vazio e ja ultrapassado: e um opcional que a pessoa dispensou.
-    return 'opcional';
+    return naoVeio ? 'Não localizamos no seu título. Digite o número, se souber.' : undefined;
   };
 
   const nameFieldId = allFields.find((field) => field.systemKey === 'name')?.id;
@@ -392,92 +312,33 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
         </>
       }
     >
-      <LocationProvider fields={allFields} values={form.values} setValue={form.setValue}>
-        <form id="cadastro-publico" ref={formRef} onSubmit={handleSubmit} noValidate>
-          {/* Celular: cada secao e um cartao proprio, numerado. A rolagem
-              ganha ritmo e a pessoa enxerga o tamanho do que falta em vez de
-              encarar uma folha unica e interminavel.
-              Desktop: os mesmos blocos, sem cartao, como sempre foram. */}
-          <p className="mt-4 text-[0.8125rem] text-ink-500">
-            Preencha na ordem. O campo marcado com{' '}
-            <span className="font-semibold text-accent-700">Preencha este campo</span> é a sua vez;
-            os seguintes abrem quando você terminar.
-          </p>
-
-          <div className="mt-4 animate-rise space-y-4 lg:mt-5 lg:space-y-7">
-            {sections.map((section, index) => (
-              <PublicFormSection
-                key={section.id}
-                id={section.id}
-                index={index}
-                title={section.title}
-                description={section.description}
-                fields={section.fields}
-                values={form.values}
-              >
-                {section.fields.map((field) => (
-                  <div
-                    key={field.id}
-                    // Captura no contorno do campo: vale para qualquer
-                    // controle dentro dele — caixa de texto, lista, cartao de
-                    // escolha ou envio de foto — sem cada um precisar avisar.
-                    onFocusCapture={() => visitar(field.id)}
-                    className={isWideField(field) ? 'sm:col-span-2' : undefined}
-                  >
-                    <DynamicFieldInput
-                      field={comAjuda(field)}
-                      idPrefix="publico"
-                      variant="invite"
-                      aside={<FieldHint kind={aviso(field)} />}
-                      allowCamera
-                      disabled={submitting || bloqueado(field)}
-                      value={form.values[field.id] ?? null}
-                      error={form.errors[field.id]}
-                      onChange={(value) => form.setValue(field.id, value)}
-                      onBlur={
-                        field.systemKey === 'cpf'
-                          ? (value) => {
-                              const digits = normalizeCpf(typeof value === 'string' ? value : '');
-                              if (isValidCpf(digits)) {
-                                verification.requestCpfConfirmation(digits);
-                              }
-                            }
-                          : field.systemKey === 'voter_id'
-                            ? (value) => {
-                                const digits = normalizeVoterId(
-                                  typeof value === 'string' ? value : '',
-                                );
-                                if (isValidVoterId(digits)) {
-                                  verification.requestTituloConfirmation(digits);
-                                }
-                              }
-                            : undefined
-                      }
-                      onImageError={(message) => toast.error(message)}
-                    />
-                  </div>
-                ))}
-              </PublicFormSection>
-            ))}
-
-            {/* Aviso e aceite ficam onde a pessoa termina de preencher.
-                Sem aviso configurado pelo ADMIN, o cartao nem existe. */}
-            {client.form.privacy.enabled ? (
-              <div className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5 lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-                <InvitePrivacyNotice
-                  config={client.form}
-                  accepted={form.values[CONSENT_KEY] === true}
-                  // O aceite e o ultimo passo: so abre com o formulario
-                  // inteiro preenchido.
-                  disabled={submitting || liberadoAte < ordemDaTela.length}
-                  error={form.errors[CONSENT_KEY]}
-                  onChange={(accepted) => form.setValue(CONSENT_KEY, accepted)}
-                />
-              </div>
-            ) : null}
-          </div>
-        </form>
-      </LocationProvider>
+      <PublicFormBody
+        config={client.form}
+        form={form}
+        sections={sections}
+        formId="cadastro-publico"
+        idPrefix="publico"
+        submitting={submitting}
+        onSubmit={handleSubmit}
+        formRef={formRef}
+        allowCamera
+        lockedField={daJusticaEleitoral}
+        fieldHelp={ajuda}
+        onImageError={(message) => toast.error(message)}
+        onFieldBlur={(field, value) => {
+          // Confirmacao de CPF e de titulo: exclusiva do link publico, onde
+          // existe o contexto do convite que autoriza a consulta.
+          if (field.systemKey === 'cpf') {
+            const digits = normalizeCpf(typeof value === 'string' ? value : '');
+            if (isValidCpf(digits)) verification.requestCpfConfirmation(digits);
+            return;
+          }
+          if (field.systemKey === 'voter_id') {
+            const digits = normalizeVoterId(typeof value === 'string' ? value : '');
+            if (isValidVoterId(digits)) verification.requestTituloConfirmation(digits);
+          }
+        }}
+      />
     </PublicFormShell>
   );
 }
