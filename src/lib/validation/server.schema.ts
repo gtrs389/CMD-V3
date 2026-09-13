@@ -386,3 +386,22 @@ export const surveyAnswerSchema = z.object({
     .refine((value) => isValidPhone(value), 'Telefone inválido.'),
   answers: responsesSchema,
 });
+
+/**
+ * Destino de quem chega ao dominio publico sem um link valido.
+ *
+ * Vazio desliga o redirecionamento. Preenchido, tem de ser um endereco
+ * absoluto `http(s)`: qualquer outro esquema — `javascript:`, `data:` —
+ * viraria um redirecionamento perigoso em uma tela que qualquer pessoa
+ * abre. O banco confere de novo, no `check` da coluna.
+ */
+export const publicEntrySchema = z.object({
+  redirectUrl: z
+    .string()
+    .trim()
+    .max(2000)
+    .refine(
+      (value) => value === '' || /^https?:\/\/[^\s]+$/.test(value),
+      'Informe um endereço completo, começando com http:// ou https://.',
+    ),
+});

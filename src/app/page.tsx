@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth/server';
 import { homePathFor, LOGIN_PATH } from '@/lib/auth/constants';
+import { isPanelHost, PUBLIC_EXIT_PATH } from '@/lib/domain/hosts';
 import { publicScreenFrom } from '@/lib/server/public-context';
 import { PublicInviteView, InviteExpired, InviteUnavailable } from '@/components/public/PublicInviteView';
 import {
@@ -66,6 +67,11 @@ export default async function HomePage() {
         );
     }
   }
+
+  // Dominio publico sem contexto nenhum: nao ha o que desenhar aqui, e a
+  // tela de login nao mora neste endereco. Quem chegou assim vai para a
+  // saida que o ADMIN configurou.
+  if (!isPanelHost((await headers()).get('host'))) redirect(PUBLIC_EXIT_PATH);
 
   const user = await getCurrentUser();
   redirect(user ? homePathFor(user) : LOGIN_PATH);

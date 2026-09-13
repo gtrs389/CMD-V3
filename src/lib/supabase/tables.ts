@@ -374,6 +374,8 @@ export interface SettingsRow {
   id: boolean;
   candidate_invite_seconds: number;
   team_invite_seconds: number;
+  /** Destino de quem chega ao dominio publico sem link (migration 024). */
+  public_redirect_url: string;
   updated_at: string;
 }
 
