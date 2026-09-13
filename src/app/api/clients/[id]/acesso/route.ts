@@ -4,7 +4,7 @@ import { canReachClient } from '@/lib/permissions';
 import { requirePermission } from '@/lib/server/guard';
 import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
 import { getTeamAccessLink, getTeamAccessLinks } from '@/lib/server/team-access.service';
-import { publicLink } from '@/lib/server/public-origin';
+import { panelLink } from '@/lib/server/public-origin';
 import { teamAccessPath } from '@/lib/utils/url';
 
 /**
@@ -32,19 +32,19 @@ import { teamAccessPath } from '@/lib/utils/url';
 type Visiveis = Partial<Record<TeamAccessAudience, TeamAccessLink>>;
 
 /**
- * Acrescenta o endereco completo, com o DOMINIO PUBLICO.
+ * Acrescenta o endereco completo, com o endereco do PAINEL.
  *
- * Quem copia o link esta no painel, e o painel nao e o endereco que se
- * divulga: montado no navegador, o link sairia apontando para o painel — ou
- * para o endereco exclusivo do ADMIN, que nao pode circular por WhatsApp.
+ * Este link nao e de cadastro: ele leva o Administrador do time e a equipe
+ * para DENTRO do painel, e o painel deles e `painel.`. Montado no navegador,
+ * sairia com o endereco da aba aberta — que pode ser o endereco exclusivo do
+ * ADMIN; mandado para o dominio publico, autenticaria a pessoa e no passo
+ * seguinte a jogaria na saida.
  */
-async function comUrl(request: NextRequest, links: Visiveis): Promise<Visiveis> {
-  const entradas = await Promise.all(
-    Object.entries(links).map(async ([audience, link]) => [
-      audience,
-      { ...link, url: await publicLink(request, teamAccessPath(link.token)) },
-    ]),
-  );
+function comUrl(request: NextRequest, links: Visiveis): Visiveis {
+  const entradas = Object.entries(links).map(([audience, link]) => [
+    audience,
+    { ...link, url: panelLink(request, teamAccessPath(link.token)) },
+  ]);
   return Object.fromEntries(entradas) as Visiveis;
 }
 
@@ -54,13 +54,13 @@ export async function GET(request: NextRequest, ctx: RouteContext<'/api/clients/
     const user = await requirePermission('invite.view');
 
     if (user.role === 'ADMIN') {
-      const accessLinks = await comUrl(request, await getTeamAccessLinks(id));
+      const accessLinks = comUrl(request, await getTeamAccessLinks(id));
       return jsonOk({ accessLinks });
     }
 
     // Administrador do proprio time: so o endereco da equipe.
     if (user.role === 'CANDIDATE' && canReachClient(user, id)) {
-      const accessLinks = await comUrl(request, {
+      const accessLinks = comUrl(request, {
         EQUIPE: await getTeamAccessLink(id, 'EQUIPE'),
       });
       return jsonOk({ accessLinks });

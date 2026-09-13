@@ -1,14 +1,17 @@
 /**
  * Os tres enderecos do sistema.
  *
- *   <adm>.<dominio>    o endereco EXCLUSIVO do ADMIN geral. So a sessao do
- *                      ADMIN vale aqui, e nenhuma porta publica e servida:
- *                      link de cadastro, Formulario 2 e acesso do time nao
- *                      abrem neste endereco.
- *   painel.<dominio>   o painel do time: Administrador do time e equipe.
- *   <dominio>          o dominio publico, que vai nos links enviados por
- *                      WhatsApp. Serve o formulario de cadastro, o
- *                      Formulario 2 e o acesso do time — e mais nada.
+ *   <adm>.<dominio>    SO o ADMIN geral entra por aqui. A sessao de
+ *                      qualquer outro perfil nao vale neste endereco, e
+ *                      nenhuma porta publica e servida.
+ *   painel.<dominio>   por onde o Administrador do time e a equipe entram,
+ *                      pelo link de acesso do proprio time + telefone. Aqui
+ *                      nao existe tela de e-mail e senha.
+ *   <dominio>          SO OS CADASTROS: Formulario 1 e Formulario 2, os
+ *                      links que vao por WhatsApp. Ninguem entra no sistema
+ *                      por este endereco.
+ *
+ * Cada endereco tem UMA porta, e a porta de um nao abre no outro.
  *
  * A separacao existe por seguranca: a tela de login e por onde um ataque
  * comeca, e ela nao tem por que ficar exposta no endereco que milhares de
@@ -122,15 +125,23 @@ export function isPanelHost(host: string | null | undefined): boolean {
 const PUBLIC_PREFIXES = [
   '/convite/',
   '/questionario/',
-  '/acesso/',
   '/api/public/',
-  '/api/acesso-time',
   // Estado, municipio, bairro e rua: as listas encadeadas do endereco. Sao
   // do formulario publico, e sem elas o campo de endereco fica vazio no
   // dominio que justamente serve os links enviados.
   '/api/localidades',
   '/saida',
 ] as const;
+
+/**
+ * O dominio publico serve SO OS CADASTROS.
+ *
+ * O acesso do time — `/acesso/` e `/api/acesso-time` — saiu desta lista: ele
+ * e a porta do Administrador do time e da equipe, e essa porta e `painel.`.
+ * Ele estava aqui porque os dois enderecos eram um so; mantido, um link de
+ * acesso aberto no dominio publico autenticaria a pessoa e, no passo
+ * seguinte, a mandaria para a saida — o painel nao e servido ali.
+ */
 
 export function isPublicPath(pathname: string): boolean {
   if (pathname === '/') return true;
@@ -199,6 +210,34 @@ const ADMIN_BLOCKED_PREFIXES = [
 
 export function isPublicEntryPath(pathname: string): boolean {
   return ADMIN_BLOCKED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/**
+ * Endereco do PAINEL deduzido de qualquer endereco do sistema.
+ *
+ * O link de acesso do time tem de apontar para `painel.`: e por ele que o
+ * Administrador do time e a equipe entram. Montado com o endereco da aba
+ * aberta, ele sairia com o endereco do ADMIN — e, pelo dominio publico, a
+ * pessoa se autenticaria para em seguida cair na saida, porque o painel nao
+ * e servido la.
+ *
+ * Devolve nulo em desenvolvimento e previa: ali um endereco so serve tudo, e
+ * trocar o host quebraria o proprio ambiente de teste.
+ */
+export function panelHostFrom(host: string | null | undefined): string | null {
+  const atual = normalize(host);
+  if (!atual || isLocalOrPreview(atual)) return null;
+
+  const configurado = normalize(process.env.CMD_PANEL_HOST);
+  if (configurado) return configurado;
+
+  if (atual.startsWith(PANEL_PREFIX)) return atual;
+
+  // Tira o primeiro rotulo quando ele existe (o endereco do ADMIN) e poe o
+  // do painel no lugar. No dominio raiz nao ha rotulo a tirar.
+  const rotulos = atual.split('.');
+  const base = rotulos.length >= 3 ? rotulos.slice(1).join('.') : atual;
+  return `${PANEL_PREFIX}${base}`;
 }
 
 /**

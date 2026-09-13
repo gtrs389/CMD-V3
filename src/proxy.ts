@@ -12,9 +12,24 @@ import {
 
 /** Manda para a saida que o ADMIN configurou, sem cache. */
 function paraSaida(request: NextRequest): NextResponse {
-  const saida = NextResponse.redirect(new URL(PUBLIC_EXIT_PATH, request.url), 307);
-  saida.headers.set('Cache-Control', 'no-store');
-  return saida;
+  return semCache(request, PUBLIC_EXIT_PATH);
+}
+
+/**
+ * Manda para a PORTA do endereco, sem cache.
+ *
+ * Em `painel.` a raiz desenha a entrada do time; no endereco do ADMIN ela
+ * leva a tela de e-mail e senha. E o contrario da saida: em vez de empurrar
+ * a pessoa para fora, devolve a ela a porta daquele endereco.
+ */
+function paraPorta(request: NextRequest): NextResponse {
+  return semCache(request, '/');
+}
+
+function semCache(request: NextRequest, destino: string): NextResponse {
+  const resposta = NextResponse.redirect(new URL(destino, request.url), 307);
+  resposta.headers.set('Cache-Control', 'no-store');
+  return resposta;
 }
 
 /**
@@ -60,8 +75,11 @@ export function proxy(request: NextRequest) {
   // 1b. A porta do ADMIN geral — e-mail e senha — existe em UM endereco. Em
   // `painel.` e no dominio publico ela nao e servida: quem digita aqueles
   // enderecos nao pode cair na tela de login do ADMIN.
+  //
+  // Em `painel.` a pessoa volta para a porta DELA, a do time; no dominio
+  // publico, para a saida — la nao existe porta nenhuma.
   if (isAdminOnlyPath(pathname) && !servesAdminLogin(host)) {
-    return paraSaida(request);
+    return isPanelHost(host) ? paraPorta(request) : paraSaida(request);
   }
 
   // 1c. Dominio publico: so as portas de entrada dos links enviados.
@@ -79,9 +97,10 @@ export function proxy(request: NextRequest) {
   const hasCookie = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
   if (!hasCookie) {
-    // Sem porta de login neste endereco, mandar para `/login` so trocaria um
-    // redirecionamento por outro: vai direto para a saida.
-    if (!servesAdminLogin(host)) return paraSaida(request);
+    // Em `painel.` nao ha tela de e-mail e senha: a porta e a raiz, onde o
+    // time entra pelo link do proprio time. Mandar para `/login` so trocaria
+    // um redirecionamento por outro.
+    if (!servesAdminLogin(host)) return paraPorta(request);
 
     const url = request.nextUrl.clone();
     url.pathname = LOGIN_PATH;

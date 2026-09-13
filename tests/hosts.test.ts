@@ -5,6 +5,7 @@ import {
   isPanelHost,
   isPublicEntryPath,
   isPublicPath,
+  panelHostFrom,
   publicHostFrom,
   servesAdminLogin,
 } from '@/lib/domain/hosts';
@@ -90,16 +91,21 @@ describe('caminhos do domínio público', () => {
     expect(isPublicPath('/')).toBe(true);
     expect(isPublicPath('/convite/abc123')).toBe(true);
     expect(isPublicPath('/questionario/abc123')).toBe(true);
-    expect(isPublicPath('/acesso/time/abc123')).toBe(true);
     expect(isPublicPath('/api/public/convite')).toBe(true);
     expect(isPublicPath('/api/public/questionario/resposta')).toBe(true);
-    expect(isPublicPath('/api/acesso-time')).toBe(true);
     // O endereco do formulario publico depende destas listas: bloquea-las
     // deixava estado, municipio, bairro e rua vazios justamente no dominio
     // que serve os links enviados.
     expect(isPublicPath('/api/localidades/estados')).toBe(true);
     expect(isPublicPath('/api/localidades/municipios/SP')).toBe(true);
     expect(isPublicPath('/saida')).toBe(true);
+  });
+
+  it('o domínio público serve só os cadastros: o acesso do time é do painel', () => {
+    // O acesso do time leva para DENTRO do painel. Servido aqui, ele
+    // autenticaria a pessoa e, no passo seguinte, a mandaria para a saida.
+    expect(isPublicPath('/acesso/time/abc123')).toBe(false);
+    expect(isPublicPath('/api/acesso-time')).toBe(false);
   });
 
   it('não deixa passar nada do painel', () => {
@@ -241,5 +247,32 @@ describe('porta de entrada do ADMIN geral', () => {
     expect(isAdminOnlyPath('/minha-mobilizacao')).toBe(false);
     expect(isAdminOnlyPath('/api/auth/logout')).toBe(false);
     expect(isAdminOnlyPath('/acesso/time/abc')).toBe(false);
+  });
+});
+
+
+describe('endereço do painel deduzido', () => {
+  it('o link de acesso do time aponta para painel., venha de onde vier', () => {
+    // Este link nao e de cadastro: ele leva o Administrador do time e a
+    // equipe para dentro do painel, e o painel deles e `painel.`.
+    delete process.env.CMD_ADMIN_HOST;
+    delete process.env.CMD_PANEL_HOST;
+
+    expect(panelHostFrom(ADMIN_HOST)).toBe('painel.convitetimebezerra.com');
+    expect(panelHostFrom('painel.convitetimebezerra.com')).toBe('painel.convitetimebezerra.com');
+    expect(panelHostFrom('www.convitetimebezerra.com')).toBe('painel.convitetimebezerra.com');
+    expect(panelHostFrom('convitetimebezerra.com')).toBe('painel.convitetimebezerra.com');
+  });
+
+  it('a variável manda quando o painel está em outro subdomínio', () => {
+    process.env.CMD_PANEL_HOST = 'equipe.convitetimebezerra.com';
+    expect(panelHostFrom(ADMIN_HOST)).toBe('equipe.convitetimebezerra.com');
+  });
+
+  it('não mexe em desenvolvimento nem em prévia', () => {
+    delete process.env.CMD_PANEL_HOST;
+    expect(panelHostFrom('localhost:3000')).toBe(null);
+    expect(panelHostFrom('cmd-git-branch-conta.vercel.app')).toBe(null);
+    expect(panelHostFrom(null)).toBe(null);
   });
 });
