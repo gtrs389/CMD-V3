@@ -172,23 +172,36 @@ export function buildSurveySections(config: ClientFormConfig): SurveySection[] {
  *     hora de desenhar. Como campos comuns eles ficariam sem opcao nenhuma,
  *     entao a lista e materializada aqui.
  */
-export function copyFromRegistration(fields: readonly CustomField[]): CustomField[] {
-  const FORA: readonly (string | null)[] = ['name', 'phone'];
+export interface CopiedForm {
+  fields: CustomField[];
+  /** Rotulos que nao puderam vir, para a tela dizer quais e por que. */
+  leftOut: string[];
+}
 
-  return [...fields]
-    .filter((field) => field.enabled)
-    .filter((field) => field.type !== 'photo')
-    .filter((field) => !FORA.includes(field.systemKey))
-    .sort((a, b) => a.order - b.order)
-    .map((field, index) => ({
+export function copyFromRegistration(fields: readonly CustomField[]): CopiedForm {
+  // Os unicos que nao podem vir, e por impedimento, nao por escolha: nome e
+  // telefone ja sao campos fixos do Formulario 2, e foto o banco recusa.
+  const impossivel = (field: CustomField) =>
+    field.type === 'photo' || field.systemKey === 'name' || field.systemKey === 'phone';
+
+  // TUDO O MAIS VEM, inclusive o que esta desativado no Formulario 1 — e com
+  // o estado que tinha la. Copiar so o que estava ligado deixava de fora
+  // campos que o ADMIN queria ter aqui e obrigava a remonta-los a mao, que e
+  // exatamente o trabalho que a copia existe para evitar.
+  const ordenados = [...fields].sort((a, b) => a.order - b.order);
+
+  return {
+    fields: ordenados.filter((field) => !impossivel(field)).map((field, index) => ({
       ...field,
       id: createId('fld'),
-      // Toda pergunta do Formulario 2 e livre: sem `system_key` nao ha
-      // verificacao, mascara de documento nem consulta pendurada nela.
+      // Todo campo do Formulario 2 e livre: sem `system_key` nao ha
+      // verificacao, mascara de documento nem consulta pendurada nele.
       systemKey: null,
       options: optionsFor(field),
       order: index,
-    }));
+    })),
+    leftOut: ordenados.filter(impossivel).map((field) => field.label),
+  };
 }
 
 /** Lista de opcoes de um campo que, no cadastro, o sistema preenchia. */

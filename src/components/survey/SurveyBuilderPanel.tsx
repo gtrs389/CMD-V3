@@ -90,7 +90,7 @@ export function SurveyBuilderPanel({
         <>
           <IdentityNotice />
           <CopyFromRegistration
-            total={registrationFields.filter((field) => field.enabled).length}
+            total={registrationFields.length}
             atual={survey.fields.length}
             saving={saving}
             open={copiando}
@@ -98,9 +98,12 @@ export function SurveyBuilderPanel({
             onCancel={() => setCopiando(false)}
             onConfirm={() => {
               setCopiando(false);
+              const { fields, leftOut } = copyFromRegistration(registrationFields);
               void persist(
-                { fields: copyFromRegistration(registrationFields) },
-                'Campos copiados do Formulário 1.',
+                { fields },
+                leftOut.length > 0
+                  ? `${fields.length} ${fields.length === 1 ? 'campo copiado' : 'campos copiados'}. Fora: ${leftOut.join(', ')}.`
+                  : `${fields.length} ${fields.length === 1 ? 'campo copiado' : 'campos copiados'} do Formulário 1.`,
               );
             }}
           />
@@ -177,8 +180,8 @@ function CopyFromRegistration({
           <div className="min-w-0">
             <CardTitle>Começar a partir do Formulário 1</CardTitle>
             <CardDescription>
-              Traz os campos ativos do Formulário 1 para cá. É só um ponto de partida: depois da
-              cópia, mexer em um não altera o outro.
+              Traz os campos do Formulário 1 para cá, na mesma ordem. É só um ponto de partida:
+              depois da cópia, mexer em um não altera o outro.
             </CardDescription>
           </div>
           <Button variant="secondary" onClick={onAsk} disabled={saving || total === 0}>
@@ -202,8 +205,12 @@ function CopyFromRegistration({
         details={
           <div className="space-y-2">
             <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
-              Nome e telefone não vêm junto: o Formulário 2 já pede os dois como campos fixos.
-              Foto também não, porque ele não recebe arquivo.
+              Vêm todos os campos, na mesma ordem e com o mesmo obrigatório/opcional — inclusive
+              os que estão desativados lá, que chegam desativados aqui.
+            </p>
+            <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
+              Só não vêm nome e telefone, que o Formulário 2 já pede como campos fixos, e foto,
+              porque ele não recebe arquivo.
             </p>
             <p className="rounded-control bg-warning-50 p-3 text-sm text-warning-600">
               CPF, título de eleitor e endereço viram campos de texto comuns. O Formulário 2 não
