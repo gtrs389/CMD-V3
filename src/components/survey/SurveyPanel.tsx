@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { GenerateSurveyLinkButton } from './GenerateSurveyLinkButton';
-import { SurveyBuilderPanel, SurveySummaryCard } from './SurveyBuilderPanel';
+import { SurveyBuilderPanel } from './SurveyBuilderPanel';
 import { SurveyResponsesList } from './SurveyResponsesList';
+import { SurveySummaryCard } from './SurveySummaryCard';
 
 /**
  * Area do questionario no painel.
@@ -32,6 +33,9 @@ interface SurveyPanelProps {
   clientId?: string;
   /** Libera o construtor de perguntas. Exclusivo do ADMIN geral. */
   canManage?: boolean;
+  /** Nome e foto do time, usados na previa do construtor. */
+  teamName?: string;
+  teamPhoto?: string | null;
 }
 
 interface SurveyData {
@@ -39,7 +43,12 @@ interface SurveyData {
   responses: SurveyResponse[];
 }
 
-export function SurveyPanel({ clientId, canManage = false }: SurveyPanelProps) {
+export function SurveyPanel({
+  clientId,
+  canManage = false,
+  teamName = '',
+  teamPhoto = null,
+}: SurveyPanelProps) {
   const loader = useCallback(async (): Promise<SurveyData> => {
     if (!clientId) return fetchOwnSurvey();
     const [survey, responses] = await Promise.all([
@@ -54,6 +63,7 @@ export function SurveyPanel({ clientId, canManage = false }: SurveyPanelProps) {
   // Edicao local: gravar uma pergunta nao precisa esperar a releitura inteira
   // para a lista aparecer atualizada.
   const [draft, setDraft] = useState<SurveyConfig | null>(null);
+  const [saving, setSaving] = useState(false);
   const survey = draft ?? data?.survey ?? null;
 
   if (loading) {
@@ -86,7 +96,15 @@ export function SurveyPanel({ clientId, canManage = false }: SurveyPanelProps) {
       </div>
 
       {canManage && clientId ? (
-        <SurveyBuilderPanel clientId={clientId} survey={survey} onChange={setDraft} />
+        <SurveyBuilderPanel
+          clientId={clientId}
+          teamName={teamName}
+          teamPhoto={teamPhoto}
+          survey={survey}
+          onChange={setDraft}
+          saving={saving}
+          onSavingChange={setSaving}
+        />
       ) : (
         <SurveySummaryCard survey={survey} />
       )}

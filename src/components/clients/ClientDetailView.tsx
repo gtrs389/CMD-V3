@@ -364,7 +364,12 @@ export function ClientDetailView({
           Quem responde nao vira integrante e nao aparece na aba Equipe. */}
       {mostrarQuestionario ? (
         <TabPanel id="questionario" active={abaAtiva}>
-          <SurveyPanel clientId={client.id} canManage={podeMontarQuestionario} />
+          <SurveyPanel
+            clientId={client.id}
+            canManage={podeMontarQuestionario}
+            teamName={client.name}
+            teamPhoto={client.photo}
+          />
         </TabPanel>
       ) : null}
 

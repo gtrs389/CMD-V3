@@ -1,18 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardList, Clock, Link2Off, Send, WifiOff } from 'lucide-react';
-import type { ClientFormConfig, CustomField, FieldValue, PublicSurvey } from '@/lib/types';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Clock, Link2Off, Send, WifiOff } from 'lucide-react';
+import type { FieldValue, PublicSurvey } from '@/lib/types';
 import { fetchPublicSurvey, submitSurvey, type PublicSurveyOutcome } from '@/lib/repositories';
 import { GoneError, NetworkError } from '@/lib/repositories/http/api';
 import { RepositoryError } from '@/lib/repositories/types';
-import { isFilled, visibleFields } from '@/lib/validation/dynamic-form';
+import {
+  buildSurveySections,
+  toSurveyFormConfig,
+  SURVEY_NAME_FIELD_ID,
+  SURVEY_PHONE_FIELD_ID,
+} from '@/lib/domain/survey-config';
+import { completionPercent, missingRequired } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 import { InviteStateShell } from './InviteChrome';
+import {
+  PublicFormSection,
+  PublicFormShell,
+  PublicSuccessScreen,
+  focusFirstInvalid,
+} from './PublicFormShell';
+import { isWideField } from './invite-sections';
 
 /**
  * Questionario publico.
@@ -22,52 +35,14 @@ import { InviteStateShell } from './InviteChrome';
  * entra em contagem nenhuma de mobilizacao. A resposta fica guardada a
  * parte, com o nome e o telefone informados.
  *
+ * Visualmente, porem, e a MESMA tela: a moldura, os cartoes, a barra de
+ * avanco e o rodape fixo sao os componentes compartilhados do cadastro. Nao
+ * existe um segundo padrao.
+ *
  * A tela nao recebe nem conhece o codigo do link: ele ficou no cookie
  * `HttpOnly` que a rota de entrada gravou, e toda leitura ou envio o resolve
  * no servidor.
- *
- * Link encerrado, ja respondido ou reservado por outro navegador mostra
- * sempre a MESMA tela, sem revelar o motivo e sem desenhar uma unica
- * pergunta.
  */
-
-/** Identificadores das duas perguntas fixas. Nao sao perguntas do ADMIN. */
-const NAME_ID = '__nome';
-const PHONE_ID = '__telefone';
-
-/**
- * As duas perguntas fixas do questionario.
- *
- * `systemKey` aqui serve so para a mascara e a validacao ja existentes
- * (nome e telefone brasileiro). Nenhuma verificacao de CPF, titulo ou
- * endereco e acionada: o questionario nao tem nada disso.
- */
-const IDENTITY_FIELDS: CustomField[] = [
-  {
-    id: NAME_ID,
-    systemKey: 'name',
-    type: 'text',
-    label: 'Seu nome',
-    placeholder: 'Nome completo',
-    helpText: '',
-    required: true,
-    enabled: true,
-    order: -2,
-    options: [],
-  },
-  {
-    id: PHONE_ID,
-    systemKey: 'phone',
-    type: 'phone',
-    label: 'Seu telefone',
-    placeholder: '(00) 00000-0000',
-    helpText: '',
-    required: true,
-    enabled: true,
-    order: -1,
-    options: [],
-  },
-];
 
 export function PublicSurveyView() {
   const [outcome, setOutcome] = useState<PublicSurveyOutcome | null>(null);
@@ -207,165 +182,142 @@ export function SurveyUnavailable() {
    Formulario
    ------------------------------------------------------------------------- */
 
+/**
+ * O questionario, desenhado pela MESMA moldura do cadastro.
+ *
+ * Cabecalho, banner do celular, largura, barra de avanco, cartoes numerados,
+ * campos, mensagens de erro, alvos de toque, rodape fixo e tela final saem
+ * de `PublicFormShell` e de `PublicFormSection` — os mesmos componentes que
+ * a tela de cadastro usa. Nao ha uma segunda versao de nada: corrigir la
+ * corrige aqui.
+ *
+ * O que e proprio do questionario e o que acontece DEPOIS do envio: a
+ * resposta e guardada a parte e quem respondeu nao vira integrante.
+ */
 function SurveyForm({ survey }: { survey: PublicSurvey }) {
   const toast = useToast();
-  const [sending, setSending] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [closed, setClosed] = useState(false);
+  const enviadoRef = useRef(false);
+  const formRef = useRef<HTMLFormElement | null>(null);
 
   /**
-   * As perguntas do ADMIN, precedidas do nome e do telefone.
+   * O questionario visto como um formulario comum.
    *
-   * Montadas como uma configuracao de formulario comum: assim o questionario
-   * reaproveita, sem copia, a mesma validacao e os mesmos campos do resto do
-   * sistema.
+   * A conversao mora em `@/lib/domain/survey-config`, e e a MESMA usada pela
+   * previa do construtor: o ADMIN ve exatamente o que a pessoa vai ver.
    */
-  const config = useMemo<ClientFormConfig>(
-    () => ({
-      fields: [
-        ...IDENTITY_FIELDS,
-        ...survey.fields.map((field, index) => ({ ...field, order: index })),
-      ],
-      privacy: {
-        enabled: false,
-        title: '',
-        text: '',
-        requireConsent: false,
-        consentLabel: '',
-      },
-      introText: survey.introText,
-      successMessage: survey.successMessage,
-      updatedAt: new Date().toISOString(),
-    }),
-    [survey],
-  );
-
+  const config = useMemo(() => toSurveyFormConfig(survey), [survey]);
   const form = useDynamicForm(config);
-  const campos = useMemo(() => visibleFields(config), [config]);
+  const sections = useMemo(() => buildSurveySections(config), [config]);
+  const percent = completionPercent(config, form.values);
+  const faltam = missingRequired(config, form.values);
 
-  // O que ainda falta, com o nome de cada pergunta: no celular, o rodape e a
-  // unica parte sempre visivel, entao e la que o aviso precisa estar.
-  const faltando = campos.filter(
-    (field) => field.required && !isFilled(form.values[field.id]),
-  );
-
-  async function handleSubmit() {
-    if (sending) return;
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (enviadoRef.current || submitting) return;
 
     const values = form.validate();
     if (!values) {
-      toast.error('Revise os campos destacados.');
+      toast.error('Revise os campos destacados antes de enviar.');
+      window.requestAnimationFrame(() => focusFirstInvalid(formRef.current));
       return;
     }
 
-    setSending(true);
-    try {
-      await submitSurvey({
-        name: String(values[NAME_ID] ?? ''),
-        phone: String(values[PHONE_ID] ?? ''),
-        answers: survey.fields.map((field) => ({
-          fieldId: field.id,
-          value: (values[field.id] ?? null) as FieldValue,
-        })),
-      });
-      setDone(true);
-    } catch (falha) {
-      // Link encerrado no meio do preenchimento: a tela troca por inteiro,
-      // em vez de insistir em um envio que nunca vai passar.
-      if (falha instanceof GoneError) {
-        setClosed(true);
-        return;
-      }
-      toast.error(
-        falha instanceof RepositoryError && falha.message
-          ? falha.message
-          : 'Não foi possível enviar. Tente novamente.',
-      );
-    } finally {
-      setSending(false);
-    }
+    enviadoRef.current = true;
+    setSubmitting(true);
+
+    void submitSurvey({
+      name: String(values[SURVEY_NAME_FIELD_ID] ?? ''),
+      phone: String(values[SURVEY_PHONE_FIELD_ID] ?? ''),
+      // So as perguntas do ADMIN: os dois campos fixos viajam a parte, como
+      // identificacao da resposta.
+      answers: survey.fields.map((field) => ({
+        fieldId: field.id,
+        value: (values[field.id] ?? null) as FieldValue,
+      })),
+    })
+      .then(() => setDone(true))
+      .catch((falha: unknown) => {
+        enviadoRef.current = false;
+
+        // Link encerrado no meio do preenchimento: a tela troca por inteiro,
+        // em vez de insistir em um envio que nunca vai passar.
+        if (falha instanceof GoneError) {
+          setClosed(true);
+          return;
+        }
+
+        toast.error(
+          falha instanceof RepositoryError && falha.message
+            ? falha.message
+            : 'Não foi possível enviar a resposta. Tente novamente.',
+        );
+      })
+      .finally(() => setSubmitting(false));
   }
 
   if (closed) return <SurveyClosed />;
+  if (done) return <PublicSuccessScreen title={survey.successMessage} />;
 
-  if (done) {
-    return (
-      <InviteStateShell>
-        <StateIcon tone="success">
-          <CheckCircle2 className="size-6" />
-        </StateIcon>
-        <h1 className="text-lg font-semibold text-ink-900">Resposta enviada</h1>
-        <p className="mt-2 text-sm text-balance text-ink-500">{survey.successMessage}</p>
-      </InviteStateShell>
-    );
-  }
+  /** O mesmo botao nas duas larguras: muda so o tamanho e a largura total. */
+  const submitButton = (fullWidth: boolean) => (
+    <Button
+      type="submit"
+      form="questionario-publico"
+      variant="accent"
+      size={fullWidth ? 'lg' : undefined}
+      loading={submitting}
+      fullWidth={fullWidth}
+    >
+      {!submitting ? <Send aria-hidden="true" className="size-4" /> : null}
+      Enviar resposta
+    </Button>
+  );
 
   return (
-    <main className="safe-x flex min-h-dvh flex-col bg-surface-muted">
-      {/* Cabecalho: de quem veio e o que e. Nada de token, endereco ou
-          identificador na tela. */}
-      <header className="safe-top border-b border-line bg-surface px-4 py-5 sm:px-6">
-        <div className="mx-auto flex w-full max-w-xl items-center gap-3">
-          <span
-            aria-hidden="true"
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700"
-          >
-            <ClipboardList className="size-5" />
-          </span>
-          <div className="min-w-0">
-            <h1 className="truncate text-base font-semibold text-ink-900">{survey.title}</h1>
-            <p className="truncate text-sm text-ink-500">
-              {survey.senderName ? `Enviado por ${survey.senderName}` : survey.clientName}
-            </p>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto w-full max-w-xl flex-1 px-4 pt-5 pb-36 sm:px-6">
-        {survey.introText ? (
-          <p className="mb-5 rounded-card border border-line bg-surface p-4 text-sm whitespace-pre-line text-ink-600">
-            {survey.introText}
-          </p>
-        ) : null}
-
-        <form
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleSubmit();
-          }}
-          className="space-y-4 rounded-card border border-line bg-surface p-4 shadow-card sm:p-6"
-        >
-          {campos.map((field) => (
-            <DynamicFieldInput
-              key={field.id}
-              field={field}
-              value={form.values[field.id] ?? null}
-              onChange={(value) => form.setValue(field.id, value)}
-              error={form.errors[field.id]}
-              disabled={sending}
-              idPrefix="questionario"
-              variant="invite"
-            />
+    <PublicFormShell
+      owner={survey.owner}
+      teamName={survey.clientName}
+      bannerTag={survey.bannerTag}
+      title={survey.title}
+      subtitle="Leva menos de 2 minutos."
+      introText={survey.introText}
+      percent={percent}
+      missing={faltam}
+      desktopAction={submitButton(false)}
+      mobileAction={submitButton(true)}
+    >
+      <form id="questionario-publico" ref={formRef} onSubmit={handleSubmit} noValidate>
+        <div className="mt-5 animate-rise space-y-4 lg:mt-6 lg:space-y-7">
+          {sections.map((section, index) => (
+            <PublicFormSection
+              key={section.id}
+              id={section.id}
+              index={index}
+              title={section.title}
+              description={section.description}
+              fields={section.fields}
+              values={form.values}
+            >
+              {section.fields.map((field) => (
+                <div key={field.id} className={isWideField(field) ? 'sm:col-span-2' : undefined}>
+                  <DynamicFieldInput
+                    field={field}
+                    idPrefix="questionario"
+                    variant="invite"
+                    disabled={submitting}
+                    value={form.values[field.id] ?? null}
+                    error={form.errors[field.id]}
+                    onChange={(value) => form.setValue(field.id, value)}
+                  />
+                </div>
+              ))}
+            </PublicFormSection>
           ))}
-        </form>
-      </div>
-
-      {/* Rodape fixo: o botao de enviar fica sempre ao alcance do polegar, e
-          o que falta preencher aparece ali mesmo. */}
-      <div className="safe-x fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:px-6">
-        <div className="mx-auto w-full max-w-xl">
-          {faltando.length > 0 ? (
-            <p className="mb-2 text-center text-xs text-ink-500">
-              Falta preencher: {faltando.map((field) => field.label).join(', ')}
-            </p>
-          ) : null}
-          <Button size="lg" fullWidth loading={sending} onClick={() => void handleSubmit()}>
-            <Send aria-hidden="true" className="size-4" />
-            Enviar resposta
-          </Button>
         </div>
-      </div>
-    </main>
+      </form>
+    </PublicFormShell>
   );
 }

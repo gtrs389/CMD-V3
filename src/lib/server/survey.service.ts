@@ -1,6 +1,7 @@
 import 'server-only';
 import type {
   CustomField,
+  PublicInviteOwner,
   PublicSurvey,
   SurveyAnswer,
   SurveyConfig,
@@ -13,6 +14,7 @@ import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
   type ClientRow,
+  type MemberRow,
   type SurveyFieldRow,
   type SurveyInviteRow,
   type SurveyResponseRow,
@@ -59,7 +61,8 @@ const INVITE_COLUMNS =
   'claim_hash,claimed_at,consumed_at,response_id,created_at';
 
 const SURVEY_CLIENT_COLUMNS =
-  'id,name,photo_path,survey_active,survey_title,survey_intro_text,survey_success_message,survey_updated_at';
+  'id,name,photo_path,survey_active,survey_title,survey_intro_text,survey_success_message,' +
+  'survey_updated_at,banner_tag_left,banner_tag_width,banner_tag_top,banner_tag_size,banner_tag_color';
 
 type SurveyClientRow = Pick<
   ClientRow,
@@ -71,6 +74,11 @@ type SurveyClientRow = Pick<
   | 'survey_intro_text'
   | 'survey_success_message'
   | 'survey_updated_at'
+  | 'banner_tag_left'
+  | 'banner_tag_width'
+  | 'banner_tag_top'
+  | 'banner_tag_size'
+  | 'banner_tag_color'
 >;
 
 /* -------------------------------------------------------------------------
@@ -370,14 +378,58 @@ export async function resolveSurveyLink(token: string): Promise<SurveyLinkState>
     survey: {
       clientId: row.id,
       clientName: row.name,
-      clientPhoto: photo,
+      bannerTag: {
+        left: Number(row.banner_tag_left),
+        width: Number(row.banner_tag_width),
+        top: Number(row.banner_tag_top),
+        size: Number(row.banner_tag_size),
+        color: row.banner_tag_color,
+      },
+      owner: await surveyOwner(invite, photo),
       title: row.survey_title || DEFAULT_SURVEY_TITLE,
       introText: row.survey_intro_text,
       successMessage: row.survey_success_message || DEFAULT_SURVEY_SUCCESS,
       fields: visiveis,
-      senderName: invite.owner_name,
     },
   };
+}
+
+/**
+ * Quem enviou o link, na mesma forma do convite de cadastro.
+ *
+ * O nome e o perfil sao o SNAPSHOT gravado na geracao: continuam corretos
+ * mesmo que o usuario tenha sido excluido depois. A foto e a do integrante,
+ * no perfil EQUIPE, e a do proprio time no perfil do Administrador do time —
+ * exatamente o mesmo criterio da tela de cadastro.
+ */
+async function surveyOwner(
+  invite: SurveyInviteRow,
+  clientPhotoUrl: string | null,
+): Promise<PublicInviteOwner | null> {
+  const role = invite.owner_role;
+  if (!invite.owner_name || (role !== 'CANDIDATE' && role !== 'EQUIPE')) return null;
+
+  if (role === 'CANDIDATE') {
+    return { name: invite.owner_name, photoUrl: clientPhotoUrl, role: 'CANDIDATE' };
+  }
+
+  let photoUrl: string | null = null;
+  if (invite.user_id) {
+    const user = await selectOne<Pick<UserRow, 'member_id'>>(TABLES.users, {
+      select: 'member_id',
+      filters: { id: `eq.${invite.user_id}` },
+    });
+
+    if (user?.member_id) {
+      const member = await selectOne<Pick<MemberRow, 'photo_path'>>(TABLES.members, {
+        select: 'photo_path',
+        filters: { id: `eq.${user.member_id}` },
+      });
+      photoUrl = await signedUrl(member?.photo_path ?? null);
+    }
+  }
+
+  return { name: invite.owner_name, photoUrl, role: 'EQUIPE' };
 }
 
 /** Reserva o link para o primeiro navegador que o abriu. */

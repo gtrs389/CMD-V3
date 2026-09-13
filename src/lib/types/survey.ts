@@ -1,5 +1,7 @@
 import type { IsoDate } from './common';
+import type { BannerTag } from './client';
 import type { CustomField, FieldType } from './form-field';
+import type { PublicInviteOwner } from './invite';
 import type { FieldValue } from './member';
 import type { Role } from './user';
 
@@ -32,16 +34,6 @@ export interface SurveyConfig {
 
 export const DEFAULT_SURVEY_TITLE = 'Questionário';
 export const DEFAULT_SURVEY_SUCCESS = 'Obrigado por responder!';
-
-/** Configuracao vazia, usada enquanto o time ainda nao montou nada. */
-export const EMPTY_SURVEY: SurveyConfig = {
-  active: false,
-  title: DEFAULT_SURVEY_TITLE,
-  introText: '',
-  successMessage: DEFAULT_SURVEY_SUCCESS,
-  fields: [],
-  updatedAt: new Date(0).toISOString(),
-};
 
 /** O que o ADMIN pode alterar. Tudo opcional: a tela envia so o que mudou. */
 export interface SurveyConfigInput {
@@ -80,15 +72,22 @@ export interface SurveyResponse {
   answers: SurveyAnswer[];
 }
 
-/** O que a tela publica precisa saber para desenhar o questionario. */
+/**
+ * O que a tela publica precisa saber para desenhar o questionario.
+ *
+ * Os campos de apresentacao sao os MESMOS do convite de cadastro — dono do
+ * link, nome do time e estampa do banner —, porque a tela e a mesma: o que
+ * muda e o que acontece com a resposta, nao o que a pessoa ve.
+ */
 export interface PublicSurvey {
   clientId: string;
   clientName: string;
-  clientPhoto: string | null;
+  /** Estampa do banner do celular, ajustada pelo ADMIN (migration 022). */
+  bannerTag: BannerTag;
+  /** Quem enviou o link: apenas nome, foto e perfil. */
+  owner: PublicInviteOwner | null;
   title: string;
   introText: string;
   successMessage: string;
   fields: CustomField[];
-  /** Quem enviou o link, para a pessoa saber de quem veio. */
-  senderName: string | null;
 }
