@@ -1,10 +1,14 @@
 /**
- * Os dois enderecos do sistema.
+ * Os tres enderecos do sistema.
  *
- *   painel.<dominio>   o painel: login, cadastro, configuracoes, tudo.
+ *   <adm>.<dominio>    o endereco EXCLUSIVO do ADMIN geral. So a sessao do
+ *                      ADMIN vale aqui, e nenhuma porta publica e servida:
+ *                      link de cadastro, Formulario 2 e acesso do time nao
+ *                      abrem neste endereco.
+ *   painel.<dominio>   o painel do time: Administrador do time e equipe.
  *   <dominio>          o dominio publico, que vai nos links enviados por
  *                      WhatsApp. Serve o formulario de cadastro, o
- *                      questionario e o acesso do time — e mais nada.
+ *                      Formulario 2 e o acesso do time — e mais nada.
  *
  * A separacao existe por seguranca: a tela de login e por onde um ataque
  * comeca, e ela nao tem por que ficar exposta no endereco que milhares de
@@ -44,6 +48,15 @@ function normalize(host: string | null | undefined): string {
 const PANEL_PREFIX = 'painel.';
 
 /**
+ * Subdominio exclusivo do ADMIN geral.
+ *
+ * Nao e um nome que se adivinhe, e essa e a ideia: o painel do ADMIN deixa
+ * de morar em um endereco que qualquer um tenta no escuro. Quem usa outro
+ * subdominio configura `CMD_ADMIN_HOST`.
+ */
+const ADMIN_PREFIX = '7061696e656c2061646d.';
+
+/**
  * Endereco de desenvolvimento ou de previa.
  *
  * Nao e o dominio publico de ninguem: e onde se testa. Trancar o login aqui
@@ -59,11 +72,36 @@ function isLocalOrPreview(host: string): boolean {
   );
 }
 
-/** O endereco recebido e o do painel? */
+/**
+ * O endereco recebido e o EXCLUSIVO do ADMIN geral?
+ *
+ * Desenvolvimento e previa respondem nao: la nao existe endereco exclusivo,
+ * e tratar `localhost` como tal trancaria o proprio ambiente de teste para
+ * todos os outros perfis.
+ */
+export function isAdminHost(host: string | null | undefined): boolean {
+  const atual = normalize(host);
+  if (!atual) return false;
+  if (isLocalOrPreview(atual)) return false;
+
+  const configurado = normalize(process.env.CMD_ADMIN_HOST);
+  if (configurado) return atual === configurado;
+
+  return atual.startsWith(ADMIN_PREFIX);
+}
+
+/**
+ * O endereco recebido serve o painel?
+ *
+ * O endereco do ADMIN tambem e painel: e por ele que o ADMIN entra. A
+ * pergunta "quem pode usar este painel" e outra, e quem responde e
+ * `isAdminHost` junto com a sessao — esconder tela nunca foi protecao.
+ */
 export function isPanelHost(host: string | null | undefined): boolean {
   const atual = normalize(host);
   if (!atual) return false;
   if (isLocalOrPreview(atual)) return true;
+  if (isAdminHost(atual)) return true;
 
   const configurado = normalize(process.env.CMD_PANEL_HOST);
   if (configurado) return atual === configurado;
@@ -97,6 +135,57 @@ const PUBLIC_PREFIXES = [
 export function isPublicPath(pathname: string): boolean {
   if (pathname === '/') return true;
   return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/**
+ * Portas de entrada de link enviado, que o endereco do ADMIN NAO serve.
+ *
+ * Link de cadastro, Formulario 2 e acesso do time pertencem ao dominio
+ * publico: recebe-los no endereco do ADMIN daria a ele um uso que nao e
+ * dele — e faria o endereco circular por WhatsApp.
+ *
+ * A lista e escrita a mao, e nao derivada de `PUBLIC_PREFIXES`, porque nem
+ * todo caminho publico e porta de entrada:
+ *
+ *   - `/api/localidades` e das listas de estado, municipio, bairro e rua, e
+ *     o proprio painel do ADMIN as usa para cadastrar alguem a mao. Bloquea-lo
+ *     deixaria o endereco do ADMIN com o campo de endereco quebrado;
+ *   - `/saida` e a propria saida;
+ *   - `/` decide o que desenhar e, sem contexto publico, leva ao login.
+ */
+const ADMIN_BLOCKED_PREFIXES = [
+  '/convite/',
+  '/questionario/',
+  '/acesso/',
+  '/api/public/',
+  '/api/acesso-time',
+] as const;
+
+export function isPublicEntryPath(pathname: string): boolean {
+  return ADMIN_BLOCKED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/**
+ * Endereco publico deduzido de um endereco de painel.
+ *
+ * `painel.x` e `<adm>.x` viram `www.x`. E o que impede um link gerado de
+ * dentro do painel de sair apontando para o painel — no endereco do ADMIN
+ * isso seria pior do que um link quebrado: divulgaria, em cada convite
+ * enviado, exatamente o endereco que existe para nao ser conhecido.
+ *
+ * Devolve nulo quando nao ha o que deduzir: no proprio dominio publico, em
+ * desenvolvimento, ou quando o painel nao esta em um subdominio (menos de
+ * tres rotulos) — ai nao existe primeiro rotulo para trocar.
+ */
+export function publicHostFrom(host: string | null | undefined): string | null {
+  const atual = normalize(host);
+  if (!atual || isLocalOrPreview(atual)) return null;
+  if (!isPanelHost(atual)) return null;
+
+  const rotulos = atual.split('.');
+  if (rotulos.length < 3) return null;
+
+  return `www.${rotulos.slice(1).join('.')}`;
 }
 
 /** Para onde vai quem chega ao dominio publico sem um link valido. */

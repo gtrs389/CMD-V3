@@ -1,16 +1,28 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { LOGIN_PATH, PROTECTED_PREFIXES, SESSION_COOKIE } from '@/lib/auth/constants';
-import { isPanelHost, isPublicPath, PUBLIC_EXIT_PATH } from '@/lib/domain/hosts';
+import {
+  isAdminHost,
+  isPanelHost,
+  isPublicEntryPath,
+  isPublicPath,
+  PUBLIC_EXIT_PATH,
+} from '@/lib/domain/hosts';
 
 /**
  * Duas decisoes tomadas antes de qualquer pagina ser desenhada.
  *
- * 1. QUAL ENDERECO E ESTE. O sistema tem dois papeis: `painel.<dominio>`
- *    atende o painel inteiro, e o dominio publico — o que vai nos links
- *    enviados por WhatsApp — atende apenas as portas de entrada desses
- *    links. Qualquer outro caminho no dominio publico, a comecar pela tela
- *    de login, vai para `/saida`, que decide o destino a partir do que o
- *    ADMIN configurou.
+ * 1. QUAL ENDERECO E ESTE. O sistema tem tres papeis:
+ *
+ *      - o endereco EXCLUSIVO DO ADMIN geral serve o painel e mais nada:
+ *        link de cadastro, Formulario 2 e acesso do time nao abrem nele.
+ *        Quem pode USAR esse painel e outra conversa, decidida no servidor
+ *        contra a sessao (`currentUser`), e nao aqui: este arquivo roda
+ *        antes da aplicacao e so enxerga um cookie opaco;
+ *      - `painel.<dominio>` atende o painel do time;
+ *      - o dominio publico — o que vai nos links enviados por WhatsApp —
+ *        atende apenas as portas de entrada desses links. Qualquer outro
+ *        caminho nele, a comecar pela tela de login, vai para `/saida`, que
+ *        decide o destino a partir do que o ADMIN configurou.
  *
  *    Aqui nao ha consulta ao banco: este arquivo roda antes da aplicacao, em
  *    toda requisicao, e a unica pergunta que responde e "este caminho
@@ -27,9 +39,19 @@ import { isPanelHost, isPublicPath, PUBLIC_EXIT_PATH } from '@/lib/domain/hosts'
  */
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  const host = request.headers.get('host');
 
-  // 1. Dominio publico: so as portas de entrada dos links enviados.
-  if (!isPanelHost(request.headers.get('host'))) {
+  // 1a. Endereco exclusivo do ADMIN: nenhuma porta publica e servida. Um
+  // link de cadastro colado neste endereco nao abre formulario nenhum — ele
+  // pertence ao dominio publico, e e de la que as pessoas o recebem.
+  if (isAdminHost(host) && isPublicEntryPath(pathname)) {
+    const saida = NextResponse.redirect(new URL(PUBLIC_EXIT_PATH, request.url), 307);
+    saida.headers.set('Cache-Control', 'no-store');
+    return saida;
+  }
+
+  // 1b. Dominio publico: so as portas de entrada dos links enviados.
+  if (!isPanelHost(host)) {
     if (!isPublicPath(pathname)) {
       const saida = NextResponse.redirect(new URL(PUBLIC_EXIT_PATH, request.url), 307);
       saida.headers.set('Cache-Control', 'no-store');
