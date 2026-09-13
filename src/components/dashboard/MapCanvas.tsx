@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import L from 'leaflet';
-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPin, PollingPlacePin } from '@/lib/domain/map-pin';
 import {
@@ -445,8 +445,13 @@ export default function MapCanvas({
       preferCanvas
       // Sem a faixa de credito no canto do mapa.
       attributionControl={false}
+      // O + / - sai do canto superior esquerdo: la ficam os controles do
+      // proprio mapa (tela cheia, filtros, ranking). Embaixo a direita ele
+      // ainda fica na altura do polegar no celular.
+      zoomControl={false}
       className="h-full w-full"
     >
+      <ZoomControl position="bottomright" />
       <TileLayer url={TILE_URL} maxZoom={19} />
 
       <FitBounds pins={focus} />

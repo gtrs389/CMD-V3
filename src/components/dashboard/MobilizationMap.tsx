@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Maximize2, MapPin as MapPinIcon, RefreshCw, Trophy, X } from 'lucide-react';
+import { Maximize2, MapPin as MapPinIcon, RefreshCw, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import {
   DEFAULT_MAP_QUERY,
+  activeFilterCount,
   applyMapQuery,
   mapOptions,
   type MapQuery,
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import type { MapFocus } from './MapCanvas';
+import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
 import { MapRanking } from './MapRanking';
 import { MemberSheetModal } from './MemberSheetModal';
@@ -43,16 +45,20 @@ interface MobilizationMapProps {
 /**
  * Cartao do mapa.
  *
- * Tres partes, e cada uma sabe fazer so a sua: os FILTROS decidem o recorte
- * (`MapFiltersBar`), o RECORTE e calculado em um modulo puro
- * (`@/lib/domain/map-filters`) e o resultado alimenta ao mesmo tempo o mapa
- * e o ranking. E por isso que a lista e o mapa nunca discordam: os dois leem
- * o mesmo `applyMapQuery`.
+ * Tres partes, e cada uma sabe fazer so a sua: os FILTROS decidem o recorte,
+ * o recorte e calculado em um modulo puro (`@/lib/domain/map-filters`) e o
+ * resultado alimenta ao mesmo tempo o mapa e o ranking. E por isso que a
+ * lista e o mapa nunca discordam: os dois leem o mesmo `applyMapQuery`.
  *
- * A tela cheia nao e outra tela. E o MESMO componente trocando de moldura —
- * a arvore de elementos continua identica, entao o Leaflet nao e remontado e
- * a posicao, o zoom, o balao aberto e o filtro sobrevivem a entrada e a
- * saida.
+ * TELA CHEIA E DO MAPA, nao do cartao. O botao fica SOBRE os tiles, no canto,
+ * junto com os outros controles — e em tela cheia o mapa ocupa a tela
+ * inteira, de borda a borda, com cabecalho, filtros, ranking e contagem
+ * flutuando por cima dele. Um cabecalho fixo empurrando o mapa para baixo
+ * nao e tela cheia: e o mesmo cartao esticado.
+ *
+ * A arvore de elementos e a MESMA nos dois modos — cada bloco condicional
+ * guarda o proprio lugar — entao o Leaflet nunca e remontado: posicao, zoom,
+ * balao aberto e filtro sobrevivem a entrada e a saida.
  */
 export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const { can } = useSession();
@@ -60,6 +66,13 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const [resolving, setResolving] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [showRanking, setShowRanking] = useState(true);
+  /**
+   * Painel de filtros da tela cheia.
+   *
+   * Comeca fechado: quem clicou em "tela cheia" quer ver o MAPA. O botao
+   * carrega o numero de filtros ligados, entao nada fica escondido sem aviso.
+   */
+  const [showFilters, setShowFilters] = useState(false);
 
   // Localizar cadastro pendente aciona consulta paga: exclusivo do ADMIN.
   // O Administrador do time abre o mapa somente para ver.
@@ -94,6 +107,7 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   /** Sem local de votacao na visao, o ranking nao teria o que ordenar. */
   const rankingDisponivel = query.kind !== 'RESIDENCE';
   const comRanking = rankingDisponivel && showRanking;
+  const pronto = !loading && !error;
 
   // Tela cheia: a pagina atras nao rola, e Escape fecha. Sem isso, arrastar o
   // mapa no celular acabaria rolando o painel embaixo dele.
@@ -136,134 +150,112 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
     });
   }
 
-  /**
-   * O ranking, na moldura de cada lugar.
-   *
-   * No desktop ele e uma coluna ao lado do mapa. No celular fica embaixo: em
-   * tela cheia dividindo a altura com o mapa, e no cartao logo ABAIXO da
-   * area do mapa — dentro dela, os dois disputariam os mesmos 360px e o mapa
-   * viraria uma tira.
-   *
-   * A visibilidade fica em um `div` de fora, e nao em classe passada para o
-   * componente: `hidden` e `flex` na mesma lista dependeriam da ordem do CSS
-   * gerado para decidir quem vence, e isso nao e uma garantia.
-   */
+  /** Sair da tela cheia fecha os paineis dela: eles nao existem no cartao. */
+  function alternarTelaCheia() {
+    setFullscreen((atual) => {
+      if (atual) setShowFilters(false);
+      return !atual;
+    });
+  }
+
   const painelRanking = (
     <MapRanking
       places={selection.places}
       zone={query.zone}
       activeId={focusPlace?.locationId ?? null}
       onFocus={focar}
-      // A altura vem do `div` de fora (o flex estica o filho); a largura
+      // A altura vem de quem envolve (o flex estica o filho); a largura
       // precisa ser pedida, porque em linha o flex nao estica na horizontal.
       className="w-full"
     />
   );
 
+  const contagem = totals ? (
+    <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
+      {/* O primeiro numero e o do RECORTE: e ele que responde "quanto voto
+          tem aqui dentro". Os totais do time vem depois. */}
+      <div className="flex gap-1">
+        <dt>Votos no filtro:</dt>
+        <dd className="font-semibold text-brand-800">{formatNumber(selection.votes)}</dd>
+      </div>
+      <div className="flex gap-1">
+        <dt>Pessoas no filtro:</dt>
+        <dd className="font-semibold text-ink-900">{formatNumber(selection.pins.length)}</dd>
+      </div>
+      <div className="flex gap-1">
+        <dt>Locais no filtro:</dt>
+        <dd className="font-semibold text-ink-900">{formatNumber(selection.placeCount)}</dd>
+      </div>
+      <div className="flex gap-1">
+        <dt>Pendentes ou não localizados:</dt>
+        <dd className="font-semibold text-ink-900">{formatNumber(pendentes)}</dd>
+      </div>
+    </dl>
+  ) : null;
+
   return (
     <section
-      aria-labelledby="mapa-mobilizacao"
+      aria-label="Mapa da mobilização"
       className={cn(
         'bg-surface',
         fullscreen
-          ? 'safe-top fixed inset-0 z-[45] flex flex-col'
+          ? 'fixed inset-0 z-[45]'
           : 'rounded-card border border-line shadow-card',
       )}
     >
-      <header className="flex shrink-0 flex-col gap-3 border-b border-line p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2
-              id="mapa-mobilizacao"
-              className="flex items-center gap-2 text-sm font-semibold text-ink-900"
-            >
-              <MapPinIcon aria-hidden="true" className="size-4 text-brand-700" />
-              Mapa da mobilização
-            </h2>
-            <p className="mt-0.5 text-xs text-ink-500">
-              Distribuição dos integrantes por localização cadastrada e local de votação
-            </p>
+      {/* Cabecalho do CARTAO. Em tela cheia ele nao existe: o que ele
+          carregava passa a flutuar sobre o proprio mapa. */}
+      {!fullscreen ? (
+        <header className="flex shrink-0 flex-col gap-3 border-b border-line p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                <MapPinIcon aria-hidden="true" className="size-4 text-brand-700" />
+                Mapa da mobilização
+              </h2>
+              <p className="mt-0.5 text-xs text-ink-500">
+                Distribuição dos integrantes por localização cadastrada e local de votação
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {podeLocalizar && pendentes > 0 ? (
+                <Button variant="secondary" onClick={localizar} disabled={resolving}>
+                  {resolving ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
+                  Localizar cadastros pendentes
+                </Button>
+              ) : null}
+
+              {rankingDisponivel ? (
+                <button
+                  type="button"
+                  aria-pressed={showRanking}
+                  onClick={() => setShowRanking((atual) => !atual)}
+                  className={cn(
+                    'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3 text-xs font-medium transition-colors',
+                    showRanking
+                      ? 'border-brand-700 bg-brand-50 text-brand-800'
+                      : 'border-line bg-surface text-ink-700 hover:bg-ink-50',
+                  )}
+                >
+                  <Trophy aria-hidden="true" className="size-3.5" />
+                  Ranking
+                </button>
+              ) : null}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {podeLocalizar && pendentes > 0 ? (
-              <Button variant="secondary" onClick={localizar} disabled={resolving}>
-                {resolving ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
-                Localizar cadastros pendentes
-              </Button>
-            ) : null}
+          <MapFiltersBar query={query} onChange={setQuery} options={options} dense />
 
-            {rankingDisponivel ? (
-              <button
-                type="button"
-                aria-pressed={showRanking}
-                onClick={() => setShowRanking((atual) => !atual)}
-                className={cn(
-                  'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3 text-xs font-medium transition-colors',
-                  showRanking
-                    ? 'border-brand-700 bg-brand-50 text-brand-800'
-                    : 'border-line bg-surface text-ink-700 hover:bg-ink-50',
-                )}
-              >
-                <Trophy aria-hidden="true" className="size-3.5" />
-                Ranking
-              </button>
-            ) : null}
+          {contagem}
+        </header>
+      ) : null}
 
-            <button
-              type="button"
-              onClick={() => setFullscreen((atual) => !atual)}
-              aria-label={fullscreen ? 'Fechar tela cheia' : 'Abrir mapa em tela cheia'}
-              className={cn(
-                'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3 text-xs font-medium transition-colors',
-                fullscreen
-                  ? 'border-brand-700 bg-brand-700 text-white hover:bg-brand-800'
-                  : 'border-line bg-surface text-ink-700 hover:bg-ink-50',
-              )}
-            >
-              {fullscreen ? (
-                <X aria-hidden="true" className="size-3.5" />
-              ) : (
-                <Maximize2 aria-hidden="true" className="size-3.5" />
-              )}
-              {fullscreen ? 'Fechar' : 'Tela cheia'}
-            </button>
-          </div>
-        </div>
-
-        <MapFiltersBar query={query} onChange={setQuery} options={options} dense={!fullscreen} />
-
-        {totals ? (
-          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
-            {/* O primeiro numero e o do RECORTE: e ele que responde "quanto
-                voto tem aqui dentro". Os totais do time vem depois. */}
-            <div className="flex gap-1">
-              <dt>Votos no filtro:</dt>
-              <dd className="font-semibold text-brand-800">{formatNumber(selection.votes)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Pessoas no filtro:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(selection.pins.length)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Locais no filtro:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(selection.placeCount)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt>Pendentes ou não localizados:</dt>
-              <dd className="font-semibold text-ink-900">{formatNumber(pendentes)}</dd>
-            </div>
-          </dl>
-        ) : null}
-      </header>
-
-      {/* A arvore abaixo e a MESMA nos dois modos: so as classes mudam. E o
-          que permite entrar e sair da tela cheia sem o mapa ser remontado. */}
       <div
         className={cn(
           'flex w-full flex-col lg:flex-row',
           fullscreen
-            ? 'min-h-0 flex-1'
+            ? 'absolute inset-0'
             : 'h-[360px] overflow-hidden sm:h-[420px] lg:h-[520px]',
         )}
       >
@@ -290,34 +282,104 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
               />
 
               {selection.pins.length === 0 && selection.places.length === 0 ? (
-                <p className="pointer-events-none absolute inset-x-3 top-3 z-[500] rounded-control border border-line bg-surface/95 px-3 py-2 text-center text-xs text-ink-700 shadow-card">
+                <p className="pointer-events-none absolute inset-x-3 top-16 z-[1050] rounded-control border border-line bg-surface/95 px-3 py-2 text-center text-xs text-ink-700 shadow-card">
                   Nenhuma localização neste filtro ainda. Nenhuma posição é estimada.
                 </p>
               ) : null}
             </>
           )}
+
+          {/* CONTROLES DO MAPA, sobre os tiles. */}
+          {pronto ? (
+            <MapControlStack corner="top-right">
+              <MapControlButton
+                label={fullscreen ? 'Fechar tela cheia' : 'Tela cheia'}
+                icon={fullscreen ? <X className="size-4" /> : <Maximize2 className="size-4" />}
+                active={fullscreen}
+                onClick={alternarTelaCheia}
+              />
+
+              {/* Em tela cheia nao ha cabecalho: filtros e ranking passam a
+                  ser controles do mapa tambem. */}
+              {fullscreen ? (
+                <MapControlButton
+                  label="Filtros"
+                  icon={<SlidersHorizontal className="size-4" />}
+                  active={showFilters}
+                  badge={activeFilterCount(query)}
+                  onClick={() => setShowFilters((atual) => !atual)}
+                />
+              ) : null}
+
+              {fullscreen && rankingDisponivel ? (
+                <MapControlButton
+                  label="Ranking"
+                  icon={<Trophy className="size-4" />}
+                  active={showRanking}
+                  onClick={() => setShowRanking((atual) => !atual)}
+                />
+              ) : null}
+            </MapControlStack>
+          ) : null}
+
+          {/* Filtros flutuantes: so existem em tela cheia. */}
+          {fullscreen && pronto && showFilters ? (
+            <MapPanel side="left" className="top-3 max-h-[calc(100%-1.5rem)]">
+              <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                  <MapPinIcon aria-hidden="true" className="size-4 text-brand-700" />
+                  Mapa da mobilização
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters(false)}
+                  aria-label="Fechar filtros"
+                  className="tap flex items-center justify-center rounded-control text-ink-500 hover:bg-ink-100"
+                >
+                  <X aria-hidden="true" className="size-4" />
+                </button>
+              </div>
+
+              <div className="min-h-0 space-y-3 overflow-y-auto p-3">
+                <MapFiltersBar query={query} onChange={setQuery} options={options} />
+
+                {podeLocalizar && pendentes > 0 ? (
+                  <Button variant="secondary" onClick={localizar} disabled={resolving} fullWidth>
+                    {resolving ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
+                    Localizar cadastros pendentes
+                  </Button>
+                ) : null}
+              </div>
+            </MapPanel>
+          ) : null}
+
+          {/* Ranking flutuante: so em tela cheia. No cartao ele e coluna. */}
+          {fullscreen && pronto && comRanking ? (
+            <MapPanel side="right" className="top-16 max-h-[calc(100%-5rem)]">
+              {painelRanking}
+            </MapPanel>
+          ) : null}
+
+          {/* A contagem do recorte acompanha o mapa em tela cheia: sem ela, o
+              numero que responde "quanto voto tem aqui" sairia da vista. */}
+          {fullscreen && pronto ? (
+            <div className="safe-bottom pointer-events-none absolute bottom-3 left-3 z-[1100] max-w-[min(22rem,calc(100vw-1.5rem))] rounded-card border border-line bg-surface/95 px-3 py-2 shadow-overlay backdrop-blur">
+              {contagem}
+            </div>
+          ) : null}
         </div>
 
-        {comRanking && !loading && !error ? (
-          <>
-            {/* Desktop: coluna fixa ao lado do mapa, nas duas molduras. */}
-            <div className="hidden shrink-0 border-l border-line lg:flex lg:h-full lg:w-80">
-              {painelRanking}
-            </div>
-
-            {/* Celular em tela cheia: abaixo do mapa, dividindo a altura. */}
-            {fullscreen ? (
-              <div className="flex max-h-[45%] shrink-0 border-t border-line lg:hidden">
-                {painelRanking}
-              </div>
-            ) : null}
-          </>
+        {/* Coluna do ranking: exclusiva do cartao no desktop. */}
+        {!fullscreen && comRanking && pronto ? (
+          <div className="hidden shrink-0 border-l border-line lg:flex lg:h-full lg:w-80">
+            {painelRanking}
+          </div>
         ) : null}
       </div>
 
-      {/* Celular no cartao: fora da area do mapa, para nao roubar altura
-          dele. Rola sozinho e nao estica a pagina sem limite. */}
-      {comRanking && !loading && !error && !fullscreen ? (
+      {/* Celular no cartao: o ranking fica FORA da area do mapa, para nao
+          roubar altura dele. Rola sozinho e nao estica a pagina sem limite. */}
+      {!fullscreen && comRanking && pronto ? (
         <div className="flex max-h-72 border-t border-line lg:hidden">{painelRanking}</div>
       ) : null}
 
