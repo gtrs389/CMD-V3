@@ -31,7 +31,7 @@ import {
   selectRows,
   updateRows,
 } from '@/lib/supabase/rest';
-import { signedUrl } from '@/lib/supabase/storage';
+import { isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { badRequest, notFound } from './http';
 
 /**
@@ -54,7 +54,8 @@ import { badRequest, notFound } from './http';
  */
 
 const FIELD_COLUMNS =
-  'id,client_id,type,label,placeholder,help_text,required,enabled,position,options,created_at,updated_at';
+  'id,client_id,system_key,type,label,placeholder,help_text,required,enabled,position,options,' +
+  'created_at,updated_at';
 
 const INVITE_COLUMNS =
   'id,client_id,user_id,owner_name,owner_role,generated_by_user_id,generated_by_name,' +
@@ -89,9 +90,11 @@ type SurveyClientRow = Pick<
 function toSurveyField(row: SurveyFieldRow): CustomField {
   return {
     id: row.id,
-    // Questionario nao tem campo de sistema: toda pergunta e livre, sem
-    // verificacao de CPF, titulo ou endereco pendurada nela.
-    systemKey: null,
+    // Campo padrao correspondente (migration 026). Ele decide apenas o
+    // desenho e a validacao — mascara, lista de genero e de UF, envio da
+    // foto. Nenhuma consulta externa e acionada no Formulario 2: a
+    // verificacao de CPF e de titulo pertence ao cadastro.
+    systemKey: row.system_key ?? null,
     type: row.type,
     label: row.label,
     placeholder: row.placeholder,
@@ -176,9 +179,6 @@ export async function updateSurvey(
   await updateRows<ClientRow>(TABLES.clients, { id: `eq.${clientId}` }, patch, 'id');
 
   if (input.fields) {
-    if (input.fields.some((field) => field.type === 'photo')) {
-      throw badRequest('O Formulário 2 não aceita campos com envio de imagem.');
-    }
     await persistFields(clientId, input.fields);
   }
 
@@ -223,6 +223,7 @@ async function persistFields(clientId: string, fields: CustomField[]): Promise<v
       // E o mesmo que o formulario de cadastro sempre fez em `syncFields`.
       novos.map((field) => ({
         client_id: clientId,
+        system_key: field.systemKey,
         type: field.type,
         label: field.label,
         placeholder: field.placeholder,
@@ -240,6 +241,7 @@ async function persistFields(clientId: string, fields: CustomField[]): Promise<v
       TABLES.surveyFields,
       { id: `eq.${field.id}`, client_id: `eq.${clientId}` },
       {
+        system_key: field.systemKey,
         type: field.type,
         label: field.label,
         placeholder: field.placeholder,
@@ -498,19 +500,26 @@ export async function submitSurveyAnswer(
   });
 
   const porId = new Map(perguntas.map((field) => [field.id, field]));
-  const respostas = input.answers
-    .filter((answer) => porId.has(answer.fieldId))
-    .map((answer) => {
-      const field = porId.get(answer.fieldId)!;
-      return {
-        field_id: field.id,
-        // Copia do momento do envio: renomear a pergunta depois nao muda o
-        // sentido do que ja foi respondido.
-        label: field.label,
-        type: field.type,
-        value: legivel(field, answer.value),
-      };
+  const respostas: {
+    field_id: string;
+    label: string;
+    type: string;
+    value: SurveyAnswer['value'];
+  }[] = [];
+
+  for (const answer of input.answers) {
+    const field = porId.get(answer.fieldId);
+    if (!field) continue;
+
+    respostas.push({
+      field_id: field.id,
+      // Copia do momento do envio: renomear o campo depois nao muda o
+      // sentido do que ja foi respondido.
+      label: field.label,
+      type: field.type,
+      value: await gravavel(field, answer.value),
     });
+  }
 
   const rows = await callFunction<AnswerRow[]>('cmd_survey_answer', {
     p_token_hash: hashToken(token),
@@ -522,6 +531,28 @@ export async function submitSurveyAnswer(
 
   const row = Array.isArray(rows) ? rows[0] : (rows as unknown as AnswerRow);
   return row?.outcome ?? 'GONE';
+}
+
+/**
+ * Valor pronto para gravar.
+ *
+ * A foto chega como imagem embutida no proprio texto (data URL) e pode ter
+ * megabytes: guardar isso em `jsonb` incharia a tabela e faria cada leitura
+ * da lista arrastar todas as imagens junto. Ela vai para o bucket privado,
+ * como a foto do integrante, e o que fica gravado e o caminho — assinado na
+ * leitura, com prazo.
+ */
+async function gravavel(
+  field: SurveyFieldRow,
+  value: SurveyAnswer['value'],
+): Promise<SurveyAnswer['value']> {
+  if (field.type === 'photo') {
+    if (typeof value !== 'string' || !isDataUrl(value)) return null;
+    const enviada = await uploadImage('survey', value);
+    return enviada.path;
+  }
+
+  return legivel(field, value);
 }
 
 /**
@@ -587,14 +618,20 @@ export async function listSurveyResponses(
     order: 'position.asc',
   });
 
+  // A foto ficou guardada como caminho no bucket privado: a tela recebe uma
+  // URL assinada, com prazo, e nunca o caminho bruto.
+  const fotos = await signedUrls(
+    valores.map((row) => (row.field_type === 'photo' && typeof row.value === 'string' ? row.value : null)),
+  );
+
   const agrupados = new Map<string, SurveyAnswer[]>();
-  for (const row of valores) {
+  for (const [index, row] of valores.entries()) {
     const lista = agrupados.get(row.response_id) ?? [];
     lista.push({
       fieldId: row.field_id,
       label: row.field_label,
       type: row.field_type,
-      value: row.value,
+      value: row.field_type === 'photo' ? fotos[index] : row.value,
     });
     agrupados.set(row.response_id, lista);
   }

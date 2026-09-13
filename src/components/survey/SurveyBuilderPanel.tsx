@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { Copy, Lock } from 'lucide-react';
-import type { CustomField, FieldType, SurveyConfig, SurveyConfigInput } from '@/lib/types';
-import { FIELD_TYPES } from '@/lib/types';
+import type { CustomField, SurveyConfig, SurveyConfigInput } from '@/lib/types';
 import { updateSurvey } from '@/lib/repositories';
 import {
   copyFromRegistration,
@@ -30,13 +29,12 @@ import { SurveySettingsCard } from './SurveySettingsCard';
  * previa, desenhada com os mesmos componentes da tela publica. Nao existe um
  * segundo construtor.
  *
- * O que e proprio daqui: as perguntas sao todas livres — o questionario nao
- * pede CPF, titulo nem endereco e nao aciona verificacao nenhuma — e envio
- * de imagem fica de fora, porque o questionario nao recebe arquivo.
+ * O que e proprio daqui: o Formulario 2 aceita os MESMOS campos do
+ * Formulario 1 — foto, nome, telefone, CPF, endereco, vinculo —, mas nao faz
+ * consulta externa nenhuma. CPF e titulo mantem a mascara e a validacao de
+ * formato; a verificacao e o preenchimento automatico de zona e secao
+ * pertencem ao cadastro e continuam so la.
  */
-
-/** Tudo menos `photo`: o questionario nao recebe arquivo. */
-const SURVEY_FIELD_TYPES: readonly FieldType[] = FIELD_TYPES.filter((type) => type !== 'photo');
 
 interface SurveyBuilderPanelProps {
   clientId: string;
@@ -84,11 +82,16 @@ export function SurveyBuilderPanel({
     <FieldsBuilder
       fields={survey.fields}
       busy={saving}
-      allowedTypes={SURVEY_FIELD_TYPES}
       onPersist={(next: CustomField[], message) => void persist({ fields: next }, message)}
       lockedNotice={
         <>
-          <IdentityNotice />
+          {/* Enquanto o ADMIN nao tiver os proprios campos de nome e
+              telefone, o Formulario 2 usa os fixos — sem eles nao ha como
+              saber de quem e a resposta. */}
+          {survey.fields.some((field) => field.systemKey === 'name') &&
+          survey.fields.some((field) => field.systemKey === 'phone') ? null : (
+            <IdentityNotice />
+          )}
           <CopyFromRegistration
             total={registrationFields.length}
             atual={survey.fields.length}
@@ -205,17 +208,14 @@ function CopyFromRegistration({
         details={
           <div className="space-y-2">
             <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
-              Vêm todos os campos, na mesma ordem e com o mesmo obrigatório/opcional — inclusive
-              os que estão desativados lá, que chegam desativados aqui.
-            </p>
-            <p className="rounded-control bg-ink-50 p-3 text-sm text-ink-700">
-              Só não vêm nome e telefone, que o Formulário 2 já pede como campos fixos, e foto,
-              porque ele não recebe arquivo.
+              Vêm todos os campos — foto, nome, telefone, CPF, endereço, vínculo e as perguntas —
+              na mesma ordem e com o mesmo obrigatório/opcional. Inclusive os desativados lá, que
+              chegam desativados aqui.
             </p>
             <p className="rounded-control bg-warning-50 p-3 text-sm text-warning-600">
-              CPF, título de eleitor e endereço viram campos de texto comuns. O Formulário 2 não
-              faz consulta: não há verificação de CPF, preenchimento automático de zona e seção
-              nem lista encadeada de município e bairro.
+              O Formulário 2 não faz consulta externa: CPF e título de eleitor continuam com
+              máscara e validação de formato, mas sem a verificação que o Formulário 1 faz, e sem
+              o preenchimento automático de zona e seção.
             </p>
           </div>
         }

@@ -169,6 +169,8 @@ export interface FormFieldRow {
 export interface SurveyFieldRow {
   id: string;
   client_id: string;
+  /** Campo padrao correspondente (migration 026). Nulo em campo livre. */
+  system_key: SystemFieldKey | null;
   type: FieldType;
   label: string;
   placeholder: string;

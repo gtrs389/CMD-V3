@@ -55,6 +55,11 @@ describe('caminhos do domínio público', () => {
     expect(isPublicPath('/api/public/convite')).toBe(true);
     expect(isPublicPath('/api/public/questionario/resposta')).toBe(true);
     expect(isPublicPath('/api/acesso-time')).toBe(true);
+    // O endereco do formulario publico depende destas listas: bloquea-las
+    // deixava estado, municipio, bairro e rua vazios justamente no dominio
+    // que serve os links enviados.
+    expect(isPublicPath('/api/localidades/estados')).toBe(true);
+    expect(isPublicPath('/api/localidades/municipios/SP')).toBe(true);
     expect(isPublicPath('/saida')).toBe(true);
   });
 

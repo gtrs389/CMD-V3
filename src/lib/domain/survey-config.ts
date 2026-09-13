@@ -2,6 +2,7 @@ import type { ClientFormConfig, CustomField, FieldOption } from '@/lib/types';
 import { GENDER_OPTIONS, UF_OPTIONS } from '@/lib/utils/documents';
 import { createId } from '@/lib/utils/id';
 import { visibleFields } from '@/lib/validation/dynamic-form';
+import { buildInviteSections } from '@/components/public/invite-sections';
 
 /**
  * O questionario visto como um formulario comum.
@@ -59,19 +60,27 @@ export const SURVEY_IDENTITY_FIELDS: readonly CustomField[] = [
   },
 ];
 
-/** Converte o questionario na configuracao de formulario que as telas leem. */
+/** Converte o Formulario 2 na configuracao de formulario que as telas leem. */
 export function toSurveyFormConfig(survey: {
   fields: CustomField[];
   introText: string;
   successMessage: string;
   updatedAt?: string;
 }): ClientFormConfig {
+  const proprios = [...survey.fields].sort((a, b) => a.order - b.order);
+
+  // Nome e telefone sao a identificacao da resposta: sem eles nao ha o que
+  // gravar em `cmd_survey_responses`. Se o ADMIN ja os configurou — copiando
+  // do Formulario 1, por exemplo —, valem OS DELE, com o rotulo e a ordem
+  // que ele escolheu. So quando faltam e que os fixos entram na frente.
+  const faltando = SURVEY_IDENTITY_FIELDS.filter(
+    (fixo) => !proprios.some((field) => field.systemKey === fixo.systemKey),
+  );
+
   return {
     fields: [
-      ...SURVEY_IDENTITY_FIELDS.map((field, index) => ({ ...field, order: index - 2 })),
-      ...[...survey.fields]
-        .sort((a, b) => a.order - b.order)
-        .map((field, index) => ({ ...field, systemKey: null, order: index })),
+      ...faltando.map((field, index) => ({ ...field, order: index - faltando.length })),
+      ...proprios.map((field, index) => ({ ...field, order: index })),
     ],
     privacy: {
       enabled: false,
@@ -84,6 +93,39 @@ export function toSurveyFormConfig(survey: {
     successMessage: survey.successMessage,
     updatedAt: survey.updatedAt ?? new Date(0).toISOString(),
   };
+}
+
+/**
+ * Nome e telefone de quem respondeu, de onde quer que eles venham.
+ *
+ * Podem ser os campos fixos, quando o ADMIN nao configurou os seus, ou os
+ * campos padrao que ele mesmo colocou — copiando do Formulario 1, por
+ * exemplo. Quem procura e o `system_key`, e nao o identificador: assim o
+ * envio funciona nos dois casos, sem a tela precisar saber qual deles e.
+ */
+export function identityFrom(
+  config: ClientFormConfig,
+  values: Record<string, unknown>,
+): { name: string; phone: string } {
+  const valorDe = (key: 'name' | 'phone') => {
+    const campo = config.fields.find((field) => field.systemKey === key);
+    const valor = campo ? values[campo.id] : null;
+    return typeof valor === 'string' ? valor : '';
+  };
+
+  return { name: valorDe('name'), phone: valorDe('phone') };
+}
+
+/**
+ * O que vai como RESPOSTA, e nao como identificacao.
+ *
+ * Nome e telefone ficam de fora: eles tem coluna propria na resposta, e
+ * grava-los tambem como valor os deixaria repetidos na leitura.
+ */
+export function answerableFields(config: ClientFormConfig): CustomField[] {
+  return visibleFields(config).filter(
+    (field) => field.systemKey !== 'name' && field.systemKey !== 'phone',
+  );
 }
 
 /* -------------------------------------------------------------------------
@@ -108,40 +150,44 @@ export interface SurveySection {
 }
 
 /**
- * Blocos do questionario publico, na mesma forma das secoes do cadastro.
+ * Blocos do Formulario 2 publico.
  *
- * O primeiro bloco e sempre a identificacao. Os demais sao as perguntas do
- * ADMIN, na ordem do construtor, divididas apenas quando sao muitas.
+ * Quando ele tem campos padrao — o caso de quem copiou do Formulario 1 —, o
+ * agrupamento e EXATAMENTE o do cadastro: dados pessoais, endereco, vinculo
+ * e perguntas. E a mesma tela, entao tem de ser a mesma leitura.
+ *
+ * Sem campos padrao, nao ha significado para agrupar: o corte passa a ser
+ * pela quantidade, so para a rolagem no celular ganhar o mesmo ritmo de
+ * blocos numerados em vez de virar uma folha unica e interminavel.
  */
 export function buildSurveySections(config: ClientFormConfig): SurveySection[] {
   const todos = visibleFields(config);
-  const identificacao = todos.filter((field) => field.systemKey !== null);
-  const perguntas = todos.filter((field) => field.systemKey === null);
+  const padrao = todos.filter((field) => field.systemKey !== null);
+  const livres = todos.filter((field) => field.systemKey === null);
+
+  // Mais do que so nome e telefone: vale o mesmo agrupamento do cadastro.
+  if (padrao.length > 2) return buildInviteSections(config);
 
   const sections: SurveySection[] = [];
 
-  if (identificacao.length > 0) {
+  if (padrao.length > 0) {
     sections.push({
       id: 'identificacao',
       title: 'Quem está respondendo',
       description: 'Só para sabermos de quem é a resposta.',
-      fields: identificacao,
+      fields: padrao,
     });
   }
 
-  const blocos = Math.ceil(perguntas.length / QUESTIONS_PER_BLOCK) || 0;
+  const blocos = Math.ceil(livres.length / QUESTIONS_PER_BLOCK) || 0;
 
   for (let bloco = 0; bloco < blocos; bloco += 1) {
-    const fields = perguntas.slice(
-      bloco * QUESTIONS_PER_BLOCK,
-      (bloco + 1) * QUESTIONS_PER_BLOCK,
-    );
+    const fields = livres.slice(bloco * QUESTIONS_PER_BLOCK, (bloco + 1) * QUESTIONS_PER_BLOCK);
 
     sections.push({
-      id: `perguntas-${bloco + 1}`,
+      id: `campos-${bloco + 1}`,
       title: blocos > 1 ? `Seus dados (${bloco + 1} de ${blocos})` : 'Seus dados',
-      description:
-        bloco === 0 ? 'Preencha os campos abaixo.' : 'Continuando.',
+      description: bloco === 0 ? 'Preencha os campos abaixo.' : 'Continuando.',
       fields,
     });
   }
@@ -179,28 +225,27 @@ export interface CopiedForm {
 }
 
 export function copyFromRegistration(fields: readonly CustomField[]): CopiedForm {
-  // Os unicos que nao podem vir, e por impedimento, nao por escolha: nome e
-  // telefone ja sao campos fixos do Formulario 2, e foto o banco recusa.
-  const impossivel = (field: CustomField) =>
-    field.type === 'photo' || field.systemKey === 'name' || field.systemKey === 'phone';
-
-  // TUDO O MAIS VEM, inclusive o que esta desativado no Formulario 1 — e com
-  // o estado que tinha la. Copiar so o que estava ligado deixava de fora
-  // campos que o ADMIN queria ter aqui e obrigava a remonta-los a mao, que e
-  // exatamente o trabalho que a copia existe para evitar.
+  // TUDO vem: foto, nome, telefone, CPF, endereco, vinculo e as perguntas do
+  // ADMIN — na mesma ordem, com o mesmo rotulo, o mesmo obrigatorio/opcional
+  // e o mesmo ativo/desativado. Inclusive o que esta desligado la, que chega
+  // desligado aqui: e justamente o campo que da mais trabalho remontar.
+  //
+  // O `system_key` vem junto (migration 026). No Formulario 2 ele decide
+  // apenas o desenho e a validacao — mascara, lista de genero e de UF, envio
+  // da foto. NENHUMA consulta externa e acionada: a verificacao de CPF e de
+  // titulo de eleitor pertence ao cadastro e continua so la.
   const ordenados = [...fields].sort((a, b) => a.order - b.order);
 
   return {
-    fields: ordenados.filter((field) => !impossivel(field)).map((field, index) => ({
+    fields: ordenados.map((field, index) => ({
       ...field,
+      // Identificador novo: os dois formularios sao separados, e a resposta
+      // de um nunca pode apontar para o campo do outro.
       id: createId('fld'),
-      // Todo campo do Formulario 2 e livre: sem `system_key` nao ha
-      // verificacao, mascara de documento nem consulta pendurada nele.
-      systemKey: null,
       options: optionsFor(field),
       order: index,
     })),
-    leftOut: ordenados.filter(impossivel).map((field) => field.label),
+    leftOut: [],
   };
 }
 

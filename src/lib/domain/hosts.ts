@@ -58,6 +58,10 @@ const PUBLIC_PREFIXES = [
   '/acesso/',
   '/api/public/',
   '/api/acesso-time',
+  // Estado, municipio, bairro e rua: as listas encadeadas do endereco. Sao
+  // do formulario publico, e sem elas o campo de endereco fica vazio no
+  // dominio que justamente serve os links enviados.
+  '/api/localidades',
   '/saida',
 ] as const;
 

@@ -346,10 +346,11 @@ export type PublicSubmissionInput = z.infer<typeof publicSubmissionSchema>;
  */
 const surveyFieldSchema = z.object({
   id: z.string().min(1).max(64),
-  // Sempre nulo, e aceito apenas para a tela poder reaproveitar o mesmo
-  // editor de campos do formulario de cadastro sem montar outro objeto.
-  systemKey: z.null().optional().default(null),
-  type: z.enum(FIELD_TYPES).refine((type) => type !== 'photo', 'O Formulário 2 não aceita imagem.'),
+  // Campo padrao correspondente (migration 026). No Formulario 2 ele decide
+  // apenas o desenho e a validacao — mascara, lista de genero e de UF, envio
+  // da foto. Nenhuma consulta externa e acionada.
+  systemKey: z.enum(SYSTEM_FIELD_KEYS).nullable().optional().default(null),
+  type: z.enum(FIELD_TYPES),
   label: trimmed(80),
   placeholder: trimmed(80),
   helpText: trimmed(160),
@@ -372,10 +373,26 @@ export const surveyUpdateSchema = z
   .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
 
 /**
+ * Valor de uma resposta do Formulario 2.
+ *
+ * Igual ao do cadastro, com uma diferenca: o texto pode ser uma imagem
+ * embutida (data URL) quando o campo e de foto. Por isso o limite de
+ * tamanho e o da imagem, e nao o de um texto comum — com 4.000 caracteres o
+ * envio de qualquer foto seria recusado antes de chegar ao servidor.
+ */
+const surveyValueSchema = z.union([
+  z.string().max(Math.ceil(appConfig.limits.maxStoredImageBytes * 1.4)),
+  z.number(),
+  z.boolean(),
+  z.array(z.string().max(200)).max(appConfig.limits.maxOptionsPerField),
+  z.null(),
+]);
+
+/**
  * Resposta enviada pelo link publico.
  *
  * Nome e telefone de quem respondeu, e nada mais: o time, o remetente e o
- * rotulo de cada pergunta sao resolvidos no servidor, a partir do token do
+ * rotulo de cada campo sao resolvidos no servidor, a partir do token do
  * link.
  */
 export const surveyAnswerSchema = z.object({
@@ -384,7 +401,9 @@ export const surveyAnswerSchema = z.object({
     .string()
     .trim()
     .refine((value) => isValidPhone(value), 'Telefone inválido.'),
-  answers: responsesSchema,
+  answers: z
+    .array(z.object({ fieldId: z.string().min(1).max(64), value: surveyValueSchema }))
+    .max(appConfig.limits.maxFieldsPerForm),
 });
 
 /**

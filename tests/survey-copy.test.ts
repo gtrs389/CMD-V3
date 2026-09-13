@@ -19,42 +19,36 @@ describe('copiar os campos do Formulário 1', () => {
     );
     const { fields } = copyFromRegistration(comDesativado);
 
-    const esperados = comDesativado.filter(
-      (field) =>
-        field.type !== 'photo' && field.systemKey !== 'name' && field.systemKey !== 'phone',
-    );
+    // TUDO vem: foto, nome, telefone e o resto.
+    const esperados = comDesativado;
 
     expect(fields).toHaveLength(esperados.length);
     // Mesma ordem e mesmos rotulos.
     expect(fields.map((field) => field.label)).toEqual(esperados.map((field) => field.label));
-    // Mesmo obrigatorio/opcional e mesmo ativo/desativado.
+    // Mesmo obrigatorio/opcional, mesmo ativo/desativado e mesmo campo
+    // padrao — e o `system_key` que faz a mascara, a lista de genero e de UF
+    // e o envio da foto funcionarem tambem aqui.
     expect(fields.map((field) => field.required)).toEqual(esperados.map((f) => f.required));
     expect(fields.map((field) => field.enabled)).toEqual(esperados.map((f) => f.enabled));
+    expect(fields.map((field) => field.systemKey)).toEqual(esperados.map((f) => f.systemKey));
     // Ordem sem buracos.
     expect(fields.map((field) => field.order)).toEqual(fields.map((_, index) => index));
   });
 
-  it('não traz nome, telefone nem foto, e diz quais ficaram fora', () => {
+  it('traz foto, nome e telefone junto', () => {
     const { fields, leftOut } = copyFromRegistration(origem);
 
-    // Nome e telefone ja sao campos fixos do Formulario 2; foto o banco
-    // recusa, porque ele nao recebe arquivo.
-    expect(fields.some((field) => field.label === 'Nome completo')).toBe(false);
-    expect(fields.some((field) => field.label === 'WhatsApp / Telefone')).toBe(false);
-    expect(fields.some((field) => field.type === 'photo')).toBe(false);
-
-    expect(leftOut).toEqual(['Foto', 'Nome completo', 'WhatsApp / Telefone']);
+    expect(fields.some((field) => field.systemKey === 'photo')).toBe(true);
+    expect(fields.some((field) => field.systemKey === 'name')).toBe(true);
+    expect(fields.some((field) => field.systemKey === 'phone')).toBe(true);
+    expect(leftOut).toEqual([]);
   });
 
-  it('traz o resto como campo comum, sem a maquinaria do cadastro', () => {
+  it('dá identificadores novos: os dois formulários são separados', () => {
     const { fields } = copyFromRegistration(origem);
 
     expect(fields.length).toBeGreaterThan(0);
-    // Sem `systemKey` nao ha verificacao de CPF, preenchimento de zona e
-    // secao nem lista encadeada de endereco penduradas no campo.
-    expect(fields.every((field) => field.systemKey === null)).toBe(true);
-    // Identificadores novos: os dois formularios sao separados, e a resposta
-    // de um nunca aponta para o campo do outro.
+    // A resposta de um formulario nunca pode apontar para o campo do outro.
     expect(fields.every((field) => !origem.some((base) => base.id === field.id))).toBe(true);
   });
 

@@ -7,10 +7,10 @@ import { fetchPublicSurvey, submitSurvey, type PublicSurveyOutcome } from '@/lib
 import { GoneError, NetworkError } from '@/lib/repositories/http/api';
 import { RepositoryError } from '@/lib/repositories/types';
 import {
+  answerableFields,
   buildSurveySections,
+  identityFrom,
   toSurveyFormConfig,
-  SURVEY_NAME_FIELD_ID,
-  SURVEY_PHONE_FIELD_ID,
 } from '@/lib/domain/survey-config';
 import { completionPercent, missingRequired } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
@@ -228,12 +228,14 @@ function SurveyForm({ survey }: { survey: PublicSurvey }) {
     enviadoRef.current = true;
     setSubmitting(true);
 
+    // Nome e telefone viajam a parte, como identificacao da resposta: eles
+    // tem coluna propria e nao entram de novo entre as respostas.
+    const { name, phone } = identityFrom(config, values);
+
     void submitSurvey({
-      name: String(values[SURVEY_NAME_FIELD_ID] ?? ''),
-      phone: String(values[SURVEY_PHONE_FIELD_ID] ?? ''),
-      // So as perguntas do ADMIN: os dois campos fixos viajam a parte, como
-      // identificacao da resposta.
-      answers: survey.fields.map((field) => ({
+      name,
+      phone,
+      answers: answerableFields(config).map((field) => ({
         fieldId: field.id,
         value: (values[field.id] ?? null) as FieldValue,
       })),
@@ -308,6 +310,7 @@ function SurveyForm({ survey }: { survey: PublicSurvey }) {
                     field={field}
                     idPrefix="questionario"
                     variant="invite"
+                    allowCamera
                     disabled={submitting}
                     value={form.values[field.id] ?? null}
                     error={form.errors[field.id]}
