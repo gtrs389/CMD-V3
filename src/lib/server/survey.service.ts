@@ -212,8 +212,16 @@ async function persistFields(clientId: string, fields: CustomField[]): Promise<v
   if (novos.length > 0) {
     await insertRows(
       TABLES.surveyFields,
+      // SEM `id`: quem gera e o banco.
+      //
+      // O identificador que chega da tela e provisorio — o construtor o cria
+      // no navegador para mexer na lista antes de salvar —, e a coluna e
+      // `uuid`. Mandar aquele texto fazia o banco recusar a linha inteira, e
+      // a tela so dizia "não foi possível concluir a operação": nenhum campo
+      // novo do Formulario 2 conseguia ser gravado.
+      //
+      // E o mesmo que o formulario de cadastro sempre fez em `syncFields`.
       novos.map((field) => ({
-        id: field.id,
         client_id: clientId,
         type: field.type,
         label: field.label,
