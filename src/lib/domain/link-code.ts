@@ -16,14 +16,19 @@
  * token — muda o codigo junto. Por ser derivado, nao existe coluna, tabela
  * nem migration para isso, e nao ha o que ficar fora de sincronia.
  *
- * A conta NAO e reversivel de forma util (sao tres caracteres para 160 bits
- * de token), entao o codigo nao revela o link. Colisao entre dois links
- * diferentes e possivel e nao tem consequencia nenhuma: quem identifica o
- * link continua sendo o token, no servidor.
+ * A conta NAO e reversivel de forma util (sao dois digitos para 160 bits de
+ * token), entao o codigo nao revela o link.
  */
 
-/** Alfabeto do codigo: sem I e O, que se confundem com 1 e 0 impressos. */
-const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+/**
+ * Letra fixa do codigo.
+ *
+ * Ela nao varia: e a marca, e o que muda de um link para outro sao os dois
+ * digitos. Por isso o codigo tem 100 valores possiveis (H00 a H99) e dois
+ * links diferentes podem cair no mesmo — sem consequencia nenhuma, porque
+ * quem identifica o link continua sendo o token, no servidor.
+ */
+const LETTER = 'H';
 
 /**
  * FNV-1a de 32 bits.
@@ -44,13 +49,10 @@ function hash32(value: string): number {
   return hash >>> 0;
 }
 
-/** Uma letra e dois digitos, no formato `H03`. Nulo sem token. */
+/** A letra fixa e dois digitos, no formato `H03`. Nulo sem token. */
 export function linkCode(token: string | null | undefined): string | null {
   if (!token) return null;
 
-  const hash = hash32(token);
-  const letra = LETTERS[hash % LETTERS.length];
-  const numero = (Math.floor(hash / LETTERS.length) % 100).toString().padStart(2, '0');
-
-  return `${letra}${numero}`;
+  const numero = (hash32(token) % 100).toString().padStart(2, '0');
+  return `${LETTER}${numero}`;
 }
