@@ -63,7 +63,8 @@ describe('perfil Candidato', () => {
       'form.view',
       'form.manage',
       'invite.manage',
-      'member.create',
+      // Cadastrar a mao ELE PODE. Corrigir cadastro alheio e apagar
+      // historico continuam sendo decisao do ADMIN.
       'member.update',
       'member.delete',
       'verification.view',
@@ -78,6 +79,17 @@ describe('perfil Candidato', () => {
     for (const permissao of proibidas) {
       expect(can(CANDIDATO_A, permissao)).toBe(false);
     }
+  });
+
+  it('cadastra integrante a mao, e so no proprio time', () => {
+    // Nem toda pessoa se cadastra sozinha pelo link: o Administrador do time
+    // registra quem esta na frente dele.
+    expect(can(CANDIDATO_A, 'member.create')).toBe(true);
+
+    // O poder para no proprio time — e e o servidor que confere as duas
+    // coisas, permissao e alcance, em `requireClientAccess`.
+    expect(canReachClient(CANDIDATO_A, 'cli-a')).toBe(true);
+    expect(canReachClient(CANDIDATO_A, 'cli-b')).toBe(false);
   });
 
   it('mantém o ADMIN com acesso total', () => {

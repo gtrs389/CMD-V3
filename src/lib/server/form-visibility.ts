@@ -73,16 +73,43 @@ function readingLabels(form: ClientFormConfig): ClientFormConfig {
 }
 
 /**
+ * Formulario para PREENCHER, sem a area de administracao.
+ *
+ * Quem cadastra alguem a mao precisa do formulario de verdade: os campos
+ * que o ADMIN deixou ativos, quais sao obrigatorios, as opcoes de cada um e
+ * o aviso de privacidade — sem ele, o aceite exigido pelo servidor nunca
+ * seria coletado e o cadastro seria recusado no envio.
+ *
+ * Isso deixa de esconder quantos campos estao ativos e obrigatorios, e nao
+ * ha como ser diferente: nao se preenche um formulario sem saber o que ele
+ * pede. O que continua fora sao os textos da tela publica, que pertencem ao
+ * link de recrutamento e nao a este cadastro.
+ */
+function fillableForm(form: ClientFormConfig): ClientFormConfig {
+  return {
+    fields: form.fields,
+    privacy: form.privacy,
+    introText: '',
+    successMessage: '',
+    updatedAt: '',
+  };
+}
+
+/**
  * Time devolvido ao navegador conforme o perfil da sessao.
  *
- * ADMIN recebe o cadastro inteiro, com a area de formulario completa. Quem
- * nao tem `form.view` recebe apenas os rotulos usados para ler a ficha da
- * propria equipe.
+ * Tres niveis, do maior para o menor:
+ *
+ *   `form.view`     ADMIN: o cadastro inteiro, com a area de formulario;
+ *   `member.create` Administrador do time: o formulario para preencher,
+ *                   porque ele cadastra pessoas a mao pelo painel;
+ *   nenhum dos dois apenas os rotulos usados para ler a ficha da equipe.
  */
 export function clientForSession(
   user: Pick<SessionUser, 'role'> | null | undefined,
   client: Client,
 ): Client {
   if (can(user, 'form.view')) return client;
+  if (can(user, 'member.create')) return { ...client, form: fillableForm(client.form) };
   return { ...client, form: readingLabels(client.form) };
 }

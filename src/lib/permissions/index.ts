@@ -84,13 +84,22 @@ const EQUIPE_PERMISSIONS: readonly Permission[] = [
 ];
 
 /**
- * Time: leitura apenas, e sempre da propria operacao.
+ * Time: a propria operacao, com um unico poder de escrita.
  *
  * Enxerga toda a equipe, em qualquer nivel, porque o vinculo e o time.
  *
- * A area interna do formulario e do ADMIN: sem `form.view` o time nao
- * ve aba, cartao, contagem de campos nem previa, e a configuracao dos campos
- * nao chega nem ao navegador.
+ * `member.create` existe porque nem toda pessoa se cadastra sozinha pelo
+ * link: o Administrador do time precisa poder registrar alguem a mao, ali
+ * na frente dele. O cadastro fica com o nome dele em "Cadastrado por", como
+ * qualquer outro, e o alcance continua sendo so o proprio time —
+ * `requireClientAccess` confere as duas coisas.
+ *
+ * Editar e excluir integrante continuam fora: corrigir um cadastro alheio e
+ * apagar historico sao decisoes do ADMIN.
+ *
+ * A area interna do formulario tambem e do ADMIN: sem `form.view` o time nao
+ * ve aba, cartao nem previa. O que ele recebe do formulario e apenas o
+ * necessario para PREENCHER o cadastro manual — ver `form-visibility.ts`.
  *
  * O mapa entra apenas como leitura: `map.view` mostra os cadastros da
  * propria operacao — o servidor forca esse recorte, o `clientId` da URL nao
@@ -101,6 +110,7 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'panel.access',
   'client.view',
   'member.view',
+  'member.create',
   'invite.view',
   'invite.renew',
   'map.view',
