@@ -16,14 +16,29 @@ afterEach(() => {
 });
 
 describe('endereço do painel', () => {
-  it('sem configuração, todo endereço continua servindo tudo', () => {
-    // Proposital: uma instalacao que ainda nao separou os dominios nao pode
-    // perder o proprio login por causa de uma variavel ausente.
+  it('sem variável nenhuma, o painel é o subdomínio painel.', () => {
+    // A versao anterior dependia SO da variavel, lida no Edge na hora do
+    // build: esquecer de configura-la deixava a tela de login aberta no
+    // endereco publico, sem nada avisar. O caminho comum passa a funcionar
+    // sem configuracao.
     delete process.env.CMD_PANEL_HOST;
 
-    expect(isPanelHost('convitetimebezerra.com')).toBe(true);
-    expect(isPanelHost('qualquer.coisa')).toBe(true);
-    expect(isPanelHost(null)).toBe(true);
+    expect(isPanelHost('painel.convitetimebezerra.com')).toBe(true);
+
+    expect(isPanelHost('convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('www.convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('outro.convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost(null)).toBe(false);
+  });
+
+  it('desenvolvimento e prévia continuam servindo tudo', () => {
+    // Nao sao o dominio publico de ninguem: e onde se testa. Trancar o login
+    // aqui deixaria sem entrada quem desenvolve ou revisa uma previa.
+    delete process.env.CMD_PANEL_HOST;
+
+    expect(isPanelHost('localhost:3000')).toBe(true);
+    expect(isPanelHost('127.0.0.1:3000')).toBe(true);
+    expect(isPanelHost('cmd-git-branch-conta.vercel.app')).toBe(true);
   });
 
   it('reconhece o painel e recusa o domínio público', () => {
@@ -43,6 +58,15 @@ describe('endereço do painel', () => {
   it('trata www e o domínio raiz como o mesmo endereço', () => {
     process.env.CMD_PANEL_HOST = 'painel.convitetimebezerra.com';
     expect(isPanelHost('www.painel.convitetimebezerra.com')).toBe(true);
+  });
+
+  it('a variável manda quando o painel não é o subdomínio padrão', () => {
+    process.env.CMD_PANEL_HOST = 'admin.convitetimebezerra.com';
+
+    expect(isPanelHost('admin.convitetimebezerra.com')).toBe(true);
+    // Configurada, ela decide sozinha: nem o subdominio da convencao passa.
+    expect(isPanelHost('painel.convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('www.convitetimebezerra.com')).toBe(false);
   });
 });
 
