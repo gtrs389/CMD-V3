@@ -1,5 +1,6 @@
 import 'server-only';
 import type { NextRequest } from 'next/server';
+import { publicHostFrom } from '@/lib/domain/hosts';
 import { getPublicEntry } from './settings.service';
 
 /**
@@ -18,8 +19,9 @@ import { getPublicEntry } from './settings.service';
  *
  *   1. o endereco configurado em Configuracoes, quando houver. Ele manda, e
  *      pode ser corrigido sem publicar codigo;
- *   2. deduzido do proprio painel: `painel.x` vira `www.x`;
- *   3. o endereco da propria requisicao, quando nao ha `painel.` nenhum para
+ *   2. deduzido do proprio painel: `painel.x` — ou o endereco exclusivo do
+ *      ADMIN — vira `www.x`;
+ *   3. o endereco da propria requisicao, quando nao ha painel nenhum para
  *      trocar — o caso de quem ainda nao separou os dominios.
  */
 
@@ -27,9 +29,8 @@ import { getPublicEntry } from './settings.service';
 function derive(origin: string): string {
   try {
     const url = new URL(origin);
-    if (url.hostname.startsWith('painel.')) {
-      url.hostname = `www.${url.hostname.slice('painel.'.length)}`;
-    }
+    const publico = publicHostFrom(url.hostname);
+    if (publico) url.hostname = publico;
     return url.origin;
   } catch {
     return origin;

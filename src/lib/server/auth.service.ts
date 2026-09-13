@@ -1,5 +1,5 @@
 import 'server-only';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { Role, SessionUser } from '@/lib/types';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createToken, hashToken } from '@/lib/auth/tokens';
@@ -10,6 +10,7 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
 } from '@/lib/auth/constants';
+import { isAdminHost } from '@/lib/domain/hosts';
 import { TABLES, type SessionRow, type UserRow } from '@/lib/supabase/tables';
 import { callFunction, deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
@@ -251,13 +252,35 @@ export async function purgeExpiredSessions(): Promise<void> {
   );
 }
 
-/** Le a sessao atual a partir dos cookies da requisicao. */
+/**
+ * Le a sessao atual a partir dos cookies da requisicao.
+ *
+ * Aqui tambem mora a regra do ENDERECO EXCLUSIVO DO ADMIN: naquele endereco,
+ * uma sessao que nao seja do ADMIN geral simplesmente nao existe. A conta
+ * continua valendo no endereco dela — o que muda e que este endereco nao
+ * atende esse perfil.
+ *
+ * A conferencia fica NESTA funcao, e nao em cada tela, porque e por ela que
+ * passam o layout do painel, todas as paginas e todas as rotas de API: uma
+ * regra escrita em um lugar so nao tem como ser esquecida na proxima rota.
+ * O `proxy.ts` nao poderia fazer isso — ele roda antes da aplicacao, le
+ * apenas o cookie opaco e nao sabe de quem ele e.
+ *
+ * Forjar o cabecalho `Host` nao abre nada: a regra so RESTRINGE. Chegar ao
+ * endereco do ADMIN sem ser ADMIN fecha a porta, e dizer-se em outro
+ * endereco devolve exatamente o acesso que a conta ja tinha.
+ */
 export async function currentUser(): Promise<SessionUser | null> {
   const store = await cookies();
-  return resolveSession(
+  const user = await resolveSession(
     store.get(SESSION_COOKIE)?.value,
     store.get(ADMIN_DEVICE_COOKIE)?.value,
   );
+  if (!user) return null;
+
+  if (user.role !== 'ADMIN' && isAdminHost((await headers()).get('host'))) return null;
+
+  return user;
 }
 
 export interface ChangePasswordOutcome {
