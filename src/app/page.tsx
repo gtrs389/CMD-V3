@@ -78,14 +78,16 @@ export default async function HomePage() {
   const user = await getCurrentUser();
   if (user) redirect(homePathFor(user));
 
-  // Sem sessao, o endereco decide QUAL porta desenhar:
+  // Sem sessao e sem contexto, o endereco decide o que acontece:
   //
-  //   - endereco exclusivo do ADMIN -> a tela de e-mail e senha;
-  //   - `painel.` -> a porta do time. O Administrador do time e a equipe
-  //     entram pelo link do proprio time, e e aqui que eles digitam o
-  //     endereco quando a sessao vence. Manda-los para a saida os empurraria
-  //     para FORA do sistema, no endereco que existe justamente para eles.
-  if (!servesAdminLogin(host)) return <TeamAccessScreen available={false} />;
+  //   - endereco exclusivo do ADMIN -> a tela de e-mail e senha, que so
+  //     existe la;
+  //   - `painel.` -> a MESMA saida do dominio publico. A porta do time e o
+  //     LINK do time: quem chega sem ele nao tem o que fazer aqui, e digitar
+  //     o endereco no escuro nao pode revelar que existe um sistema atras
+  //     dele. Com o link, o contexto ja foi tratado la em cima e a tela do
+  //     telefone aparece normalmente.
+  if (!servesAdminLogin(host)) redirect(PUBLIC_EXIT_PATH);
 
   redirect(LOGIN_PATH);
 }

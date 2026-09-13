@@ -6,7 +6,9 @@
  *                      nenhuma porta publica e servida.
  *   painel.<dominio>   por onde o Administrador do time e a equipe entram,
  *                      pelo link de acesso do proprio time + telefone. Aqui
- *                      nao existe tela de e-mail e senha.
+ *                      nao existe tela de e-mail e senha, e digitar so o
+ *                      endereco leva a MESMA saida do dominio publico: a
+ *                      porta e o link, nao o endereco.
  *   <dominio>          SO OS CADASTROS: Formulario 1 e Formulario 2, os
  *                      links que vao por WhatsApp. Ninguem entra no sistema
  *                      por este endereco.
