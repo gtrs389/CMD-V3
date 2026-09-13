@@ -32,7 +32,6 @@ export function GenerateSurveyLinkButton({
     <GenerateLinkButton
       label={label}
       buildPath={surveyPath}
-      successTitle="Link do Formulário 2 gerado"
       generate={() => generateSurveyLink(clientId)}
     />
   );
