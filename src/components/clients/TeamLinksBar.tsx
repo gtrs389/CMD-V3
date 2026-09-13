@@ -89,7 +89,9 @@ export function TeamLinksBar({
   const links = data?.accessLinks ?? null;
 
   async function copy(audience: TeamAccessAudience, link: TeamAccessLink) {
-    const url = `${origin}${teamAccessPath(link.token)}`;
+    // O endereco vem pronto do servidor, com o dominio publico. O da aba
+    // aberta e reserva: ela e o painel, e o painel nao se divulga.
+    const url = link.url ?? `${origin}${teamAccessPath(link.token)}`;
     if (!(await copyText(url))) {
       toast.error('Não foi possível copiar. Tente novamente.');
       return;

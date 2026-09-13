@@ -140,6 +140,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
           <div className="space-y-2">
             <TeamAccessLinkField
               token={created.TEAM_ADMIN.token}
+              url={created.TEAM_ADMIN.url}
               label="Link de acesso — Administradores do time"
             />
             <p className="text-sm text-ink-500">Envie este link aos administradores do time.</p>
@@ -148,6 +149,7 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
           <div className="space-y-2">
             <TeamAccessLinkField
               token={created.EQUIPE.token}
+              url={created.EQUIPE.url}
               label="Link de acesso — Equipe"
             />
             <p className="text-sm text-ink-500">Envie este link aos membros da equipe.</p>
