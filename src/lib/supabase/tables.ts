@@ -643,6 +643,7 @@ export interface ApiKeyRow {
   name: string;
   prefix: string;
   token_hash: string;
+  /** ADMIN geral que criou a chave: quem AUTORIZA. */
   created_by: string | null;
   created_by_name: string | null;
   created_at: string;
@@ -651,7 +652,24 @@ export interface ApiKeyRow {
   revoked_at: string | null;
   revoked_by: string | null;
   revoked_by_name: string | null;
+  /**
+   * Administrador do time em nome de quem a chave age: quem APARECE no
+   * historico do link (migration 031). Imutavel depois da criacao; nulo
+   * apenas nas chaves da 029, que por isso nao autenticam mais.
+   */
+  acting_user_id: string | null;
+  acting_user_name: string | null;
+  acting_client_id: string | null;
+  acting_client_name: string | null;
 }
+
+/** Operacoes registradas de uma chave (migrations 030 e 031). */
+export type ApiKeyAction =
+  | 'LINK_GERADO'
+  | 'LINK_REVOGADO'
+  | 'LINK_LISTADO'
+  | 'LINK_CONSULTADO'
+  | 'CHAVE_RECUSADA';
 
 /**
  * Acao de uma chave da API (migration 030).
@@ -666,7 +684,11 @@ export interface ApiKeyEventRow {
   key_name: string | null;
   admin_user_id: string | null;
   admin_name: string | null;
-  action: 'LINK_GERADO' | 'LINK_REVOGADO';
+  action: ApiKeyAction;
+  /** Resultado da operacao (migration 031). */
+  result: 'SUCESSO' | 'RECUSADO';
+  /** Motivo tecnico da recusa. Nunca sai do servidor para quem chamou. */
+  detail: string | null;
   invite_id: string | null;
   client_id: string | null;
   client_name: string | null;

@@ -1,20 +1,19 @@
 import 'server-only';
 import type { NextRequest } from 'next/server';
-import type { ApiLink, ApiTeam } from '@/lib/types';
+import type { ApiBindingInfo, ApiLink } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
-import { TABLES, type ClientRow, type InviteRow, type UserRow } from '@/lib/supabase/tables';
-import { callFunction, inFilter, selectOne, selectRows } from '@/lib/supabase/rest';
+import { TABLES, type ClientRow, type InviteRow } from '@/lib/supabase/tables';
+import { callFunction, selectOne, selectRows } from '@/lib/supabase/rest';
 import { invitePath } from '@/lib/utils/url';
 import { publicLink } from './public-origin';
-import { badRequest, notFound } from './http';
-import { recordApiKeyEvent } from './api-key.service';
-import type { ApiCaller } from './api-guard';
+import { notFound } from './http';
 import {
   ensurePersonalInvite,
   expireDueInvites,
   findInviteByUser,
   issuePersonalInvite,
 } from './invite.service';
+import type { ApiCaller } from './api-guard';
 
 /**
  * Links de cadastro pela API.
@@ -25,31 +24,26 @@ import {
  * hora e historico imutavel por geracao (013/020/021). Nao existe um segundo
  * sistema de links, nem um link "de API" com regras proprias.
  *
- * O que a API acrescenta e apenas o pedido por programa — e a revogacao
- * avulsa, que o painel nao tinha: derrubar um link enviado por engano sem
- * precisar por outro no lugar.
+ * A API AGE COMO O DONO DA CHAVE. Gerar um link e exatamente o que
+ * aconteceria se aquele Administrador do time entrasse no painel e clicasse
+ * em "Gerar link": mesmo dono, MESMO GERADOR, mesmo prazo do perfil dele,
+ * mesmos eventos, mesmo registro de geracao.
  *
- * A API AGE COMO O DONO. Gerar um link pela API e exatamente o que
- * aconteceria se o Administrador do time entrasse no painel e clicasse em
- * "Gerar link": mesmo dono, MESMO GERADOR, mesmo prazo do perfil dele,
- * mesmos eventos, mesmo registro de geracao. Quem abre o rastreamento em
- * Configuracoes ve o link do Joao gerado pelo Joao — e nao um caminho
- * tecnico que nao interessa a quem le a tela.
+ * E SO ELE. Todo acesso daqui e recortado pelo vinculo da chave
+ * (`caller.owner`), que veio do banco e nao da requisicao: uma chave do Joao
+ * nao gera, nao lista, nao consulta e nao revoga nada da Maria. Link de
+ * outro administrador nao aparece como "sem permissao" — aparece como
+ * inexistente, que e o que ele e, do ponto de vista daquela chave.
  *
- * Quem CHAMA continua sendo sempre o ADMIN geral (ver `api-guard.ts`): o que
- * muda e o que fica escrito no historico. Como esse historico passa a ser
- * indistinguivel de um clique humano, o rastro da API e gravado do outro
- * lado — em `cmd_api_key_events`, junto da chave, com o link afetado e o
- * dono em nome de quem ela agiu (migration 030).
+ * Como o historico do link e, de proposito, indistinguivel de um clique
+ * humano, o rastro da API fica do outro lado: em `cmd_api_key_events`, junto
+ * da chave, com o ADMIN geral responsavel, o administrador em nome de quem
+ * ela agiu, o time, a operacao e o resultado (migrations 030 e 031).
  */
 
 const INVITE_COLUMNS =
   'id,client_id,user_id,token,active,issued_at,expires_at,status,claimed_at,consumed_at,' +
   'revoked_at,generation,owner_name,owner_role,generated_by_name,generated_by_role';
-
-/** Teto de leitura por consulta, para um filtro amplo nao virar varredura. */
-const LIMITE_PADRAO = 50;
-const LIMITE_MAXIMO = 200;
 
 type InviteSlice = Pick<
   InviteRow,
@@ -76,6 +70,19 @@ type TeamSlice = Pick<ClientRow, 'id' | 'name' | 'recruiting_active'>;
 /** Perfis que tem link pessoal. Qualquer outro valor vira nulo na resposta. */
 function ownerRole(value: string | null): 'CANDIDATE' | 'EQUIPE' | null {
   return value === 'CANDIDATE' || value === 'EQUIPE' ? value : null;
+}
+
+/** Time da chave. O identificador vem do vinculo, nunca da requisicao. */
+async function loadTeam(caller: ApiCaller): Promise<TeamSlice> {
+  const team = await selectOne<TeamSlice>(TABLES.clients, {
+    select: 'id,name,recruiting_active',
+    filters: { id: `eq.${caller.owner.clientId}` },
+  });
+
+  // O vinculo ja foi conferido na autenticacao; chegar aqui sem time seria
+  // uma exclusao acontecendo no meio da requisicao.
+  if (!team) throw notFound('Time não encontrado.');
+  return team;
 }
 
 /**
@@ -114,232 +121,120 @@ async function toApiLink(
   };
 }
 
-/** Times e clientes, em uma consulta so, para nao repetir busca por linha. */
-async function loadTeams(ids: readonly string[]): Promise<Map<string, TeamSlice>> {
-  if (ids.length === 0) return new Map();
-
-  const rows = await selectRows<TeamSlice>(TABLES.clients, {
-    select: 'id,name,recruiting_active',
-    filters: { id: inFilter([...new Set(ids)]) },
-  });
-  return new Map(rows.map((row) => [row.id, row]));
-}
-
-/** Nome do dono quando o convite ainda nao tem o snapshot (links antigos). */
-async function loadOwnerNames(ids: readonly string[]): Promise<Map<string, string>> {
-  const alvos = [...new Set(ids)];
-  if (alvos.length === 0) return new Map();
-
-  const rows = await selectRows<Pick<UserRow, 'id' | 'name'>>(TABLES.users, {
-    select: 'id,name',
-    filters: { id: inFilter(alvos) },
-  });
-  return new Map(rows.map((row) => [row.id, row.name]));
-}
-
-async function assemble(
-  request: NextRequest,
-  invites: InviteSlice[],
-): Promise<ApiLink[]> {
-  const teams = await loadTeams(invites.map((invite) => invite.client_id));
-  const semSnapshot = invites
-    .filter((invite) => !invite.owner_name && invite.user_id)
-    .map((invite) => invite.user_id as string);
-  const nomes = await loadOwnerNames(semSnapshot);
-
-  const links: ApiLink[] = [];
-  for (const invite of invites) {
-    const team = teams.get(invite.client_id);
-    // Time excluido no meio do caminho: o link nao tem mais a que pertencer.
-    if (!team) continue;
-
-    const nome = nomes.get(invite.user_id ?? '') ?? 'Não identificado';
-    links.push(await toApiLink(request, invite, team, nome));
-  }
-  return links;
-}
-
 /* -------------------------------------------------------------------------
-   Times
+   Vinculo da chave
    ------------------------------------------------------------------------- */
 
-/**
- * Times com os administradores que podem ser donos de um link.
- *
- * E a consulta que da ao programa os identificadores que ele precisa enviar
- * em `POST /api/v1/links`. So administradores ATIVOS entram: emitir link em
- * nome de um acesso desativado e recusado pelo banco.
- */
-export async function listApiTeams(): Promise<ApiTeam[]> {
-  const [teams, admins] = await Promise.all([
-    selectRows<Pick<ClientRow, 'id' | 'name' | 'recruiting_active' | 'created_at'>>(
-      TABLES.clients,
-      { select: 'id,name,recruiting_active,created_at', order: 'name.asc', limit: 500 },
-    ),
-    selectRows<Pick<UserRow, 'id' | 'name' | 'client_id'>>(TABLES.users, {
-      select: 'id,name,client_id',
-      filters: { role: 'eq.CANDIDATE', is_active: 'is.true' },
-      order: 'created_at.asc',
-      limit: 2000,
-    }),
-  ]);
+/** A quem esta chave pertence: o time e o administrador, como estao agora. */
+export async function getApiBinding(caller: ApiCaller): Promise<ApiBindingInfo> {
+  const team = await loadTeam(caller);
 
-  return teams.map((team) => ({
-    id: team.id,
-    nome: team.name,
-    recrutamentoAtivo: team.recruiting_active,
-    criadoEm: team.created_at,
-    administradores: admins
-      .filter((admin) => admin.client_id === team.id)
-      .map((admin) => ({ id: admin.id, nome: admin.name })),
-  }));
+  return {
+    time: { id: team.id, nome: team.name, recrutamentoAtivo: team.recruiting_active },
+    administrador: {
+      id: caller.owner.userId,
+      nome: caller.owner.userName,
+      perfil: 'CANDIDATE',
+    },
+    chave: { nome: caller.keyName },
+  };
 }
 
 /* -------------------------------------------------------------------------
    Links
    ------------------------------------------------------------------------- */
 
-export interface ApiLinkFilter {
-  clientId?: string;
-  state?: InviteState;
-  limit?: number;
-}
-
 /**
- * Links existentes, do mais recente para o mais antigo.
+ * Os links do administrador vinculado, do mais recente para o mais antigo.
  *
- * O que vencer e marcado como expirado NA CONSULTA, com o horario do banco:
- * o sistema nao tem cron, e a lista nunca mostra como ativo um link que ja
- * passou do prazo.
+ * Na pratica e UM: cada usuario tem um unico convite, e gerar de novo renova
+ * o mesmo registro. O recorte por dono e aplicado na consulta ao banco.
+ *
+ * O que passou do prazo e marcado como expirado NA CONSULTA, com o horario
+ * do banco: o sistema nao tem cron, e a lista nunca mostra como ativo um
+ * link vencido.
  */
 export async function listApiLinks(
   request: NextRequest,
-  filter: ApiLinkFilter = {},
+  caller: ApiCaller,
 ): Promise<ApiLink[]> {
   await expireDueInvites();
-
-  const filters: Record<string, string> = {};
-  if (filter.clientId) filters.client_id = `eq.${filter.clientId}`;
-  if (filter.state) filters.status = `eq.${filter.state}`;
+  const team = await loadTeam(caller);
 
   const invites = await selectRows<InviteSlice>(TABLES.invites, {
     select: INVITE_COLUMNS,
-    filters,
+    filters: { user_id: `eq.${caller.owner.userId}` },
     order: 'issued_at.desc',
-    limit: Math.min(Math.max(filter.limit ?? LIMITE_PADRAO, 1), LIMITE_MAXIMO),
+    limit: 50,
   });
 
-  return assemble(request, invites);
+  const links: ApiLink[] = [];
+  for (const invite of invites) {
+    links.push(await toApiLink(request, invite, team, caller.owner.userName));
+  }
+  return links;
 }
 
-export async function getApiLink(request: NextRequest, id: string): Promise<ApiLink> {
+/**
+ * Um link do administrador vinculado.
+ *
+ * O filtro por dono entra NA CONSULTA, junto do identificador: link de outro
+ * administrador responde 404, e nao 403 — a chave nao chega nem a saber que
+ * ele existe.
+ */
+export async function getApiLink(
+  request: NextRequest,
+  caller: ApiCaller,
+  id: string,
+): Promise<ApiLink> {
   await expireDueInvites();
 
   const invite = await selectOne<InviteSlice>(TABLES.invites, {
     select: INVITE_COLUMNS,
-    filters: { id: `eq.${id}` },
+    filters: { id: `eq.${id}`, user_id: `eq.${caller.owner.userId}` },
   });
   if (!invite) throw notFound('Link não encontrado.');
 
-  const [link] = await assemble(request, [invite]);
-  if (!link) throw notFound('Link não encontrado.');
-  return link;
-}
-
-export interface GenerateApiLinkInput {
-  clientId: string;
-  /** Administrador do time dono do link. Ausente, vale o mais antigo ativo. */
-  ownerId?: string;
+  const team = await loadTeam(caller);
+  return toApiLink(request, invite, team, caller.owner.userName);
 }
 
 /**
- * Gera (ou renova) o link de cadastro de um time.
+ * Gera (ou renova) o link de cadastro do administrador vinculado a chave.
  *
- * O dono do link e sempre um usuario do PROPRIO time: o `clientId` recebido
- * tem de bater com o vinculo do usuario no banco, e nao ha como emitir um
- * link cruzando times. Sem `ownerId`, vale a mesma regra do painel — o
- * administrador ATIVO mais antigo do time.
- *
- * A geracao anterior deixa de funcionar no mesmo instante.
+ * Nao ha nada a escolher: dono, time e prazo saem do vinculo e do banco. A
+ * geracao anterior daquele administrador deixa de funcionar no mesmo
+ * instante, exatamente como quando ele clica no painel.
  */
 export async function generateApiLink(
   request: NextRequest,
-  input: GenerateApiLinkInput,
   caller: ApiCaller,
 ): Promise<ApiLink> {
-  const team = await selectOne<TeamSlice>(TABLES.clients, {
-    select: 'id,name,recruiting_active',
-    filters: { id: `eq.${input.clientId}` },
-  });
-  if (!team) throw notFound('Time não encontrado.');
-
-  const owner = input.ownerId
-    ? await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(
-        TABLES.users,
-        {
-          select: 'id,name,role,client_id,is_active',
-          filters: { id: `eq.${input.ownerId}` },
-        },
-      )
-    : await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(
-        TABLES.users,
-        {
-          select: 'id,name,role,client_id,is_active',
-          filters: { client_id: `eq.${team.id}`, role: 'eq.CANDIDATE', is_active: 'is.true' },
-          order: 'created_at.asc',
-        },
-      );
-
-  if (!owner) {
-    throw notFound(
-      input.ownerId
-        ? 'Dono do link não encontrado.'
-        : 'Este time ainda não tem administrador. Cadastre um antes de gerar o link.',
-    );
-  }
-
-  // O vinculo vem do BANCO, nunca do corpo da requisicao: mandar o `donoId`
-  // de outro time nao gera link nenhum.
-  if (owner.client_id !== team.id) throw badRequest('Este dono não pertence ao time informado.');
-  if (!owner.is_active) throw badRequest('O acesso deste dono está desativado.');
-  if (owner.role !== 'CANDIDATE' && owner.role !== 'EQUIPE') {
-    throw badRequest('Este perfil não tem link de cadastro.');
-  }
+  const team = await loadTeam(caller);
+  const owner = caller.owner;
 
   // Sem link proprio ainda, o administrador adota o convite sem dono do time
   // — o mesmo caminho do painel, para nenhum endereco ja distribuido sumir.
-  await ensurePersonalInvite(owner.id, team.id, owner.id);
+  await ensurePersonalInvite(owner.userId, team.id, owner.userId);
 
   // Dono e gerador coincidem, exatamente como na rota do painel
   // (`/api/convite/renovar`, que chama `issuePersonalInvite(user.id, user.id)`).
   // E isto que faz o rastreamento sair identico ao de um clique do proprio
   // Administrador do time.
-  await issuePersonalInvite(owner.id, owner.id);
+  await issuePersonalInvite(owner.userId, owner.userId);
 
-  const invite = await findInviteByUser(owner.id);
+  const invite = await findInviteByUser(owner.userId);
   if (!invite) throw notFound('Link não encontrado depois da geração.');
 
-  // O historico do link nao diz que a API passou por aqui — de proposito.
-  // Quem guarda isso e o registro da chave.
-  await recordApiKeyEvent({
-    keyId: caller.keyId,
-    keyName: caller.keyName ?? 'Sessão do painel',
-    adminUserId: caller.userId,
-    adminName: caller.userName,
-    action: 'LINK_GERADO',
-    inviteId: invite.id,
-    clientId: team.id,
-    clientName: team.name,
-    ownerUserId: owner.id,
-    ownerName: owner.name,
-    ownerRole: owner.role,
-  });
-
-  return toApiLink(request, invite, team, owner.name);
+  return toApiLink(request, invite, team, owner.userName);
 }
 
 /**
- * Revoga um link ja enviado.
+ * Revoga um link do administrador vinculado.
+ *
+ * A conferencia de dono acontece ANTES de tocar no banco: `getApiLink` so
+ * encontra o link se ele for daquele administrador, entao uma chave nunca
+ * derruba o link de outra pessoa.
  *
  * O endereco para de funcionar na hora, e nenhum outro toma o lugar dele:
  * quem abrir ve a tela de link indisponivel. Repetir a chamada devolve o
@@ -347,32 +242,18 @@ export async function generateApiLink(
  */
 export async function revokeApiLink(
   request: NextRequest,
-  id: string,
   caller: ApiCaller,
+  id: string,
 ): Promise<ApiLink> {
-  // Aqui o ADMIN aparece mesmo no historico do link, e esta certo: revogar
+  await getApiLink(request, caller, id);
+
+  // Aqui o ADMIN geral aparece no historico do link, e esta certo: revogar
   // nao imita clique nenhum — nao existe esse botao no painel. Todo evento
   // REVOKED avulso e, por definicao, uma acao da administracao.
   await callFunction<unknown>('cmd_invite_revoke', {
     p_invite_id: id,
-    p_revoked_by: caller.userId,
+    p_revoked_by: caller.adminUserId,
   });
 
-  const link = await getApiLink(request, id);
-
-  await recordApiKeyEvent({
-    keyId: caller.keyId,
-    keyName: caller.keyName ?? 'Sessão do painel',
-    adminUserId: caller.userId,
-    adminName: caller.userName,
-    action: 'LINK_REVOGADO',
-    inviteId: link.id,
-    clientId: link.time.id,
-    clientName: link.time.nome,
-    ownerUserId: link.dono.id,
-    ownerName: link.dono.nome,
-    ownerRole: link.dono.perfil,
-  });
-
-  return link;
+  return getApiLink(request, caller, id);
 }

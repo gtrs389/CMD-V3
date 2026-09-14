@@ -42,7 +42,7 @@ variáveis na Vercel.
 | `cmd_member_responses` | Respostas por campo. Chaves estrangeiras compostas impedem vínculo entre clientes diferentes |
 | `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
 | `cmd_api_keys` | Chaves da API de links de cadastro. Guarda apenas o hash SHA-256 do segredo |
-| `cmd_api_key_events` | O que cada chave fez: link gerado ou revogado, em nome de quem e quando |
+| `cmd_api_key_events` | O que cada chave fez: operação, em nome de quem, resultado e motivo da recusa |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -185,12 +185,13 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/members/[id]` | ADMIN | Atualiza e exclui um integrante |
 | `/api/public/convite/[token]` | Pública | Resolve o convite pelo token do link |
 | `/api/public/convite/[token]/membros` | Pública | Recebe o cadastro do formulário |
-| `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API |
+| `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API (com vínculo) |
+| `/api/configuracoes/chaves/opcoes` | ADMIN geral | Times e administradores para vincular |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
 | `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
-| `/api/v1/links` | ADMIN geral | Gera e lista links de cadastro |
-| `/api/v1/links/[id]` | ADMIN geral | Consulta e revoga um link |
-| `/api/v1/times` | ADMIN geral | Times e administradores, para gerar o link |
+| `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
+| `/api/v1/links/[id]` | Chave da API | Consulta e revoga um link daquele administrador |
+| `/api/v1/vinculo` | Chave da API | Time e administrador vinculados à chave |
 
 O token do convite é opaco e aleatório: **nenhum dado pessoal vai para a URL**.
 O banco guarda apenas o hash SHA-256 dele, por isso o endereço completo aparece
@@ -211,31 +212,59 @@ mesmo histórico imutável. O que a API acrescenta é o pedido por programa e a
 revogação avulsa (`DELETE /api/v1/links/[id]`), que derruba um link enviado por
 engano sem colocar outro no lugar.
 
-**A API age como o dono.** Gerar pela API é exatamente o que aconteceria se o
-Administrador do time entrasse no painel e clicasse em "Gerar link": ele consta
+### A identidade vem da chave
+
+Cada chave pertence a **um administrador de um time**, escolhidos pelo ADMIN
+geral no momento da criação (Configurações → Chaves da API). O vínculo é
+imutável: para trocar o administrador, revoga-se a chave e cria-se outra — o
+gatilho `cmd_api_keys_guard` recusa qualquer alteração no banco.
+
+Nenhum endpoint recebe `donoId` ou `timeId`; corpo com campos é recusado com
+400. `POST /api/v1/links` gera o link **daquele** administrador, e as demais
+rotas só alcançam links dele: para uma chave do João, o link da Maria responde
+404, e não 403.
+
+**A API age como o dono.** Gerar pela API é exatamente o que aconteceria se
+aquele administrador entrasse no painel e clicasse em "Gerar link": ele consta
 como dono **e** como quem gerou, com data e hora do servidor, prazo do perfil
 dele e os mesmos eventos. A rota do painel chama
 `issuePersonalInvite(user.id, user.id)` e a API faz a mesma chamada — no
 histórico do link não há como distinguir os dois caminhos, e é esse o objetivo.
 
-Como o histórico do link passa a ser indistinguível de um clique humano, o
-rastro de que a ação veio da API fica do outro lado: em `cmd_api_key_events`,
-junto da chave, com o link afetado e o dono em nome de quem ela agiu. Isso
-aparece em Configurações, no botão **Atividade** de cada chave. Revogação é a
-exceção: como não existe esse botão no painel, ela consta no histórico como
-ação da administração.
+### Quem pode o quê
 
-**Exclusiva do ADMIN geral.** A autenticação é uma chave no cabeçalho
-`Authorization: Bearer cmd_...`, criada em **Configurações**; a sessão do painel
-também é aceita, desde que seja a de um ADMIN, para o próprio administrador
-testar um endpoint a partir da documentação. A chave age em nome do ADMIN que a
-criou: desativado esse acesso, todas as chaves dele param de valer no mesmo
-instante. A API não cria nem revoga chaves — isso só acontece na tela, com
-sessão —, então uma chave vazada não consegue criar outra.
+Criar, listar, ver atividade e revogar chaves é **exclusivo do ADMIN geral**
+(`settings.manage` + perfil ADMIN). O Administrador do time não cria, não vê,
+não vincula e não escolhe em nome de quem a API atua — ele apenas continua
+gerando e copiando o próprio link pelo painel, como sempre.
+
+Nas rotas `/api/v1` a **sessão do painel não vale**: só o cabeçalho
+`Authorization: Bearer cmd_...`. A cada chamada o banco reconfere o vínculo
+inteiro — chave não revogada, ADMIN geral ativo, administrador ativo com perfil
+de Administrador do time, ainda ligado ao mesmo time, e o time ainda existindo.
+Qualquer falha derruba a chave na hora, e a resposta é sempre o mesmo 401, sem
+dizer qual conferência falhou.
 
 O segredo aparece **uma única vez**, na criação: o banco guarda apenas o
-SHA-256 e o prefixo público (`cmd_` + 8 caracteres) usado para identificar a
-chave na lista. Perdido o valor, revogue e crie outra.
+SHA-256 e o prefixo público (`cmd_` + 8 caracteres).
+
+### Auditoria em dois lugares
+
+Como o histórico do link é, de propósito, indistinguível de um clique humano, o
+rastro da API vive em `cmd_api_key_events`: qual chave, sob qual ADMIN geral, em
+nome de qual administrador, qual time, qual operação, o resultado e o instante —
+incluindo as chamadas **recusadas**, com o motivo que a resposta nunca revela.
+Isso aparece em Configurações, no botão **Ver atividade** de cada chave.
+
+Revogação é a exceção do "agir como dono": como não existe esse botão no painel,
+ela consta no histórico do link como ação da administração.
+
+### Chaves antigas
+
+Chaves criadas antes do vínculo (migration 029) **não funcionam mais** e nenhum
+administrador é escolhido por elas: `cmd_api_key_resolve` recusa com o motivo
+`sem vinculo`, e a tela marca "Vínculo obrigatório". O ADMIN geral revoga e cria
+outra escolhendo time e administrador.
 
 A documentação completa — endpoints, parâmetros, exemplos de requisição e de
 resposta, estados do link e tabela de erros — fica em **Configurações**, na
@@ -248,7 +277,8 @@ A API é servida no endereço do **painel**. O domínio público não a serve �
 só serve os links enviados. Já os links que ela devolve apontam para o domínio
 público, que é o endereço que as pessoas recebem.
 
-Requer as migrations `029_api_links_cadastro.sql` e `030_api_agir_como_dono.sql`.
+Requer as migrations `029_api_links_cadastro.sql`, `030_api_agir_como_dono.sql`
+e `031_api_chave_vinculada.sql`.
 
 ---
 

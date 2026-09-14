@@ -443,14 +443,18 @@ export const publicEntrySchema = z
   .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
 
 /* -------------------------------------------------------------------------
-   API de links de cadastro (migration 029)
+   API de links de cadastro (migrations 029, 030 e 031)
    ------------------------------------------------------------------------- */
 
 /**
- * Apelido da chave da API.
+ * Criacao de chave da API, so pelo ADMIN geral.
  *
- * Serve para o ADMIN reconhecer a chave na lista e revogar a certa. O
- * segredo nao passa por aqui: ele nasce no servidor.
+ * Nome, time e administrador chegam juntos: nao existe chave sem vinculo. O
+ * segredo nao passa por aqui — ele nasce no servidor.
+ *
+ * Quem confere se o administrador existe, esta ativo, tem o perfil certo e
+ * pertence AQUELE time e o banco, em `createApiKey`: a tela nunca decide
+ * vinculo.
  */
 export const apiKeyCreateSchema = z.object({
   name: z
@@ -458,16 +462,10 @@ export const apiKeyCreateSchema = z.object({
     .trim()
     .min(1, 'Dê um nome para identificar a chave.')
     .max(API_KEY_NAME_MAX, `O nome deve ter até ${API_KEY_NAME_MAX} caracteres.`),
-});
-
-/**
- * Pedido de geracao de link.
- *
- * `donoId` e opcional: sem ele vale o administrador ativo mais antigo do
- * time. O vinculo entre dono e time e conferido no BANCO — mandar o dono de
- * outro time nao gera link nenhum.
- */
-export const apiLinkCreateSchema = z.object({
-  timeId: z.string().trim().min(1, 'Informe o time.').max(64, 'Identificador inválido.'),
-  donoId: z.string().trim().min(1).max(64, 'Identificador inválido.').optional(),
+  clientId: z.string().trim().min(1, 'Escolha o time.').max(64, 'Identificador inválido.'),
+  actingUserId: z
+    .string()
+    .trim()
+    .min(1, 'Escolha o administrador do time.')
+    .max(64, 'Identificador inválido.'),
 });

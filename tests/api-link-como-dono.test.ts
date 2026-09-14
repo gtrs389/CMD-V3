@@ -3,28 +3,25 @@ import type { NextRequest } from 'next/server';
 import type { ApiCaller } from '@/lib/server/api-guard';
 
 /**
- * A API gera o link COMO SE o dono tivesse clicado no painel.
+ * A API gera o link COMO SE o dono da chave tivesse clicado no painel — e so
+ * alcanca o que e dele.
  *
- * Esta e a regra central da API de links: no painel, quando o Administrador
- * do time clica em "Gerar link", a rota chama
- * `issuePersonalInvite(user.id, user.id)` — dono e gerador sao a mesma
- * pessoa, e e isso que o rastreamento mostra. A API precisa chamar o banco
- * exatamente do mesmo jeito, senao o historico do time passa a depender do
- * caminho tecnico usado.
+ * Duas regras vivem aqui:
  *
- * O teste olha o que chega na funcao do banco (`cmd_invite_issue`), que e
- * onde a decisao se materializa.
+ *   1. no painel, quando o Administrador do time clica em "Gerar link", a
+ *      rota chama `issuePersonalInvite(user.id, user.id)` — dono e gerador
+ *      sao a mesma pessoa, e e isso que o rastreamento mostra. A API precisa
+ *      chamar o banco exatamente do mesmo jeito;
+ *   2. a identidade vem do VINCULO DA CHAVE, nunca da requisicao. Uma chave
+ *      do Joao nao gera, nao lista, nao consulta e nao revoga nada da Maria.
+ *
+ * O teste olha o que chega na funcao do banco e nos filtros das consultas,
+ * que e onde as duas decisoes se materializam.
  */
 
-const TIME = { id: 'time-1', name: 'Equipe Zona Norte', recruiting_active: true };
+const TIME = { id: 'time-1', name: 'Time Bezerra', recruiting_active: true };
 
-const JOAO = {
-  id: 'user-joao',
-  name: 'João Silva',
-  role: 'CANDIDATE',
-  client_id: TIME.id,
-  is_active: true,
-};
+const JOAO = { id: 'user-joao', name: 'João Silva' };
 
 /** Convite como o banco o devolve depois da geracao. */
 const CONVITE = {
@@ -48,28 +45,33 @@ const CONVITE = {
 };
 
 const chamadas: { nome: string; args: Record<string, unknown> }[] = [];
-const registros: Record<string, unknown>[] = [];
-const estado = { outroDono: false };
+const consultas: { tabela: string; filtros: Record<string, string> }[] = [];
 
 vi.mock('@/lib/server/public-origin', () => ({
   publicLink: async (_request: unknown, path: string) => `https://www.exemplo.test${path}`,
 }));
 
 vi.mock('@/lib/supabase/rest', () => ({
-  selectOne: async (table: string) => {
+  selectOne: async (table: string, options: { filters?: Record<string, string> }) => {
+    consultas.push({ tabela: table, filtros: options.filters ?? {} });
     if (table === 'cmd_clients') return { ...TIME };
-    if (table === 'cmd_users') {
-      // Dono de OUTRO time: usado para provar que o vinculo vem do banco.
-      return estado.outroDono ? { ...JOAO, client_id: 'outro-time' } : { ...JOAO };
+    if (table === 'cmd_invites') {
+      // O recorte por dono e aplicado na consulta: sem ele, nada volta.
+      const dono = (options.filters?.user_id ?? '').replace('eq.', '');
+      return dono === JOAO.id ? { ...CONVITE } : null;
     }
-    if (table === 'cmd_invites') return { ...CONVITE };
     return null;
   },
-  selectRows: async () => [],
-  insertRows: async (_table: string, values: Record<string, unknown>[]) => {
-    registros.push(...values);
-    return values.map((_, index) => ({ id: `ev-${index}` }));
+  selectRows: async (table: string, options: { filters?: Record<string, string> }) => {
+    consultas.push({ tabela: table, filtros: options.filters ?? {} });
+    if (table === 'cmd_invites') {
+      const dono = (options.filters?.user_id ?? '').replace('eq.', '');
+      return dono === JOAO.id ? [{ ...CONVITE }] : [];
+    }
+    return [];
   },
+  insertRows: async (_table: string, values: Record<string, unknown>[]) =>
+    values.map((_, index) => ({ id: `ev-${index}` })),
   insertOne: async () => ({ ...CONVITE }),
   updateRows: async () => [],
   inFilter: (values: readonly string[]) => `in.(${values.join(',')})`,
@@ -84,14 +86,23 @@ vi.mock('@/lib/supabase/rest', () => ({
   },
 }));
 
-const { generateApiLink } = await import('@/lib/server/api-link.service');
+const { generateApiLink, getApiLink, listApiLinks } = await import(
+  '@/lib/server/api-link.service'
+);
+const { requireEmptyBody } = await import('@/lib/server/api-guard');
 
-const CHAMADOR: ApiCaller = {
-  userId: 'user-admin',
-  userName: 'Administradora',
-  via: 'chave',
+/** Chave vinculada ao João, do Time Bezerra. */
+const CHAVE: ApiCaller = {
   keyId: 'chave-1',
-  keyName: 'Integração WhatsApp',
+  keyName: 'Integração CRM',
+  adminUserId: 'user-admin',
+  adminName: 'Administradora',
+  owner: {
+    userId: JOAO.id,
+    userName: JOAO.name,
+    clientId: TIME.id,
+    clientName: TIME.name,
+  },
 };
 
 /** A API so le cabeçalhos e a URL da requisicao; nada mais e usado aqui. */
@@ -99,27 +110,26 @@ const REQUISICAO = {} as NextRequest;
 
 beforeEach(() => {
   chamadas.length = 0;
-  registros.length = 0;
-  estado.outroDono = false;
+  consultas.length = 0;
 });
 
 describe('link gerado pela API', () => {
   it('chama o banco como o painel chama: o dono é também o gerador', async () => {
-    await generateApiLink(REQUISICAO, { clientId: TIME.id }, CHAMADOR);
+    await generateApiLink(REQUISICAO, CHAVE);
 
     const emissao = chamadas.find((chamada) => chamada.nome === 'cmd_invite_issue');
     expect(emissao, 'a emissão do link não chegou ao banco').toBeDefined();
 
-    // O coração da regra: quem gerou é o próprio dono, e não o ADMIN que
-    // chamou a API. É isso que faz o rastreamento sair idêntico ao de um
+    // O coração da regra: quem gerou é o próprio dono da chave, e não o ADMIN
+    // geral que a criou. É isso que faz o rastreamento sair idêntico ao de um
     // clique do João no painel.
     expect(emissao?.args.p_user_id).toBe(JOAO.id);
     expect(emissao?.args.p_generated_by).toBe(JOAO.id);
-    expect(emissao?.args.p_generated_by).not.toBe(CHAMADOR.userId);
+    expect(emissao?.args.p_generated_by).not.toBe(CHAVE.adminUserId);
   });
 
   it('devolve o link com o dono do time nos dois papéis', async () => {
-    const link = await generateApiLink(REQUISICAO, { clientId: TIME.id }, CHAMADOR);
+    const link = await generateApiLink(REQUISICAO, CHAVE);
 
     expect(link.dono).toEqual({ id: JOAO.id, nome: JOAO.name, perfil: 'CANDIDATE' });
     expect(link.geradoPor).toEqual({ nome: JOAO.name, perfil: 'CANDIDATE' });
@@ -127,32 +137,61 @@ describe('link gerado pela API', () => {
     expect(link.time).toEqual({ id: TIME.id, nome: TIME.name });
   });
 
-  it('registra a ação da chave, que é onde o rastro da API fica', async () => {
-    await generateApiLink(REQUISICAO, { clientId: TIME.id }, CHAMADOR);
+  it('usa o time do vínculo, e não algum identificador da requisição', async () => {
+    await generateApiLink(REQUISICAO, CHAVE);
 
-    // O histórico do link não diz que veio da API — de propósito. Sem este
-    // registro, a origem da ação se perderia por completo.
-    const registro = registros.at(-1);
-    expect(registro).toMatchObject({
-      api_key_id: CHAMADOR.keyId,
-      key_name: CHAMADOR.keyName,
-      admin_user_id: CHAMADOR.userId,
-      action: 'LINK_GERADO',
-      invite_id: CONVITE.id,
-      client_id: TIME.id,
-      owner_user_id: JOAO.id,
-      owner_name: JOAO.name,
+    const time = consultas.find((consulta) => consulta.tabela === 'cmd_clients');
+    expect(time?.filtros.id).toBe(`eq.${TIME.id}`);
+  });
+});
+
+describe('escopo da chave', () => {
+  it('lista apenas os links do administrador vinculado', async () => {
+    await listApiLinks(REQUISICAO, CHAVE);
+
+    const consulta = consultas.find((item) => item.tabela === 'cmd_invites');
+    expect(consulta?.filtros.user_id).toBe(`eq.${JOAO.id}`);
+  });
+
+  it('não encontra o link de outro administrador', async () => {
+    const chaveDaMaria: ApiCaller = {
+      ...CHAVE,
+      keyId: 'chave-2',
+      owner: { ...CHAVE.owner, userId: 'user-maria', userName: 'Maria' },
+    };
+
+    // O filtro por dono entra na consulta: para esta chave, o link do João
+    // simplesmente não existe — 404, e não 403.
+    await expect(getApiLink(REQUISICAO, chaveDaMaria, CONVITE.id)).rejects.toMatchObject({
+      status: 404,
     });
   });
+});
 
-  it('recusa gerar em nome de um dono de outro time', async () => {
-    estado.outroDono = true;
+describe('corpo da requisição', () => {
+  /** Requisicao com o corpo que o teste quiser, sem subir servidor nenhum. */
+  function corpo(texto: string): NextRequest {
+    return { text: async () => texto } as unknown as NextRequest;
+  }
 
-    await expect(
-      generateApiLink(REQUISICAO, { clientId: TIME.id, ownerId: JOAO.id }, CHAMADOR),
-    ).rejects.toMatchObject({ status: 400 });
-
-    // Nada chegou ao banco: o vínculo é conferido antes de emitir.
-    expect(chamadas.some((chamada) => chamada.nome === 'cmd_invite_issue')).toBe(false);
+  it('aceita requisição sem corpo, com corpo vazio ou com objeto vazio', async () => {
+    await expect(requireEmptyBody(corpo(''))).resolves.toBeUndefined();
+    await expect(requireEmptyBody(corpo('   '))).resolves.toBeUndefined();
+    await expect(requireEmptyBody(corpo('{}'))).resolves.toBeUndefined();
   });
+
+  it('recusa donoId e timeId: a identidade vem da chave', async () => {
+    await expect(corpoRecusado('{"donoId":"user-maria"}')).resolves.toBe(400);
+    await expect(corpoRecusado('{"timeId":"time-2"}')).resolves.toBe(400);
+    await expect(corpoRecusado('{"qualquerCoisa":1}')).resolves.toBe(400);
+  });
+
+  async function corpoRecusado(texto: string): Promise<number> {
+    try {
+      await requireEmptyBody(corpo(texto));
+      return 200;
+    } catch (error) {
+      return (error as { status?: number }).status ?? 500;
+    }
+  }
 });

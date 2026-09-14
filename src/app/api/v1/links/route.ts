@@ -1,43 +1,30 @@
 import type { NextRequest } from 'next/server';
-import type { InviteState } from '@/lib/domain/invite-expiration';
-import { apiJson, requireApiAdmin, toApiErrorResponse } from '@/lib/server/api-guard';
-import { readJson } from '@/lib/server/http';
-import { apiLinkCreateSchema } from '@/lib/validation/server.schema';
+import {
+  apiJson,
+  recordApiCall,
+  requireApiKey,
+  requireEmptyBody,
+  toApiErrorResponse,
+} from '@/lib/server/api-guard';
 import { generateApiLink, listApiLinks } from '@/lib/server/api-link.service';
-
-const ESTADOS: readonly InviteState[] = [
-  'ACTIVE',
-  'CLAIMED',
-  'SUBMITTING',
-  'CONSUMED',
-  'EXPIRED',
-  'REVOKED',
-];
 
 /**
  * `GET /api/v1/links`
  *
- * Links de cadastro existentes, do mais recente para o mais antigo.
+ * O link de cadastro do administrador vinculado a chave.
  *
- * Filtros opcionais: `time`, `estado` e `limite`. O que venceu e marcado
- * como expirado na propria consulta, com o horario do banco — a lista nunca
- * mostra como ativo um link fora do prazo.
+ * O recorte por dono e aplicado na consulta ao banco: uma chave nunca ve o
+ * link de outro administrador, nem de outro time. Como cada pessoa tem um
+ * unico convite, a lista traz o link atual daquele administrador.
+ *
+ * O que venceu e marcado como expirado na propria consulta, com o horario do
+ * banco — a lista nunca mostra como ativo um link fora do prazo.
  */
 export async function GET(request: NextRequest) {
   try {
-    await requireApiAdmin(request);
-
-    const params = request.nextUrl.searchParams;
-    const estado = params.get('estado');
-    const limite = Number(params.get('limite'));
-
-    const links = await listApiLinks(request, {
-      clientId: params.get('time')?.trim() || undefined,
-      state: ESTADOS.includes((estado ?? '') as InviteState)
-        ? (estado as InviteState)
-        : undefined,
-      limit: Number.isFinite(limite) && limite > 0 ? Math.trunc(limite) : undefined,
-    });
+    const caller = await requireApiKey(request);
+    const links = await listApiLinks(request, caller);
+    await recordApiCall(caller, 'LINK_LISTADO', links[0]?.id ?? null);
 
     return apiJson({ links });
   } catch (error) {
@@ -48,27 +35,28 @@ export async function GET(request: NextRequest) {
 /**
  * `POST /api/v1/links`
  *
- * Gera o link de cadastro de um time — o mesmo endereco que o Administrador
- * do time envia para as pessoas se cadastrarem.
+ * Gera o link de cadastro do administrador vinculado a chave.
  *
- * O link nasce COMO SE o dono tivesse clicado no painel: no rastreamento
- * ele aparece como dono e como gerador, com o prazo do perfil dele — nao ha
- * diferenca entre o link gerado aqui e o gerado por um clique.
+ * NAO RECEBE CAMPO NENHUM. Dono, time e prazo vem do vinculo imutavel da
+ * chave, conferido no banco a cada chamada; `donoId` e `timeId` sao recusados
+ * com 400. Uma chave do Joao gera o link do Joao, e so.
+ *
+ * O link nasce COMO SE ele tivesse entrado no painel e clicado em "Gerar
+ * link": no rastreamento aparece como dono e como gerador, com o prazo do
+ * perfil dele. Nao ha diferenca entre o link gerado aqui e o gerado por um
+ * clique.
  *
  * O endereco completo volta UMA vez, nesta resposta, e a geracao anterior
- * daquele dono deixa de funcionar no mesmo instante. A acao da chave fica
- * registrada em Configuracoes, junto da propria chave.
+ * daquele administrador deixa de funcionar no mesmo instante. A acao da
+ * chave fica registrada em Configuracoes, junto da propria chave.
  */
 export async function POST(request: NextRequest) {
   try {
-    const caller = await requireApiAdmin(request);
-    const input = await readJson(request, apiLinkCreateSchema);
+    const caller = await requireApiKey(request);
+    await requireEmptyBody(request);
 
-    const link = await generateApiLink(
-      request,
-      { clientId: input.timeId, ownerId: input.donoId },
-      caller,
-    );
+    const link = await generateApiLink(request, caller);
+    await recordApiCall(caller, 'LINK_GERADO', link.id);
 
     return apiJson({ link }, 201);
   } catch (error) {

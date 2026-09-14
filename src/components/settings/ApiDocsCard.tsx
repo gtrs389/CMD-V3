@@ -7,10 +7,12 @@ import {
   API_AUTH_NOTES,
   API_BASE,
   API_ENDPOINTS,
+  API_ERRO_CORPO,
   API_ERRO_EXEMPLO,
   API_ERROS_GERAIS,
   API_ESTADOS,
   API_HOST_NOTE,
+  API_IDENTIDADE,
   API_REGRAS,
   API_VERSION,
   type DocEndpoint,
@@ -269,7 +271,13 @@ export function ApiDocsCard() {
 
         {/* Autenticacao ------------------------------------------------- */}
         <section className="space-y-2">
-          <h4 className="text-sm font-semibold text-ink-900">Autenticação</h4>
+          <h4 className="text-sm font-semibold text-ink-900">Autenticação e identidade</h4>
+
+          {/* A regra que organiza tudo o mais: a chave DIZ quem é. */}
+          <p className="rounded-control border border-line bg-brand-50 p-3 text-sm text-brand-800">
+            {API_IDENTIDADE}
+          </p>
+
           <CodeBlock label="cabeçalho de autenticação" code={API_AUTH_HEADER} />
           <ul className="space-y-1.5 text-sm text-ink-700">
             {API_AUTH_NOTES.map((nota) => (
@@ -320,6 +328,13 @@ export function ApiDocsCard() {
           </p>
           <CodeBlock label="formato de erro" code={API_ERRO_EXEMPLO} />
           <ErrosTable erros={API_ERROS_GERAIS} />
+
+          <p className="pt-1 text-sm text-ink-700">
+            Enviar <code className="font-mono text-xs">donoId</code> ou{' '}
+            <code className="font-mono text-xs">timeId</code> no corpo é recusado: a identidade vem
+            da chave.
+          </p>
+          <CodeBlock label="erro de corpo com campos" code={API_ERRO_CORPO} />
         </section>
 
         {/* Regras ------------------------------------------------------- */}

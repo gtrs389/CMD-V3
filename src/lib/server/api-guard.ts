@@ -1,84 +1,170 @@
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
-import { can } from '@/lib/permissions';
 import { bearerToken } from '@/lib/domain/api-key';
-import { currentUser } from './auth.service';
-import { authenticateApiKey } from './api-key.service';
-import { forbidden, toErrorResponse, unauthorized } from './http';
+import type { ApiKeyAction } from '@/lib/supabase/tables';
+import { recordApiKeyEvent, resolveApiKey } from './api-key.service';
+import { badRequest, toErrorResponse, unauthorized } from './http';
 
 /**
  * Porta de entrada da API de links de cadastro (`/api/v1`).
  *
- * EXCLUSIVA DO ADMIN GERAL. Nao existe caminho aqui para o Administrador do
- * time nem para o integrante da equipe: os dois continuam gerando e copiando
- * os proprios links pelo painel, e nada disso muda — o que eles nao alcancam
- * e esta API, nem para ler.
+ * SO UMA CREDENCIAL ENTRA AQUI: a chave, em
+ * `Authorization: Bearer cmd_...`. A sessao do painel NAO serve — nem a do
+ * ADMIN geral. Quem administra e testa as chaves e a tela de Configuracoes;
+ * quem chama a API e um programa, com a chave dele. Sem essa separacao, um
+ * cookie no navegador viraria credencial de API e a identidade do link
+ * deixaria de vir do vinculo.
  *
- * Duas credenciais sao aceitas, nesta ordem:
+ * A IDENTIDADE VEM DA CHAVE, e de mais nada. Cada chave pertence a UM
+ * Administrador de UM time (migration 031): e em nome dele que o link nasce,
+ * e nenhum campo da requisicao muda isso. Uma chave do Joao nunca alcanca a
+ * Maria.
  *
- *   1. `Authorization: Bearer cmd_...` — a chave da API. E o caminho dos
- *      programas. A chave age em nome do ADMIN que a criou e vale enquanto
- *      esse ADMIN continuar ativo;
- *   2. a sessao do painel — o cookie de quem ja esta logado. E o que permite
- *      ao ADMIN experimentar um endpoint a partir da propria documentacao,
- *      sem criar chave nenhuma. A sessao ainda precisa ser de um ADMIN.
+ * Antes de cada operacao o banco reconfere o vinculo inteiro — revogacao,
+ * ADMIN geral ativo, administrador ativo com o perfil certo, ainda ligado ao
+ * mesmo time, e o time ainda existindo. Qualquer falha derruba a chave na
+ * hora.
  *
- * Cabecalho `Authorization` presente nunca cai na sessao: quem mandou uma
- * chave e recebeu 401 precisa ver o erro da CHAVE, e nao ser atendido por um
- * cookie que por acaso estava no mesmo navegador.
- *
- * Nenhuma resposta distingue chave inexistente, revogada ou de dono
- * desativado: de fora, os tres casos sao o mesmo 401.
+ * Para fora, toda recusa e a mesma: 401 com a mesma frase. Chave inexistente,
+ * revogada, sem vinculo, com administrador desativado ou com time removido
+ * sao indistinguiveis — quem tem a chave nao descobre, tentando, o estado do
+ * sistema. O motivo real fica registrado na atividade da chave, onde so o
+ * ADMIN geral le.
  */
 
-/** Quem esta chamando, ja resolvido e conferido. */
-export interface ApiCaller {
-  /** ADMIN em nome de quem a chamada acontece. */
+/** Administrador do time em nome de quem a chamada acontece. */
+export interface ApiOwner {
   userId: string;
   userName: string;
-  via: 'chave' | 'sessao';
-  /** Chave usada. Nulos quando a chamada veio pela sessao do painel. */
-  keyId: string | null;
-  keyName: string | null;
+  clientId: string;
+  clientName: string;
 }
 
-export async function requireApiAdmin(request: NextRequest): Promise<ApiCaller> {
-  const header = request.headers.get('authorization');
+/** Chamada autenticada: a chave e o vinculo dela, ja conferidos. */
+export interface ApiCaller {
+  keyId: string;
+  keyName: string;
+  /** ADMIN geral que criou a chave: quem autorizou a existencia dela. */
+  adminUserId: string;
+  adminName: string;
+  /** Quem aparece no historico do link, como se tivesse clicado no painel. */
+  owner: ApiOwner;
+}
 
-  if (header) {
-    const token = bearerToken(header);
-    if (!token) {
-      throw unauthorized(
-        'Credencial inválida. Use o cabeçalho Authorization: Bearer <chave da API>.',
-      );
-    }
+/** Mesma frase para toda recusa: nada do estado interno vaza pela resposta. */
+const RECUSA = 'Chave da API inválida ou sem permissão.';
 
-    const key = await authenticateApiKey(token);
-    if (!key) throw unauthorized('Chave da API inválida ou revogada.');
-
-    return {
-      userId: key.userId,
-      userName: key.userName,
-      via: 'chave',
-      keyId: key.keyId,
-      keyName: key.keyName,
-    };
+export async function requireApiKey(request: NextRequest): Promise<ApiCaller> {
+  const token = bearerToken(request.headers.get('authorization'));
+  if (!token) {
+    throw unauthorized(
+      'Informe a chave da API no cabeçalho Authorization: Bearer <chave>.',
+    );
   }
 
-  // Sem cabecalho: a sessao do painel atende, para o ADMIN poder testar a
-  // partir da documentacao. A conferencia e a mesma do resto do sistema.
-  const user = await currentUser();
-  if (!user) {
-    throw unauthorized('Informe a chave da API no cabeçalho Authorization: Bearer.');
-  }
-  if (user.mustChangePassword) {
-    throw forbidden('Defina a nova senha para continuar.');
-  }
-  if (user.role !== 'ADMIN' || !can(user, 'settings.manage')) {
-    throw forbidden('Esta API é exclusiva do administrador geral do sistema.');
+  const resolucao = await resolveApiKey(token);
+
+  // Nenhuma chave com este segredo: nao ha nem o que registrar.
+  if (!resolucao) throw unauthorized(RECUSA);
+
+  if (!resolucao.ok) {
+    // A chave existe, mas alguma conferencia falhou. A recusa fica registrada
+    // com o motivo — e e o unico lugar onde esse motivo aparece.
+    const recusada = resolucao.key;
+    await recordApiKeyEvent({
+      keyId: recusada.keyId,
+      keyName: recusada.keyName,
+      adminUserId: recusada.adminUserId,
+      adminName: recusada.adminName,
+      action: 'CHAVE_RECUSADA',
+      result: 'RECUSADO',
+      detail: recusada.reason,
+      clientId: recusada.clientId,
+      clientName: recusada.clientName,
+      ownerUserId: recusada.actingUserId,
+      ownerName: recusada.actingUserName,
+      ownerRole: 'CANDIDATE',
+    });
+
+    throw unauthorized(RECUSA);
   }
 
-  return { userId: user.id, userName: user.name, via: 'sessao', keyId: null, keyName: null };
+  const { key } = resolucao;
+  return {
+    keyId: key.keyId,
+    keyName: key.keyName,
+    adminUserId: key.adminUserId,
+    adminName: key.adminName,
+    owner: {
+      userId: key.actingUserId,
+      userName: key.actingUserName,
+      clientId: key.clientId,
+      clientName: key.clientName,
+    },
+  };
+}
+
+/**
+ * Registra uma operacao bem-sucedida da chave.
+ *
+ * Atalho para as rotas: o vinculo ja esta no `caller`, entao cada rota so
+ * diz o que fez e sobre qual link.
+ */
+export async function recordApiCall(
+  caller: ApiCaller,
+  action: ApiKeyAction,
+  inviteId: string | null = null,
+): Promise<void> {
+  await recordApiKeyEvent({
+    keyId: caller.keyId,
+    keyName: caller.keyName,
+    adminUserId: caller.adminUserId,
+    adminName: caller.adminName,
+    action,
+    result: 'SUCESSO',
+    inviteId,
+    clientId: caller.owner.clientId,
+    clientName: caller.owner.clientName,
+    ownerUserId: caller.owner.userId,
+    ownerName: caller.owner.userName,
+    ownerRole: 'CANDIDATE',
+  });
+}
+
+/**
+ * Recusa qualquer campo no corpo da requisicao.
+ *
+ * `POST /api/v1/links` nao escolhe nada: dono e time vem do vinculo da
+ * chave. Aceitar `donoId` ou `timeId` "por compatibilidade" seria manter de
+ * pe justamente o que foi removido — e um dia alguem confiaria neles.
+ *
+ * Corpo ausente, vazio ou `{}` passa; qualquer campo e recusado com 400,
+ * dizendo o que fazer.
+ */
+export async function requireEmptyBody(request: NextRequest): Promise<void> {
+  const raw = (await request.text()).trim();
+  if (!raw) return;
+
+  let corpo: unknown;
+  try {
+    corpo = JSON.parse(raw);
+  } catch {
+    throw badRequest('Corpo da requisição inválido.');
+  }
+
+  if (corpo === null) return;
+  if (
+    typeof corpo === 'object' &&
+    !Array.isArray(corpo) &&
+    Object.keys(corpo as Record<string, unknown>).length === 0
+  ) {
+    return;
+  }
+
+  throw badRequest(
+    'Esta requisição não recebe campos: o dono e o time do link vêm da chave. ' +
+      'Remova donoId e timeId do corpo.',
+  );
 }
 
 /* -------------------------------------------------------------------------
@@ -118,8 +204,7 @@ export function apiJson<T>(data: T, status = 200): NextResponse {
  * Resposta de erro da API.
  *
  * O corpo traz `erro.codigo` e `erro.mensagem`, e repete a mensagem em
- * `message` — e a chave que o proprio painel ja le, e assim a documentacao
- * pode chamar a API sem um segundo formato de erro.
+ * `message` — a chave que o proprio painel ja le.
  */
 export function apiError(status: number, mensagem: string): NextResponse {
   return NextResponse.json(

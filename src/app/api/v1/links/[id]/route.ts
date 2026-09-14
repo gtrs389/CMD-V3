@@ -1,20 +1,33 @@
 import type { NextRequest } from 'next/server';
-import { apiJson, requireApiAdmin, toApiErrorResponse } from '@/lib/server/api-guard';
+import {
+  apiJson,
+  recordApiCall,
+  requireApiKey,
+  toApiErrorResponse,
+} from '@/lib/server/api-guard';
 import { getApiLink, revokeApiLink } from '@/lib/server/api-link.service';
 
 /**
  * `GET /api/v1/links/{id}`
  *
- * Situacao de um link: estado, prazo, primeiro acesso e conclusao.
+ * Situacao de um link do administrador vinculado: estado, prazo, primeiro
+ * acesso e conclusao.
+ *
+ * Link de outro administrador responde "nao encontrado", e nao "sem
+ * permissao": a chave nao chega nem a saber que ele existe.
  *
  * Nao devolve nenhum dado da pessoa que se cadastrou — para isso existe o
  * painel, onde o acesso e conferido cadastro a cadastro.
  */
 export async function GET(request: NextRequest, ctx: RouteContext<'/api/v1/links/[id]'>) {
   try {
-    await requireApiAdmin(request);
+    const caller = await requireApiKey(request);
     const { id } = await ctx.params;
-    return apiJson({ link: await getApiLink(request, id) });
+
+    const link = await getApiLink(request, caller, id);
+    await recordApiCall(caller, 'LINK_CONSULTADO', link.id);
+
+    return apiJson({ link });
   } catch (error) {
     return toApiErrorResponse(error);
   }
@@ -26,16 +39,20 @@ export async function GET(request: NextRequest, ctx: RouteContext<'/api/v1/links
  * Derruba o link na hora, sem por outro no lugar: quem abrir o endereco ve a
  * tela de link indisponivel.
  *
- * E o que fazer quando o link foi enviado para a pessoa errada. Repetir a
- * chamada devolve o mesmo resultado. Link ja usado para um cadastro nao e
- * revogado — o cadastro existe, e apagar o estado final falsificaria o
- * historico.
+ * So alcanca link do proprio administrador vinculado. E o que fazer quando o
+ * endereco foi enviado para a pessoa errada. Repetir a chamada devolve o
+ * mesmo resultado. Link ja usado para um cadastro nao e revogado — o
+ * cadastro existe, e apagar o estado final falsificaria o historico.
  */
 export async function DELETE(request: NextRequest, ctx: RouteContext<'/api/v1/links/[id]'>) {
   try {
-    const caller = await requireApiAdmin(request);
+    const caller = await requireApiKey(request);
     const { id } = await ctx.params;
-    return apiJson({ link: await revokeApiLink(request, id, caller) });
+
+    const link = await revokeApiLink(request, caller, id);
+    await recordApiCall(caller, 'LINK_REVOGADO', link.id);
+
+    return apiJson({ link });
   } catch (error) {
     return toApiErrorResponse(error);
   }

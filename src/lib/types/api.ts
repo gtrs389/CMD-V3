@@ -1,4 +1,5 @@
 import type { InviteState } from '@/lib/domain/invite-expiration';
+import type { ApiKeyAction } from '@/lib/supabase/tables';
 import type { IsoDate } from './common';
 
 /**
@@ -6,8 +7,20 @@ import type { IsoDate } from './common';
  *
  * Tudo aqui e EXCLUSIVO do ADMIN geral. Administrador do time e integrante
  * continuam gerando e copiando os proprios links pelo painel, como sempre —
- * o que nao alcancam e esta API nem a gestao das chaves.
+ * o que nao alcancam e esta API, as chaves e esta documentacao.
+ *
+ * Cada chave pertence a UM administrador de UM time, e esse vinculo nasce
+ * com ela (migration 031). E dele que a API tira a identidade: nenhuma
+ * requisicao escolhe dono nem time.
  */
+
+/** Administrador do time em nome de quem uma chave age. */
+export interface ApiKeyBinding {
+  userId: string;
+  userName: string;
+  clientId: string;
+  clientName: string;
+}
 
 /**
  * Chave da API como a tela de Configuracoes a ve.
@@ -17,12 +30,18 @@ import type { IsoDate } from './common';
  */
 export interface ApiKeySummary {
   id: string;
-  /** Apelido escolhido pelo ADMIN ("Integração WhatsApp", por exemplo). */
+  /** Apelido escolhido pelo ADMIN geral ("Integração CRM", por exemplo). */
   name: string;
   /** `cmd_` + 8 caracteres. O restante do segredo nao existe mais aqui. */
   prefix: string;
   createdAt: IsoDate;
+  /** ADMIN geral que criou a chave. */
   createdByName: string | null;
+  /**
+   * Vinculo imutavel da chave. Nulo apenas nas chaves criadas antes da
+   * migration 031: elas nao autenticam mais e precisam ser revogadas.
+   */
+  binding: ApiKeyBinding | null;
   lastUsedAt: IsoDate | null;
   requestCount: number;
   revokedAt: IsoDate | null;
@@ -45,19 +64,21 @@ export interface CreatedApiKey extends ApiKeySummary {
 /** Acao registrada de uma chave, como a tela de Configuracoes a ve. */
 export interface ApiKeyEvent {
   id: string;
-  /** LINK_GERADO ou LINK_REVOGADO. */
-  action: 'LINK_GERADO' | 'LINK_REVOGADO';
+  action: ApiKeyAction;
+  /** SUCESSO ou RECUSADO. Recusa fica registrada, mas nunca e detalhada para fora. */
+  result: 'SUCESSO' | 'RECUSADO';
+  /** Motivo da recusa, visivel apenas aqui, para o ADMIN geral. */
+  detail: string | null;
   occurredAt: IsoDate;
-  /** Como a chamada foi autenticada: a chave, ou a sessao do painel. */
   keyName: string | null;
-  /** ADMIN responsavel. */
+  /** ADMIN geral responsavel pela chave. */
   adminName: string | null;
   clientName: string | null;
   /**
-   * Dono em nome de quem a chave agiu.
+   * Administrador do time em nome de quem a chave agiu.
    *
-   * E ele que consta como gerador no historico do link, exatamente como se
-   * tivesse clicado no painel — por isso este registro existe.
+   * E ele que consta como dono e gerador no historico do link, exatamente
+   * como se tivesse clicado no painel — por isso este registro existe.
    */
   ownerName: string | null;
   ownerRole: string | null;
@@ -100,12 +121,25 @@ export interface ApiLink {
   revogadoEm: IsoDate | null;
 }
 
-/** Time na resposta da API, com os administradores que podem ser donos. */
-export interface ApiTeam {
+/**
+ * Resposta de `GET /api/v1/vinculo`: a quem esta chave pertence.
+ *
+ * Serve para o sistema externo confirmar, sem adivinhar, em nome de quem os
+ * links que ele pedir vao sair.
+ */
+export interface ApiBindingInfo {
+  time: { id: string; nome: string; recrutamentoAtivo: boolean };
+  administrador: { id: string; nome: string; perfil: 'CANDIDATE' };
+  chave: { nome: string };
+}
+
+/**
+ * Time disponivel para vincular uma chave, com seus administradores ATIVOS.
+ *
+ * Usado apenas pela tela de Configuracoes, no momento de criar a chave.
+ */
+export interface BindableTeam {
   id: string;
-  nome: string;
-  /** Recrutamento do time ligado. Desligado, nenhum link daquele time aceita cadastro. */
-  recrutamentoAtivo: boolean;
-  criadoEm: IsoDate;
-  administradores: { id: string; nome: string }[];
+  name: string;
+  admins: { id: string; name: string }[];
 }
