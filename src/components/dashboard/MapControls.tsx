@@ -109,17 +109,23 @@ export function MapControlStack({
  */
 export function MapPanel({
   side,
+  wide = false,
   children,
   className,
 }: {
   side: 'left' | 'right';
+  /** Painel mais largo, para conteudo de leitura (a ficha do integrante). */
+  wide?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute z-[1100] flex w-[min(22rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-card border border-line bg-surface/97 shadow-overlay backdrop-blur',
+        'pointer-events-auto absolute z-[1100] flex flex-col overflow-hidden rounded-card border border-line bg-surface/97 shadow-overlay backdrop-blur',
+        wide
+          ? 'w-[min(28rem,calc(100vw-1.5rem))]'
+          : 'w-[min(22rem,calc(100vw-1.5rem))]',
         side === 'left' ? 'left-3' : 'right-3',
         className,
       )}

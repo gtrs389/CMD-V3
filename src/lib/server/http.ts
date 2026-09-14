@@ -131,9 +131,14 @@ const REGRAS_DO_BANCO: Record<string, { status: number; message: string }> = {
     status: 409,
     message: 'Este cadastro não pertence a este time.',
   },
+  // Recusa correta quando a troca chega sem registro (ou com registro
+  // falso). A troca legitima — "Alterar responsável", na ficha — passa pela
+  // guarda desde a migration 032, porque grava quando, quem e de quem era.
   'origem do cadastro nao pode ser alterada': {
     status: 409,
-    message: 'Quem cadastrou uma pessoa não pode ser alterado por aqui.',
+    message:
+      'Quem cadastrou uma pessoa só muda em "Alterar responsável", na ficha do integrante, ' +
+      'e a mudança fica registrada. Se a ação veio de lá, falta executar a migration 032 no banco.',
   },
   'usuario nao encontrado': {
     status: 404,
