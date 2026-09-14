@@ -37,7 +37,8 @@ export interface ApiCaller {
   userId: string;
   userName: string;
   via: 'chave' | 'sessao';
-  /** Apelido da chave usada. Nulo quando a chamada veio pela sessao. */
+  /** Chave usada. Nulos quando a chamada veio pela sessao do painel. */
+  keyId: string | null;
   keyName: string | null;
 }
 
@@ -55,7 +56,13 @@ export async function requireApiAdmin(request: NextRequest): Promise<ApiCaller> 
     const key = await authenticateApiKey(token);
     if (!key) throw unauthorized('Chave da API inválida ou revogada.');
 
-    return { userId: key.userId, userName: key.userName, via: 'chave', keyName: key.keyName };
+    return {
+      userId: key.userId,
+      userName: key.userName,
+      via: 'chave',
+      keyId: key.keyId,
+      keyName: key.keyName,
+    };
   }
 
   // Sem cabecalho: a sessao do painel atende, para o ADMIN poder testar a
@@ -71,7 +78,7 @@ export async function requireApiAdmin(request: NextRequest): Promise<ApiCaller> 
     throw forbidden('Esta API é exclusiva do administrador geral do sistema.');
   }
 
-  return { userId: user.id, userName: user.name, via: 'sessao', keyName: null };
+  return { userId: user.id, userName: user.name, via: 'sessao', keyId: null, keyName: null };
 }
 
 /* -------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import type { ApiKeySummary, CreatedApiKey } from '@/lib/types';
+import type { ApiKeyEvent, ApiKeySummary, CreatedApiKey } from '@/lib/types';
 import { API_KEY_MARK, API_KEY_NAME_MAX, apiKeyPrefix } from '@/lib/domain/api-key';
 import { hashToken } from '@/lib/auth/tokens';
-import { TABLES, type ApiKeyRow } from '@/lib/supabase/tables';
-import { callFunction, insertOne, selectRows, updateRows } from '@/lib/supabase/rest';
+import { TABLES, type ApiKeyEventRow, type ApiKeyRow } from '@/lib/supabase/tables';
+import { callFunction, insertOne, insertRows, selectRows, updateRows } from '@/lib/supabase/rest';
 import { badRequest, notFound } from './http';
 
 /**
@@ -148,4 +148,89 @@ export async function authenticateApiKey(token: string): Promise<AuthenticatedAp
     userId: row.user_id,
     userName: row.user_name,
   };
+}
+
+/* -------------------------------------------------------------------------
+   Registro das acoes da chave (migration 030)
+   ------------------------------------------------------------------------- */
+
+const EVENT_COLUMNS =
+  'id,api_key_id,key_name,admin_user_id,admin_name,action,invite_id,client_id,client_name,' +
+  'owner_user_id,owner_name,owner_role,occurred_at';
+
+function toEvent(row: ApiKeyEventRow): ApiKeyEvent {
+  return {
+    id: row.id,
+    action: row.action,
+    occurredAt: row.occurred_at,
+    keyName: row.key_name,
+    adminName: row.admin_name,
+    clientName: row.client_name,
+    ownerName: row.owner_name,
+    ownerRole: row.owner_role,
+    inviteId: row.invite_id,
+  };
+}
+
+export interface ApiKeyEventInput {
+  keyId: string | null;
+  keyName: string | null;
+  adminUserId: string;
+  adminName: string;
+  action: 'LINK_GERADO' | 'LINK_REVOGADO';
+  inviteId: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerRole: string | null;
+}
+
+/**
+ * Registra o que a chave fez.
+ *
+ * E o contrapeso de a API agir COMO O DONO: o historico do link fica
+ * indistinguivel de um clique do proprio Administrador do time — que e o
+ * comportamento desejado —, e o rastro de que aquilo veio da API vive aqui.
+ *
+ * Uma falha ao registrar nunca derruba a operacao: o link ja foi gerado, e
+ * transformar isso em erro faria a pessoa gerar de novo, criando um segundo
+ * link e derrubando o primeiro. A falha vai para o log do servidor.
+ */
+export async function recordApiKeyEvent(input: ApiKeyEventInput): Promise<void> {
+  try {
+    await insertRows<ApiKeyEventRow>(
+      TABLES.apiKeyEvents,
+      [
+        {
+          api_key_id: input.keyId,
+          key_name: input.keyName,
+          admin_user_id: input.adminUserId,
+          admin_name: input.adminName,
+          action: input.action,
+          invite_id: input.inviteId,
+          client_id: input.clientId,
+          client_name: input.clientName,
+          owner_user_id: input.ownerUserId,
+          owner_name: input.ownerName,
+          owner_role: input.ownerRole,
+        },
+      ],
+      'id',
+    );
+  } catch (error) {
+    console.error('[cmd] Não foi possível registrar a ação da chave da API:', error);
+  }
+}
+
+/** Ultimas acoes de uma chave, da mais recente para a mais antiga. */
+export async function listApiKeyEvents(keyId: string, limit = 30): Promise<ApiKeyEvent[]> {
+  const rows = await selectRows<ApiKeyEventRow>(TABLES.apiKeyEvents, {
+    select: EVENT_COLUMNS,
+    filters: { api_key_id: `eq.${keyId}` },
+    order: 'occurred_at.desc',
+    limit,
+  });
+
+  return rows.map(toEvent);
 }

@@ -7,6 +7,8 @@ import { callFunction, inFilter, selectOne, selectRows } from '@/lib/supabase/re
 import { invitePath } from '@/lib/utils/url';
 import { publicLink } from './public-origin';
 import { badRequest, notFound } from './http';
+import { recordApiKeyEvent } from './api-key.service';
+import type { ApiCaller } from './api-guard';
 import {
   ensurePersonalInvite,
   expireDueInvites,
@@ -27,10 +29,18 @@ import {
  * avulsa, que o painel nao tinha: derrubar um link enviado por engano sem
  * precisar por outro no lugar.
  *
- * Quem chama e sempre o ADMIN geral (ver `api-guard.ts`), e e o nome dele que
- * fica no historico como quem gerou. O DONO do link — a hierarquia que
- * recebe o cadastro e o nome que permanece em "Cadastrado por" — continua
- * sendo o Administrador do time, nunca o ADMIN.
+ * A API AGE COMO O DONO. Gerar um link pela API e exatamente o que
+ * aconteceria se o Administrador do time entrasse no painel e clicasse em
+ * "Gerar link": mesmo dono, MESMO GERADOR, mesmo prazo do perfil dele,
+ * mesmos eventos, mesmo registro de geracao. Quem abre o rastreamento em
+ * Configuracoes ve o link do Joao gerado pelo Joao — e nao um caminho
+ * tecnico que nao interessa a quem le a tela.
+ *
+ * Quem CHAMA continua sendo sempre o ADMIN geral (ver `api-guard.ts`): o que
+ * muda e o que fica escrito no historico. Como esse historico passa a ser
+ * indistinguivel de um clique humano, o rastro da API e gravado do outro
+ * lado — em `cmd_api_key_events`, junto da chave, com o link afetado e o
+ * dono em nome de quem ela agiu (migration 030).
  */
 
 const INVITE_COLUMNS =
@@ -255,7 +265,7 @@ export interface GenerateApiLinkInput {
 export async function generateApiLink(
   request: NextRequest,
   input: GenerateApiLinkInput,
-  adminUserId: string,
+  caller: ApiCaller,
 ): Promise<ApiLink> {
   const team = await selectOne<TeamSlice>(TABLES.clients, {
     select: 'id,name,recruiting_active',
@@ -298,11 +308,32 @@ export async function generateApiLink(
 
   // Sem link proprio ainda, o administrador adota o convite sem dono do time
   // — o mesmo caminho do painel, para nenhum endereco ja distribuido sumir.
-  await ensurePersonalInvite(owner.id, team.id, adminUserId);
-  await issuePersonalInvite(owner.id, adminUserId);
+  await ensurePersonalInvite(owner.id, team.id, owner.id);
+
+  // Dono e gerador coincidem, exatamente como na rota do painel
+  // (`/api/convite/renovar`, que chama `issuePersonalInvite(user.id, user.id)`).
+  // E isto que faz o rastreamento sair identico ao de um clique do proprio
+  // Administrador do time.
+  await issuePersonalInvite(owner.id, owner.id);
 
   const invite = await findInviteByUser(owner.id);
   if (!invite) throw notFound('Link não encontrado depois da geração.');
+
+  // O historico do link nao diz que a API passou por aqui — de proposito.
+  // Quem guarda isso e o registro da chave.
+  await recordApiKeyEvent({
+    keyId: caller.keyId,
+    keyName: caller.keyName ?? 'Sessão do painel',
+    adminUserId: caller.userId,
+    adminName: caller.userName,
+    action: 'LINK_GERADO',
+    inviteId: invite.id,
+    clientId: team.id,
+    clientName: team.name,
+    ownerUserId: owner.id,
+    ownerName: owner.name,
+    ownerRole: owner.role,
+  });
 
   return toApiLink(request, invite, team, owner.name);
 }
@@ -317,12 +348,31 @@ export async function generateApiLink(
 export async function revokeApiLink(
   request: NextRequest,
   id: string,
-  adminUserId: string,
+  caller: ApiCaller,
 ): Promise<ApiLink> {
+  // Aqui o ADMIN aparece mesmo no historico do link, e esta certo: revogar
+  // nao imita clique nenhum — nao existe esse botao no painel. Todo evento
+  // REVOKED avulso e, por definicao, uma acao da administracao.
   await callFunction<unknown>('cmd_invite_revoke', {
     p_invite_id: id,
-    p_revoked_by: adminUserId,
+    p_revoked_by: caller.userId,
   });
 
-  return getApiLink(request, id);
+  const link = await getApiLink(request, id);
+
+  await recordApiKeyEvent({
+    keyId: caller.keyId,
+    keyName: caller.keyName ?? 'Sessão do painel',
+    adminUserId: caller.userId,
+    adminName: caller.userName,
+    action: 'LINK_REVOGADO',
+    inviteId: link.id,
+    clientId: link.time.id,
+    clientName: link.time.nome,
+    ownerUserId: link.dono.id,
+    ownerName: link.dono.nome,
+    ownerRole: link.dono.perfil,
+  });
+
+  return link;
 }

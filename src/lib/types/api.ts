@@ -42,6 +42,28 @@ export interface CreatedApiKey extends ApiKeySummary {
   token: string;
 }
 
+/** Acao registrada de uma chave, como a tela de Configuracoes a ve. */
+export interface ApiKeyEvent {
+  id: string;
+  /** LINK_GERADO ou LINK_REVOGADO. */
+  action: 'LINK_GERADO' | 'LINK_REVOGADO';
+  occurredAt: IsoDate;
+  /** Como a chamada foi autenticada: a chave, ou a sessao do painel. */
+  keyName: string | null;
+  /** ADMIN responsavel. */
+  adminName: string | null;
+  clientName: string | null;
+  /**
+   * Dono em nome de quem a chave agiu.
+   *
+   * E ele que consta como gerador no historico do link, exatamente como se
+   * tivesse clicado no painel — por isso este registro existe.
+   */
+  ownerName: string | null;
+  ownerRole: string | null;
+  inviteId: string | null;
+}
+
 /** Perfil do dono de um link, como a API o publica. */
 export type ApiLinkOwnerRole = 'CANDIDATE' | 'EQUIPE';
 

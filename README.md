@@ -42,6 +42,7 @@ variáveis na Vercel.
 | `cmd_member_responses` | Respostas por campo. Chaves estrangeiras compostas impedem vínculo entre clientes diferentes |
 | `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
 | `cmd_api_keys` | Chaves da API de links de cadastro. Guarda apenas o hash SHA-256 do segredo |
+| `cmd_api_key_events` | O que cada chave fez: link gerado ou revogado, em nome de quem e quando |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -186,6 +187,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/public/convite/[token]/membros` | Pública | Recebe o cadastro do formulário |
 | `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
+| `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
 | `/api/v1/links` | ADMIN geral | Gera e lista links de cadastro |
 | `/api/v1/links/[id]` | ADMIN geral | Consulta e revoga um link |
 | `/api/v1/times` | ADMIN geral | Times e administradores, para gerar o link |
@@ -208,6 +210,20 @@ token opaco gerado no servidor, mesma geração anterior derrubada na hora e
 mesmo histórico imutável. O que a API acrescenta é o pedido por programa e a
 revogação avulsa (`DELETE /api/v1/links/[id]`), que derruba um link enviado por
 engano sem colocar outro no lugar.
+
+**A API age como o dono.** Gerar pela API é exatamente o que aconteceria se o
+Administrador do time entrasse no painel e clicasse em "Gerar link": ele consta
+como dono **e** como quem gerou, com data e hora do servidor, prazo do perfil
+dele e os mesmos eventos. A rota do painel chama
+`issuePersonalInvite(user.id, user.id)` e a API faz a mesma chamada — no
+histórico do link não há como distinguir os dois caminhos, e é esse o objetivo.
+
+Como o histórico do link passa a ser indistinguível de um clique humano, o
+rastro de que a ação veio da API fica do outro lado: em `cmd_api_key_events`,
+junto da chave, com o link afetado e o dono em nome de quem ela agiu. Isso
+aparece em Configurações, no botão **Atividade** de cada chave. Revogação é a
+exceção: como não existe esse botão no painel, ela consta no histórico como
+ação da administração.
 
 **Exclusiva do ADMIN geral.** A autenticação é uma chave no cabeçalho
 `Authorization: Bearer cmd_...`, criada em **Configurações**; a sessão do painel
@@ -232,7 +248,7 @@ A API é servida no endereço do **painel**. O domínio público não a serve �
 só serve os links enviados. Já os links que ela devolve apontam para o domínio
 público, que é o endereço que as pessoas recebem.
 
-Requer a migration `029_api_links_cadastro.sql`.
+Requer as migrations `029_api_links_cadastro.sql` e `030_api_agir_como_dono.sql`.
 
 ---
 

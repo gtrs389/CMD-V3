@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { KeyRound, Plus, ShieldOff, TriangleAlert } from 'lucide-react';
-import type { ApiKeySummary, CreatedApiKey } from '@/lib/types';
+import { History, KeyRound, Plus, ShieldOff, TriangleAlert } from 'lucide-react';
+import type { ApiKeyEvent, ApiKeySummary, CreatedApiKey } from '@/lib/types';
 import { API_KEY_NAME_MAX, maskApiKey } from '@/lib/domain/api-key';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
@@ -40,6 +40,8 @@ export function ApiKeysCard() {
   const [criando, setCriando] = useState(false);
   const [criada, setCriada] = useState<CreatedApiKey | null>(null);
   const [revogando, setRevogando] = useState<ApiKeySummary | null>(null);
+  const [aberta, setAberta] = useState<string | null>(null);
+  const [atividade, setAtividade] = useState<Record<string, ApiKeyEvent[] | 'carregando'>>({});
 
   const chaves = data?.keys ?? [];
   const ativas = chaves.filter((chave) => chave.active).length;
@@ -65,6 +67,34 @@ export function ApiKeysCard() {
       );
     } finally {
       setCriando(false);
+    }
+  }
+
+  /**
+   * Atividade da chave, carregada so quando a pessoa abre.
+   *
+   * Este registro existe porque o historico do LINK e igual ao de um clique
+   * do proprio Administrador do time: e aqui que fica escrito que a acao
+   * veio da API, e em nome de quem.
+   */
+  async function abrirAtividade(chave: ApiKeySummary) {
+    if (aberta === chave.id) {
+      setAberta(null);
+      return;
+    }
+
+    setAberta(chave.id);
+    if (atividade[chave.id]) return;
+
+    setAtividade((atual) => ({ ...atual, [chave.id]: 'carregando' }));
+    try {
+      const { events } = await api<{ events: ApiKeyEvent[] }>(
+        `/api/configuracoes/chaves/${chave.id}/atividade`,
+      );
+      setAtividade((atual) => ({ ...atual, [chave.id]: events }));
+    } catch {
+      setAtividade((atual) => ({ ...atual, [chave.id]: [] }));
+      toast.error('Não foi possível carregar a atividade desta chave.');
     }
   }
 
@@ -146,7 +176,8 @@ export function ApiKeysCard() {
         ) : (
           <ul className="divide-y divide-line rounded-control border border-line">
             {chaves.map((chave) => (
-              <li key={chave.id} className="flex flex-wrap items-center gap-3 p-3">
+              <li key={chave.id} className="p-3">
+                <div className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink-900">
                     {chave.name}
@@ -173,11 +204,28 @@ export function ApiKeysCard() {
                   </p>
                 </div>
 
-                {chave.active ? (
-                  <Button variant="secondary" size="sm" onClick={() => setRevogando(chave)}>
-                    <ShieldOff aria-hidden="true" className="size-4" />
-                    Revogar
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={aberta === chave.id}
+                    onClick={() => void abrirAtividade(chave)}
+                  >
+                    <History aria-hidden="true" className="size-4" />
+                    Atividade
                   </Button>
+
+                  {chave.active ? (
+                    <Button variant="secondary" size="sm" onClick={() => setRevogando(chave)}>
+                      <ShieldOff aria-hidden="true" className="size-4" />
+                      Revogar
+                    </Button>
+                  ) : null}
+                </div>
+                </div>
+
+                {aberta === chave.id ? (
+                  <Atividade eventos={atividade[chave.id]} />
                 ) : null}
               </li>
             ))}
@@ -229,5 +277,45 @@ export function ApiKeysCard() {
         }}
       />
     </Card>
+  );
+}
+
+const ACOES: Record<ApiKeyEvent['action'], string> = {
+  LINK_GERADO: 'Gerou link',
+  LINK_REVOGADO: 'Revogou link',
+};
+
+/**
+ * O que a chave fez, do mais recente para o mais antigo.
+ *
+ * "Em nome de" e a informacao que nao existe no rastreamento do link: la o
+ * link aparece gerado pelo proprio Administrador do time, porque a API age
+ * como ele. Aqui fica registrado que quem disparou foi a API, com qual
+ * chave e sob qual administrador.
+ */
+function Atividade({ eventos }: { eventos: ApiKeyEvent[] | 'carregando' | undefined }) {
+  if (eventos === 'carregando' || eventos === undefined) {
+    return <Skeleton className="mt-3 h-16 rounded-control" />;
+  }
+
+  if (eventos.length === 0) {
+    return (
+      <p className="mt-3 rounded-control bg-ink-50 px-3 py-3 text-xs text-ink-500">
+        Nenhuma ação registrada para esta chave ainda.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="mt-3 space-y-1.5 rounded-control bg-ink-50 p-3">
+      {eventos.map((evento) => (
+        <li key={evento.id} className="text-xs text-ink-700">
+          <span className="font-semibold text-ink-900">{ACOES[evento.action]}</span>
+          {evento.ownerName ? ` em nome de ${evento.ownerName}` : ''}
+          {evento.clientName ? ` · ${evento.clientName}` : ''}
+          <span className="text-ink-400"> · {formatDateTime(evento.occurredAt)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

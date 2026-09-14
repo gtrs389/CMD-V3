@@ -77,6 +77,7 @@ export const API_AUTH_HEADER = 'Authorization: Bearer cmd_SUA_CHAVE';
 export const API_AUTH_NOTES: readonly string[] = [
   'Toda chamada exige uma chave da API no cabeçalho Authorization. A chave é criada nesta mesma tela e aparece por inteiro uma única vez: o banco guarda apenas o SHA-256 dela.',
   'A chave age em nome do administrador geral que a criou. Se esse acesso for desativado, todas as chaves dele param de funcionar no mesmo instante — não é preciso revogar uma por uma.',
+  'Quem autoriza a chamada é o administrador geral; quem aparece no histórico do link é o administrador do time em nome de quem ela foi feita. São coisas diferentes, e as duas ficam registradas.',
   'A API não cria nem revoga chaves: isso acontece apenas aqui, com sessão de administrador. Uma chave vazada não consegue criar outra.',
   'Sem o cabeçalho Authorization, a sessão do painel também é aceita — é o que permite testar um endpoint direto do navegador, já logado como administrador.',
   'Chame a API do seu servidor, nunca do navegador de quem usa seu sistema: a chave é um segredo, e no navegador ela fica visível para qualquer pessoa. Guarde-a em variável de ambiente, fora do código.',
@@ -163,8 +164,8 @@ const LINK_EXEMPLO = `{
     "perfil": "CANDIDATE"
   },
   "geradoPor": {
-    "nome": "Administração",
-    "perfil": "ADMIN"
+    "nome": "Marina Duarte",
+    "perfil": "CANDIDATE"
   },
   "geradoEm": "2026-09-13T14:02:51.417Z",
   "expiraEm": "2026-09-14T14:02:51.417Z",
@@ -191,10 +192,12 @@ export const API_ENDPOINTS: readonly DocEndpoint[] = [
     titulo: 'Gerar link de cadastro',
     resumo: 'Cria o endereço que o time envia para as pessoas se cadastrarem.',
     descricao: [
-      'É a mesma operação do botão do painel: o link nasce no servidor, com identificador opaco e aleatório, e vale pelo prazo definido em Configurações.',
+      'O link nasce COMO SE o dono tivesse entrado no painel e clicado em "Gerar link". Não é uma imitação: é a mesma operação, no mesmo servidor, com o mesmo identificador opaco e aleatório.',
+      'O rastreamento sai idêntico ao de um clique: o administrador do time aparece como dono E como quem gerou, com data e hora do servidor, e o prazo aplicado é o do perfil dele, definido em Configurações. Não há como distinguir, no histórico do link, um link gerado aqui de um gerado no painel.',
+      'Que a ação veio da API fica registrado do outro lado: em "Chaves da API", no botão Atividade de cada chave, com o link afetado e o dono em nome de quem ela agiu.',
       'A geração anterior daquele dono deixa de funcionar no mesmo instante. Quem abrir o endereço antigo vê a tela de link indisponível.',
       'O endereço completo volta uma única vez, nesta resposta. Para vê-lo de novo, use GET /api/v1/links — ele permanece disponível enquanto a geração for a corrente.',
-      'Quem recebe o cadastro continua sendo o dono do link: o administrador do time fica em "Cadastrado por", e não o administrador geral que chamou a API.',
+      'Quem recebe o cadastro é o dono do link: o administrador do time fica em "Cadastrado por", como em qualquer cadastro.',
     ],
     parametros: [],
     corpo: [
@@ -208,7 +211,7 @@ export const API_ENDPOINTS: readonly DocEndpoint[] = [
         nome: 'donoId',
         tipo: 'string (uuid)',
         descricao:
-          'Administrador do time dono do link, quando o time tem mais de um. Ausente, vale o administrador ativo mais antigo.',
+          'Em nome de quem gerar — o administrador do time que apareceria como dono e gerador se tivesse clicado no painel. Use quando o time tem mais de um administrador; ausente, vale o ativo mais antigo.',
       },
     ],
     requisicao: `curl -X POST 'https://SEU-PAINEL/api/v1/links' \\
@@ -325,8 +328,8 @@ export const API_ENDPOINTS: readonly DocEndpoint[] = [
       "perfil": "CANDIDATE"
     },
     "geradoPor": {
-      "nome": "Administração",
-      "perfil": "ADMIN"
+      "nome": "Marina Duarte",
+      "perfil": "CANDIDATE"
     },
     "geradoEm": "2026-09-13T14:02:51.417Z",
     "expiraEm": "2026-09-14T14:02:51.417Z",
@@ -347,6 +350,7 @@ export const API_ENDPOINTS: readonly DocEndpoint[] = [
     descricao: [
       'É o que fazer quando o endereço foi para a pessoa errada: quem abrir vê a tela de link indisponível, e nenhum cadastro entra por ele.',
       'Repetir a chamada devolve o mesmo resultado e não duplica nada no histórico.',
+      'Diferente da geração, a revogação consta no histórico como ação da administração: não existe esse botão no painel, então não há clique a reproduzir.',
       'Link já usado para um cadastro não é revogado: o cadastro existe, e apagar o estado final falsificaria o histórico. Nesse caso a resposta é 409.',
     ],
     parametros: [
@@ -377,8 +381,8 @@ export const API_ENDPOINTS: readonly DocEndpoint[] = [
       "perfil": "CANDIDATE"
     },
     "geradoPor": {
-      "nome": "Administração",
-      "perfil": "ADMIN"
+      "nome": "Marina Duarte",
+      "perfil": "CANDIDATE"
     },
     "geradoEm": "2026-09-13T14:02:51.417Z",
     "expiraEm": "2026-09-14T14:02:51.417Z",
@@ -450,6 +454,7 @@ export const API_REGRAS: readonly string[] = [
   'O prazo dos links é o configurado em "Expiração dos links", nesta mesma tela. A API não escolhe duração.',
   'Com o recrutamento do time desligado, o link continua sendo gerado, mas nasce sem aceitar cadastro: o campo "ativo" vem falso.',
   'Cada dono tem um único link. Gerar de novo renova o mesmo link e derruba o endereço anterior — não existe acumular endereços válidos para a mesma pessoa.',
-  'Todo link gerado pela API aparece no rastreamento desta tela, com o administrador da chave registrado como quem gerou.',
+  'Todo link gerado pela API aparece no rastreamento desta tela como se tivesse sido gerado no painel pelo próprio administrador do time — mesmo dono, mesmo gerador, mesma data e hora do servidor.',
+  'O registro de que a ação partiu da API fica em "Chaves da API", no botão Atividade: qual chave, sob qual administrador, em nome de quem e quando.',
   'As respostas não trazem token em separado, hash, segredo de reserva, CPF, título de eleitor nem retorno de consulta cadastral.',
 ];

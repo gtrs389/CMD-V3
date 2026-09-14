@@ -51,10 +51,13 @@ export async function GET(request: NextRequest) {
  * Gera o link de cadastro de um time — o mesmo endereco que o Administrador
  * do time envia para as pessoas se cadastrarem.
  *
- * O endereco completo volta UMA vez, nesta resposta. A geracao anterior
- * daquele dono deixa de funcionar no mesmo instante, e o historico registra
- * o ADMIN da chave como quem gerou; o dono do link continua sendo o
- * administrador do time.
+ * O link nasce COMO SE o dono tivesse clicado no painel: no rastreamento
+ * ele aparece como dono e como gerador, com o prazo do perfil dele — nao ha
+ * diferenca entre o link gerado aqui e o gerado por um clique.
+ *
+ * O endereco completo volta UMA vez, nesta resposta, e a geracao anterior
+ * daquele dono deixa de funcionar no mesmo instante. A acao da chave fica
+ * registrada em Configuracoes, junto da propria chave.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -64,7 +67,7 @@ export async function POST(request: NextRequest) {
     const link = await generateApiLink(
       request,
       { clientId: input.timeId, ownerId: input.donoId },
-      caller.userId,
+      caller,
     );
 
     return apiJson({ link }, 201);

@@ -35,7 +35,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext<'/api/v1/li
   try {
     const caller = await requireApiAdmin(request);
     const { id } = await ctx.params;
-    return apiJson({ link: await revokeApiLink(request, id, caller.userId) });
+    return apiJson({ link: await revokeApiLink(request, id, caller) });
   } catch (error) {
     return toApiErrorResponse(error);
   }

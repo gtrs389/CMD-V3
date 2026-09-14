@@ -37,6 +37,7 @@ export const TABLES = {
   surveyResponses: 'cmd_survey_responses',
   surveyResponseValues: 'cmd_survey_response_values',
   apiKeys: 'cmd_api_keys',
+  apiKeyEvents: 'cmd_api_key_events',
 } as const;
 
 export interface UserRow {
@@ -650,4 +651,27 @@ export interface ApiKeyRow {
   revoked_at: string | null;
   revoked_by: string | null;
   revoked_by_name: string | null;
+}
+
+/**
+ * Acao de uma chave da API (migration 030).
+ *
+ * Existe porque o historico do LINK e, de proposito, indistinguivel de um
+ * clique do proprio dono no painel: o rastro de que a acao veio da API mora
+ * aqui, junto da chave.
+ */
+export interface ApiKeyEventRow {
+  id: string;
+  api_key_id: string | null;
+  key_name: string | null;
+  admin_user_id: string | null;
+  admin_name: string | null;
+  action: 'LINK_GERADO' | 'LINK_REVOGADO';
+  invite_id: string | null;
+  client_id: string | null;
+  client_name: string | null;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  owner_role: string | null;
+  occurred_at: string;
 }
