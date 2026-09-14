@@ -41,6 +41,8 @@ variáveis na Vercel.
 | `cmd_members` | Integrantes cadastrados |
 | `cmd_member_responses` | Respostas por campo. Chaves estrangeiras compostas impedem vínculo entre clientes diferentes |
 | `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
+| `cmd_api_keys` | Chaves da API de links de cadastro. Guarda apenas o hash SHA-256 do segredo |
+| `cmd_api_key_events` | O que cada chave fez: operação, em nome de quem, resultado e motivo da recusa |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -183,11 +185,100 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/members/[id]` | ADMIN | Atualiza e exclui um integrante |
 | `/api/public/convite/[token]` | Pública | Resolve o convite pelo token do link |
 | `/api/public/convite/[token]/membros` | Pública | Recebe o cadastro do formulário |
+| `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API (com vínculo) |
+| `/api/configuracoes/chaves/opcoes` | ADMIN geral | Times e administradores para vincular |
+| `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
+| `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
+| `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
+| `/api/v1/links/[id]` | Chave da API | Consulta e revoga um link daquele administrador |
+| `/api/v1/vinculo` | Chave da API | Time e administrador vinculados à chave |
 
 O token do convite é opaco e aleatório: **nenhum dado pessoal vai para a URL**.
 O banco guarda apenas o hash SHA-256 dele, por isso o endereço completo aparece
 uma única vez, no momento em que é gerado. Para obter um link visível de novo,
 use **Gerar novo token** — o anterior deixa de funcionar na hora.
+
+---
+
+## API de links de cadastro
+
+O link de cadastro — o endereço que o Administrador do time envia para as
+pessoas se cadastrarem — também pode ser gerado por programa, em `/api/v1`.
+
+É a **mesma operação do painel**, e não um segundo sistema de links: mesmo
+convite único por usuário, mesmo prazo configurado em Configurações, mesmo
+token opaco gerado no servidor, mesma geração anterior derrubada na hora e
+mesmo histórico imutável. O que a API acrescenta é o pedido por programa e a
+revogação avulsa (`DELETE /api/v1/links/[id]`), que derruba um link enviado por
+engano sem colocar outro no lugar.
+
+### A identidade vem da chave
+
+Cada chave pertence a **um administrador de um time**, escolhidos pelo ADMIN
+geral no momento da criação (Configurações → Chaves da API). O vínculo é
+imutável: para trocar o administrador, revoga-se a chave e cria-se outra — o
+gatilho `cmd_api_keys_guard` recusa qualquer alteração no banco.
+
+Nenhum endpoint recebe `donoId` ou `timeId`; corpo com campos é recusado com
+400. `POST /api/v1/links` gera o link **daquele** administrador, e as demais
+rotas só alcançam links dele: para uma chave do João, o link da Maria responde
+404, e não 403.
+
+**A API age como o dono.** Gerar pela API é exatamente o que aconteceria se
+aquele administrador entrasse no painel e clicasse em "Gerar link": ele consta
+como dono **e** como quem gerou, com data e hora do servidor, prazo do perfil
+dele e os mesmos eventos. A rota do painel chama
+`issuePersonalInvite(user.id, user.id)` e a API faz a mesma chamada — no
+histórico do link não há como distinguir os dois caminhos, e é esse o objetivo.
+
+### Quem pode o quê
+
+Criar, listar, ver atividade e revogar chaves é **exclusivo do ADMIN geral**
+(`settings.manage` + perfil ADMIN). O Administrador do time não cria, não vê,
+não vincula e não escolhe em nome de quem a API atua — ele apenas continua
+gerando e copiando o próprio link pelo painel, como sempre.
+
+Nas rotas `/api/v1` a **sessão do painel não vale**: só o cabeçalho
+`Authorization: Bearer cmd_...`. A cada chamada o banco reconfere o vínculo
+inteiro — chave não revogada, ADMIN geral ativo, administrador ativo com perfil
+de Administrador do time, ainda ligado ao mesmo time, e o time ainda existindo.
+Qualquer falha derruba a chave na hora, e a resposta é sempre o mesmo 401, sem
+dizer qual conferência falhou.
+
+O segredo aparece **uma única vez**, na criação: o banco guarda apenas o
+SHA-256 e o prefixo público (`cmd_` + 8 caracteres).
+
+### Auditoria em dois lugares
+
+Como o histórico do link é, de propósito, indistinguível de um clique humano, o
+rastro da API vive em `cmd_api_key_events`: qual chave, sob qual ADMIN geral, em
+nome de qual administrador, qual time, qual operação, o resultado e o instante —
+incluindo as chamadas **recusadas**, com o motivo que a resposta nunca revela.
+Isso aparece em Configurações, no botão **Ver atividade** de cada chave.
+
+Revogação é a exceção do "agir como dono": como não existe esse botão no painel,
+ela consta no histórico do link como ação da administração.
+
+### Chaves antigas
+
+Chaves criadas antes do vínculo (migration 029) **não funcionam mais** e nenhum
+administrador é escolhido por elas: `cmd_api_key_resolve` recusa com o motivo
+`sem vinculo`, e a tela marca "Vínculo obrigatório". O ADMIN geral revoga e cria
+outra escolhendo time e administrador.
+
+A documentação completa — endpoints, parâmetros, exemplos de requisição e de
+resposta, estados do link e tabela de erros — fica em **Configurações**, na
+própria tela do sistema, e nasce de `src/lib/domain/api-docs.ts`. Ela é
+conferida por teste (`tests/api-docs.test.ts`): endpoint documentado precisa
+existir como rota e exportar o método descrito, e todo exemplo de resposta
+precisa ser JSON válido.
+
+A API é servida no endereço do **painel**. O domínio público não a serve — ele
+só serve os links enviados. Já os links que ela devolve apontam para o domínio
+público, que é o endereço que as pessoas recebem.
+
+Requer as migrations `029_api_links_cadastro.sql`, `030_api_agir_como_dono.sql`
+e `031_api_chave_vinculada.sql`.
 
 ---
 
@@ -253,6 +344,9 @@ src/
 | `src/lib/server/consent.ts` | Texto canônico e evidência do consentimento |
 | `scripts/configurar-storage.mjs` | Criação idempotente do bucket pela API oficial |
 | `src/lib/validation/server.schema.ts` | Zod de tudo que chega ao servidor |
+| `src/lib/domain/api-docs.ts` | Documentação da API exibida em Configurações e conferida por teste |
+| `src/lib/server/api-guard.ts` | Porta da API: chave `Bearer` ou sessão, sempre ADMIN geral |
+| `src/lib/server/api-link.service.ts` | Geração, consulta e revogação dos links pela API |
 | `supabase/migrations/001_cmd_initial.sql` | Estrutura completa do banco |
 | `src/proxy.ts` | Redirecionamento das rotas administrativas |
 

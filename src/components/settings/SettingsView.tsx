@@ -39,6 +39,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { ApiDocsCard } from './ApiDocsCard';
+import { ApiKeysCard } from './ApiKeysCard';
 import { CredentialsModal } from './CredentialsModal';
 import { InviteExpirationCard } from './InviteExpirationCard';
 import { InviteHistoryCard } from './InviteHistoryCard';
@@ -262,7 +264,8 @@ export function SettingsView() {
           Configurações
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Acessos do sistema, prazo dos links de recrutamento e rastreamento dos links.
+          Acessos do sistema, prazo dos links de recrutamento, rastreamento dos links e a API de
+          links de cadastro.
         </p>
       </header>
 
@@ -483,6 +486,14 @@ export function SettingsView() {
         Conectado como {user?.email ?? user?.name ?? '--'}. Sua própria conta não pode ser
         desativada nem ter as sessões revogadas por aqui.
       </p>
+
+      {/* API de links de cadastro: gerar e ver por programa o mesmo link que o
+          Administrador do time envia. Exclusiva do ADMIN geral — as rotas
+          exigem `settings.manage` e o perfil ADMIN, e a chave so vale
+          enquanto o ADMIN que a criou continuar ativo. */}
+      <ApiKeysCard />
+
+      <ApiDocsCard />
 
       <InviteHistoryCard />
 

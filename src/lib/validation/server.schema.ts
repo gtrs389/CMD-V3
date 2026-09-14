@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
+import { API_KEY_NAME_MAX } from '@/lib/domain/api-key';
 import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
 import {
   GENDER_VALUES,
@@ -440,3 +441,31 @@ export const publicEntrySchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Nada para atualizar.');
+
+/* -------------------------------------------------------------------------
+   API de links de cadastro (migrations 029, 030 e 031)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Criacao de chave da API, so pelo ADMIN geral.
+ *
+ * Nome, time e administrador chegam juntos: nao existe chave sem vinculo. O
+ * segredo nao passa por aqui — ele nasce no servidor.
+ *
+ * Quem confere se o administrador existe, esta ativo, tem o perfil certo e
+ * pertence AQUELE time e o banco, em `createApiKey`: a tela nunca decide
+ * vinculo.
+ */
+export const apiKeyCreateSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Dê um nome para identificar a chave.')
+    .max(API_KEY_NAME_MAX, `O nome deve ter até ${API_KEY_NAME_MAX} caracteres.`),
+  clientId: z.string().trim().min(1, 'Escolha o time.').max(64, 'Identificador inválido.'),
+  actingUserId: z
+    .string()
+    .trim()
+    .min(1, 'Escolha o administrador do time.')
+    .max(64, 'Identificador inválido.'),
+});

@@ -36,6 +36,8 @@ export const TABLES = {
   surveyInvites: 'cmd_survey_invites',
   surveyResponses: 'cmd_survey_responses',
   surveyResponseValues: 'cmd_survey_response_values',
+  apiKeys: 'cmd_api_keys',
+  apiKeyEvents: 'cmd_api_key_events',
 } as const;
 
 export interface UserRow {
@@ -627,4 +629,71 @@ export interface MemberLocationRow {
   lock_token: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Chave da API de links de cadastro (migration 029).
+ *
+ * Somente o SHA-256 do segredo e guardado. `prefix` e a parte publica, usada
+ * para reconhecer a chave na tela; `created_by` e a identidade com que ela
+ * age — deixando de ser um ADMIN ativo, a chave para de autenticar.
+ */
+export interface ApiKeyRow {
+  id: string;
+  name: string;
+  prefix: string;
+  token_hash: string;
+  /** ADMIN geral que criou a chave: quem AUTORIZA. */
+  created_by: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  request_count: number;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  revoked_by_name: string | null;
+  /**
+   * Administrador do time em nome de quem a chave age: quem APARECE no
+   * historico do link (migration 031). Imutavel depois da criacao; nulo
+   * apenas nas chaves da 029, que por isso nao autenticam mais.
+   */
+  acting_user_id: string | null;
+  acting_user_name: string | null;
+  acting_client_id: string | null;
+  acting_client_name: string | null;
+}
+
+/** Operacoes registradas de uma chave (migrations 030 e 031). */
+export type ApiKeyAction =
+  | 'LINK_GERADO'
+  | 'LINK_REVOGADO'
+  | 'LINK_LISTADO'
+  | 'LINK_CONSULTADO'
+  | 'CHAVE_RECUSADA';
+
+/**
+ * Acao de uma chave da API (migration 030).
+ *
+ * Existe porque o historico do LINK e, de proposito, indistinguivel de um
+ * clique do proprio dono no painel: o rastro de que a acao veio da API mora
+ * aqui, junto da chave.
+ */
+export interface ApiKeyEventRow {
+  id: string;
+  api_key_id: string | null;
+  key_name: string | null;
+  admin_user_id: string | null;
+  admin_name: string | null;
+  action: ApiKeyAction;
+  /** Resultado da operacao (migration 031). */
+  result: 'SUCESSO' | 'RECUSADO';
+  /** Motivo tecnico da recusa. Nunca sai do servidor para quem chamou. */
+  detail: string | null;
+  invite_id: string | null;
+  client_id: string | null;
+  client_name: string | null;
+  owner_user_id: string | null;
+  owner_name: string | null;
+  owner_role: string | null;
+  occurred_at: string;
 }
