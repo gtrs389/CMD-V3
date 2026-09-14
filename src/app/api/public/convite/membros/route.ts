@@ -58,12 +58,33 @@ import {
  * time com o telefone deste cadastro. A tela final mostra apenas o
  * agradecimento.
  */
+
+/**
+ * Executa uma etapa do cadastro dizendo, no log, QUAL delas falhou.
+ *
+ * Sem isso, uma falha em qualquer ponto deste fluxo — contexto, telefone,
+ * gravacao, acesso — chegava ao log como uma linha solta de banco, sem dizer
+ * em que momento do cadastro aconteceu. A linha sai logo antes da falha em
+ * si, que `toErrorResponse` registra com o codigo de referencia mostrado a
+ * pessoa.
+ *
+ * Nao registra nada do que a pessoa preencheu.
+ */
+async function etapa<T>(nome: string, executar: () => Promise<T>): Promise<T> {
+  try {
+    return await executar();
+  } catch (error) {
+    console.error(`[cmd] cadastro público falhou na etapa "${nome}"`);
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const token = readInviteContext(request);
     if (!token) return jsonGone('taken');
 
-    const context = await getInviteContext(token);
+    const context = await etapa('contexto do link', () => getInviteContext(token));
 
     // Prazo vencido, cadastro ja concluido ou token substituido. Quem abriu
     // antes do prazo e tenta finalizar depois para aqui: nada e gravado.
@@ -79,7 +100,9 @@ export async function POST(request: NextRequest) {
     const claim = readClaim(request);
     if (!claim) return jsonGone('taken');
 
-    const start = await beginInviteSubmit(token, claim.hash);
+    const start = await etapa('reserva do envio', () =>
+      beginInviteSubmit(token, claim.hash),
+    );
     if (start === 'GONE') return jsonGone('expired');
     if (start === 'TAKEN') return jsonGone('taken');
     if (start === 'BUSY') {
@@ -87,6 +110,17 @@ export async function POST(request: NextRequest) {
     }
 
     const { client, owner } = context;
+
+    /**
+     * Identificador do integrante depois de salvo.
+     *
+     * Divide o fluxo em dois: ANTES, qualquer falha devolve o link para a
+     * mesma pessoa e nada foi gravado; DEPOIS, o cadastro existe e nenhuma
+     * etapa restante pode transformar isso em erro na tela — quem preencheu
+     * ja esta cadastrado, e mandar "tente de novo" faria a pessoa bater em
+     * um link consumido, ou duplicar o proprio cadastro.
+     */
+    let salvo: string | null = null;
 
     // A partir daqui o link esta em SUBMITTING: qualquer falha antes de o
     // integrante existir devolve o link para a mesma pessoa.
@@ -104,34 +138,50 @@ export async function POST(request: NextRequest) {
       // uso naquele time interrompe o cadastro sem deixar integrante,
       // usuario ou link orfao. E o telefone que identifica a pessoa no
       // acesso, entao ele nao pode apontar para duas.
-      await assertTeamPhoneAvailable(client.id, input.phone);
+      await etapa('conferência do telefone', () =>
+        assertTeamPhoneAvailable(client.id, input.phone),
+      );
 
       const { device, ...submission } = input;
-      const member = await createMember(
-        { ...submission, clientId: client.id, source: 'invite' },
-        // Responsavel determinado no servidor, pelo dono do link utilizado.
-        owner ? { userId: owner.userId, name: owner.name, role: owner.role } : null,
+      const member = await etapa('gravação do cadastro', () =>
+        createMember(
+          { ...submission, clientId: client.id, source: 'invite' },
+          // Responsavel determinado no servidor, pelo dono do link utilizado.
+          owner ? { userId: owner.userId, name: owner.name, role: owner.role } : null,
+        ),
       );
 
       // Acesso do integrante: usuario EQUIPE e link pessoal, criados juntos.
       // Sem e-mail, sem senha e sem primeiro acesso — ele ja entra pelo link
       // do time com o telefone que acabou de informar.
       try {
-        await createMemberAccess({
-          clientId: client.id,
-          memberId: member.id,
-          name: member.name,
-          phone: member.phone,
-        });
+        await etapa('criação do acesso', () =>
+          createMemberAccess({
+            clientId: client.id,
+            memberId: member.id,
+            name: member.name,
+            phone: member.phone,
+          }),
+        );
       } catch (error) {
         await rollbackMember(member.id);
         throw error;
       }
 
+      // Daqui para baixo o cadastro EXISTE. Nenhuma etapa seguinte pode
+      // derrubar a resposta.
+      salvo = member.id;
+
       // Integrante salvo: o link esta consumido em definitivo. Se a resposta
       // ao navegador falhar depois daqui, o link segue consumido e nao gera
       // cadastro em duplicidade.
-      await consumeInvite(token, member.id);
+      //
+      // Falhar AQUI nao pode virar erro na tela: o cadastro ja esta gravado.
+      // Mandar a pessoa tentar de novo criaria um segundo cadastro dela, ou
+      // a jogaria contra um link indisponivel.
+      await consumeInvite(token, member.id).catch((error: unknown) => {
+        console.error('[cmd] cadastro salvo, mas o link não foi fechado:', error);
+      });
 
       // Prova da confirmacao final. Nunca pode impedir o cadastro, que ja
       // esta salvo.
@@ -200,6 +250,14 @@ export async function POST(request: NextRequest) {
 
       return response;
     } catch (error) {
+      // Cadastro ja gravado: a falha e de uma etapa acessoria (aparelho,
+      // verificacao, fechamento do link). A pessoa ja esta cadastrada, entao
+      // a tela recebe o sucesso que corresponde ao que aconteceu de fato.
+      if (salvo) {
+        console.error('[cmd] cadastro salvo, mas a finalização falhou:', error);
+        return jsonOk({ ok: true, id: salvo }, 201);
+      }
+
       // Nada foi salvo: a mesma pessoa pode corrigir e tentar de novo,
       // enquanto o prazo do link durar.
       await releaseInviteSubmit(token, claim.hash);

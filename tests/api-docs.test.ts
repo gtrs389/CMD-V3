@@ -87,7 +87,13 @@ describe('documentação da API', () => {
 
     const codigos = API_ERROS_GERAIS.map((erro) => erro.codigo);
     expect(codigos).toContain('nao_autenticado');
-    expect(codigos).toContain('sem_permissao');
+    expect(codigos).toContain('dados_invalidos');
+    expect(codigos).toContain('nao_encontrado');
+
+    // Nao existe 403 nesta API: sem sessao e sem escolha de dono, toda
+    // recusa de credencial ou de escopo e o mesmo 401 — e o link de outro
+    // administrador simplesmente nao existe para aquela chave (404).
+    expect(codigos).not.toContain('sem_permissao');
   });
 
   it('descreve o ciclo de vida inteiro do link', () => {

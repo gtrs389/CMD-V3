@@ -238,8 +238,14 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
         return;
       }
 
+      // A mensagem do servidor aparece como ela e. Ela ja e escrita para ser
+      // lida por quem esta preenchendo — diz se algum dado nao foi aceito, se
+      // e para tentar de novo, e traz o codigo da falha quando existe. Trocar
+      // tudo por "não foi possível" apagava justamente a parte util: a pessoa
+      // nao sabia o que corrigir, e quem fosse ajudar nao tinha o que
+      // procurar no log.
       toast.error(
-        error instanceof NetworkError
+        error instanceof RepositoryError && error.message
           ? error.message
           : 'Não foi possível enviar o cadastro. Tente novamente.',
       );

@@ -16,12 +16,30 @@ import { supabaseAuthHeaders, supabaseEnv } from './env';
 export class SupabaseRequestError extends Error {
   readonly status: number;
   readonly code: string | null;
+  /**
+   * `details` e `hint` do PostgREST.
+   *
+   * Nao vao para o navegador em hipotese nenhuma — existem para o LOG do
+   * servidor. Sem eles, uma violacao de check chega ao log dizendo apenas
+   * que uma linha foi recusada, e nao QUAL coluna a recusou: e a diferenca
+   * entre corrigir em minutos e caçar o problema no escuro.
+   */
+  readonly details: string | null;
+  readonly hint: string | null;
 
-  constructor(message: string, status: number, code: string | null) {
+  constructor(
+    message: string,
+    status: number,
+    code: string | null,
+    details: string | null = null,
+    hint: string | null = null,
+  ) {
     super(message);
     this.name = 'SupabaseRequestError';
     this.status = status;
     this.code = code;
+    this.details = details;
+    this.hint = hint;
   }
 
   /** Violacao de unicidade (ex.: e-mail ou token repetido). */
@@ -103,12 +121,14 @@ async function request<T>(
 
   if (!response.ok) {
     const detail = (await response.json().catch(() => null)) as
-      | { message?: string; code?: string }
+      | { message?: string; code?: string; details?: string; hint?: string }
       | null;
     throw new SupabaseRequestError(
       detail?.message ?? 'Erro ao consultar o banco de dados.',
       response.status,
       detail?.code ?? null,
+      detail?.details ?? null,
+      detail?.hint ?? null,
     );
   }
 
