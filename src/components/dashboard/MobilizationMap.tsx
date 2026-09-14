@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Maximize2, MapPin as MapPinIcon, RefreshCw, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import {
@@ -15,9 +15,10 @@ import type { MapFocus } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
 import { MapRanking } from './MapRanking';
-import { MemberSheetModal } from './MemberSheetModal';
+import { MemberSheetPanel } from './MemberSheetPanel';
 import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { api } from '@/lib/repositories/http/api';
+import { useIsDesktop } from '@/hooks/use-desktop';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
@@ -62,6 +63,10 @@ interface MobilizationMapProps {
  */
 export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
   const { can } = useSession();
+  // Decide em qual dos dois lugares a ficha nasce: ao lado do mapa ou abaixo
+  // dele. Sem isso, as duas copias existiriam e buscariam o integrante duas
+  // vezes a cada abertura.
+  const isDesktop = useIsDesktop();
   const [query, setQuery] = useState<MapQuery>(DEFAULT_MAP_QUERY);
   const [resolving, setResolving] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -95,15 +100,30 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
 
   const [openPlace, setOpenPlace] = useState<PollingPlacePin | null>(null);
   /**
-   * Ficha aberta SOBRE o mapa.
+   * Ficha aberta NA COLUNA LATERAL, no lugar do ranking.
    *
    * O pino e a lista da escola abrem a ficha aqui, e nao na pagina do time:
    * sair do mapa custaria a posicao, o zoom, o filtro e a propria escola
    * aberta — e a ficha e uma leitura rapida no meio da analise.
+   *
+   * Ela tambem nao abre mais como dialogo sobre o mapa: um dialogo cobre
+   * justamente o que se estava olhando. A coluna do ranking ja e o lugar da
+   * leitura auxiliar, entao a ficha ocupa essa coluna e fechar devolve o
+   * ranking — sem o mapa se mexer.
    */
   const [openMember, setOpenMember] = useState<string | null>(null);
   /** Local que o ranking mandou enquadrar. */
   const [focusPlace, setFocusPlace] = useState<MapFocus | null>(null);
+
+  /**
+   * Bloco abaixo do mapa no celular.
+   *
+   * No desktop a ficha aparece ao lado, na mesma altura do olho. No celular
+   * ela nasce abaixo do mapa, fora da vista — e quem clicou em "Ver ficha
+   * completa" ficaria achando que o botao nao fez nada. A rolagem leva a
+   * ficha ate ela.
+   */
+  const colunaCelular = useRef<HTMLDivElement | null>(null);
 
   const options = useMemo(() => mapOptions(data, query.state), [data, query.state]);
   const selection = useMemo(() => applyMapQuery(data, query), [data, query]);
@@ -133,6 +153,24 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
       window.removeEventListener('keydown', onKey);
     };
   }, [fullscreen]);
+
+  /**
+   * Abre a ficha e fecha a lista da escola.
+   *
+   * A lista de pessoas de um local cobre a tela inteira (e uma folha, no
+   * celular, e uma gaveta no desktop). Com ela aberta, a ficha nasceria na
+   * coluna ATRAS dela — e quem clicou em "Ver ficha completa" veria a
+   * mesma lista de sempre, achando que o botao nao fez nada.
+   */
+  function abrirFicha(memberId: string) {
+    setOpenPlace(null);
+    setOpenMember(memberId);
+  }
+
+  useEffect(() => {
+    if (!openMember || fullscreen || isDesktop) return;
+    colunaCelular.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [openMember, fullscreen, isDesktop]);
 
   async function localizar() {
     if (resolving) return;
@@ -179,6 +217,32 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
       className="w-full"
     />
   );
+
+  /**
+   * A ficha toma a coluna enquanto estiver aberta.
+   *
+   * Uma coluna so, com dois conteudos possiveis: assim o mapa nunca perde
+   * largura por causa de um segundo painel, e a ficha nasce no lugar onde a
+   * pessoa ja esta acostumada a ler.
+   */
+  const painelFicha = openMember ? (
+    <MemberSheetPanel
+      memberId={openMember}
+      onClose={() => setOpenMember(null)}
+      className="w-full"
+    />
+  ) : null;
+
+  /**
+   * A ficha existe em UM lugar so; o ranking, nos dois (nao custa nada e o
+   * CSS esconde o que sobra).
+   */
+  const colunaDesktop =
+    (isDesktop ? painelFicha : null) ?? (comRanking ? painelRanking : null);
+  const colunaCelularConteudo =
+    (isDesktop ? null : painelFicha) ?? (comRanking ? painelRanking : null);
+  /** Em tela cheia ha um painel flutuante so: nao ha copia a evitar. */
+  const colunaLateral = painelFicha ?? (comRanking ? painelRanking : null);
 
   const contagem = totals ? (
     <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
@@ -286,9 +350,11 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
                 pins={selection.pins}
                 places={selection.places}
                 onOpenPlace={setOpenPlace}
-                onOpenMember={setOpenMember}
+                onOpenMember={abrirFicha}
                 focusPlace={focusPlace}
-                resizeKey={`${fullscreen ? 'full' : 'card'}:${comRanking ? 'rank' : 'solo'}`}
+                resizeKey={`${fullscreen ? 'full' : 'card'}:${
+                  painelFicha ? 'ficha' : comRanking ? 'rank' : 'solo'
+                }`}
               />
 
               {selection.pins.length === 0 && selection.places.length === 0 ? (
@@ -363,10 +429,16 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
             </MapPanel>
           ) : null}
 
-          {/* Ranking flutuante: so em tela cheia. No cartao ele e coluna. */}
-          {fullscreen && pronto && comRanking ? (
-            <MapPanel side="right" className="top-16 max-h-[calc(100%-5rem)]">
-              {painelRanking}
+          {/* Painel lateral flutuante: so em tela cheia. No cartao ele e
+              coluna. Mostra a ficha quando ha uma aberta, e o ranking no
+              resto do tempo — nunca os dois disputando o mesmo canto. */}
+          {fullscreen && pronto && colunaLateral ? (
+            <MapPanel
+              side="right"
+              wide={painelFicha !== null}
+              className="top-16 max-h-[calc(100%-5rem)]"
+            >
+              {colunaLateral}
             </MapPanel>
           ) : null}
 
@@ -379,31 +451,43 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
           ) : null}
         </div>
 
-        {/* Coluna do ranking: exclusiva do cartao no desktop. */}
-        {!fullscreen && comRanking && pronto ? (
-          <div className="hidden shrink-0 border-l border-line lg:flex lg:h-full lg:w-80">
-            {painelRanking}
+        {/* Coluna lateral: exclusiva do cartao no desktop. Carrega o
+            ranking ou, com uma ficha aberta, a ficha — que pede mais
+            largura para as duas colunas de dados caberem. */}
+        {!fullscreen && pronto && colunaDesktop ? (
+          <div
+            className={cn(
+              'hidden shrink-0 border-l border-line lg:flex lg:h-full',
+              painelFicha && isDesktop ? 'lg:w-[26rem]' : 'lg:w-80',
+            )}
+          >
+            {colunaDesktop}
           </div>
         ) : null}
       </div>
 
-      {/* Celular no cartao: o ranking fica FORA da area do mapa, para nao
-          roubar altura dele. Rola sozinho e nao estica a pagina sem limite. */}
-      {!fullscreen && comRanking && pronto ? (
-        <div className="flex max-h-72 border-t border-line lg:hidden">{painelRanking}</div>
+      {/* Celular no cartao: a coluna fica FORA da area do mapa, para nao
+          roubar altura dele. Rola sozinha e nao estica a pagina sem limite.
+          A ficha ganha mais altura que o ranking — ela tem o que ler. */}
+      {!fullscreen && pronto && colunaCelularConteudo ? (
+        <div
+          ref={colunaCelular}
+          className={cn(
+            'flex border-t border-line lg:hidden',
+            painelFicha ? 'max-h-[70vh]' : 'max-h-72',
+          )}
+        >
+          {colunaCelularConteudo}
+        </div>
       ) : null}
 
       {openPlace ? (
         <PlaceMembersPanel
           place={openPlace}
-          onOpenMember={setOpenMember}
+          onOpenMember={abrirFicha}
           onClose={() => setOpenPlace(null)}
         />
       ) : null}
-
-      {/* A ficha fica por cima de tudo: fechar devolve o mapa exatamente como
-          estava, com a escola ainda aberta se era de la que ela veio. */}
-      <MemberSheetModal memberId={openMember} onClose={() => setOpenMember(null)} />
     </section>
   );
 }

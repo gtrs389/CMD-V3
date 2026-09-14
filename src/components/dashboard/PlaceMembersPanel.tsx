@@ -28,7 +28,10 @@ export function PlaceMembersPanel({
   onClose,
 }: {
   place: PollingPlacePin;
-  /** Abre a ficha da pessoa sobre o mapa, sem sair dele. */
+  /**
+   * Abre a ficha da pessoa na coluna lateral do mapa, sem sair dele. Fecha
+   * esta lista junto: ela cobre a tela, e a ficha nasceria atras dela.
+   */
   onOpenMember: (memberId: string) => void;
   onClose: () => void;
 }) {
