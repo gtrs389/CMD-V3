@@ -30,6 +30,7 @@ import {
   updateRows,
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
+import { withoutDemoClients } from './demo-scope';
 import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
@@ -303,9 +304,21 @@ async function writeResponses(
   );
 }
 
+/**
+ * Todos os integrantes REAIS, do mais novo para o mais antigo.
+ *
+ * Alimenta os numeros globais do painel do ADMIN — total, cadastros de hoje,
+ * dos sete dias, do mes e o grafico. Por isso os Times DEMO ficam de fora
+ * aqui: sao dados de apresentacao, e um deles somando ao total da operacao
+ * real tornaria o numero inutil.
+ *
+ * A pagina do proprio Time DEMO usa `listMembersByClient`, que continua
+ * mostrando tudo.
+ */
 export async function listAllMembers(): Promise<Member[]> {
   const rows = await selectRows<MemberRow>(TABLES.members, {
     select: '*',
+    filters: await withoutDemoClients(),
     order: 'created_at.desc',
   });
   return assembleMany(rows);

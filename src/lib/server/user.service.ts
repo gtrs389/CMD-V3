@@ -156,8 +156,10 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
 
   const [clients, members, people] = await Promise.all([
     clientIds.length
-      ? selectRows<Pick<ClientRow, 'id' | 'name' | 'photo_path'>>(TABLES.clients, {
-          select: 'id,name,photo_path',
+      ? selectRows<Pick<ClientRow, 'id' | 'name' | 'photo_path' | 'is_demo'>>(TABLES.clients, {
+          // `is_demo` acompanha o time ate esta tela: o acesso de um Time
+          // DEMO aparece com o selo, e nao se confunde com um acesso real.
+          select: 'id,name,photo_path,is_demo',
           filters: { id: inFilter(clientIds) },
         })
       : Promise.resolve([]),
@@ -192,7 +194,12 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
   const byId = new Map(
     clients.map((client, index) => [
       client.id,
-      { id: client.id, name: client.name, photo: photos[index] ?? null },
+      {
+        id: client.id,
+        name: client.name,
+        photo: photos[index] ?? null,
+        isDemo: client.is_demo === true,
+      },
     ]),
   );
   const memberById = new Map(members.map((member) => [member.id, member]));

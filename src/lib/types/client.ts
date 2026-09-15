@@ -110,6 +110,14 @@ export interface Client extends Timestamped {
   people: TeamPerson[];
   /** Estampa sobre o banner do celular (migration 022). */
   bannerTag: BannerTag;
+  /**
+   * Time de demonstracao (migration 033).
+   *
+   * E um time de verdade, nas mesmas tabelas e nas mesmas telas — o que muda
+   * e que ele fica FORA de toda metrica global. Imutavel: nao existe editar
+   * um time real para vira-lo DEMO, nem o contrario.
+   */
+  isDemo: boolean;
 }
 
 export interface ClientInput {

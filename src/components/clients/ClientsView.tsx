@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   Building2,
   CalendarRange,
   ChevronDown,
   ChevronRight,
+  FlaskConical,
   Search,
   SearchX,
   UserPlus,
@@ -16,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useClientSummaries } from '@/hooks/use-clients';
+import { useSession } from '@/components/layout/SessionProvider';
 import type { ClientSummary } from '@/lib/types';
 import { cn } from '@/lib/utils/cn';
 import { startOfMonthIso } from '@/lib/utils/date';
@@ -24,6 +27,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ClientCard, ClientCardSkeleton } from './ClientCard';
 import { ClientFormModal } from './ClientFormModal';
+import { DemoTeamModal } from './DemoTeamModal';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { SampleDataButton } from './SampleDataButton';
 
@@ -58,10 +62,19 @@ const ACTION_BUTTON =
   'active:bg-accent-700';
 
 export function ClientsView() {
-  const { data, loading, error, reload } = useClientSummaries();
+  const { user } = useSession();
+  // Só o ADMIN geral cria e enxerga Time DEMO. A rota confere de novo: o
+  // botão escondido nunca foi proteção.
+  const adminGeral = user?.role === 'ADMIN';
+  const router = useRouter();
+
+  // A lista da pagina "Times" inclui os Times DEMO, com selo. Os indicadores
+  // logo abaixo continuam somando apenas a operacao real.
+  const { data, loading, error, reload } = useClientSummaries({ includeDemo: adminGeral });
   const [term, setTerm] = useState('');
   const [sort, setSort] = useState<SortId>('recentes');
   const [creating, setCreating] = useState(false);
+  const [creatingDemo, setCreatingDemo] = useState(false);
   const [editing, setEditing] = useState<ClientSummary | null>(null);
   const [deleting, setDeleting] = useState<ClientSummary | null>(null);
 
@@ -84,13 +97,23 @@ export function ClientsView() {
     [ordered, term],
   );
 
+  /**
+   * Indicadores da OPERACAO REAL.
+   *
+   * O Time DEMO aparece na lista, com selo, porque o ADMIN geral precisa
+   * abrir e apresentar. Mas ele nao entra em nenhum destes numeros: um time
+   * de demonstracao somando ao total de times e de integrantes tornaria os
+   * dois inuteis.
+   */
   const totals = useMemo(() => {
     const monthStart = startOfMonthIso();
+    const reais = clients.filter((client) => !client.isDemo);
+
     return {
-      clients: clients.length,
-      clientsThisMonth: clients.filter((client) => client.createdAt >= monthStart).length,
-      members: clients.reduce((sum, client) => sum + client.memberCount, 0),
-      membersLast7Days: clients.reduce((sum, client) => sum + client.memberCountLast7Days, 0),
+      clients: reais.length,
+      clientsThisMonth: reais.filter((client) => client.createdAt >= monthStart).length,
+      members: reais.reduce((sum, client) => sum + client.memberCount, 0),
+      membersLast7Days: reais.reduce((sum, client) => sum + client.memberCountLast7Days, 0),
     };
   }, [clients]);
 
@@ -111,14 +134,20 @@ export function ClientsView() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setCreating(true)}
-            className={ACTION_BUTTON}
-          >
-            <UserPlus aria-hidden="true" className="size-4" />
-            Novo time
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Exclusivo do ADMIN geral. */}
+            {adminGeral ? (
+              <Button variant="secondary" onClick={() => setCreatingDemo(true)}>
+                <FlaskConical aria-hidden="true" className="size-4" />
+                Criar Time DEMO
+              </Button>
+            ) : null}
+
+            <button type="button" onClick={() => setCreating(true)} className={ACTION_BUTTON}>
+              <UserPlus aria-hidden="true" className="size-4" />
+              Novo time
+            </button>
+          </div>
         </div>
       </header>
 
@@ -253,6 +282,19 @@ export function ClientsView() {
           </div>
         )}
       </section>
+
+      {/* Concluida a criacao, a pagina do proprio Time DEMO abre: e la que
+          os cartoes, as pessoas e o mapa ja aparecem preenchidos. */}
+      {creatingDemo ? (
+        <DemoTeamModal
+          onClose={() => setCreatingDemo(false)}
+          onCreated={({ client }) => {
+            setCreatingDemo(false);
+            reload();
+            router.push(`/candidatos/${client.id}`);
+          }}
+        />
+      ) : null}
 
       <ClientFormModal open={creating} onClose={() => setCreating(false)} />
       <ClientFormModal

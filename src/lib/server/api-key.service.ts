@@ -107,6 +107,10 @@ export async function listBindableTeams(): Promise<BindableTeam[]> {
   const [teams, admins] = await Promise.all([
     selectRows<Pick<ClientRow, 'id' | 'name'>>(TABLES.clients, {
       select: 'id,name',
+      // Time DEMO nao recebe chave: a API publica trata da operacao real, e
+      // um link de demonstracao saindo por ela seria indistinguivel de um
+      // link de verdade para quem consome.
+      filters: { is_demo: 'is.false' },
       order: 'name.asc',
       limit: 500,
     }),
@@ -160,11 +164,16 @@ export async function createApiKey(
     throw badRequest(`O nome da chave deve ter até ${API_KEY_NAME_MAX} caracteres.`);
   }
 
-  const team = await selectOne<Pick<ClientRow, 'id' | 'name'>>(TABLES.clients, {
-    select: 'id,name',
+  const team = await selectOne<Pick<ClientRow, 'id' | 'name' | 'is_demo'>>(TABLES.clients, {
+    select: 'id,name,is_demo',
     filters: { id: `eq.${input.clientId}` },
   });
   if (!team) throw notFound('Time não encontrado.');
+  // O vinculo e imutavel e `is_demo` tambem: recusando aqui, nenhuma chave
+  // existente pode passar a apontar para um Time DEMO depois.
+  if (team.is_demo) {
+    throw badRequest('Time DEMO não recebe chave da API: ele fica fora dos dados reais.');
+  }
 
   const owner = await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(
     TABLES.users,

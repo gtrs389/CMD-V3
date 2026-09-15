@@ -26,6 +26,7 @@ import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormsPanel } from '@/components/fields/FormsPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { BannerTagModal } from './BannerTagModal';
+import { DemoBadge } from './DemoBadge';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
@@ -204,9 +205,16 @@ export function ClientDetailView({
           )}
 
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl leading-tight font-bold tracking-tight break-words text-ink-900 sm:text-[1.375rem]">
-              {client.name}
-            </h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl leading-tight font-bold tracking-tight break-words text-ink-900 sm:text-[1.375rem]">
+                {client.name}
+              </h1>
+              {/* Quem identifica um Time DEMO e o ADMIN geral. Para o
+                  administrador do proprio time — que e quem estara
+                  apresentando — a tela e a mesma de um time real, sem selo
+                  aparecendo no meio da demonstracao. */}
+              {client.isDemo && user?.role === 'ADMIN' ? <DemoBadge /> : null}
+            </div>
 
             {/* No lugar do contato do time: quem administra a operacao. */}
             {client.people.length > 0 ? (

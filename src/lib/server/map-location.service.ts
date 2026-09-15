@@ -31,6 +31,7 @@ import {
 import { deleteRows, inFilter, insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
 import { signedUrls } from '@/lib/supabase/storage';
 import { decryptJson } from './crypto';
+import { withoutDemoClients } from './demo-scope';
 import { lookupPlace, MapLookupError } from './serpapi.service';
 
 /**
@@ -384,6 +385,10 @@ async function scopeLinksToClient(
 export async function mapOverview(clientId?: string): Promise<MapOverviewPayload> {
   const links = await selectRows<MemberLocationRow>(TABLES.memberLocations, {
     select: '*',
+    // Mapa GERAL: os Times DEMO ficam de fora, como em toda metrica global.
+    // Com `clientId` o recorte e o time pedido — inclusive quando ele e o
+    // proprio Time DEMO, que dentro da propria pagina mostra tudo.
+    filters: clientId ? {} : await withoutDemoClients(),
     order: 'updated_at.desc',
     limit: 2000,
   });
@@ -497,8 +502,11 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
         longitude: place.longitude,
         title: place.title ?? eleitoral?.local ?? null,
         address: place.address ?? eleitoral?.logradouro ?? null,
-        city: eleitoral?.municipio ?? null,
-        state: eleitoral?.uf ?? null,
+        // Sem retorno eleitoral, vale o municipio declarado por quem vota
+        // ali: sem isso o filtro por cidade escondia a escola inteira, e o
+        // popup abria sem dizer onde ela fica.
+        city: eleitoral?.municipio ?? member.city ?? null,
+        state: eleitoral?.uf ?? member.state ?? null,
         imageUrl: place.image_url,
         total: 0,
         men: 0,
@@ -561,6 +569,8 @@ export async function placeMembers(
       location_id: `eq.${locationId}`,
       location_kind: 'eq.POLLING_PLACE',
       status: 'eq.SUCCESS',
+      // Sem time pedido, a lista e a do mapa geral: Time DEMO fica fora.
+      ...(options.clientId ? {} : await withoutDemoClients()),
     },
     limit: 2000,
   });

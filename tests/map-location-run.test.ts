@@ -74,7 +74,13 @@ vi.mock('@/lib/supabase/rest', () => ({
     if (table === 'cmd_members') {
       return Object.values(db.members).filter((row) => match(row, filters));
     }
-    if (table === 'cmd_clients') return [{ id: 'cli-1', name: 'Comitê Exemplo' }];
+    if (table === 'cmd_clients') {
+      // O mapa geral pergunta antes quais times sao DEMO, para deixa-los de
+      // fora. O time deste cenario e real: a pergunta volta vazia, e a
+      // consulta segue sem nenhum recorte.
+      if (filters.is_demo === 'is.true') return [];
+      return [{ id: 'cli-1', name: 'Comitê Exemplo', is_demo: false }];
+    }
     if (table === 'cmd_member_verifications') {
       return Object.values(db.verifications);
     }

@@ -144,6 +144,12 @@ export function inFilter(values: readonly string[]): string {
   return `in.(${escaped.join(',')})`;
 }
 
+/** Monta um filtro `not.in.(a,b,c)`. Usado para tirar os Times DEMO das metricas. */
+export function notInFilter(values: readonly string[]): string {
+  const escaped = values.map((value) => `"${value.replace(/"/g, '""')}"`);
+  return `not.in.(${escaped.join(',')})`;
+}
+
 export async function selectRows<T>(table: string, options: QueryOptions = {}): Promise<T[]> {
   const rows = await request<T[] | null>(buildUrl(table, options), { method: 'GET' });
   return rows ?? [];

@@ -38,6 +38,7 @@ export const TABLES = {
   surveyResponseValues: 'cmd_survey_response_values',
   apiKeys: 'cmd_api_keys',
   apiKeyEvents: 'cmd_api_key_events',
+  demoSeeds: 'cmd_demo_seeds',
 } as const;
 
 export interface UserRow {
@@ -126,6 +127,12 @@ export interface ClientRow {
   privacy_consent_label: string;
   /** Interruptor da operacao: em false nenhum link daquele time aceita cadastro. */
   recruiting_active: boolean;
+  /**
+   * Time de demonstracao (migration 033). Imutavel depois de criado, e fora
+   * de toda metrica global: total de times, integrantes, graficos, mapa
+   * geral, rankings e a API contam somente `is_demo = false`.
+   */
+  is_demo: boolean;
   /**
    * Estampa "#NOME DO TIME" sobre o banner do celular (migration 022).
    * Tudo em porcentagem da propria imagem, nunca em pixels da tela.

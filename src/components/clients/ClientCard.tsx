@@ -7,6 +7,7 @@ import type { ClientSummary } from '@/lib/types';
 import { formatLastActivity } from '@/lib/utils/date';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
+import { DemoBadge } from './DemoBadge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Menu } from '@/components/ui/Menu';
 
@@ -60,6 +61,9 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
             <h3 className="truncate text-[0.9375rem] leading-tight font-semibold text-ink-900">
               {client.name}
             </h3>
+            {/* Time de demonstracao: o selo evita que um numero de
+                apresentacao seja lido como numero da operacao. */}
+            {client.isDemo ? <DemoBadge className="mt-1" /> : null}
           </div>
 
           <span

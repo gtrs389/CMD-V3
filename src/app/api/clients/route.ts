@@ -8,11 +8,24 @@ import { panelLink } from '@/lib/server/public-origin';
 import { teamAccessPath } from '@/lib/utils/url';
 import type { TeamAccessLinks } from '@/lib/types';
 
-/** Listagem e criacao de clientes. Somente para sessao com permissao. */
-export async function GET() {
+/**
+ * Listagem e criacao de clientes. Somente para sessao com permissao.
+ *
+ * `?demo=incluir` traz tambem os Times DEMO, e so a pagina "Times" do ADMIN
+ * geral pede isso: e la que ele enxerga o time de demonstracao, com o selo,
+ * para abrir e apresentar. Todo o resto do sistema — a comecar pelo painel,
+ * que soma os numeros da operacao — recebe a lista sem DEMO.
+ *
+ * O parametro nao amplia permissao nenhuma: `client.list` ja e exclusivo do
+ * ADMIN geral, e o perfil e conferido de novo aqui.
+ */
+export async function GET(request: NextRequest) {
   try {
-    await requirePermission('client.list');
-    return jsonOk({ clients: await listClientSummaries() });
+    const user = await requirePermission('client.list');
+    const includeDemo = request.nextUrl.searchParams.get('demo') === 'incluir'
+      && user.role === 'ADMIN';
+
+    return jsonOk({ clients: await listClientSummaries({ includeDemo }) });
   } catch (error) {
     return toErrorResponse(error);
   }

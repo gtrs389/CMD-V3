@@ -98,8 +98,14 @@ export interface SystemUser {
   photo: string | null;
   role: Role;
   status: AccessStatus;
-  /** Time (operacao) do usuario. Nulo apenas no ADMIN. */
-  candidate: { id: string; name: string; photo: string | null } | null;
+  /**
+   * Time (operacao) do usuario. Nulo apenas no ADMIN.
+   *
+   * `isDemo` marca quem pertence a um Time DEMO: a tela exibe o selo ao lado
+   * do nome, para ninguem confundir um acesso de demonstracao com um acesso
+   * da operacao real.
+   */
+  candidate: { id: string; name: string; photo: string | null; isDemo: boolean } | null;
   /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */
   memberId: string | null;
   /** Administrador do time correspondente. */

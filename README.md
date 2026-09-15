@@ -43,6 +43,7 @@ variáveis na Vercel.
 | `cmd_invites` | Convites. Guarda apenas o hash SHA-256 do token do link |
 | `cmd_api_keys` | Chaves da API de links de cadastro. Guarda apenas o hash SHA-256 do segredo |
 | `cmd_api_key_events` | O que cada chave fez: operação, em nome de quem, resultado e motivo da recusa |
+| `cmd_demo_seeds` | Chaves de idempotência da criação de Time DEMO |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -187,6 +188,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/public/convite/[token]/membros` | Pública | Recebe o cadastro do formulário |
 | `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API (com vínculo) |
 | `/api/configuracoes/chaves/opcoes` | ADMIN geral | Times e administradores para vincular |
+| `/api/clients/demo` | ADMIN geral | Cria um Time DEMO completo |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
 | `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
 | `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
@@ -279,6 +281,73 @@ público, que é o endereço que as pessoas recebem.
 
 Requer as migrations `029_api_links_cadastro.sql`, `030_api_agir_como_dono.sql`
 e `031_api_chave_vinculada.sql`.
+
+---
+
+## Time DEMO
+
+Um time de demonstração é um time **de verdade**: mesmas tabelas, mesmas
+telas, mesmos serviços. Não existe tela falsa, tabela DEMO paralela nem
+número chumbado em componente — a página do Time DEMO lê exatamente as mesmas
+consultas que a de um time real.
+
+O que ele tem de diferente é um sinal, `cmd_clients.is_demo`, e o fato de que
+os dados dele são **gerados no servidor** a partir de listas fictícias
+(`src/lib/domain/demo.ts`): pessoas, telefones de uma faixa de demonstração,
+ruas, bairros, escolas, zonas e seções. Nunca há CPF, título de eleitor,
+e-mail ou telefone de pessoa real, e **nenhuma consulta externa acontece** —
+nem SerpAPI, nem TSE, nem FonteData.
+
+### Onde se cria
+
+**Times → "Criar Time DEMO"**, ao lado de "Novo time". O botão só aparece
+para o ADMIN geral, e a rota confere de novo (`client.create` + perfil
+ADMIN): administrador do time e integrante recebem 403.
+
+O diálogo pede nome, foto, os administradores (quantos forem necessários,
+cada um com nome, telefone e foto opcional) e as quantidades de pessoas e de
+locais de votação, já preenchidas com valores razoáveis. Ao concluir, a
+página do próprio time abre com os cartões, as pessoas e o mapa cheios.
+
+Os administradores do Time DEMO entram pelo **mesmo fluxo dos times reais**:
+link de acesso do time + telefone. Não há segundo sistema de autenticação.
+
+### Mapa sem API externa
+
+Cada local de votação e cada rua viram uma linha em `cmd_map_locations` com
+`provider = 'DEMO_SEED'` — a própria linha diz que o ponto foi semeado, e
+ninguém confunde isso com uma consulta paga à SerpAPI. Os vínculos em
+`cmd_member_locations` nascem `SUCCESS`, como em um cadastro que já passou
+pela localização: uma linha de moradia (camada "Pessoas") e uma de local de
+votação (pino agrupado da escola) por pessoa.
+
+A coordenada da moradia é a **da rua**, compartilhada por quem mora nela —
+o mesmo comportamento do cache real, e o que faz os pinos se agruparem em vez
+de virar um borrão de pontos soltos.
+
+### Fora dos números reais
+
+Os dados DEMO não entram em nenhuma métrica da operação. O recorte vive em um
+lugar só, `src/lib/server/demo-scope.ts`, e dele dependem o total de times, o
+total de integrantes, os cadastros do dia, o gráfico, o mapa geral, a lista de
+pessoas de um local e a API `/api/v1` (um Time DEMO não recebe chave). Sem
+nenhum Time DEMO cadastrado, nenhuma consulta ganha uma cláusula sequer.
+
+Na listagem de Times o ADMIN geral vê o Time DEMO com o selo **DEMO**, mas os
+dois indicadores acima da lista continuam somando apenas `is_demo = false`.
+Dentro da página do próprio time, tudo aparece normalmente.
+
+### O que o banco garante
+
+`is_demo` é **imutável**: o gatilho `cmd_clients_demo_guard` recusa converter
+um time real em DEMO e um DEMO em real, venha de onde vier. A criação é
+idempotente: a chave enviada pelo navegador é reservada em `cmd_demo_seeds`
+antes de qualquer escrita, então um duplo clique devolve o mesmo time em vez
+de criar outro. Qualquer falha no meio desfaz tudo — o time é excluído (a
+cascata leva campos, acessos, pessoas e vínculos) e as coordenadas semeadas
+são removidas.
+
+Requer a migration `033_time_demo.sql`.
 
 ---
 
