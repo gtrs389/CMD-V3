@@ -28,6 +28,7 @@ import {
   insertRowsInChunks,
   selectRows,
   updateRows,
+  SupabaseRequestError,
 } from '@/lib/supabase/rest';
 import { deleteImage } from '@/lib/supabase/storage';
 import { createClient, deleteClient, getClient } from './client.service';
@@ -207,14 +208,21 @@ async function updateSeed(seedId: string, clientId: string): Promise<void> {
   );
 }
 
-/** Anota no time qual catalogo gerou os dados que ele tem agora. */
+/**
+ * Anota no time qual catalogo gerou os dados que ele tem agora.
+ *
+ * Falha em silencio de proposito. Isto e ANOTACAO: serve para a rotina de
+ * correcao saber em que versao o time esta. Um banco ainda sem a migration
+ * 034 nao tem a coluna — e perder um time inteiro de mil pessoas, ja gravado,
+ * por causa de uma anotacao seria absurdo.
+ */
 async function markSeeded(clientId: string): Promise<void> {
   await updateRows(
     TABLES.clients,
     { id: `eq.${clientId}` },
     { demo_seed_version: DEMO_SEED_VERSION },
     'id',
-  );
+  ).catch(() => []);
 }
 
 /* -------------------------------------------------------------------------
@@ -257,10 +265,21 @@ export async function refreshDemoTeam(clientId: string): Promise<DemoRefreshRepo
   const admins = await demoAdmins(clientId);
 
   // Quantas pessoas o time tinha: a escolha de quem o criou e mantida.
+  // Sem a migration 034 a coluna da marca nao existe: nesse caso a correcao
+  // trata TODAS as pessoas do Time DEMO como geradas — que e o que elas sao,
+  // porque sem a coluna tambem nao houve como marcar outra coisa.
   const anteriores = await selectRows<Pick<MemberRow, 'id' | 'photo_path'>>(TABLES.members, {
     select: 'id,photo_path',
     filters: { client_id: `eq.${clientId}`, demo_seed: 'not.is.null' },
     limit: DEMO_LIMITS.maxPeople,
+  }).catch(async (error: unknown) => {
+    const faltaColuna = error instanceof SupabaseRequestError && error.isMissingSchema;
+    if (!faltaColuna) throw error;
+    return selectRows<Pick<MemberRow, 'id' | 'photo_path'>>(TABLES.members, {
+      select: 'id,photo_path',
+      filters: { client_id: `eq.${clientId}` },
+      limit: DEMO_LIMITS.maxPeople,
+    });
   });
   // A equipe nunca encolhe na correcao: um time criado com o padrao antigo
   // (trinta pessoas em seis escolas) sobe para o padrao atual, e um time que
@@ -395,6 +414,15 @@ export async function setDemoAccess(clientId: string, enabled: boolean): Promise
    Conteudo de demonstracao
    ------------------------------------------------------------------------- */
 
+/**
+ * Tempo maximo gasto resolvendo coordenadas em UMA criacao.
+ *
+ * Nao e chute: o sistema roda em funcoes com tempo de vida curto, e a
+ * criacao de um Time DEMO ja gastou o dela escrevendo as pessoas. O que
+ * sobra e isto.
+ */
+const LOCATION_BUDGET_MS = 8000;
+
 interface SeedOptions {
   people: number;
   places: number;
@@ -446,9 +474,25 @@ async function seedDemoContent(
     usedPhones: admins.map((row) => row.phone ?? ''),
   });
 
-  const locations = await seedLocations(data, pontos);
+  // AS PESSOAS PRIMEIRO. A ordem nao e detalhe: resolver coordenada conversa
+  // com um provedor externo, e uma consulta lenta — ou sessenta delas — gasta
+  // todo o tempo que a funcao tem. Quando isso acontecia ANTES da escrita, a
+  // criacao morria com o time ja criado e NENHUMA pessoa dentro: cartoes
+  // zerados, grafico vazio, lista vazia. Agora o que as telas mostram ja esta
+  // gravado antes de o primeiro endereco ser perguntado.
   const members = await seedMembers(client, data, admins);
-  await seedMemberLocations(client.id, data, members, locations);
+
+  // Coordenada e ENFEITE perto disso: ela melhora o mapa e nao pode derrubar
+  // a criacao. Qualquer falha aqui deixa os vinculos sem ponto, e a rotina de
+  // correcao ("Refazer dados") tenta de novo depois.
+  let locations: SeededLocations = { places: [], residences: [] };
+  try {
+    locations = await seedLocations(data, pontos);
+  } catch {
+    locations = { places: [], residences: [] };
+  }
+
+  await seedMemberLocations(client.id, data, members, locations).catch(() => undefined);
 
   const encontrados = [...locations.places, ...locations.residences].filter(
     (outcome) => outcome.point !== null,
@@ -492,7 +536,20 @@ async function seedLocations(data: DemoData, pontos: string[]): Promise<SeededLo
   const places: PointSlot[] = [];
   const residences: PointSlot[] = [];
 
+  // Prazo. O que ja esta no cache sai instantaneo; o que precisa do provedor
+  // custa uma consulta de rede, e dezenas delas em fila gastam todo o tempo
+  // que a funcao tem. Estourado o prazo, o resto fica sem ponto — e o time
+  // continua completo, com as pessoas, os numeros e as listas no lugar. A
+  // rotina de correcao resolve o restante depois, e ai cada endereco ja
+  // resolvido e de graca.
+  const prazo = Date.now() + LOCATION_BUDGET_MS;
+  const vencido = () => Date.now() > prazo;
+
   for (const entry of data.places) {
+    if (vencido()) {
+      places.push({ point: null, hash: '', error: 'TIMEOUT', precision: null });
+      continue;
+    }
     const query = pollingPlaceLookup(entry.place);
     if (!query) {
       places.push({ point: null, hash: '', error: 'MISSING_DATA', precision: null });
@@ -514,6 +571,10 @@ async function seedLocations(data: DemoData, pontos: string[]): Promise<SeededLo
   }
 
   for (const entry of data.residences) {
+    if (vencido()) {
+      residences.push({ point: null, hash: '', error: 'TIMEOUT', precision: null });
+      continue;
+    }
     const lookup = residenceLookupFor(entry);
     if (!lookup) {
       residences.push({ point: null, hash: '', error: 'MISSING_DATA', precision: null });
@@ -583,7 +644,23 @@ async function seedMembers(
 
   // Em lotes: cinco mil pessoas em um envio so estouraria o corpo da
   // requisicao, e a criacao inteira falharia no fim.
-  return insertRowsInChunks<MemberRow>(TABLES.members, linhas, 'id,name,phone');
+  try {
+    return await insertRowsInChunks<MemberRow>(TABLES.members, linhas, 'id,name,phone');
+  } catch (error) {
+    // Banco sem a migration 034: a coluna `demo_seed` ainda nao existe. Ela
+    // serve a UMA coisa — saber o que a rotina de correcao pode refazer — e
+    // nao vale derrubar a criacao inteira por causa dela. As pessoas entram
+    // sem a marca, e a marca aparece quando a migration for executada.
+    const faltaColuna = error instanceof SupabaseRequestError && error.isMissingSchema;
+    if (!faltaColuna) throw error;
+
+    const semMarca = linhas.map((linha) => {
+      const copia: Record<string, unknown> = { ...linha };
+      delete copia.demo_seed;
+      return copia as typeof linha;
+    });
+    return insertRowsInChunks<MemberRow>(TABLES.members, semMarca, 'id,name,phone');
+  }
 }
 
 /**

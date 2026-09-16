@@ -373,8 +373,11 @@ export async function resolveSurveyLink(token: string): Promise<SurveyLinkState>
   }
   if (!invite.active) return { kind: 'unavailable' };
 
+  // `select: '*'` de proposito: a lista de colunas quebraria inteira em um
+  // banco que ainda nao recebeu a migration mais nova, e esta e uma pagina
+  // PUBLICA — ela nao pode depender de o banco estar em dia.
   const row = await selectOne<SurveyClientRow>(TABLES.clients, {
-    select: SURVEY_CLIENT_COLUMNS,
+    select: '*',
     filters: { id: `eq.${invite.client_id}` },
   });
   if (!row || !row.survey_active) return { kind: 'unavailable' };
@@ -382,7 +385,7 @@ export async function resolveSurveyLink(token: string): Promise<SurveyLinkState>
   const [fields, photo, banner] = await Promise.all([
     loadSurveyFields(row.id),
     signedUrl(row.photo_path),
-    signedUrl(row.banner_path),
+    signedUrl(row.banner_path ?? null),
   ]);
 
   const visiveis = fields.filter((field) => field.enabled);

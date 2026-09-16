@@ -27,6 +27,7 @@ import {
   insertRows,
   selectOne,
   selectRows,
+  SupabaseRequestError,
   updateRows,
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
@@ -145,7 +146,7 @@ async function assemble(row: ClientRow, inviteToken?: string | null): Promise<Cl
     loadFields([row.id]),
     loadInvites([row.id]),
     signedUrl(row.photo_path),
-    signedUrl(row.banner_path),
+    signedUrl(row.banner_path ?? null),
     loadTeamPeople([row.id]),
   ]);
 
@@ -344,7 +345,7 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
     signedUrl(row.photo_path),
     // O banner do celular e desta tela: e ele que a pessoa ve primeiro ao
     // abrir o link no telefone.
-    signedUrl(row.banner_path),
+    signedUrl(row.banner_path ?? null),
   ]);
 
   const client = toClient(row, {
@@ -568,21 +569,35 @@ export async function createClient(
   const banner =
     input.banner && isDataUrl(input.banner) ? await uploadImage('banners', input.banner) : null;
 
-  const row = await insertOne<ClientRow>(TABLES.clients, {
+  const novo = {
     name: input.name.trim(),
     notes: input.notes?.trim() ?? '',
     is_demo: options.isDemo === true,
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
-    banner_path: banner?.path ?? null,
-    banner_mime: banner?.mime ?? null,
-    banner_size: banner?.size ?? null,
     privacy_enabled: appConfig.privacy.enabledByDefault,
     privacy_title: appConfig.privacy.defaultTitle,
     privacy_text: appConfig.privacy.defaultText,
     privacy_consent_label: appConfig.privacy.defaultConsentLabel,
-  });
+  };
+
+  let row: ClientRow;
+  try {
+    row = await insertOne<ClientRow>(TABLES.clients, {
+      ...novo,
+      banner_path: banner?.path ?? null,
+      banner_mime: banner?.mime ?? null,
+      banner_size: banner?.size ?? null,
+    });
+  } catch (error) {
+    // Banco ainda sem a migration 035: as colunas do banner nao existem. O
+    // time nao pode deixar de nascer por causa de uma imagem opcional — ele
+    // nasce sem banner proprio, e o banner padrao do sistema continua
+    // valendo, como sempre valeu.
+    if (!(error instanceof SupabaseRequestError) || !error.isMissingSchema) throw error;
+    row = await insertOne<ClientRow>(TABLES.clients, novo);
+  }
 
   await insertDefaultFields(row.id);
 
