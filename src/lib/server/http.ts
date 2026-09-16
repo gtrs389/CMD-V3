@@ -243,7 +243,17 @@ export function toErrorResponse(error: unknown): NextResponse {
     if (error.isMissingSchema) {
       return jsonError(
         503,
-        'A estrutura do banco está desatualizada: falta executar a migration mais recente no Supabase.',
+        'A estrutura do banco está desatualizada: execute a migration mais recente no Supabase. ' +
+          'Se você já executou, recarregue o cache do schema (Supabase → Settings → API → Reload schema cache) ' +
+          `e tente de novo. (código ${ref})`,
+      );
+    }
+
+    if (error.isMissingGrant) {
+      return jsonError(
+        503,
+        'O banco recusou por permissão: falta executar o bloco de permissões da migration mais recente. ' +
+          `(código ${ref})`,
       );
     }
 

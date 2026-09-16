@@ -48,17 +48,53 @@ export class SupabaseRequestError extends Error {
   }
 
   /**
-   * O banco nao tem a coluna ou a tabela que o codigo pediu.
+   * O banco nao tem a coluna, a tabela ou a funcao que o codigo pediu.
    *
    * Na pratica isso significa UMA coisa: a migration correspondente ainda
-   * nao foi executada. Sem distinguir esse caso, toda falha assim vira a
-   * mesma mensagem generica de erro e a tela nao diz o que fazer — o que
-   * transforma um `alter table` esquecido em uma caca ao bug.
+   * nao foi executada — ou foi, e o PostgREST ainda nao recarregou o cache
+   * do schema. Sem distinguir esse caso, toda falha assim vira a mesma
+   * mensagem generica de erro e a tela nao diz o que fazer, o que transforma
+   * um `alter table` esquecido em uma caca ao bug.
    *
-   * 42703 = coluna inexistente; 42P01 = tabela inexistente.
+   * Dois mundos, e os dois precisam entrar:
+   *
+   *   POSTGRES   42703 coluna inexistente, 42P01 tabela inexistente. Sao os
+   *              erros de quem consultou o banco direto.
+   *   POSTGREST  PGRST202 funcao, PGRST204 coluna e PGRST205 tabela que nao
+   *              estao NO CACHE dele. O PostgREST nem chega a perguntar ao
+   *              banco: ele recusa antes, com codigo proprio.
+   *
+   * Faltava o segundo grupo, e e justamente o que aparece logo depois de uma
+   * migration nova — o caso mais comum de todos.
    */
   get isMissingSchema(): boolean {
-    return this.code === '42703' || this.code === '42P01';
+    if (
+      this.code === '42703' ||
+      this.code === '42P01' ||
+      this.code === 'PGRST202' ||
+      this.code === 'PGRST204' ||
+      this.code === 'PGRST205'
+    ) {
+      return true;
+    }
+
+    // Rede de seguranca por TEXTO: algumas versoes do PostgREST recusam a
+    // funcao ou a coluna ausente sem mandar `code` nenhum. Sem isto, o caso
+    // mais comum depois de uma migration nova — "ja rodei o SQL, e continua
+    // dando erro" — volta a ser um 500 que nao explica nada.
+    const texto = this.message.toLowerCase();
+    return texto.includes('schema cache') || texto.includes('does not exist');
+  }
+
+  /**
+   * O banco existe, tem a estrutura, mas recusou por permissao.
+   *
+   * Tambem e configuracao pendente, e nao defeito: quase sempre a parte de
+   * `grant` da migration nao foi executada. Merece mensagem propria, porque
+   * a acao e outra — rodar o bloco de permissoes, e nao criar coluna.
+   */
+  get isMissingGrant(): boolean {
+    return this.code === '42501';
   }
 
   /**
