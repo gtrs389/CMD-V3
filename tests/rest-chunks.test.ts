@@ -24,16 +24,37 @@ vi.mock('@/lib/supabase/env', () => ({
 
 const urlsChamadas: string[] = [];
 
+/** Quantas linhas o servidor de mentira devolve, ao todo. */
+let totalNoBanco = 0;
+
 beforeEach(() => {
   urlsChamadas.length = 0;
+  totalNoBanco = 0;
+
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      urlsChamadas.push(String(url));
-      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const endereco = String(url);
+      urlsChamadas.push(endereco);
+
+      // Reproduz o corte do Supabase: no maximo 1.000 linhas por resposta,
+      // com status 200 e sem aviso nenhum de que havia mais.
+      const params = new URL(endereco).searchParams;
+      const limite = Math.min(Number(params.get('limit') ?? PAGINA), PAGINA);
+      const inicio = Number(params.get('offset') ?? 0);
+      const quantas = Math.max(0, Math.min(limite, totalNoBanco - inicio));
+      const linhas = Array.from({ length: quantas }, (_, i) => ({ id: `linha-${inicio + i}` }));
+
+      return new Response(JSON.stringify(linhas), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }),
   );
 });
+
+/** O corte do servidor. */
+const PAGINA = 1000;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -83,5 +104,68 @@ describe('escrita com lista longa', () => {
     await deleteRows('cmd_members', { id: inFilter(['a', 'b', 'c']) });
 
     expect(urlsChamadas).toHaveLength(1);
+  });
+});
+
+describe('leitura alem da primeira pagina', () => {
+  /**
+   * O Supabase corta toda resposta em 1.000 linhas, com status 200 e sem
+   * aviso. Uma consulta sem `limit` parecia trazer "todas" e trazia mil.
+   *
+   * Foi assim que a pagina de um Time DEMO de 1.553 pessoas mostrou 1.000 em
+   * todos os quadros, com o ranking da equipe zerado: os recrutadores sao as
+   * pessoas mais ANTIGAS, e ficavam fora da janela devolvida.
+   */
+  it('traz TODAS as linhas, e nao so as mil primeiras', async () => {
+    const { selectRows } = await import('@/lib/supabase/rest');
+    totalNoBanco = 1553;
+
+    const linhas = await selectRows('cmd_members', {
+      filters: { client_id: 'eq.demo-1' },
+      order: 'created_at.desc',
+    });
+
+    expect(linhas).toHaveLength(1553);
+    // Duas paginas: 1.000 e 553.
+    expect(urlsChamadas).toHaveLength(2);
+  });
+
+  it('nenhuma linha repetida entre as paginas', async () => {
+    const { selectRows } = await import('@/lib/supabase/rest');
+    totalNoBanco = 2500;
+
+    const linhas = await selectRows<{ id: string }>('cmd_members', {});
+
+    expect(new Set(linhas.map((l) => l.id)).size).toBe(2500);
+  });
+
+  it('consulta pequena continua custando UMA requisicao', async () => {
+    const { selectRows } = await import('@/lib/supabase/rest');
+    totalNoBanco = 12;
+
+    await selectRows('cmd_clients', {});
+
+    expect(urlsChamadas).toHaveLength(1);
+  });
+
+  it('com `limit` explicito, quem chamou manda: uma requisicao so', async () => {
+    const { selectRows } = await import('@/lib/supabase/rest');
+    totalNoBanco = 5000;
+
+    const linhas = await selectRows('cmd_members', { limit: 10 });
+
+    expect(urlsChamadas).toHaveLength(1);
+    expect(linhas).toHaveLength(10);
+  });
+
+  it('pagina com ordem definida: sem ela o banco nao promete ordem entre consultas', async () => {
+    const { selectRows } = await import('@/lib/supabase/rest');
+    totalNoBanco = 1200;
+
+    await selectRows('cmd_members', {});
+
+    for (const url of urlsChamadas) {
+      expect(new URL(url).searchParams.get('order')).toBeTruthy();
+    }
   });
 });
