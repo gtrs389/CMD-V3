@@ -23,6 +23,8 @@ const db: Record<string, Row[]> = {
   cmd_users: [],
   cmd_members: [],
   cmd_invites: [],
+  cmd_member_locations: [],
+  cmd_map_locations: [],
 };
 
 let sequence = 0;
@@ -140,7 +142,15 @@ const TOTAL_PESSOAS = 100;
 vi.mock('@/lib/server/client.service', () => ({
   getClient: async (id: string) => {
     const row = db.cmd_clients.find((c) => c.id === id);
-    return row ? { id: row.id, name: row.name, isDemo: row.is_demo === true } : null;
+    return row
+      ? {
+          id: row.id,
+          name: row.name,
+          isDemo: row.is_demo === true,
+          // A geracao le as opcoes de vinculo do formulario do time.
+          form: { fields: [] },
+        }
+      : null;
   },
   createClient: async () => ({ id: TIME }),
   deleteClient: async () => undefined,
@@ -198,73 +208,97 @@ function ranking(): { nome: string; cadastros: number }[] {
 
 describe('segunda camada do Time DEMO', () => {
   it('sem ela, o ranking da equipe fica vazio', () => {
-    // O estado de antes: todos cadastrados pelo administrador.
     expect(ranking()).toEqual([]);
     expect(db.cmd_members.every((m) => m.recruited_by_role === 'CANDIDATE')).toBe(true);
   });
 
-  it('enche o ranking, com numeros DIFERENTES entre si', async () => {
+  it('ACRESCENTA gente ao time: o total sobe', async () => {
     const { setDemoRecruiters } = await import('@/lib/server/demo.service');
-    const resultado = await setDemoRecruiters(TIME, 5);
+    const resultado = await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
 
     expect(resultado.recruiters).toBe(5);
-    expect(resultado.moved).toBeGreaterThan(0);
+    expect(resultado.people).toBe(300);
+    // As mil de antes continuam la: a segunda camada nao reparte quem ja
+    // estava no time, ela traz gente nova.
+    expect(db.cmd_members).toHaveLength(TOTAL_PESSOAS + 300);
+  });
+
+  it('as pessoas da PRIMEIRA camada nao sao tocadas', async () => {
+    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
+    const antes = db.cmd_members.map((m) => ({ id: m.id, dono: m.recruited_by_user_id }));
+
+    await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
+
+    for (const original of antes) {
+      const agora = db.cmd_members.find((m) => m.id === original.id);
+      // Reescrever a origem de um cadastro ja gravado e o que a guarda do
+      // banco recusa — e com razao.
+      expect(agora?.recruited_by_user_id).toBe(original.dono);
+    }
+  });
+
+  it('a gente nova entra no MAPA, como qualquer outra', async () => {
+    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
+    await setDemoRecruiters(TIME, { recruiters: 3, people: 120 });
+
+    const novas = db.cmd_members.filter((m) => m.recruited_by_role === 'EQUIPE');
+    const comPino = new Set(db.cmd_member_locations.map((l) => l.member_id));
+
+    expect(novas.length).toBe(120);
+    // Duas linhas por pessoa: moradia e local de votacao.
+    expect(novas.every((m) => comPino.has(m.id))).toBe(true);
+  });
+
+  it('enche o ranking, com numeros DIFERENTES entre si', async () => {
+    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
+    await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
 
     const linhas = ranking();
     expect(linhas).toHaveLength(5);
     // Um ranking empatado nao demonstra nada.
     expect(new Set(linhas.map((l) => l.cadastros)).size).toBeGreaterThan(1);
-    expect(linhas[0].cadastros).toBeGreaterThan(0);
+    expect(linhas.reduce((soma, l) => soma + l.cadastros, 0)).toBe(300);
   });
 
-  it('o administrador continua com cadastros proprios', async () => {
+  it('o administrador continua com os cadastros dele', async () => {
     const { setDemoRecruiters } = await import('@/lib/server/demo.service');
-    await setDemoRecruiters(TIME, 5);
+    await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
 
     const doAdmin = db.cmd_members.filter((m) => m.recruited_by_user_id === ADMIN_USER).length;
-    expect(doAdmin).toBeGreaterThan(0);
+    expect(doAdmin).toBe(TOTAL_PESSOAS);
   });
 
   it('NINGUEM ganha entrada no painel: o acesso nasce desligado', async () => {
     const { setDemoRecruiters } = await import('@/lib/server/demo.service');
-    await setDemoRecruiters(TIME, 5);
+    await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
 
     const equipe = db.cmd_users.filter((u) => u.role === 'EQUIPE');
     expect(equipe).toHaveLength(5);
-    // O login por link + telefone filtra `is_active: is.true`. Desligado,
-    // nenhum telefone ficticio abre o painel do time.
+    // O login por link + telefone filtra `is_active: is.true`.
     expect(equipe.every((u) => u.is_active === false)).toBe(true);
     expect(equipe.every((u) => u.password_hash === null)).toBe(true);
   });
 
-  it('um numero MENOR desfaz e devolve os cadastros ao administrador', async () => {
+  it('salvar de novo REFAZ a camada, sem acumular', async () => {
     const { setDemoRecruiters } = await import('@/lib/server/demo.service');
-    await setDemoRecruiters(TIME, 5);
-    await setDemoRecruiters(TIME, 2);
-
-    expect(db.cmd_users.filter((u) => u.role === 'EQUIPE')).toHaveLength(2);
-    // Ninguem pode ficar apontando para um recrutador que nao existe mais.
-    const vivos = new Set(db.cmd_users.map((u) => u.id));
-    expect(db.cmd_members.every((m) => vivos.has(m.recruited_by_user_id as string))).toBe(true);
-  });
-
-  it('zero devolve o time a UMA camada, sem apagar ninguem', async () => {
-    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
-    await setDemoRecruiters(TIME, 5);
-    await setDemoRecruiters(TIME, 0);
-
-    expect(db.cmd_users.filter((u) => u.role === 'EQUIPE')).toHaveLength(0);
-    // As PESSOAS continuam: elas so deixaram de recrutar.
-    expect(db.cmd_members).toHaveLength(TOTAL_PESSOAS);
-    expect(db.cmd_members.every((m) => m.recruited_by_user_id === ADMIN_USER)).toBe(true);
-  });
-
-  it('refazer com o mesmo numero nao duplica recrutador', async () => {
-    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
-    await setDemoRecruiters(TIME, 3);
-    await setDemoRecruiters(TIME, 3);
+    await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
+    await setDemoRecruiters(TIME, { recruiters: 3, people: 100 });
 
     expect(db.cmd_users.filter((u) => u.role === 'EQUIPE')).toHaveLength(3);
+    expect(db.cmd_members).toHaveLength(TOTAL_PESSOAS + 100);
+    // Os pinos da camada anterior saem junto: pessoa apagada nao fica no mapa.
+    const vivos = new Set(db.cmd_members.map((m) => m.id));
+    expect(db.cmd_member_locations.every((l) => vivos.has(l.member_id as string))).toBe(true);
+  });
+
+  it('zero devolve o time a UMA camada, sem tocar nas pessoas do administrador', async () => {
+    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
+    await setDemoRecruiters(TIME, { recruiters: 5, people: 300 });
+    await setDemoRecruiters(TIME, { recruiters: 0, people: 0 });
+
+    expect(db.cmd_users.filter((u) => u.role === 'EQUIPE')).toHaveLength(0);
+    expect(db.cmd_members).toHaveLength(TOTAL_PESSOAS);
+    expect(db.cmd_members.every((m) => m.recruited_by_user_id === ADMIN_USER)).toBe(true);
   });
 });
 

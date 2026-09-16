@@ -62,6 +62,7 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
   const [people, setPeople] = useState(String(DEMO_DEFAULTS.people));
   const [places, setPlaces] = useState(String(DEMO_DEFAULTS.places));
   const [recruiters, setRecruiters] = useState(String(DEMO_RECRUITERS_DEFAULT));
+  const [recruiterPeople, setRecruiterPeople] = useState('0');
   /**
    * Chave de idempotencia desta tentativa.
    *
@@ -119,6 +120,7 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
             people: pessoas,
             places: locais,
             recruiters: Number(recruiters) || 0,
+            recruiterPeople: Number(recruiterPeople) || 0,
             // Repetir a requisicao com esta chave devolve o mesmo time.
             seedKey,
           },
@@ -287,14 +289,13 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
             />
           </Field>
 
-          {/* Segunda camada. OPCIONAL: em branco ou zero, o time nasce como
-              sempre nasceu — todo mundo cadastrado pelo administrador. E
-              ajustavel depois, na pagina do time, quantas vezes for
-              preciso. */}
+          {/* Segunda camada. OPCIONAL: zero em qualquer um dos dois numeros e
+              o time nasce como sempre nasceu — todo mundo cadastrado pelo
+              administrador. Ajustavel depois, na pagina do time. */}
           <Field
             id="demo-recrutadores"
             label="Pessoas que também recrutam"
-            help={`Opcional, até ${DEMO_RECRUITERS_MAX}. Elas aparecem no ranking da equipe. Pode mudar depois.`}
+            help={`Opcional, até ${DEMO_RECRUITERS_MAX}. Enche o ranking da equipe.`}
           >
             <Input
               id="demo-recrutadores"
@@ -302,6 +303,20 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
               inputMode="numeric"
               placeholder="0"
               onChange={(event) => setRecruiters(event.target.value.replace(/\D/g, ''))}
+            />
+          </Field>
+
+          <Field
+            id="demo-recrutadores-pessoas"
+            label="Quantas pessoas elas trazem"
+            help="Pessoas NOVAS, somadas às de cima. Entram no mapa como as outras."
+          >
+            <Input
+              id="demo-recrutadores-pessoas"
+              value={recruiterPeople}
+              inputMode="numeric"
+              placeholder="0"
+              onChange={(event) => setRecruiterPeople(event.target.value.replace(/\D/g, ''))}
             />
           </Field>
 
