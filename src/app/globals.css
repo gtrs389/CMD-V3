@@ -148,6 +148,41 @@
 }
 
 /* ==========================================================================
+   TELA DE CARREGAMENTO
+   ==========================================================================
+   O bloco de "menos movimento" nao congela a animacao no comeco: ele a
+   encurta, ela corre ate o FIM, e o que fica na tela e o ULTIMO quadro. Logo
+   o repouso e decidido pelo quadro 100% de cada keyframe — e so depois pela
+   classe. Aqui isso e o que importa: parado, o aviso continua tendo de dizer
+   "Carregando...", com os tres pontos VISIVEIS. Um ponto que repousasse
+   apagado viraria uma reticencia faltando pedaco. */
+
+/* O anel de dentro gira ao contrario do de fora. */
+@keyframes giro-inverso {
+  to { transform: rotate(-360deg); }
+}
+
+/* Os tres pontos de "Carregando...", em onda.
+   Comeca e TERMINA aceso, e nao apagado. Isso nao e estilo: a animacao
+   encurtada corre ate o fim e e o ULTIMO quadro que fica na tela, entao um
+   keyframe terminando em 0.3 deixava os tres pontos quase invisiveis para
+   quem pediu menos movimento — medido, 0.3 nos tres. Escrever `opacity: 1`
+   na classe nao resolve sozinho: o fim da animacao ganha dela. */
+@keyframes carregando-ponto {
+  0%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  50% { opacity: 0.25; transform: translate3d(0, 2px, 0); }
+}
+
+.animate-giro-inverso { animation: giro-inverso 1.6s linear infinite; }
+
+.carregando-ponto {
+  /* Aceso em repouso: ver a nota acima. */
+  opacity: 1;
+  animation: carregando-ponto 1.4s ease-in-out infinite;
+  animation-delay: var(--ponto-atraso, 0ms);
+}
+
+/* ==========================================================================
    TELA DE ACESSO BLOQUEADO
    ==========================================================================
    O REPOUSO E O ESTADO BASE DO ELEMENTO, e nao um quadro da animacao. O
