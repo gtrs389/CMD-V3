@@ -200,39 +200,56 @@ export function PublicFormShell({
 
       {/* Unica coluna que rola no desktop; no celular e a pagina inteira. */}
       <div className="lg:h-dvh lg:flex-1 lg:overflow-y-auto">
-        {/* Celular (abaixo de 768px): o banner oficial do time, servido como
-            arquivo, ocupando a largura inteira. Em tablet e desktop ele nao
-            e renderizado. */}
-        <div className="safe-top md:hidden">
-          <InviteBanner
-            src={bannerSrc}
-            teamName={teamName}
-            tag={bannerTag}
-            code={linkCode}
-            fallback={<InviteOwnerBanner owner={owner} fallbackName={teamName} />}
-          />
-        </div>
+        {/* Celular e tablet: o TOPO INTEIRO fica parado.
+        
+            O banner e a faixa de preenchimento sao UM bloco so, e o bloco e
+            que gruda no topo — nao cada um por sua conta. Dois `sticky` em
+            `top-0` disputariam o mesmo ponto e um cairia por cima do outro;
+            juntos eles se empilham sozinhos, sem ninguem precisar medir a
+            altura do banner, que e a do arquivo que o time subiu e muda de
+            time para time.
+        
+            O banner do time e a marca de quem convidou: some-lo no primeiro
+            gesto de rolagem era perde-lo justamente enquanto a pessoa
+            preenche. Agora ele fica.
+        
+            No desktop o bloco volta a ser comum (`lg:static`): la o banner
+            nao e renderizado, a faixa vive dentro do formulario e quem da o
+            contexto e a coluna azul da esquerda. */}
+        <div className="sticky top-0 z-30 lg:static lg:z-auto">
+          {/* Celular (abaixo de 768px): o banner oficial do time, servido
+              como arquivo, ocupando a largura inteira. Em tablet e desktop
+              ele nao e renderizado. */}
+          <div className="safe-top md:hidden">
+            <InviteBanner
+              src={bannerSrc}
+              teamName={teamName}
+              tag={bannerTag}
+              code={linkCode}
+              fallback={<InviteOwnerBanner owner={owner} fallbackName={teamName} />}
+            />
+          </div>
 
-        {/* Tablet (768px a 1023px): sem banner, a faixa de sempre continua
-            dando o contexto de quem enviou. */}
-        <div className="safe-top hidden md:block lg:hidden">
-          <InviteOwnerBanner owner={owner} fallbackName={teamName} />
-        </div>
+          {/* Tablet (768px a 1023px): sem banner, a faixa de sempre continua
+              dando o contexto de quem enviou. */}
+          <div className="safe-top hidden md:block lg:hidden">
+            <InviteOwnerBanner owner={owner} fallbackName={teamName} />
+          </div>
 
-        {/* Celular: assim que o cartao sai da tela, esta faixa gruda no topo.
-            E a unica orientacao necessaria durante a rolagem — onde a pessoa
-            esta e quanto ja preencheu — e ela nunca some. */}
-        <div className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur lg:hidden">
-          <div className="mx-auto w-full max-w-2xl px-4 py-2.5 sm:px-6">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
-                Preenchimento
-              </p>
-              <p className="shrink-0 text-xs font-bold text-success-600 tabular-nums">
-                {percent}%
-              </p>
+          {/* A orientacao da rolagem: onde a pessoa esta e quanto ja
+              preencheu. Vem logo abaixo do banner, e nunca some. */}
+          <div className="border-b border-line bg-surface/95 backdrop-blur lg:hidden">
+            <div className="mx-auto w-full max-w-2xl px-4 py-2.5 sm:px-6">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[0.625rem] font-bold tracking-[0.12em] text-ink-500 uppercase">
+                  Preenchimento
+                </p>
+                <p className="shrink-0 text-xs font-bold text-success-600 tabular-nums">
+                  {percent}%
+                </p>
+              </div>
+              <div className="mt-2">{avanco}</div>
             </div>
-            <div className="mt-2">{avanco}</div>
           </div>
         </div>
 
