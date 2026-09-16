@@ -105,6 +105,10 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       // O painel do integrante nao desenha banner: o valor de fabrica basta,
       // e a imagem nem e carregada.
       banner: null,
+      // O lugar do time e do painel do ADMIN: a tela do integrante nao o
+      // mostra, e o recorte dele nao tem por que carregar as colunas.
+      stateUf: null,
+      cities: [],
       // Quem chegou aqui ja passou pela sessao, que so resolve com o acesso
       // do time ligado.
       demoAccessEnabled: true,

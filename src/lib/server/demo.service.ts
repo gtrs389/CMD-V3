@@ -158,6 +158,11 @@ export async function createDemoTeam(
         photo: input.photo ?? null,
         banner: input.banner ?? null,
         notes: 'Time de demonstração. Os dados são fictícios e ficam fora dos números reais.',
+        // O catalogo do Time DEMO e de Alagoas, e os locais de votacao dele
+        // sao reais: o time nasce com o estado dos proprios dados, e nao
+        // vazio. Municipio fica em branco — sao varios, e "nao restringiu" e
+        // a resposta certa aqui.
+        stateUf: DEMO_STATE,
         people: input.admins.map<TeamPersonInput>((person) => ({
           name: person.name,
           phone: person.phone,

@@ -126,6 +126,8 @@ export function createLocalClientRepository(
         email: null,
         photo: input.photo ?? null,
         notes: input.notes?.trim() ?? '',
+        stateUf: input.stateUf ?? null,
+        cities: input.cities ?? [],
         // O modo local nao tem Storage: banner proprio e coisa do servidor.
         banner: null,
         demoAccessEnabled: true,
@@ -158,6 +160,8 @@ export function createLocalClientRepository(
         name: input.name?.trim() ?? client.name,
         photo: input.photo === undefined ? client.photo : input.photo,
         notes: input.notes === undefined ? client.notes : input.notes.trim(),
+        stateUf: input.stateUf === undefined ? client.stateUf : input.stateUf,
+        cities: input.cities === undefined ? client.cities : input.cities,
         people: input.people === undefined ? client.people : toTeamPeople(input.people),
         updatedAt: nowIso(),
       }));

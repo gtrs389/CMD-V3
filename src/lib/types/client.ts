@@ -126,6 +126,20 @@ export interface Client extends Timestamped {
    */
   isDemo: boolean;
   /**
+   * Estado do time, pela sigla da UF (migration 038).
+   *
+   * Nulo nos times criados antes dela: o cadastro de time NOVO exige, e um
+   * time antigo ganha o estado quando o ADMIN abrir "Editar time". Nulo
+   * quer dizer "ainda nao informado", nunca "nao tem".
+   */
+  stateUf: string | null;
+  /**
+   * Municipios onde o time atua (migration 038). Opcional e plural: uma
+   * operacao raramente cabe em um municipio so. Vazio: o time nao
+   * restringiu.
+   */
+  cities: string[];
+  /**
    * Acesso deste Time DEMO ao sistema (migration 036).
    *
    * Sempre `true` em time real. Desligado por um Time DEMO, os
@@ -148,6 +162,10 @@ export interface ClientInput {
    * voltar ao banner padrao do sistema.
    */
   banner?: StoredImage | null;
+  /** Sigla da UF. Obrigatoria ao criar; ausente na edicao nao altera. */
+  stateUf?: string;
+  /** Municipios onde o time atua. Ausente na edicao nao altera. */
+  cities?: string[];
 }
 
 /** Integrante resumido, usado na pilha de fotos do cartao de cliente. */
