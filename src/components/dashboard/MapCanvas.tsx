@@ -14,6 +14,7 @@ import {
   ESTIMATED_VOTES_LABEL,
   type PinCluster,
 } from '@/lib/domain/map-pin';
+import { tileUrlFrom } from '@/lib/domain/map-tile';
 import { formatPhone } from '@/lib/utils/phone';
 import { PlaceSections } from './PlaceSections';
 import { formatNumber } from '@/lib/utils/text';
@@ -29,8 +30,16 @@ import { initials } from '@/lib/utils/text';
  * barra sobre os tiles.
  */
 
-const TILE_URL =
-  process.env.NEXT_PUBLIC_MAP_TILE_URL ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+/**
+ * Endereco dos tiles.
+ *
+ * A regra mora em `map-tile.ts`: sem configuracao vale o OpenStreetMap, que
+ * nao usa credencial, e um valor configurado que nao serve — vazio, com
+ * aspas, ou sem `{z}/{x}/{y}` — tambem cai nele. O `??` de antes so olhava
+ * `undefined`, entao uma variavel cadastrada e VAZIA passava inteira e o
+ * mapa ficava cinza atras dos pinos, sem erro nenhum na tela.
+ */
+const TILE_URL = tileUrlFrom(process.env.NEXT_PUBLIC_MAP_TILE_URL);
 
 /** Azul do CMD para a moradia; laranja para o local de votacao. */
 const COLORS: Record<MapPin['locationKind'], string> = {
