@@ -23,7 +23,7 @@ import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useSession } from '@/components/layout/SessionProvider';
 import { Spinner } from '@/components/ui/Spinner';
 
@@ -35,7 +35,10 @@ import { Spinner } from '@/components/ui/Spinner';
  */
 const MapCanvas = dynamic(() => import('./MapCanvas'), {
   ssr: false,
-  loading: () => <Skeleton className="h-full w-full rounded-none" />,
+  // O pacote do mapa e pesado e chega depois do resto da pagina. Um retangulo
+  // cinza no lugar nao diz nada: quem esperava nao sabia se o mapa estava
+  // vindo ou se a tela tinha falhado.
+  loading: () => <LoadingScreen fill label="Carregando o mapa" />,
 });
 
 interface MobilizationMapProps {
@@ -343,7 +346,14 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
       >
         <div className="relative min-h-0 flex-1 overflow-hidden">
           {loading ? (
-            <Skeleton className="h-full w-full rounded-none" />
+            // Esta e a espera longa: o mapa le os integrantes, os vinculos e
+            // as coordenadas de todos eles. Num time grande sao milhares de
+            // linhas, e a tela precisa dizer que esta trabalhando.
+            <LoadingScreen
+              fill
+              label="Carregando o mapa"
+              description="Reunindo os integrantes, os locais de votação e as coordenadas."
+            />
           ) : error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
               <p className="text-sm text-ink-500">Não foi possível carregar o mapa.</p>

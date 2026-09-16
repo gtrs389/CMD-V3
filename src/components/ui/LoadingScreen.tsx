@@ -31,6 +31,14 @@ interface LoadingScreenProps {
    * de conteudo, para a moldura nao piscar a cada navegacao.
    */
   fullscreen?: boolean;
+  /**
+   * Preenche EXATAMENTE o espaco do pai, sem altura minima propria.
+   *
+   * Para quem ja tem uma moldura de altura definida e so precisa preencher o
+   * miolo — o mapa e o caso: o cartao dele ja reservou a altura, e uma
+   * altura minima aqui esticaria a pagina enquanto carrega.
+   */
+  fill?: boolean;
   className?: string;
 }
 
@@ -38,6 +46,7 @@ export function LoadingScreen({
   label = 'Carregando',
   description,
   fullscreen = false,
+  fill = false,
   className,
 }: LoadingScreenProps) {
   return (
@@ -46,7 +55,7 @@ export function LoadingScreen({
       aria-live="polite"
       className={cn(
         'flex w-full flex-col items-center justify-center gap-5 px-6 text-center',
-        fullscreen ? 'min-h-dvh' : 'min-h-[60vh] py-16',
+        fullscreen ? 'min-h-dvh' : fill ? 'h-full' : 'min-h-[60vh] py-16',
         className,
       )}
     >
