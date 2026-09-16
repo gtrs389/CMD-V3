@@ -1,5 +1,4 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
 import type { Client, TeamPersonInput } from '@/lib/types';
 import {
   DEMO_LIMITS,
@@ -8,10 +7,16 @@ import {
   clampCount,
   type DemoData,
 } from '@/lib/domain/demo';
+import {
+  DEMO_POLLING_PLACES,
+  DEMO_SEED_VERSION,
+  DEMO_STATE,
+} from '@/lib/domain/demo-catalog';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
   type MapLocationRow,
+  type MemberLocationRow,
   type MemberRow,
   type UserRow,
 } from '@/lib/supabase/tables';
@@ -23,11 +28,13 @@ import {
   selectRows,
   updateRows,
 } from '@/lib/supabase/rest';
+import { deleteImage } from '@/lib/supabase/storage';
 import { createClient, deleteClient, getClient } from './client.service';
+import { addressLookup, pollingPlaceLookup, resolveDemoPoint } from './demo-locations';
 import { badRequest, notFound } from './http';
 
 /**
- * Criacao de um Time DEMO.
+ * Criacao e correcao de um Time DEMO.
  *
  * O Time DEMO e um time DE VERDADE: mesmas tabelas, mesmas telas, mesmos
  * servicos. Nao existe tela falsa, tabela paralela nem numero chumbado em
@@ -36,30 +43,29 @@ import { badRequest, notFound } from './http';
  *
  * O que ele tem de diferente e um sinal, `is_demo`, que o mantem fora de
  * toda metrica global (ver `demo-scope.ts`), e o fato de que os dados dele
- * sao gerados aqui, no servidor, a partir de listas ficticias
- * (`@/lib/domain/demo`).
+ * sao gerados aqui, no servidor.
  *
- * NENHUMA CONSULTA EXTERNA acontece: nem SerpAPI, nem TSE, nem FonteData.
- * As coordenadas vem do proprio conjunto de dados e sao gravadas no cache do
- * mapa com `provider = 'DEMO_SEED'` — a linha diz de onde veio, e ninguem
- * confunde ponto semeado com consulta paga.
+ * OS LUGARES SAO REAIS, E DE ALAGOAS. Escola, rua, bairro, municipio, UF,
+ * zona e secao vem do catalogo (`demo-catalog.ts`), que so tem local de
+ * votacao divulgado pelo TRE/AL, com a fonte anotada. As coordenadas vem da
+ * consulta de endereco do proprio sistema (`demo-locations.ts`) e nenhuma e
+ * escrita a mao nem deslocada: o que nao passa pelas barreiras de Alagoas
+ * simplesmente nao vira ponto.
  *
- * NENHUM DADO PESSOAL REAL entra: sem CPF, sem titulo de eleitor, sem
- * e-mail, e os telefones sao de uma faixa de demonstracao.
+ * AS PESSOAS sao ficticias: nome montado de listas, telefone de uma faixa de
+ * demonstracao com DDD 82. Sem CPF, sem titulo de eleitor, sem e-mail e sem
+ * nenhum retorno de consulta cadastral.
  *
  * QUEM TEM ACESSO AO PAINEL: somente os administradores que o ADMIN geral
  * cadastrou a mao. As pessoas ficticias sao DADOS, e nada mais — elas
  * existem em `cmd_members` e em nenhum outro lugar. Sem usuario, sem senha,
  * sem sessao, sem link de acesso, sem aparelho vinculado e sem convite
- * pessoal: nao ha por onde entrar nem o que gerar em nome delas. Criar trinta
- * contas so para calar um aviso de tela seria fabricar acesso que ninguem
- * pediu.
+ * pessoal.
  *
  * A criacao e ATOMICA na pratica: o PostgREST nao abre transacao entre
  * chamadas, entao qualquer falha depois do time criado desfaz tudo pelo
  * caminho que o proprio sistema ja usa — excluir o time, que leva junto, em
- * cascata, campos, pessoas, acessos, integrantes e vinculos de mapa. Nunca
- * fica um Time DEMO pela metade.
+ * cascata, campos, pessoas, acessos, integrantes e vinculos de mapa.
  *
  * Repetir a requisicao NAO duplica: a chave de idempotencia e reservada no
  * banco antes de qualquer escrita (migration 033), e a segunda chamada
@@ -90,10 +96,7 @@ interface ClaimRow {
   claimed: boolean;
 }
 
-/** SHA-256 estavel de um ponto semeado: nunca colide com outra consulta. */
-function seededHash(clientId: string, kind: string, index: number): string {
-  return createHash('sha256').update(`demo:${clientId}:${kind}:${index}`, 'utf8').digest('hex');
-}
+type Admin = Pick<UserRow, 'id' | 'name' | 'phone'>;
 
 /* -------------------------------------------------------------------------
    Criacao
@@ -132,7 +135,7 @@ export async function createDemoTeam(
   }
 
   let clientId: string | null = null;
-  /** Coordenadas semeadas: elas nao pertencem ao time, entao saem na mao. */
+  /** Coordenadas criadas AQUI: so elas podem ser desfeitas. */
   const pontos: string[] = [];
 
   try {
@@ -155,7 +158,7 @@ export async function createDemoTeam(
     clientId = criado.id;
 
     await seedDemoContent(criado, { people, places, seedKey: input.seedKey }, pontos);
-
+    await markSeeded(criado.id);
     await updateSeed(claim.seed_id, criado.id);
 
     // Recarrega pelo caminho normal: e exatamente o que a pagina do time vai
@@ -169,7 +172,8 @@ export async function createDemoTeam(
     //    reserva sai para a mesma chave poder tentar de novo.
     if (clientId) await deleteClient(clientId).catch(() => undefined);
     // O cache de coordenadas nao tem `client_id`: excluir o time nao leva os
-    // pontos junto, e um ponto orfao ficaria no mapa de ninguem.
+    // pontos junto. Saem apenas os que ESTA criacao gravou — um ponto que ja
+    // existia serve a outros times e nao e nosso para apagar.
     if (pontos.length > 0) {
       await deleteRows(TABLES.mapLocations, { id: inFilter(pontos) }).catch(() => []);
     }
@@ -193,6 +197,145 @@ async function updateSeed(seedId: string, clientId: string): Promise<void> {
   );
 }
 
+/** Anota no time qual catalogo gerou os dados que ele tem agora. */
+async function markSeeded(clientId: string): Promise<void> {
+  await updateRows(
+    TABLES.clients,
+    { id: `eq.${clientId}` },
+    { demo_seed_version: DEMO_SEED_VERSION },
+    'id',
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Correcao de um Time DEMO ja criado
+   ------------------------------------------------------------------------- */
+
+export interface DemoRefreshReport {
+  clientId: string;
+  /** Catalogo aplicado. */
+  version: string;
+  /** Pessoas ficticias removidas (as da geracao anterior). */
+  removed: number;
+  /** Pessoas ficticias criadas agora. */
+  people: number;
+  /** Locais de votacao do catalogo usados. */
+  places: number;
+  /** Coordenadas aceitas e recusadas nesta passagem. */
+  points: { resolved: number; missing: number };
+}
+
+/**
+ * Regenera SOMENTE os dados gerados de um Time DEMO.
+ *
+ * O que NAO e tocado: o time, o nome, a foto, os administradores, os acessos
+ * deles, os links do time, o formulario, o questionario, as configuracoes e
+ * qualquer pessoa cadastrada a mao. Sai apenas o que carrega a marca
+ * `demo_seed` — ou seja, o que este gerador criou.
+ *
+ * RODAR DUAS VEZES NAO DUPLICA: a rotina apaga a geracao anterior antes de
+ * escrever a nova, e a semente e a mesma (a chave da criacao original), entao
+ * o resultado e identico. Nao ha o que somar.
+ *
+ * Time real nunca entra aqui: sem `is_demo`, a rotina recusa.
+ */
+export async function refreshDemoTeam(clientId: string): Promise<DemoRefreshReport> {
+  const client = await getClient(clientId);
+  if (!client) throw notFound('Time não encontrado.');
+  if (!client.isDemo) throw badRequest('Só um Time DEMO pode ter os dados regerados.');
+
+  const admins = await demoAdmins(clientId);
+
+  // Quantas pessoas o time tinha: a escolha de quem o criou e mantida.
+  const anteriores = await selectRows<Pick<MemberRow, 'id' | 'photo_path'>>(TABLES.members, {
+    select: 'id,photo_path',
+    filters: { client_id: `eq.${clientId}`, demo_seed: 'not.is.null' },
+    limit: DEMO_LIMITS.maxPeople,
+  });
+  const people = clampCount(
+    anteriores.length || DEMO_LIMITS.minPeople,
+    DEMO_LIMITS.minPeople,
+    DEMO_LIMITS.maxPeople,
+  );
+
+  // A semente original: os nomes e a distribuicao continuam os mesmos do time
+  // que o ADMIN ja conhece.
+  const [reserva] = await selectRows<{ seed_key: string }>(TABLES.demoSeeds, {
+    select: 'seed_key',
+    filters: { client_id: `eq.${clientId}` },
+    order: 'created_at.asc',
+    limit: 1,
+  });
+
+  // 1. Fora a geracao anterior. A cascata leva junto os vinculos de mapa dela.
+  //    A foto sai antes da linha: o arquivo mora no Storage privado, que
+  //    nenhuma cascata do banco alcanca — apagar so a linha deixaria o
+  //    arquivo la para sempre.
+  if (anteriores.length > 0) {
+    for (const row of anteriores) await deleteImage(row.photo_path).catch(() => undefined);
+    await deleteRows(TABLES.members, { id: inFilter(anteriores.map((row) => row.id)) });
+  }
+
+  // 2. Fora os pontos semeados que sobraram sem dono. Sao as coordenadas
+  //    inventadas da versao antiga — as que punham marcador em Recife e no
+  //    mar. Um ponto ainda usado por outro Time DEMO nao e apagado.
+  await dropOrphanSeededPoints();
+
+  // 3. A geracao nova, pelo mesmo caminho da criacao.
+  const pontos: string[] = [];
+  const resumo = await seedDemoContent(
+    client,
+    {
+      people,
+      places: DEMO_POLLING_PLACES.length,
+      seedKey: reserva?.seed_key ?? clientId,
+    },
+    pontos,
+    admins,
+  );
+
+  await markSeeded(clientId);
+
+  return {
+    clientId,
+    version: DEMO_SEED_VERSION,
+    removed: anteriores.length,
+    people: resumo.people,
+    places: resumo.places,
+    points: resumo.points,
+  };
+}
+
+/**
+ * Apaga pontos `DEMO_SEED` que nao pertencem mais a ninguem.
+ *
+ * `DEMO_SEED` era a marca das coordenadas que o gerador antigo escrevia de
+ * memoria. Elas nao sao mais criadas: hoje toda coordenada do Time DEMO vem
+ * da consulta de endereco. As que sobraram de um time ja regenerado seriam
+ * lixo no cache, entao saem — e somente as que nenhum vinculo aponta.
+ */
+async function dropOrphanSeededPoints(): Promise<void> {
+  const semeados = await selectRows<Pick<MapLocationRow, 'id'>>(TABLES.mapLocations, {
+    select: 'id',
+    filters: { provider: `eq.${DEMO_PROVIDER}` },
+    limit: 2000,
+  });
+  if (semeados.length === 0) return;
+
+  const ids = semeados.map((row) => row.id);
+  const emUso = await selectRows<Pick<MemberLocationRow, 'location_id'>>(TABLES.memberLocations, {
+    select: 'location_id',
+    filters: { location_id: inFilter(ids) },
+    limit: 4000,
+  });
+
+  const ocupados = new Set(emUso.map((row) => row.location_id));
+  const orfaos = ids.filter((id) => !ocupados.has(id));
+  if (orfaos.length > 0) {
+    await deleteRows(TABLES.mapLocations, { id: inFilter(orfaos) }).catch(() => []);
+  }
+}
+
 /* -------------------------------------------------------------------------
    Conteudo de demonstracao
    ------------------------------------------------------------------------- */
@@ -203,30 +346,42 @@ interface SeedOptions {
   seedKey: string;
 }
 
+interface SeedSummary {
+  people: number;
+  places: number;
+  points: { resolved: number; missing: number };
+}
+
+/** Administradores do time: sao eles que aparecem em "Cadastrado por". */
+async function demoAdmins(clientId: string): Promise<Admin[]> {
+  const admins = await selectRows<Admin>(TABLES.users, {
+    select: 'id,name,phone',
+    filters: { client_id: `eq.${clientId}`, role: 'eq.CANDIDATE', is_active: 'is.true' },
+    order: 'created_at.asc',
+  });
+  if (admins.length === 0) throw notFound('O Time DEMO ficou sem administrador.');
+  return admins;
+}
+
 /**
- * Gera e grava o conteudo: locais, pessoas e vinculos de mapa.
+ * Gera e grava o conteudo: coordenadas, pessoas e vinculos de mapa.
  *
  * Tudo em lote, nas tabelas reais. As pessoas nascem com responsavel (um dos
- * administradores do time), endereco, zona, secao e data de cadastro
- * espalhada entre hoje, os ultimos sete dias e o mes — os mesmos registros
- * que os cartoes, o grafico, as listas e o mapa vao ler.
+ * administradores do time), endereco de Alagoas, zona e secao quando o
+ * TRE/AL as publicou, e data de cadastro espalhada entre hoje, os ultimos
+ * sete dias e o mes — os mesmos registros que os cartoes, o grafico, as
+ * listas e o mapa vao ler.
  *
- * O que elas NAO ganham e acesso: nenhuma linha em `cmd_users`. Elas sao
- * dados de demonstracao, e nao pessoas que entram no sistema.
+ * O que elas NAO ganham e acesso: nenhuma linha em `cmd_users`.
  */
 async function seedDemoContent(
   client: Client,
   options: SeedOptions,
-  /** Recebe os pontos criados, para o desfazer poder limpa-los. */
+  /** Recebe os pontos criados AQUI, para o desfazer poder limpa-los. */
   pontos: string[],
-): Promise<void> {
-  // Administradores recem-criados: sao eles que aparecem em "Cadastrado por".
-  const admins = await selectRows<Pick<UserRow, 'id' | 'name' | 'phone'>>(TABLES.users, {
-    select: 'id,name,phone',
-    filters: { client_id: `eq.${client.id}`, role: 'eq.CANDIDATE', is_active: 'is.true' },
-    order: 'created_at.asc',
-  });
-  if (admins.length === 0) throw notFound('O Time DEMO ficou sem administrador.');
+  known?: Admin[],
+): Promise<SeedSummary> {
+  const admins = known ?? (await demoAdmins(client.id));
 
   const data = buildDemoData({
     seed: options.seedKey,
@@ -236,60 +391,77 @@ async function seedDemoContent(
     usedPhones: admins.map((row) => row.phone ?? ''),
   });
 
-  const locations = await seedLocations(client.id, data);
-  pontos.push(...locations.places, ...locations.streets);
+  const locations = await seedLocations(data, pontos);
   const members = await seedMembers(client, data, admins);
   await seedMemberLocations(client.id, data, members, locations);
+
+  const encontrados = [...locations.places, ...locations.streets].filter(
+    (outcome) => outcome.point !== null,
+  ).length;
+  const total = locations.places.length + locations.streets.length;
+
+  return {
+    people: data.people.length,
+    places: data.places.length,
+    points: { resolved: encontrados, missing: total - encontrados },
+  };
+}
+
+interface PointSlot {
+  point: { locationId: string } | null;
+  hash: string;
+  error: string | null;
 }
 
 interface SeededLocations {
-  /** Coordenada de cada local de votacao, na ordem de `data.places`. */
-  places: string[];
-  /** Coordenada de cada rua, na ordem de `data.streets`. */
-  streets: string[];
+  /** Resultado de cada local de votacao, na ordem de `data.places`. */
+  places: PointSlot[];
+  /** Resultado de cada rua, na ordem de `data.streets`. */
+  streets: PointSlot[];
 }
 
 /**
- * Locais no cache do mapa, com `provider = 'DEMO_SEED'`.
+ * Coordenadas de cada escola e de cada RUA — e nao uma por pessoa.
  *
- * Uma coordenada por escola e uma por RUA — e nao uma por pessoa. E o mesmo
- * comportamento do cache real (uma consulta serve a todos os moradores
- * daquela rua), e e o que faz os pinos se agruparem no mapa em vez de virar
- * um borrao de pontos soltos.
+ * E o mesmo comportamento do cache real (uma consulta serve a todos os
+ * moradores daquela rua), e e o que faz os pinos se agruparem no mapa em vez
+ * de virar um borrao de pontos soltos. Como o catalogo e curto e o cache e
+ * compartilhado por consulta, o segundo Time DEMO nao consulta nada.
+ *
+ * Sequencial de proposito: duas consultas simultaneas do mesmo endereco
+ * perguntariam duas vezes antes de existir cache — e cada consulta e cobrada.
  */
-async function seedLocations(clientId: string, data: DemoData): Promise<SeededLocations> {
-  const linhas = [
-    ...data.places.map((place, index) => ({
-      query_hash: seededHash(clientId, 'place', index),
-      latitude: place.latitude,
-      longitude: place.longitude,
-      title: place.title,
-      address: place.address,
-      provider: DEMO_PROVIDER,
-    })),
-    ...data.streets.map((street, index) => ({
-      query_hash: seededHash(clientId, 'street', index),
-      latitude: street.latitude,
-      longitude: street.longitude,
-      title: street.street,
-      address: `${street.street} - ${street.district}, ${street.city}/${street.state}`,
-      provider: DEMO_PROVIDER,
-    })),
-  ];
+async function seedLocations(data: DemoData, pontos: string[]): Promise<SeededLocations> {
+  const places: PointSlot[] = [];
+  const streets: PointSlot[] = [];
 
-  const gravados = await insertRows<MapLocationRow>(TABLES.mapLocations, linhas, 'id,query_hash');
-  const porHash = new Map(gravados.map((row) => [row.query_hash, row.id]));
+  for (const entry of data.places) {
+    const query = pollingPlaceLookup(entry.place);
+    if (!query) {
+      places.push({ point: null, hash: '', error: 'MISSING_DATA' });
+      continue;
+    }
+    const outcome = await resolveDemoPoint(query, {
+      city: entry.place.city,
+      state: entry.place.state,
+    });
+    if (outcome.point?.created) pontos.push(outcome.point.locationId);
+    places.push({ point: outcome.point, hash: outcome.hash, error: outcome.error });
+  }
 
-  const places = data.places.map((_, index) => {
-    const id = porHash.get(seededHash(clientId, 'place', index));
-    if (!id) throw notFound('Local de votação de demonstração não foi criado.');
-    return id;
-  });
-  const streets = data.streets.map((_, index) => {
-    const id = porHash.get(seededHash(clientId, 'street', index));
-    if (!id) throw notFound('Endereço de demonstração não foi criado.');
-    return id;
-  });
+  for (const entry of data.streets) {
+    const query = addressLookup(entry.address);
+    if (!query) {
+      streets.push({ point: null, hash: '', error: 'MISSING_DATA' });
+      continue;
+    }
+    const outcome = await resolveDemoPoint(query, {
+      city: entry.address.city,
+      state: entry.address.state,
+    });
+    if (outcome.point?.created) pontos.push(outcome.point.locationId);
+    streets.push({ point: outcome.point, hash: outcome.hash, error: outcome.error });
+  }
 
   return { places, streets };
 }
@@ -298,7 +470,7 @@ async function seedLocations(clientId: string, data: DemoData): Promise<SeededLo
 async function seedMembers(
   client: Client,
   data: DemoData,
-  admins: Pick<UserRow, 'id' | 'name' | 'phone'>[],
+  admins: Admin[],
 ): Promise<Pick<MemberRow, 'id' | 'name' | 'phone'>[]> {
   // Opcoes de vinculo do formulario recem-criado: o Time DEMO usa o MESMO
   // construtor de formulario, entao os identificadores sao os dele.
@@ -324,6 +496,9 @@ async function seedMembers(
       relationship_label: opcao?.label ?? null,
       // Cadastro pelo link, como a maior parte de um time real.
       source: 'invite',
+      // A marca da geracao: e por ela, e so por ela, que a correcao sabe o
+      // que pode refazer. Quem foi cadastrado a mao nao a tem, e fica.
+      demo_seed: DEMO_SEED_VERSION,
       // O responsavel e um administrador do proprio time: a guarda do banco
       // confere time e perfil linha a linha.
       recruited_by_user_id: responsavel.id,
@@ -341,12 +516,16 @@ async function seedMembers(
 }
 
 /**
- * Vinculos do mapa, ja resolvidos.
+ * Vinculos do mapa.
  *
  * Duas linhas por pessoa, como em um cadastro real que ja passou pela
  * localizacao: a moradia aproximada (pino da camada "Pessoas") e o local de
- * votacao (pino agrupado da escola). Status SUCCESS porque a coordenada
- * existe — ela foi semeada, e a propria linha do cache diz isso.
+ * votacao (pino agrupado da escola).
+ *
+ * SUCCESS somente quando existe coordenada conferida. Sem ela o vinculo fica
+ * NOT_FOUND (o provedor nao devolveu resultado confiavel) ou FAILED (a
+ * consulta nao pode ser feita) — a tela conta o integrante como pendente, e
+ * o mapa nao ganha um pino que nao corresponde a lugar nenhum.
  */
 async function seedMemberLocations(
   clientId: string,
@@ -362,37 +541,44 @@ async function seedMemberLocations(
   // receber o endereco e a escola de outra no dia em que ela mudasse.
   const porTelefone = new Map(members.map((member) => [normalizePhone(member.phone), member.id]));
 
+  /**
+   * Uma linha, com as MESMAS chaves em todos os casos: em um envio em lote o
+   * PostgREST exige que todas as linhas tenham exatamente as mesmas chaves e
+   * recusa o lote inteiro quando uma delas falta (PGRST102).
+   */
+  function link(
+    memberId: string,
+    kind: 'RESIDENCE' | 'POLLING_PLACE',
+    slot: PointSlot | undefined,
+    // Precisao e coisa de endereco declarado, nao de local de votacao.
+    precision: string | null,
+  ): Record<string, string | null> {
+    const found = slot?.point ?? null;
+    return {
+      client_id: clientId,
+      member_id: memberId,
+      location_kind: kind,
+      status: found ? 'SUCCESS' : slot?.error ? 'FAILED' : 'NOT_FOUND',
+      query_hash: slot?.hash || null,
+      location_id: found?.locationId ?? null,
+      location_precision: found ? precision : null,
+      error_code: found ? null : (slot?.error ?? null),
+      resolved_at: agora,
+    };
+  }
+
   data.people.forEach((person) => {
     const memberId = porTelefone.get(normalizePhone(person.phone));
     if (!memberId) return;
 
-    linhas.push({
-      client_id: clientId,
-      member_id: memberId,
-      location_kind: 'RESIDENCE',
-      status: 'SUCCESS',
-      location_id: locations.streets[person.streetIndex] ?? null,
-      // O ponto e o da RUA, nunca o da casa: e o mesmo limite que o sistema
-      // real respeita ao mostrar moradia no mapa.
-      location_precision: 'STREET',
-      resolved_at: agora,
-    });
-
-    linhas.push({
-      client_id: clientId,
-      member_id: memberId,
-      location_kind: 'POLLING_PLACE',
-      status: 'SUCCESS',
-      location_id: locations.places[person.placeIndex] ?? null,
-      // Nula de proposito, e escrita: precisao e coisa de endereco
-      // declarado, nao de local de votacao. Mas a chave PRECISA existir —
-      // em um envio em lote, o PostgREST exige que todas as linhas tenham
-      // exatamente as mesmas chaves, e recusa o lote inteiro quando uma
-      // delas falta (PGRST102).
-      location_precision: null,
-      resolved_at: agora,
-    });
+    // O ponto e o da RUA, nunca o da casa: e o mesmo limite que o sistema
+    // real respeita ao mostrar moradia no mapa.
+    linhas.push(link(memberId, 'RESIDENCE', locations.streets[person.streetIndex], 'STREET'));
+    linhas.push(link(memberId, 'POLLING_PLACE', locations.places[person.placeIndex], null));
   });
 
   if (linhas.length > 0) await insertRows(TABLES.memberLocations, linhas, 'id');
 }
+
+/** UF unica do Time DEMO, exposta para quem precisar conferir. */
+export const DEMO_TEAM_STATE = DEMO_STATE;

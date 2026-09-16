@@ -189,6 +189,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/configuracoes/chaves` | ADMIN geral | Lista e cria chaves da API (com vínculo) |
 | `/api/configuracoes/chaves/opcoes` | ADMIN geral | Times e administradores para vincular |
 | `/api/clients/demo` | ADMIN geral | Cria um Time DEMO completo |
+| `/api/clients/demo/:id/dados` | ADMIN geral | Refaz os dados gerados de um Time DEMO |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
 | `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
 | `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
@@ -292,11 +293,19 @@ número chumbado em componente — a página do Time DEMO lê exatamente as mesm
 consultas que a de um time real.
 
 O que ele tem de diferente é um sinal, `cmd_clients.is_demo`, e o fato de que
-os dados dele são **gerados no servidor** a partir de listas fictícias
-(`src/lib/domain/demo.ts`): pessoas, telefones de uma faixa de demonstração,
-ruas, bairros, escolas, zonas e seções. Nunca há CPF, título de eleitor,
-e-mail ou telefone de pessoa real, e **nenhuma consulta externa acontece** —
-nem SerpAPI, nem TSE, nem FonteData.
+as **pessoas** dele são geradas no servidor a partir de listas fictícias
+(`src/lib/domain/demo.ts`): nome, gênero e telefone de uma faixa de
+demonstração com DDD 82. Nunca há CPF, título de eleitor, e-mail ou telefone
+de pessoa real.
+
+Os **lugares não são fictícios**. Escola, rua, bairro, município, UF, zona e
+seção saem de `src/lib/domain/demo-catalog.ts`, que só tem local de votação
+**real de Alagoas**, divulgado pelo TRE/AL, com a fonte anotada linha a linha.
+Zona e seção aparecem somente onde a fonte as publicou; onde não publicou, o
+campo fica vazio — que é a verdade.
+
+Um Time DEMO é **inteiro de Alagoas**: não há âncora de outro estado em lugar
+nenhum do gerador.
 
 ### Onde se cria
 
@@ -338,18 +347,62 @@ esquecer de outra concederia acesso pela porta esquecida. Recusar não é
 falhar: o cadastro continua e a função devolve `null`, porque derrubar o envio
 público quebraria justamente a demonstração do formulário.
 
-### Mapa sem API externa
+### Mapa: nenhuma coordenada inventada
 
-Cada local de votação e cada rua viram uma linha em `cmd_map_locations` com
-`provider = 'DEMO_SEED'` — a própria linha diz que o ponto foi semeado, e
-ninguém confunde isso com uma consulta paga à SerpAPI. Os vínculos em
-`cmd_member_locations` nascem `SUCCESS`, como em um cadastro que já passou
-pela localização: uma linha de moradia (camada "Pessoas") e uma de local de
-votação (pino agrupado da escola) por pessoa.
+**Nenhuma coordenada é escrita à mão e nenhuma é calculada.** Cada ponto vem
+da mesma consulta de endereço que põe um integrante real no mapa
+(`src/lib/server/demo-locations.ts` → `lookupPlace`), e fica no cache de
+`cmd_map_locations`, com a chave do **endereço** — não do time. Como o
+catálogo é curto, o primeiro Time DEMO resolve cada endereço uma vez e todos
+os seguintes aproveitam a linha gravada, sem nova consulta e sem nova
+cobrança.
+
+Foi exatamente isto que corrigiu o mapa: antes, as coordenadas eram âncoras
+digitadas de memória mais um deslocamento aleatório — e o resultado eram
+marcadores em Recife e no mar. O deslocamento deixou de existir e as âncoras
+também.
+
+Três barreiras antes de um ponto ser aceito:
+
+1. o provedor só devolve resultado cujo endereço bate com o município e a UF
+   pedidos (`parsePlace`);
+2. `isUsableDemoCoordinate` recusa nula, `NaN`, `0,0` e **qualquer ponto fora
+   de Alagoas** — e o que é recusado nem entra no cache, para não estragar a
+   consulta de um time real;
+3. o que não passa **não vira ponto**: o vínculo fica `NOT_FOUND` (sem
+   resultado confiável) ou `FAILED` (consulta impossível), a tela conta a
+   pessoa como pendente, e o mapa não ganha um pino que não corresponde a
+   lugar nenhum.
+
+Os vínculos em `cmd_member_locations` nascem `SUCCESS` quando a coordenada
+existe: uma linha de moradia (camada "Pessoas") e uma de local de votação
+(pino agrupado da escola) por pessoa.
 
 A coordenada da moradia é a **da rua**, compartilhada por quem mora nela —
 o mesmo comportamento do cache real, e o que faz os pinos se agruparem em vez
 de virar um borrão de pontos soltos.
+
+No mapa, o enquadramento (`fitBounds`) considera **somente coordenadas
+utilizáveis**: nula, `NaN`, fora da faixa ou `0,0` ficam de fora, porque um
+único ponto desses estica o enquadramento por meio planeta. Sem nenhum pino
+ainda resolvido, a página de um Time DEMO abre no **centro de Alagoas**; o
+mapa geral continua abrindo no centro do país.
+
+### Corrigir um Time DEMO já criado
+
+Na página do time, menu de ações → **"Refazer dados de demonstração"** (só o
+ADMIN geral vê), ou `POST /api/clients/demo/:id/dados`.
+
+A rotina refaz **somente o que o gerador criou**: as linhas marcadas em
+`cmd_members.demo_seed` com a versão do catálogo. O time, os administradores,
+os acessos deles, os links, o formulário, o questionário, as configurações e
+qualquer pessoa cadastrada à mão continuam exatamente como estão. Um time
+real não passa daqui.
+
+Rodar duas vezes **não duplica**: a geração anterior sai antes de a nova
+entrar, e a semente é a mesma (a chave da criação original), então o resultado
+é idêntico. Os pontos `DEMO_SEED` que sobram sem dono — as coordenadas
+inventadas da versão antiga — são removidos do cache.
 
 ### Fora dos números reais
 
@@ -380,7 +433,12 @@ de criar outro. Qualquer falha no meio desfaz tudo — o time é excluído (a
 cascata leva campos, acessos, pessoas e vínculos) e as coordenadas semeadas
 são removidas.
 
-Requer a migration `033_time_demo.sql`.
+A marca da geração vive em `cmd_members.demo_seed`, e o gatilho
+`cmd_members_demo_seed_guard` recusa marcá-la em quem não pertence a um Time
+DEMO — sem isso, um erro de código poderia levar a rotina de correção a apagar
+um cadastro de verdade.
+
+Requer as migrations `033_time_demo.sql` e `034_time_demo_alagoas.sql`.
 
 ---
 

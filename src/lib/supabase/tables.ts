@@ -134,6 +134,11 @@ export interface ClientRow {
    */
   is_demo: boolean;
   /**
+   * Catalogo que gerou os dados deste Time DEMO (migration 034). Nulo em time
+   * real. E por ele que a correcao sabe se o time ja esta na versao atual.
+   */
+  demo_seed_version: string | null;
+  /**
    * Estampa "#NOME DO TIME" sobre o banner do celular (migration 022).
    * Tudo em porcentagem da propria imagem, nunca em pixels da tela.
    */
@@ -269,6 +274,13 @@ export interface MemberRow {
   consent_privacy_snapshot: string | null;
   consent_privacy_version: string | null;
   source: 'invite' | 'admin';
+  /**
+   * Marca do gerador do Time DEMO (migration 034): guarda a versao do
+   * catalogo que criou esta linha. Nulo em todo cadastro real e em quem foi
+   * cadastrado a mao dentro de um Time DEMO — e so o que tem a marca pode ser
+   * refeito pela rotina de correcao.
+   */
+  demo_seed: string | null;
   /**
    * Responsavel pelo cadastro (migration 012). O identificador vira nulo se
    * o responsavel for excluido; o snapshot permanece, para o historico

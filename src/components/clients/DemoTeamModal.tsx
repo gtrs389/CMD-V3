@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { FlaskConical, Plus, Trash2 } from 'lucide-react';
 import type { ClientSummary, TeamAccessLinks } from '@/lib/types';
 import { DEMO_DEFAULTS, DEMO_LIMITS } from '@/lib/domain/demo';
+import { DEMO_POLLING_PLACES } from '@/lib/domain/demo-catalog';
 import { api } from '@/lib/repositories/http/api';
 import { createId } from '@/lib/utils/id';
 import { Button } from '@/components/ui/Button';
@@ -264,7 +265,9 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
           <Field
             id="demo-locais"
             label="Locais de votação"
-            help={`De ${DEMO_LIMITS.minPlaces} a ${DEMO_LIMITS.maxPlaces}.`}
+            // O teto nao e uma escolha de tela: sao os locais de votacao de
+            // Alagoas que estao conferidos. Pedir mais nao inventa o proximo.
+            help={`De ${DEMO_LIMITS.minPlaces} a ${DEMO_POLLING_PLACES.length}, todos em Alagoas.`}
           >
             <Input
               id="demo-locais"

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Building2,
+  RefreshCw,
   FileText,
   Image as ImageIcon,
   LayoutList,
@@ -30,6 +31,7 @@ import { DemoBadge } from './DemoBadge';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
+import { DemoDataDialog } from './DemoDataDialog';
 import { GenerateClientInviteButton } from './GenerateClientInviteButton';
 import { GenerateInviteButton } from './GenerateInviteButton';
 import { TeamLinksBar } from './TeamLinksBar';
@@ -66,6 +68,8 @@ export function ClientDetailView({
   const [editing, setEditing] = useState(false);
   const [banner, setBanner] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** Refazer os dados gerados: so aparece em Time DEMO, so para o ADMIN. */
+  const [refazendo, setRefazendo] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
   /**
    * Aba pedida pelo endereco, depois que a pagina ja esta aberta.
@@ -313,6 +317,16 @@ export function ClientDetailView({
                           },
                         ]
                       : []),
+                    ...(client.isDemo && user?.role === 'ADMIN'
+                      ? [
+                          {
+                            id: 'dados-demo',
+                            label: 'Refazer dados de demonstração',
+                            icon: <RefreshCw className="size-4" />,
+                            onSelect: () => setRefazendo(true),
+                          },
+                        ]
+                      : []),
                     ...(podeExcluir
                       ? [
                           {
@@ -384,6 +398,18 @@ export function ClientDetailView({
       <ClientFormModal open={editing} client={client} onClose={() => setEditing(false)} />
 
       <BannerTagModal open={banner} client={client} onClose={() => setBanner(false)} />
+
+      <DemoDataDialog
+        open={refazendo}
+        client={client}
+        onCancel={() => setRefazendo(false)}
+        onDone={() => {
+          setRefazendo(false);
+          // A pagina inteira le de novo: as pessoas, os numeros e o mapa sao
+          // os que acabaram de ser gravados.
+          reload();
+        }}
+      />
 
       <DeleteClientDialog
         open={deleting}

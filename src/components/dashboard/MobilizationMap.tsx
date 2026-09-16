@@ -41,6 +41,14 @@ const MapCanvas = dynamic(() => import('./MapCanvas'), {
 interface MobilizationMapProps {
   /** Restringe o mapa a equipe de um unico time. */
   clientId?: string;
+  /**
+   * Onde o mapa abre enquanto nao ha pino nenhum para enquadrar.
+   *
+   * O mapa geral nao pede nada e continua abrindo no centro do Brasil. A
+   * pagina de um time pode pedir a propria regiao — e o que faz o Time DEMO,
+   * que e todo de Alagoas, abrir em Alagoas.
+   */
+  fallbackCenter?: { latitude: number; longitude: number };
 }
 
 /**
@@ -61,7 +69,7 @@ interface MobilizationMapProps {
  * guarda o proprio lugar — entao o Leaflet nunca e remontado: posicao, zoom,
  * balao aberto e filtro sobrevivem a entrada e a saida.
  */
-export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
+export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapProps = {}) {
   const { can } = useSession();
   // Decide em qual dos dois lugares a ficha nasce: ao lado do mapa ou abaixo
   // dele. Sem isso, as duas copias existiriam e buscariam o integrante duas
@@ -352,6 +360,7 @@ export function MobilizationMap({ clientId }: MobilizationMapProps = {}) {
                 onOpenPlace={setOpenPlace}
                 onOpenMember={abrirFicha}
                 focusPlace={focusPlace}
+                fallbackCenter={fallbackCenter}
                 resizeKey={`${fullscreen ? 'full' : 'card'}:${
                   painelFicha ? 'ficha' : comRanking ? 'rank' : 'solo'
                 }`}

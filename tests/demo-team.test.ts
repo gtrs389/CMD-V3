@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEMO_DEFAULTS,
-  DEMO_LIMITS,
-  DEMO_PROVIDER,
-  buildDemoData,
-  clampCount,
-} from '@/lib/domain/demo';
+import { DEMO_DEFAULTS, DEMO_LIMITS, buildDemoData, clampCount } from '@/lib/domain/demo';
+import { DEMO_POLLING_PLACES } from '@/lib/domain/demo-catalog';
 import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
 import { isValidCpf } from '@/lib/utils/documents';
 
@@ -73,7 +68,12 @@ describe('dados de demonstração', () => {
       // A escola e a pessoa precisam concordar: a quebra por seção do mapa
       // sai do CADASTRO, e discordar faria a soma das seções não fechar.
       expect(person.zone).toBe(local.zone);
-      expect(local.sections).toContain(person.section);
+
+      // Seção só existe quando o TRE/AL publicou as do local. Onde ele não
+      // publicou, o campo fica vazio: inventar um número aqui falsificaria a
+      // quebra por seção do mapa.
+      if (local.sections.length === 0) expect(person.section).toBeNull();
+      else expect(local.sections).toContain(person.section);
     }
   });
 
@@ -150,20 +150,21 @@ describe('dados de demonstração', () => {
     }
   });
 
-  it('gera coordenadas válidas e distintas', () => {
+  it('não produz coordenada nenhuma: elas vêm do endereço, no servidor', () => {
     const data = gerar({ people: 30, places: 6 });
-    const pontos = [...data.places, ...data.streets];
 
-    for (const ponto of pontos) {
-      expect(ponto.latitude).toBeGreaterThanOrEqual(-90);
-      expect(ponto.latitude).toBeLessThanOrEqual(90);
-      expect(ponto.longitude).toBeGreaterThanOrEqual(-180);
-      expect(ponto.longitude).toBeLessThanOrEqual(180);
+    // Era daqui que saíam os pinos em Recife e no mar: âncoras escritas de
+    // memória mais um deslocamento aleatório. O gerador não devolve mais
+    // latitude nem longitude — quem as obtém é a consulta de endereço do
+    // próprio sistema, que recusa o que cai fora de Alagoas.
+    const bruto = JSON.stringify(data);
+    expect(bruto).not.toContain('latitude');
+    expect(bruto).not.toContain('longitude');
+
+    for (const person of data.people) {
+      expect(Object.keys(person)).not.toContain('latitude');
+      expect(Object.keys(person)).not.toContain('longitude');
     }
-
-    // Pontos colados demais viram um borrão: cada lugar tem o seu.
-    const chaves = pontos.map((ponto) => `${ponto.latitude},${ponto.longitude}`);
-    expect(new Set(chaves).size).toBe(chaves.length);
   });
 
   it('é reproduzível: a mesma semente devolve o mesmo time', () => {
@@ -188,12 +189,39 @@ describe('dados de demonstração', () => {
 
     const data = gerar({ people: 10_000, places: 10_000 });
     expect(data.people).toHaveLength(DEMO_LIMITS.maxPeople);
-    expect(data.places).toHaveLength(DEMO_LIMITS.maxPlaces);
+
+    // Pedir mais locais do que existem não inventa o sétimo: o teto real é o
+    // catálogo de locais de votação conferidos.
+    expect(data.places).toHaveLength(DEMO_POLLING_PLACES.length);
+    expect(data.places.length).toBeLessThanOrEqual(DEMO_LIMITS.maxPlaces);
   });
 
-  it('marca a origem das coordenadas como semeada, nunca como consulta paga', () => {
-    // O cache do mapa e um so: o que separa o ponto semeado do consultado na
-    // SerpAPI e esta marca, gravada na propria linha (migration 033).
-    expect(DEMO_PROVIDER).toBe('DEMO_SEED');
+  it('é todo de Alagoas, sem nenhuma âncora de outro estado', () => {
+    const data = gerar({ people: 60, places: 6 });
+
+    expect(data.state).toBe('AL');
+    for (const person of data.people) {
+      expect(person.state).toBe('AL');
+      expect(DEMO_POLLING_PLACES.some((place) => place.city === person.city)).toBe(true);
+    }
+    for (const local of data.places) expect(local.place.state).toBe('AL');
+
+    // O print que abriu esta correção mostrava pinos em Recife. Nenhum
+    // pedaço do conjunto pode sequer mencionar outro estado.
+    const bruto = JSON.stringify(data);
+    for (const proibido of ['Recife', 'PE', 'São Paulo', 'Belo Horizonte', 'Curitiba']) {
+      expect(bruto).not.toContain(proibido);
+    }
+  });
+
+  it('usa somente locais de votação do catálogo conferido', () => {
+    const data = gerar({ places: 6 });
+
+    for (const local of data.places) {
+      // Nome, endereço, bairro, município, zona e seções saem do catálogo, e
+      // o catálogo guarda a fonte de cada linha.
+      expect(DEMO_POLLING_PLACES).toContain(local.place);
+      expect(local.place.source).toMatch(/^https:\/\//);
+    }
   });
 });

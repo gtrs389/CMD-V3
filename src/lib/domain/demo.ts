@@ -1,4 +1,11 @@
 import { normalizePhone } from '@/lib/utils/phone';
+import {
+  DEMO_ADDRESSES,
+  DEMO_POLLING_PLACES,
+  DEMO_STATE,
+  type DemoAddress,
+  type DemoPollingPlace,
+} from './demo-catalog';
 
 /**
  * Dados do Time DEMO.
@@ -8,17 +15,31 @@ import { normalizePhone } from '@/lib/utils/phone';
  * conjunto — e por isso ele pode ser conferido por teste, que e onde a
  * coerencia dos numeros e garantida antes de existir uma linha no banco.
  *
- * Tudo aqui e ficticio: nomes montados a partir de listas, telefones de uma
- * faixa reservada para demonstracao, ruas e bairros inventados, escolas
- * inventadas. NAO existe CPF, titulo de eleitor, e-mail nem retorno de
- * consulta cadastral — nenhum dado de pessoa real entra em um Time DEMO.
+ * AS PESSOAS sao ficticias: nome montado a partir de listas, telefone de uma
+ * faixa de demonstracao, genero distribuido. Nao existe CPF, titulo de
+ * eleitor, e-mail nem retorno de consulta cadastral — nenhum dado de pessoa
+ * real entra em um Time DEMO.
  *
- * As coordenadas vem das ancoras abaixo, com deslocamentos calculados aqui.
- * Nenhuma consulta a SerpAPI, TSE, FonteData ou qualquer servico e feita
- * para montar um Time DEMO.
+ * OS LUGARES NAO SAO. Escola, rua, bairro, municipio, UF, zona e secao vem
+ * do catalogo (`demo-catalog.ts`), que so tem local de votacao REAL de
+ * Alagoas, divulgado pelo TRE/AL, com a fonte anotada. Antes eu inventava os
+ * tres — e o resultado foi um mapa em Recife com pinos no mar.
+ *
+ * COORDENADA NAO SE ESCREVE AQUI, e nao se calcula em lugar nenhum: este
+ * modulo nao devolve latitude nem longitude. Quem as obtem e o servidor,
+ * pelo MESMO caminho que ja poe um integrante real no mapa, e o resultado
+ * fica no cache de coordenadas do sistema.
  */
 
-/** Marca do ponto semeado no cache de coordenadas (migration 033). */
+/**
+ * Marca do ponto semeado no cache de coordenadas (migration 033).
+ *
+ * HERANCA. Nenhuma coordenada nova nasce com esta marca: as do Time DEMO vem
+ * hoje da consulta de endereco do proprio sistema, e por isso sao gravadas
+ * como a consulta que realmente aconteceu. A marca continua existindo para
+ * uma coisa so — reconhecer, e limpar, os pontos que a versao anterior do
+ * gerador escreveu de memoria.
+ */
 export const DEMO_PROVIDER = 'DEMO_SEED';
 
 /** Valores iniciais do formulario de criacao. O ADMIN pode alterar. */
@@ -94,39 +115,6 @@ const SOBRENOMES = [
   'Oliveira', 'Pacheco', 'Quintela', 'Rezende', 'Siqueira', 'Teixeira', 'Valadares',
 ] as const;
 
-/** Bairros inventados: nenhum deles existe com este nome nas cidades usadas. */
-const BAIRROS = [
-  'Jardim Aurora', 'Vila Bonança', 'Parque das Acácias', 'Alto da Colina',
-  'Recanto do Sol', 'Bairro das Palmeiras', 'Vila Serena', 'Morada Nova',
-] as const;
-
-const RUAS = [
-  'Rua das Acácias', 'Avenida dos Ipês', 'Rua Monte Claro', 'Travessa do Bosque',
-  'Rua Vinte e Três de Maio', 'Avenida Primavera', 'Rua do Mirante', 'Rua Sete Fontes',
-  'Alameda das Cerejeiras', 'Rua Boa Esperança', 'Avenida Central', 'Rua do Horizonte',
-] as const;
-
-const ESCOLAS = [
-  'Escola Municipal Aurora', 'Colégio Estadual Bonança', 'Escola Municipal Céu Azul',
-  'Centro Educacional Divisa', 'Escola Municipal Encosta Verde', 'Colégio Municipal Farol',
-  'Escola Estadual Girassol', 'Centro Comunitário Horizonte', 'Escola Municipal Ipê Roxo',
-  'Colégio Municipal Jequitibá', 'Escola Municipal Lago Sul', 'Centro Educacional Montanha',
-] as const;
-
-/**
- * Ancoras de cidade.
- *
- * O municipio e a UF sao reais porque o mapa precisa cair em algum lugar do
- * Brasil — as ruas, os bairros, as escolas e as pessoas e que sao
- * inventados. A escolha e determinada pela semente.
- */
-const CIDADES = [
-  { city: 'São Paulo', state: 'SP', ddd: '11', latitude: -23.5505, longitude: -46.6333 },
-  { city: 'Belo Horizonte', state: 'MG', ddd: '31', latitude: -19.9167, longitude: -43.9345 },
-  { city: 'Recife', state: 'PE', ddd: '81', latitude: -8.0476, longitude: -34.877 },
-  { city: 'Curitiba', state: 'PR', ddd: '41', latitude: -25.4284, longitude: -49.2733 },
-] as const;
-
 /** Distribuicao do genero, na ordem em que as pessoas sao geradas. */
 const GENEROS = ['MULHER', 'HOMEM', 'MULHER', 'HOMEM', 'NAO_INFORMAR'] as const;
 
@@ -136,29 +124,24 @@ export type DemoGender = (typeof GENEROS)[number];
    Formato do resultado
    ------------------------------------------------------------------------- */
 
-/** Local de votacao ficticio, ja com coordenada. */
+/**
+ * Local de votacao escolhido para o Time DEMO.
+ *
+ * E uma entrada do catalogo, e nao um lugar novo: nome, endereco, bairro,
+ * municipio, UF, zona e secoes vem de la, ja conferidos. Sem coordenada — o
+ * servidor a resolve pelo endereco, como faz com qualquer integrante real.
+ */
 export interface DemoPlace {
-  title: string;
-  address: string;
-  district: string;
-  city: string;
-  state: string;
-  latitude: number;
-  longitude: number;
-  /** Zona eleitoral ficticia da escola. */
-  zone: string;
-  /** Secoes ficticias que votam ali. */
-  sections: string[];
+  place: DemoPollingPlace;
+  /** Zona eleitoral verificada, ou nula quando a fonte nao a publicou. */
+  zone: string | null;
+  /** Secoes verificadas. Vazio quando a fonte nao as publicou. */
+  sections: readonly string[];
 }
 
-/** Rua ficticia: uma coordenada serve a todas as pessoas daquela rua. */
+/** Endereco de moradia: um logradouro real do catalogo. */
 export interface DemoStreet {
-  street: string;
-  district: string;
-  city: string;
-  state: string;
-  latitude: number;
-  longitude: number;
+  address: DemoAddress;
 }
 
 /** Pessoa ficticia, com tudo o que as telas do sistema usam. */
@@ -169,12 +152,19 @@ export interface DemoPerson {
   street: string;
   district: string;
   city: string;
-  state: string;
-  zone: string;
-  section: string;
-  /** Rua (e coordenada) da moradia. */
+  state: typeof DEMO_STATE;
+  /**
+   * Zona e secao do local onde a pessoa vota.
+   *
+   * Nulas quando o TRE/AL nao publicou zona ou secao daquele local. A tela
+   * mostra "sem zona/secao", que e a verdade — inventar um numero aqui
+   * falsificaria a quebra por secao do mapa.
+   */
+  zone: string | null;
+  section: string | null;
+  /** Endereco (e coordenada) da moradia, por posicao em `streets`. */
   streetIndex: number;
-  /** Local de votacao. */
+  /** Local de votacao, por posicao em `places`. */
   placeIndex: number;
   /** Administrador do time que aparece em "Cadastrado por". */
   adminIndex: number;
@@ -186,7 +176,7 @@ export interface DemoPerson {
 
 export interface DemoData {
   city: string;
-  state: string;
+  state: typeof DEMO_STATE;
   places: DemoPlace[];
   streets: DemoStreet[];
   people: DemoPerson[];
@@ -257,21 +247,18 @@ function spreadDate(index: number, total: number, now: Date): string {
    Geracao
    ------------------------------------------------------------------------- */
 
-/** Deslocamento pequeno e determinístico em torno da ancora da cidade. */
-function offset(random: () => number, base: number, espalhamento: number): number {
-  return Number((base + (random() - 0.5) * espalhamento).toFixed(6));
-}
-
 /**
  * Telefone de demonstracao.
  *
  * Faixa fixa e sequencial (9 8000 0000 + posicao), para os numeros nunca se
  * repetirem dentro do time e para serem reconheciveis como ficticios ao
- * lado de um numero real.
+ * lado de um numero real. O DDD e o de Alagoas.
  */
-function demoPhone(ddd: string, position: number): string {
+const DDD_ALAGOAS = '82';
+
+function demoPhone(position: number): string {
   const sufixo = String(80000000 + position).padStart(8, '0');
-  return `${ddd}9${sufixo}`;
+  return `${DDD_ALAGOAS}9${sufixo}`;
 }
 
 export function buildDemoData(input: DemoInput): DemoData {
@@ -279,75 +266,65 @@ export function buildDemoData(input: DemoInput): DemoData {
   const now = input.now ?? new Date();
 
   const totalPessoas = clampCount(input.people, DEMO_LIMITS.minPeople, DEMO_LIMITS.maxPeople);
-  const totalLocais = clampCount(input.places, DEMO_LIMITS.minPlaces, DEMO_LIMITS.maxPlaces);
-  // Quantos administradores o time tiver: as pessoas se dividem entre todos
-  // eles, sem teto. O minimo e um, porque um time sem administrador nao
-  // teria como ser acessado.
   const totalAdmins = Math.max(1, Math.trunc(input.admins) || 1);
 
-  const cidade = pick(random, CIDADES);
-  const ocupados = new Set((input.usedPhones ?? []).map((phone) => normalizePhone(phone)));
+  // Locais: os do catalogo, na ordem em que estao la. O teto nao e uma
+  // escolha de estilo — nao existe local de votacao alem dos conferidos, e
+  // inventar o sétimo seria voltar ao erro que gerou o mapa em Recife.
+  const totalLocais = Math.min(
+    clampCount(input.places, DEMO_LIMITS.minPlaces, DEMO_LIMITS.maxPlaces),
+    DEMO_POLLING_PLACES.length,
+  );
 
-  // Locais de votacao: cada um com a propria zona e duas secoes.
-  const places: DemoPlace[] = Array.from({ length: totalLocais }, (_, index) => {
-    const bairro = BAIRROS[index % BAIRROS.length];
-    const zona = String(101 + index).slice(0, 3);
-
-    return {
-      title: ESCOLAS[index % ESCOLAS.length],
-      address: `${RUAS[index % RUAS.length]}, ${100 + index * 7} - ${bairro}, ${cidade.city}/${cidade.state}`,
-      district: bairro,
-      city: cidade.city,
-      state: cidade.state,
-      latitude: offset(random, cidade.latitude, 0.14),
-      longitude: offset(random, cidade.longitude, 0.14),
-      zone: zona,
-      sections: [String(1 + index * 2).padStart(4, '0'), String(2 + index * 2).padStart(4, '0')],
-    };
-  });
-
-  // Ruas: uma coordenada por rua, compartilhada por quem mora nela — e o
-  // mesmo comportamento do cache real, e e o que faz os pinos se agruparem
-  // no mapa em vez de virar um borrao de pontos soltos.
-  const totalRuas = Math.min(RUAS.length, Math.max(3, Math.ceil(totalPessoas / 4)));
-  const streets: DemoStreet[] = Array.from({ length: totalRuas }, (_, index) => ({
-    street: RUAS[index % RUAS.length],
-    district: BAIRROS[index % BAIRROS.length],
-    city: cidade.city,
-    state: cidade.state,
-    latitude: offset(random, cidade.latitude, 0.1),
-    longitude: offset(random, cidade.longitude, 0.1),
+  const places: DemoPlace[] = DEMO_POLLING_PLACES.slice(0, totalLocais).map((place) => ({
+    place,
+    zone: place.zone,
+    sections: place.sections,
   }));
 
+  // Ruas: os mesmos logradouros reais. Uma coordenada por rua, compartilhada
+  // por quem mora nela — e o comportamento do cache real, e e o que faz os
+  // pinos se agruparem no mapa em vez de virar um borrao.
+  const streets: DemoStreet[] = DEMO_ADDRESSES.slice(0, Math.max(totalLocais, 1)).map(
+    (address) => ({ address }),
+  );
+
+  const ocupados = new Set((input.usedPhones ?? []).map((phone) => normalizePhone(phone)));
   const people: DemoPerson[] = [];
   let posicaoTelefone = 1;
 
   for (let index = 0; index < totalPessoas; index += 1) {
-    const placeIndex = index % totalLocais;
-    const place = places[placeIndex];
-    const streetIndex = index % totalRuas;
-    const street = streets[streetIndex];
+    const placeIndex = index % places.length;
+    const escolhido = places[placeIndex];
+    const streetIndex = index % streets.length;
+    const morada = streets[streetIndex].address;
 
     // Telefone livre: nunca repete o de um administrador do proprio time,
     // senao duas pessoas entrariam pelo mesmo numero.
-    let phone = demoPhone(cidade.ddd, posicaoTelefone);
+    let phone = demoPhone(posicaoTelefone);
     while (ocupados.has(phone)) {
       posicaoTelefone += 1;
-      phone = demoPhone(cidade.ddd, posicaoTelefone);
+      phone = demoPhone(posicaoTelefone);
     }
     ocupados.add(phone);
     posicaoTelefone += 1;
+
+    // Secao so quando o TRE/AL publicou as do local. Sem isso, nula.
+    const section =
+      escolhido.sections.length > 0
+        ? escolhido.sections[index % escolhido.sections.length]
+        : null;
 
     people.push({
       name: `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)}`,
       phone,
       gender: GENEROS[index % GENEROS.length],
-      street: street.street,
-      district: street.district,
-      city: cidade.city,
-      state: cidade.state,
-      zone: place.zone,
-      section: place.sections[index % place.sections.length],
+      street: morada.street,
+      district: morada.district,
+      city: morada.city,
+      state: DEMO_STATE,
+      zone: escolhido.zone,
+      section,
       streetIndex,
       placeIndex,
       adminIndex: index % totalAdmins,
@@ -356,5 +333,11 @@ export function buildDemoData(input: DemoInput): DemoData {
     });
   }
 
-  return { city: cidade.city, state: cidade.state, places, streets, people };
+  return {
+    city: places[0]?.place.city ?? DEMO_ADDRESSES[0]?.city ?? 'Maceió',
+    state: DEMO_STATE,
+    places,
+    streets,
+    people,
+  };
 }

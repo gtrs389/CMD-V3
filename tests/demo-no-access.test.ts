@@ -71,11 +71,35 @@ vi.mock('@/lib/supabase/rest', () => ({
     }
     return linhas.map((_, index) => ({ id: `${select ?? 'row'}-${index}` }));
   },
+  insertOne: async (table: string, linha: Record<string, unknown>) => {
+    // As coordenadas entram uma a uma, pelo cache do proprio sistema.
+    escritas.push({ tabela: table, linhas: [linha] });
+    return { id: `loc-${escritas.length}`, ...linha };
+  },
   updateRows: async () => [],
   deleteRows: async () => [],
   selectOne: async () => null,
   inFilter: (values: readonly string[]) => `in.(${values.join(',')})`,
   notInFilter: (values: readonly string[]) => `not.in.(${values.join(',')})`,
+}));
+
+/**
+ * O geocodificador do sistema, com um endereco de Maceio.
+ *
+ * O Time DEMO nao carrega coordenada nenhuma: ela vem daqui, pelo mesmo
+ * caminho de um integrante real, e so entra se cair dentro de Alagoas.
+ */
+vi.mock('@/lib/server/serpapi.service', () => ({
+  MapLookupError: class MapLookupError extends Error {},
+  lookupPlace: async () => ({
+    latitude: -9.6658,
+    longitude: -35.7353,
+    title: 'Local de votação',
+    address: 'Maceió - AL',
+    placeId: null,
+    dataId: null,
+    imageUrl: null,
+  }),
 }));
 
 const { createDemoTeam } = await import('@/lib/server/demo.service');
@@ -106,7 +130,9 @@ describe('pessoas fictícias do Time DEMO', () => {
 
     const tabelas = escritas.map((item) => item.tabela);
 
-    // Só três destinos: integrantes, coordenadas e vínculos do mapa.
+    // Só três destinos: integrantes, coordenadas e vínculos do mapa. As
+    // coordenadas não são semeadas: são o resultado da consulta do endereço,
+    // guardado no cache que o sistema inteiro usa.
     expect(new Set(tabelas)).toEqual(
       new Set(['cmd_members', 'cmd_map_locations', 'cmd_member_locations']),
     );

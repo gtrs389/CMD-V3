@@ -143,19 +143,40 @@ function clusterIcon(total: number, kinds: MapPin['locationKind'][]): L.DivIcon 
   });
 }
 
+/**
+ * Coordenada que pode entrar no enquadramento.
+ *
+ * Nula, NaN, fora da faixa de latitude/longitude ou exatamente `0,0` — a
+ * "ilha nula" no golfo da Guine, para onde vai todo campo esquecido — nao
+ * dizem onde nada fica, e um unico ponto desses estica o enquadramento por
+ * meio planeta, deixando o mapa inteiro sem zoom.
+ */
+function usableCoordinate(latitude: number, longitude: number): boolean {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  if (latitude === 0 && longitude === 0) return false;
+  return latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+}
+
 /** Enquadra os pinos a cada mudanca de filtro ou de dados. */
 function FitBounds({ pins }: { pins: MapPin[] }) {
   const map = useMap();
-  const signature = pins.map((pin) => `${pin.latitude},${pin.longitude}`).join('|');
+  // So o que tem coordenada utilizavel entra na conta. Sem nenhum ponto
+  // valido o mapa fica onde esta — melhor manter a vista atual do que
+  // enquadrar um lugar que nao existe.
+  const uteis = useMemo(
+    () => pins.filter((pin) => usableCoordinate(pin.latitude, pin.longitude)),
+    [pins],
+  );
+  const signature = uteis.map((pin) => `${pin.latitude},${pin.longitude}`).join('|');
   const last = useRef('');
 
   useEffect(() => {
-    if (pins.length === 0 || last.current === signature) return;
+    if (uteis.length === 0 || last.current === signature) return;
     last.current = signature;
 
-    const bounds = L.latLngBounds(pins.map((pin) => [pin.latitude, pin.longitude] as [number, number]));
+    const bounds = L.latLngBounds(uteis.map((pin) => [pin.latitude, pin.longitude] as [number, number]));
     map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
-  }, [map, pins, signature]);
+  }, [map, uteis, signature]);
 
   return null;
 }
@@ -412,6 +433,7 @@ export default function MapCanvas({
   onOpenMember,
   focusPlace = null,
   resizeKey,
+  fallbackCenter,
 }: {
   pins: MapPin[];
   places?: PollingPlacePin[];
@@ -428,6 +450,14 @@ export default function MapCanvas({
    * metade do mapa cinza ate alguem arrastar.
    */
   resizeKey?: string | number;
+  /**
+   * Centro de partida quando ainda nao ha nenhum pino para enquadrar.
+   *
+   * O padrao e o centro do Brasil, que serve ao mapa geral. A pagina de um
+   * time pode pedir o centro da propria regiao — e o que faz o mapa de um
+   * Time DEMO abrir em Alagoas, e nao a meio caminho de outro estado.
+   */
+  fallbackCenter?: { latitude: number; longitude: number };
 }) {
   const [zoom, setZoom] = useState(4);
   const markers = useRef(new Map<string, L.Marker>());
@@ -439,8 +469,10 @@ export default function MapCanvas({
 
   return (
     <MapContainer
-      center={[-14.235, -51.9253]}
-      zoom={4}
+      center={
+        fallbackCenter ? [fallbackCenter.latitude, fallbackCenter.longitude] : [-14.235, -51.9253]
+      }
+      zoom={fallbackCenter ? 8 : 4}
       scrollWheelZoom
       preferCanvas
       // Sem a faixa de credito no canto do mapa.
