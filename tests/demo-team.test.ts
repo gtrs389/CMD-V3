@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEMO_DEFAULTS, DEMO_LIMITS, buildDemoData, clampCount } from '@/lib/domain/demo';
-import { DEMO_POLLING_PLACES } from '@/lib/domain/demo-catalog';
+import { DEMO_CITIES, DEMO_POLLING_PLACES } from '@/lib/domain/demo-catalog';
 import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
 import { isValidCpf } from '@/lib/utils/documents';
 
@@ -34,9 +34,48 @@ describe('dados de demonstração', () => {
 
     expect(data.people).toHaveLength(30);
     expect(data.places).toHaveLength(6);
-    // Uma coordenada por rua, compartilhada por quem mora nela: e o que faz
-    // os pinos se agruparem no mapa, como no cache real.
-    expect(data.streets.length).toBeGreaterThan(0);
+    // Uma coordenada por endereço, compartilhada por quem mora nele: é o que
+    // faz os pinos se agruparem no mapa, como no cache real.
+    expect(data.residences.length).toBeGreaterThan(0);
+  });
+
+  it('alcança vários municípios de Alagoas, e não só a capital', () => {
+    const data = gerar({ people: 120, places: 12 });
+
+    // Uma operação estadual não cabe em uma cidade só: o mapa precisa ter
+    // onde se espalhar, e o ranking de locais precisa comparar municípios.
+    expect(data.cities.length).toBeGreaterThan(1);
+    for (const city of data.cities) expect(DEMO_CITIES).toContain(city);
+  });
+
+  it('faz cada pessoa morar no município em que vota', () => {
+    const data = gerar({ people: 120, places: 12 });
+
+    for (const person of data.people) {
+      const local = data.places[person.placeIndex];
+      const morada = data.residences[person.residenceIndex];
+
+      // Quem vota em Arapiraca não mora em Penedo. Errar isso poria a camada
+      // "Pessoas" a 200 km da escola onde ela vota.
+      expect(morada.city).toBe(local.place.city);
+      expect(person.city).toBe(local.place.city);
+    }
+  });
+
+  it('distribui com peso: o ranking de locais tem topo e base', () => {
+    const data = gerar({ people: 200, places: 12 });
+
+    const porLocal = new Map<number, number>();
+    for (const person of data.people) {
+      porLocal.set(person.placeIndex, (porLocal.get(person.placeIndex) ?? 0) + 1);
+    }
+    const contagens = [...porLocal.values()];
+
+    // Divisão igual é o jeito mais rápido de a demonstração parecer falsa.
+    expect(Math.max(...contagens)).toBeGreaterThan(Math.min(...contagens));
+    // E nenhum local fica vazio: escola sem ninguém no mapa é dado quebrado.
+    expect(Math.min(...contagens)).toBeGreaterThanOrEqual(1);
+    expect(contagens.reduce((total, valor) => total + valor, 0)).toBe(200);
   });
 
   it('distribui todas as pessoas entre os locais de votação, sem sobra', () => {
@@ -56,7 +95,7 @@ describe('dados de demonstração', () => {
     expect(porLocal.size).toBe(data.places.length);
     for (const person of data.people) {
       expect(data.places[person.placeIndex]).toBeDefined();
-      expect(data.streets[person.streetIndex]).toBeDefined();
+      expect(data.residences[person.residenceIndex]).toBeDefined();
     }
   });
 
@@ -190,10 +229,14 @@ describe('dados de demonstração', () => {
     const data = gerar({ people: 10_000, places: 10_000 });
     expect(data.people).toHaveLength(DEMO_LIMITS.maxPeople);
 
-    // Pedir mais locais do que existem não inventa o sétimo: o teto real é o
+    // Pedir mais locais do que existem não inventa o próximo: o teto real é o
     // catálogo de locais de votação conferidos.
     expect(data.places).toHaveLength(DEMO_POLLING_PLACES.length);
     expect(data.places.length).toBeLessThanOrEqual(DEMO_LIMITS.maxPlaces);
+
+    // E nunca mais locais do que pessoas: sobraria escola sem ninguém.
+    const poucas = gerar({ people: 3, places: 12 });
+    expect(poucas.places).toHaveLength(3);
   });
 
   it('é todo de Alagoas, sem nenhuma âncora de outro estado', () => {
@@ -202,7 +245,7 @@ describe('dados de demonstração', () => {
     expect(data.state).toBe('AL');
     for (const person of data.people) {
       expect(person.state).toBe('AL');
-      expect(DEMO_POLLING_PLACES.some((place) => place.city === person.city)).toBe(true);
+      expect(DEMO_CITIES).toContain(person.city);
     }
     for (const local of data.places) expect(local.place.state).toBe('AL');
 
@@ -212,6 +255,14 @@ describe('dados de demonstração', () => {
     for (const proibido of ['Recife', 'PE', 'São Paulo', 'Belo Horizonte', 'Curitiba']) {
       expect(bruto).not.toContain(proibido);
     }
+  });
+
+  it('não repete nome dentro do time', () => {
+    const data = gerar({ people: 150 });
+    const nomes = data.people.map((person) => person.name);
+
+    // Nome repetido em uma lista de apresentação passa por descuido.
+    expect(new Set(nomes).size).toBe(nomes.length);
   });
 
   it('usa somente locais de votação do catálogo conferido', () => {

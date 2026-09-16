@@ -1,9 +1,9 @@
+import { isValidCpf } from '@/lib/utils/documents';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
-  DEMO_ADDRESSES,
   DEMO_POLLING_PLACES,
   DEMO_STATE,
-  type DemoAddress,
+  addressesInCity,
   type DemoPollingPlace,
 } from './demo-catalog';
 
@@ -42,8 +42,14 @@ import {
  */
 export const DEMO_PROVIDER = 'DEMO_SEED';
 
-/** Valores iniciais do formulario de criacao. O ADMIN pode alterar. */
-export const DEMO_DEFAULTS = { people: 30, places: 6 } as const;
+/**
+ * Valores iniciais do formulario de criacao. O ADMIN pode alterar.
+ *
+ * Um time pequeno demais nao demonstra nada: com trinta pessoas em seis
+ * escolas o mapa fica ralo, o ranking de locais empata em tudo e o grafico
+ * vira uma linha reta. Os valores abaixo enchem as telas sem virar carga.
+ */
+export const DEMO_DEFAULTS = { people: 120, places: 12 } as const;
 
 /**
  * Limites conferidos no servidor, e nao apenas na tela.
@@ -60,7 +66,9 @@ export const DEMO_LIMITS = {
   minPeople: 1,
   maxPeople: 300,
   minPlaces: 1,
-  maxPlaces: 30,
+  // O teto de verdade e o tamanho do catalogo conferido; este numero so
+  // existe para o servidor nao aceitar um valor absurdo vindo da tela.
+  maxPlaces: 40,
 } as const;
 
 /* -------------------------------------------------------------------------
@@ -103,16 +111,35 @@ function pick<T>(random: () => number, list: readonly T[]): T {
    Listas ficticias
    ------------------------------------------------------------------------- */
 
+/**
+ * Nomes proprios e sobrenomes comuns no Nordeste.
+ *
+ * As listas sao grandes o bastante para um time de centenas de pessoas nao
+ * repetir nome — nada aqui pertence a ninguem: sao nomes correntes,
+ * combinados por sorteio, sem qualquer vinculo com pessoa real.
+ */
 const PRIMEIROS_NOMES = [
-  'Ana', 'Bruno', 'Carla', 'Daniel', 'Eliane', 'Fábio', 'Gabriela', 'Heitor',
-  'Isabel', 'João', 'Karina', 'Lucas', 'Marina', 'Nelson', 'Olívia', 'Paulo',
-  'Queila', 'Rafael', 'Sônia', 'Tiago', 'Úrsula', 'Vinícius', 'Wagner', 'Yara',
+  'Adriana', 'Alaíde', 'Aldemir', 'Ana', 'Antônio', 'Benedita', 'Bruno',
+  'Carla', 'Cícero', 'Cláudia', 'Damião', 'Daniel', 'Edvaldo', 'Elenilda',
+  'Eliane', 'Fábio', 'Francisca', 'Gabriela', 'Genivaldo', 'Geraldo',
+  'Givaldo', 'Heitor', 'Inácio', 'Isabel', 'Ivanildo', 'Jaqueline', 'João',
+  'Joelma', 'José', 'Josefa', 'Josivaldo', 'Karina', 'Lucas', 'Luciene',
+  'Manoel', 'Marcos', 'Maria', 'Marinalva', 'Marina', 'Nelson', 'Neide',
+  'Olívia', 'Patrícia', 'Paulo', 'Quitéria', 'Rafael', 'Raimunda',
+  'Rosineide', 'Sebastião', 'Severino', 'Silvana', 'Sônia', 'Tarcísio',
+  'Tiago', 'Valdemir', 'Vanderlei', 'Verônica', 'Vinícius', 'Wagner',
+  'Zenaide',
 ] as const;
 
 const SOBRENOMES = [
-  'Almeida', 'Barbosa', 'Cardoso', 'Duarte', 'Esteves', 'Falcão', 'Gonçalves',
-  'Henriques', 'Ibiapina', 'Junqueira', 'Lacerda', 'Martins', 'Nogueira',
-  'Oliveira', 'Pacheco', 'Quintela', 'Rezende', 'Siqueira', 'Teixeira', 'Valadares',
+  'Albuquerque', 'Almeida', 'Alves', 'Amorim', 'Andrade', 'Barbosa', 'Barros',
+  'Bezerra', 'Brandão', 'Calheiros', 'Cardoso', 'Cavalcante', 'Correia',
+  'Costa', 'Duarte', 'Falcão', 'Ferreira', 'Firmino', 'Gomes', 'Gonçalves',
+  'Lima', 'Lins', 'Lopes', 'Lyra', 'Macedo', 'Malta', 'Martins', 'Melo',
+  'Mendonça', 'Moura', 'Nogueira', 'Nunes', 'Oliveira', 'Pacheco', 'Peixoto',
+  'Pereira', 'Pimentel', 'Ramos', 'Rocha', 'Sampaio', 'Santos', 'Silva',
+  'Siqueira', 'Soares', 'Tenório', 'Teixeira', 'Vasconcelos', 'Veríssimo',
+  'Vieira', 'Wanderley',
 ] as const;
 
 /** Distribuicao do genero, na ordem em que as pessoas sao geradas. */
@@ -139,9 +166,20 @@ export interface DemoPlace {
   sections: readonly string[];
 }
 
-/** Endereco de moradia: um logradouro real do catalogo. */
-export interface DemoStreet {
-  address: DemoAddress;
+/**
+ * Endereco de moradia de demonstracao.
+ *
+ * Sai dos MESMOS logradouros conferidos dos locais de votacao, e sempre no
+ * municipio em que a pessoa vota. Quando a divulgacao daquele municipio nao
+ * trouxe rua nenhuma, a moradia fica no bairro ou no proprio municipio — que
+ * e o que o sistema ja faz com um cadastro real de endereco incompleto, e
+ * bem melhor do que inventar uma rua.
+ */
+export interface DemoResidence {
+  street: string | null;
+  district: string | null;
+  city: string;
+  state: typeof DEMO_STATE;
 }
 
 /** Pessoa ficticia, com tudo o que as telas do sistema usam. */
@@ -149,8 +187,9 @@ export interface DemoPerson {
   name: string;
   phone: string;
   gender: DemoGender;
-  street: string;
-  district: string;
+  /** Endereco declarado. Nulos quando a fonte do municipio nao os trouxe. */
+  street: string | null;
+  district: string | null;
   city: string;
   state: typeof DEMO_STATE;
   /**
@@ -162,8 +201,8 @@ export interface DemoPerson {
    */
   zone: string | null;
   section: string | null;
-  /** Endereco (e coordenada) da moradia, por posicao em `streets`. */
-  streetIndex: number;
+  /** Endereco (e coordenada) da moradia, por posicao em `residences`. */
+  residenceIndex: number;
   /** Local de votacao, por posicao em `places`. */
   placeIndex: number;
   /** Administrador do time que aparece em "Cadastrado por". */
@@ -175,10 +214,11 @@ export interface DemoPerson {
 }
 
 export interface DemoData {
-  city: string;
+  /** Municipios alcancados pelo time, na ordem do catalogo. */
+  cities: string[];
   state: typeof DEMO_STATE;
   places: DemoPlace[];
-  streets: DemoStreet[];
+  residences: DemoResidence[];
   people: DemoPerson[];
 }
 
@@ -261,6 +301,87 @@ function demoPhone(position: number): string {
   return `${DDD_ALAGOAS}9${sufixo}`;
 }
 
+/**
+ * O telefone esta livre para uso?
+ *
+ * Duas recusas. A primeira e obvia: numero ja usado no time, inclusive pelos
+ * administradores — duas pessoas entrariam pelo mesmo numero.
+ *
+ * A segunda so aparece em time grande, e foi um teste que a encontrou: um
+ * telefone de onze digitos as vezes passa na validacao de CPF por acaso. Em
+ * uma tela de apresentacao, um numero desses copiado de uma ficha vira um CPF
+ * aparentemente valido que nao pertence a ninguem. O Time DEMO nao grava
+ * documento nenhum, e nao vai gerar um por acidente.
+ */
+function phoneIsFree(phone: string, taken: ReadonlySet<string>): boolean {
+  return !taken.has(phone) && !isValidCpf(phone);
+}
+
+/**
+ * Reparte as pessoas entre os locais, com peso.
+ *
+ * Divisao igual e o jeito mais rapido de a demonstracao parecer falsa: o
+ * ranking "onde voce tem mais votos" empata em tudo e o mapa vira um tabuleiro
+ * regular. Aqui cada local recebe um peso sorteado pela semente, e as pessoas
+ * se dividem em proporcao a ele — com PISO DE UM: nenhum local do catalogo
+ * fica vazio, ou a tela mostraria uma escola sem ninguem.
+ *
+ * O resto da divisao vai para os maiores restos, desempatando pela posicao:
+ * a soma fecha exatamente com o total, sempre, e a mesma semente reparte
+ * sempre igual.
+ */
+function shareByWeight(total: number, weights: readonly number[]): number[] {
+  const locais = weights.length;
+  const sobrando = total - locais;
+  if (sobrando <= 0) return weights.map(() => 1);
+
+  const soma = weights.reduce((acumulado, peso) => acumulado + peso, 0);
+  const exatos = weights.map((peso) => (sobrando * peso) / soma);
+  const cotas = exatos.map((valor) => Math.floor(valor));
+
+  const ordem = exatos
+    .map((valor, index) => ({ index, resto: valor - Math.floor(valor) }))
+    .sort((a, b) => b.resto - a.resto || a.index - b.index);
+
+  let faltam = sobrando - cotas.reduce((acumulado, cota) => acumulado + cota, 0);
+  for (let passo = 0; faltam > 0; passo += 1, faltam -= 1) {
+    cotas[ordem[passo % locais].index] += 1;
+  }
+
+  return cotas.map((cota) => cota + 1);
+}
+
+/** Embaralha sem aleatoriedade de verdade: a mesma semente, a mesma ordem. */
+function shuffle<T>(random: () => number, list: T[]): T[] {
+  const copia = [...list];
+  for (let index = copia.length - 1; index > 0; index -= 1) {
+    const troca = Math.floor(random() * (index + 1));
+    [copia[index], copia[troca]] = [copia[troca], copia[index]];
+  }
+  return copia;
+}
+
+/**
+ * Enderecos de moradia possiveis para quem vota naquele local.
+ *
+ * Sempre no MESMO municipio: quem vota em Arapiraca nao mora em Penedo. Sem
+ * nenhuma rua publicada naquele municipio, a moradia fica no bairro do
+ * proprio local — ou so no municipio, quando nem bairro houve.
+ */
+function residencesFor(place: DemoPollingPlace): DemoResidence[] {
+  const doMunicipio = addressesInCity(place.city);
+  if (doMunicipio.length > 0) {
+    return doMunicipio.map((address) => ({
+      street: address.street,
+      district: address.district,
+      city: address.city,
+      state: address.state,
+    }));
+  }
+
+  return [{ street: null, district: place.district, city: place.city, state: place.state }];
+}
+
 export function buildDemoData(input: DemoInput): DemoData {
   const random = createRandom(input.seed);
   const now = input.now ?? new Date();
@@ -268,55 +389,93 @@ export function buildDemoData(input: DemoInput): DemoData {
   const totalPessoas = clampCount(input.people, DEMO_LIMITS.minPeople, DEMO_LIMITS.maxPeople);
   const totalAdmins = Math.max(1, Math.trunc(input.admins) || 1);
 
-  // Locais: os do catalogo, na ordem em que estao la. O teto nao e uma
-  // escolha de estilo — nao existe local de votacao alem dos conferidos, e
-  // inventar o sétimo seria voltar ao erro que gerou o mapa em Recife.
+  // Locais: os do catalogo, na ordem em que estao la — capital, maior
+  // municipio do interior, agreste, sertao e litoral. O teto nao e escolha de
+  // estilo: nao existe local de votacao alem dos conferidos, e inventar o
+  // proximo seria voltar ao erro que gerou o mapa em Recife. E nunca mais
+  // locais do que pessoas, senao sobraria escola sem ninguem.
   const totalLocais = Math.min(
     clampCount(input.places, DEMO_LIMITS.minPlaces, DEMO_LIMITS.maxPlaces),
     DEMO_POLLING_PLACES.length,
+    totalPessoas,
   );
 
-  const places: DemoPlace[] = DEMO_POLLING_PLACES.slice(0, totalLocais).map((place) => ({
+  const escolhidos = DEMO_POLLING_PLACES.slice(0, totalLocais);
+  const places: DemoPlace[] = escolhidos.map((place) => ({
     place,
     zone: place.zone,
     sections: place.sections,
   }));
 
-  // Ruas: os mesmos logradouros reais. Uma coordenada por rua, compartilhada
-  // por quem mora nela — e o comportamento do cache real, e e o que faz os
-  // pinos se agruparem no mapa em vez de virar um borrao.
-  const streets: DemoStreet[] = DEMO_ADDRESSES.slice(0, Math.max(totalLocais, 1)).map(
-    (address) => ({ address }),
+  // Uma coordenada por endereco, compartilhada por quem mora nele — e o
+  // comportamento do cache real, e e o que faz os pinos se agruparem no mapa
+  // em vez de virar um borrao de pontos soltos.
+  const residences: DemoResidence[] = [];
+  const porChave = new Map<string, number>();
+  /** Enderecos disponiveis para cada local, por posicao em `residences`. */
+  const moradiasDoLocal: number[][] = escolhidos.map((place) =>
+    residencesFor(place).map((moradia) => {
+      const chave = `${moradia.street ?? ''}|${moradia.district ?? ''}|${moradia.city}`;
+      const existente = porChave.get(chave);
+      if (existente !== undefined) return existente;
+
+      porChave.set(chave, residences.length);
+      residences.push(moradia);
+      return residences.length - 1;
+    }),
+  );
+
+  // Peso de cada local: e ele que faz o ranking de locais ter topo e base,
+  // como em uma operacao real.
+  const pesos = escolhidos.map(() => 1 + Math.floor(random() * 6));
+  const cotas = shareByWeight(totalPessoas, pesos);
+
+  // As pessoas de um mesmo local nao podem nascer em sequencia: as datas de
+  // cadastro sao espalhadas pela POSICAO, e um bloco inteiro cairia todo no
+  // mesmo dia — "hoje" seria uma escola so.
+  const sorteio = shuffle(
+    random,
+    cotas.flatMap((cota, placeIndex) => Array.from({ length: cota }, () => placeIndex)),
   );
 
   const ocupados = new Set((input.usedPhones ?? []).map((phone) => normalizePhone(phone)));
+  const usados = new Set<string>();
   const people: DemoPerson[] = [];
   let posicaoTelefone = 1;
 
-  for (let index = 0; index < totalPessoas; index += 1) {
-    const placeIndex = index % places.length;
+  sorteio.forEach((placeIndex, index) => {
     const escolhido = places[placeIndex];
-    const streetIndex = index % streets.length;
-    const morada = streets[streetIndex].address;
+    const opcoes = moradiasDoLocal[placeIndex];
+    const residenceIndex = opcoes[index % opcoes.length];
+    const morada = residences[residenceIndex];
 
     // Telefone livre: nunca repete o de um administrador do proprio time,
     // senao duas pessoas entrariam pelo mesmo numero.
     let phone = demoPhone(posicaoTelefone);
-    while (ocupados.has(phone)) {
+    while (!phoneIsFree(phone, ocupados)) {
       posicaoTelefone += 1;
       phone = demoPhone(posicaoTelefone);
     }
     ocupados.add(phone);
     posicaoTelefone += 1;
 
-    // Secao so quando o TRE/AL publicou as do local. Sem isso, nula.
+    // Nome inedito no time: nome repetido em uma lista de apresentacao passa
+    // por descuido. Depois de algumas tentativas o sorteio aceita o que veio —
+    // xara existe na vida real, e travar a geracao seria pior.
+    let name = `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)}`;
+    for (let tentativa = 0; usados.has(name) && tentativa < 12; tentativa += 1) {
+      name = `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)}`;
+    }
+    usados.add(name);
+
+    // Secao so quando a fonte publicou as do local. Sem isso, nula.
     const section =
       escolhido.sections.length > 0
         ? escolhido.sections[index % escolhido.sections.length]
         : null;
 
     people.push({
-      name: `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)}`,
+      name,
       phone,
       gender: GENEROS[index % GENEROS.length],
       street: morada.street,
@@ -325,19 +484,19 @@ export function buildDemoData(input: DemoInput): DemoData {
       state: DEMO_STATE,
       zone: escolhido.zone,
       section,
-      streetIndex,
+      residenceIndex,
       placeIndex,
       adminIndex: index % totalAdmins,
       relationshipIndex: index % 3,
       createdAt: spreadDate(index, totalPessoas, now),
     });
-  }
+  });
 
   return {
-    city: places[0]?.place.city ?? DEMO_ADDRESSES[0]?.city ?? 'Maceió',
+    cities: [...new Set(escolhidos.map((place) => place.city))],
     state: DEMO_STATE,
     places,
-    streets,
+    residences,
     people,
   };
 }

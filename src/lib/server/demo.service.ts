@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Client, TeamPersonInput } from '@/lib/types';
 import {
+  DEMO_DEFAULTS,
   DEMO_LIMITS,
   DEMO_PROVIDER,
   buildDemoData,
@@ -30,7 +31,7 @@ import {
 } from '@/lib/supabase/rest';
 import { deleteImage } from '@/lib/supabase/storage';
 import { createClient, deleteClient, getClient } from './client.service';
-import { addressLookup, pollingPlaceLookup, resolveDemoPoint } from './demo-locations';
+import { pollingPlaceLookup, residenceLookupFor, resolveDemoPoint } from './demo-locations';
 import { badRequest, notFound } from './http';
 
 /**
@@ -252,8 +253,11 @@ export async function refreshDemoTeam(clientId: string): Promise<DemoRefreshRepo
     filters: { client_id: `eq.${clientId}`, demo_seed: 'not.is.null' },
     limit: DEMO_LIMITS.maxPeople,
   });
+  // A equipe nunca encolhe na correcao: um time criado com o padrao antigo
+  // (trinta pessoas em seis escolas) sobe para o padrao atual, e um time que
+  // o ADMIN montou maior continua do tamanho que ele escolheu.
   const people = clampCount(
-    anteriores.length || DEMO_LIMITS.minPeople,
+    Math.max(anteriores.length, DEMO_DEFAULTS.people),
     DEMO_LIMITS.minPeople,
     DEMO_LIMITS.maxPeople,
   );
@@ -283,6 +287,11 @@ export async function refreshDemoTeam(clientId: string): Promise<DemoRefreshRepo
 
   // 3. A geracao nova, pelo mesmo caminho da criacao.
   const pontos: string[] = [];
+  // A correcao usa o catalogo INTEIRO: e a unica vez em que aquele time passa
+  // por aqui, e e o que da ao mapa todos os municipios do catalogo. O custo e uma
+  // consulta por endereco inedito, uma unica vez no sistema todo — o cache e
+  // por endereco, entao o proximo Time DEMO nao consulta mais nada.
+  //
   const resumo = await seedDemoContent(
     client,
     {
@@ -395,10 +404,10 @@ async function seedDemoContent(
   const members = await seedMembers(client, data, admins);
   await seedMemberLocations(client.id, data, members, locations);
 
-  const encontrados = [...locations.places, ...locations.streets].filter(
+  const encontrados = [...locations.places, ...locations.residences].filter(
     (outcome) => outcome.point !== null,
   ).length;
-  const total = locations.places.length + locations.streets.length;
+  const total = locations.places.length + locations.residences.length;
 
   return {
     people: data.people.length,
@@ -411,13 +420,15 @@ interface PointSlot {
   point: { locationId: string } | null;
   hash: string;
   error: string | null;
+  /** Ate onde o endereco chega: rua, bairro ou municipio. */
+  precision: string | null;
 }
 
 interface SeededLocations {
   /** Resultado de cada local de votacao, na ordem de `data.places`. */
   places: PointSlot[];
-  /** Resultado de cada rua, na ordem de `data.streets`. */
-  streets: PointSlot[];
+  /** Resultado de cada endereco de moradia, na ordem de `data.residences`. */
+  residences: PointSlot[];
 }
 
 /**
@@ -433,12 +444,12 @@ interface SeededLocations {
  */
 async function seedLocations(data: DemoData, pontos: string[]): Promise<SeededLocations> {
   const places: PointSlot[] = [];
-  const streets: PointSlot[] = [];
+  const residences: PointSlot[] = [];
 
   for (const entry of data.places) {
     const query = pollingPlaceLookup(entry.place);
     if (!query) {
-      places.push({ point: null, hash: '', error: 'MISSING_DATA' });
+      places.push({ point: null, hash: '', error: 'MISSING_DATA', precision: null });
       continue;
     }
     const outcome = await resolveDemoPoint(query, {
@@ -446,24 +457,36 @@ async function seedLocations(data: DemoData, pontos: string[]): Promise<SeededLo
       state: entry.place.state,
     });
     if (outcome.point?.created) pontos.push(outcome.point.locationId);
-    places.push({ point: outcome.point, hash: outcome.hash, error: outcome.error });
+    places.push({
+      point: outcome.point,
+      hash: outcome.hash,
+      error: outcome.error,
+      // Precisao e coisa de endereco declarado, nao de local de votacao: o
+      // pino da escola esta no predio, e a tela nao fala em aproximacao.
+      precision: null,
+    });
   }
 
-  for (const entry of data.streets) {
-    const query = addressLookup(entry.address);
-    if (!query) {
-      streets.push({ point: null, hash: '', error: 'MISSING_DATA' });
+  for (const entry of data.residences) {
+    const lookup = residenceLookupFor(entry);
+    if (!lookup) {
+      residences.push({ point: null, hash: '', error: 'MISSING_DATA', precision: null });
       continue;
     }
-    const outcome = await resolveDemoPoint(query, {
-      city: entry.address.city,
-      state: entry.address.state,
+    const outcome = await resolveDemoPoint(lookup.query, {
+      city: entry.city,
+      state: entry.state,
     });
     if (outcome.point?.created) pontos.push(outcome.point.locationId);
-    streets.push({ point: outcome.point, hash: outcome.hash, error: outcome.error });
+    residences.push({
+      point: outcome.point,
+      hash: outcome.hash,
+      error: outcome.error,
+      precision: lookup.precision,
+    });
   }
 
-  return { places, streets };
+  return { places, residences };
 }
 
 /** Pessoas ficticias, na tabela real de integrantes. */
@@ -550,8 +573,6 @@ async function seedMemberLocations(
     memberId: string,
     kind: 'RESIDENCE' | 'POLLING_PLACE',
     slot: PointSlot | undefined,
-    // Precisao e coisa de endereco declarado, nao de local de votacao.
-    precision: string | null,
   ): Record<string, string | null> {
     const found = slot?.point ?? null;
     return {
@@ -561,7 +582,7 @@ async function seedMemberLocations(
       status: found ? 'SUCCESS' : slot?.error ? 'FAILED' : 'NOT_FOUND',
       query_hash: slot?.hash || null,
       location_id: found?.locationId ?? null,
-      location_precision: found ? precision : null,
+      location_precision: found ? (slot?.precision ?? null) : null,
       error_code: found ? null : (slot?.error ?? null),
       resolved_at: agora,
     };
@@ -571,10 +592,10 @@ async function seedMemberLocations(
     const memberId = porTelefone.get(normalizePhone(person.phone));
     if (!memberId) return;
 
-    // O ponto e o da RUA, nunca o da casa: e o mesmo limite que o sistema
-    // real respeita ao mostrar moradia no mapa.
-    linhas.push(link(memberId, 'RESIDENCE', locations.streets[person.streetIndex], 'STREET'));
-    linhas.push(link(memberId, 'POLLING_PLACE', locations.places[person.placeIndex], null));
+    // O ponto e o da RUA (ou do bairro, ou do municipio), nunca o da casa: e
+    // o mesmo limite que o sistema real respeita ao mostrar moradia no mapa.
+    linhas.push(link(memberId, 'RESIDENCE', locations.residences[person.residenceIndex]));
+    linhas.push(link(memberId, 'POLLING_PLACE', locations.places[person.placeIndex]));
   });
 
   if (linhas.length > 0) await insertRows(TABLES.memberLocations, linhas, 'id');

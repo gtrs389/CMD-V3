@@ -300,12 +300,26 @@ de pessoa real.
 
 Os **lugares não são fictícios**. Escola, rua, bairro, município, UF, zona e
 seção saem de `src/lib/domain/demo-catalog.ts`, que só tem local de votação
-**real de Alagoas**, divulgado pelo TRE/AL, com a fonte anotada linha a linha.
-Zona e seção aparecem somente onde a fonte as publicou; onde não publicou, o
-campo fica vazio — que é a verdade.
+**real de Alagoas**, divulgado pela Justiça Eleitoral, com a fonte anotada
+linha a linha: 33 locais em 17 municípios — Maceió, Arapiraca, Palmeira dos
+Índios, Girau do Ponciano, Ouro Branco, Rio Largo, Santana do Ipanema, Pão de
+Açúcar, Coruripe, Marechal Deodoro, Porto Calvo, Maragogi, Lagoa da Canoa,
+Limoeiro de Anadia, Junqueiro, Pariconha e Paulo Jacinto.
+
+Rua, bairro, zona e seção aparecem **somente onde a fonte os publicou**. Onde
+não publicou, o campo fica vazio — que é a verdade —, e a consulta de
+coordenada usa o nome do local + município + UF, que é como a própria Justiça
+Eleitoral identifica o local. Completar endereço de cabeça seria invenção.
 
 Um Time DEMO é **inteiro de Alagoas**: não há âncora de outro estado em lugar
-nenhum do gerador.
+nenhum do gerador. Cada pessoa **mora no município em que vota** — quem vota
+em Arapiraca não mora em Penedo —, e a moradia cai na rua, no bairro ou no
+município, conforme até onde o endereço publicado chega.
+
+As pessoas se dividem entre os locais **com peso**, sorteado pela semente:
+divisão igual é o jeito mais rápido de a demonstração parecer falsa, porque o
+ranking "onde você tem mais votos" empata em tudo e o mapa vira um tabuleiro
+regular. Nenhum local fica vazio, e a soma fecha com o total do time.
 
 ### Onde se cria
 
@@ -403,6 +417,10 @@ Rodar duas vezes **não duplica**: a geração anterior sai antes de a nova
 entrar, e a semente é a mesma (a chave da criação original), então o resultado
 é idêntico. Os pontos `DEMO_SEED` que sobram sem dono — as coordenadas
 inventadas da versão antiga — são removidos do cache.
+
+A correção usa o **catálogo inteiro** e nunca encolhe a equipe: um time criado
+com o padrão antigo (30 pessoas em 6 escolas) sobe para o padrão atual, e um
+time que o ADMIN montou maior continua do tamanho que ele escolheu.
 
 ### Fora dos números reais
 

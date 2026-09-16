@@ -3,14 +3,12 @@ import {
   buildQuery,
   residenceLookup,
   type AddressParts,
+  type LocationPrecision,
   type MapErrorCode,
   type MapPlace,
 } from '@/lib/domain/map-location';
-import {
-  isUsableDemoCoordinate,
-  type DemoAddress,
-  type DemoPollingPlace,
-} from '@/lib/domain/demo-catalog';
+import type { DemoResidence } from '@/lib/domain/demo';
+import { isUsableDemoCoordinate, type DemoPollingPlace } from '@/lib/domain/demo-catalog';
 import { TABLES, type MapLocationRow } from '@/lib/supabase/tables';
 import { insertOne, selectOne } from '@/lib/supabase/rest';
 import { queryHash } from './map-location.service';
@@ -71,20 +69,37 @@ export interface DemoPointOutcome {
   error: MapErrorCode | null;
 }
 
-/** Consulta do local de votacao: nome do local + endereco publicado. */
+/**
+ * Consulta do local de votacao: nome do local + endereco publicado.
+ *
+ * O nome basta quando a divulgacao nao trouxe rua — e assim que a propria
+ * Justica Eleitoral identifica o local, e e o mesmo caminho que o sistema usa
+ * para o domicilio eleitoral de um integrante real.
+ */
 export function pollingPlaceLookup(place: DemoPollingPlace): string | null {
+  const logradouro =
+    place.street && place.number ? `${place.street}, ${place.number}` : place.street;
+
   return buildQuery({
     place: place.name,
-    street: place.number ? `${place.street}, ${place.number}` : place.street,
+    street: logradouro,
     district: place.district,
     city: place.city,
     state: place.state,
   });
 }
 
-/** Consulta da moradia: rua, bairro, municipio e UF. Nunca o numero. */
-export function addressLookup(address: DemoAddress): string | null {
-  return residenceLookup(address)?.query ?? null;
+/**
+ * Consulta da moradia: rua, bairro, municipio e UF. Nunca o numero.
+ *
+ * A precisao vem junto e diz ate onde o endereco chega — rua, bairro ou
+ * municipio. E ela que o balao do mapa mostra, para a tela nunca sugerir a
+ * casa exata de ninguem.
+ */
+export function residenceLookupFor(
+  residence: DemoResidence,
+): { query: string; precision: LocationPrecision } | null {
+  return residenceLookup(residence);
 }
 
 async function cachedPoint(hash: string): Promise<MapLocationRow | null> {

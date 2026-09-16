@@ -69,15 +69,28 @@ vi.mock('@/lib/server/serpapi.service', () => ({
   },
 }));
 
-const { addressLookup, pollingPlaceLookup, resolveDemoPoint } = await import(
+const { pollingPlaceLookup, residenceLookupFor, resolveDemoPoint } = await import(
   '@/lib/server/demo-locations'
 );
 const { DEMO_ADDRESSES, DEMO_POLLING_PLACES, isUsableDemoCoordinate } = await import(
   '@/lib/domain/demo-catalog'
 );
 
-const ESCOLA = DEMO_POLLING_PLACES[2];
-const RUA = DEMO_ADDRESSES[2];
+/** Uma escola com endereço completo, e a rua dela, as duas do catálogo. */
+const ESCOLA = DEMO_POLLING_PLACES.find((place) => place.id === 'mcz-rosalvo-ribeiro-dos-santos')!;
+const RUA = DEMO_ADDRESSES.find((address) => address.id === `end-${ESCOLA.id}`)!;
+
+/** O que a consulta da moradia recebe: rua, bairro, município e UF. */
+const MORADIA = {
+  street: RUA.street,
+  district: RUA.district,
+  city: RUA.city,
+  state: RUA.state,
+};
+
+function addressLookup(): string {
+  return residenceLookupFor(MORADIA)?.query ?? '';
+}
 
 beforeEach(() => {
   db.places = [];
@@ -99,9 +112,25 @@ describe('barreiras de coordenada do Time DEMO', () => {
     expect(isUsableDemoCoordinate(MACEIO.latitude, MACEIO.longitude)).toBe(true);
   });
 
+  it('a moradia sai com a precisão do endereço, nunca como a casa exata', () => {
+    // Rua conhecida: o ponto é o da rua.
+    expect(residenceLookupFor(MORADIA)?.precision).toBe('STREET');
+
+    // Município cuja divulgação não trouxe rua nenhuma: o ponto desce para o
+    // bairro, e a tela diz isso. Inventar uma rua seria o contrário disso.
+    expect(
+      residenceLookupFor({
+        street: null,
+        district: 'Conjunto Antônio Lins',
+        city: 'Rio Largo',
+        state: 'AL',
+      })?.precision,
+    ).toBe('DISTRICT');
+  });
+
   it('pergunta pelo endereço publicado, e nunca por dado de pessoa', () => {
     const escola = pollingPlaceLookup(ESCOLA) ?? '';
-    const rua = addressLookup(RUA) ?? '';
+    const rua = addressLookup();
 
     expect(escola).toContain(ESCOLA.name);
     expect(escola).toContain('Maceió - AL');
@@ -152,7 +181,7 @@ describe('resolução das coordenadas', () => {
 
   it('descarta o `0,0`', async () => {
     resposta = ILHA_NULA;
-    const query = addressLookup(RUA) as string;
+    const query = addressLookup();
     const outcome = await resolveDemoPoint(query, { city: RUA.city, state: RUA.state });
 
     expect(outcome.point).toBeNull();
@@ -161,7 +190,7 @@ describe('resolução das coordenadas', () => {
 
   it('sem resultado confiável, fica sem ponto — e não com um ponto qualquer', async () => {
     resposta = null;
-    const query = addressLookup(RUA) as string;
+    const query = addressLookup();
     const outcome = await resolveDemoPoint(query, { city: RUA.city, state: RUA.state });
 
     expect(outcome.point).toBeNull();
@@ -172,7 +201,7 @@ describe('resolução das coordenadas', () => {
     const { MapLookupError } = await import('@/lib/server/serpapi.service');
     falha = new MapLookupError('MISSING_CONFIG');
 
-    const query = addressLookup(RUA) as string;
+    const query = addressLookup();
     const outcome = await resolveDemoPoint(query, { city: RUA.city, state: RUA.state });
 
     expect(outcome.point).toBeNull();
