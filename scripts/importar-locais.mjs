@@ -197,11 +197,20 @@ function texto(valor, limite) {
   return limpo.length > limite ? limpo.slice(0, limite) : limpo;
 }
 
-function inteiro(valor) {
+/**
+ * Inteiro dentro de um teto.
+ *
+ * O teto nao e preciosismo: um numero comprido demais (codigo de municipio
+ * com quinze digitos, zona com oito) estoura a coluna `integer` do Postgres,
+ * e o banco recusa o LOTE inteiro por causa de uma linha torta. Fora do
+ * teto vira nulo, e a linha e ignorada como qualquer outra invalida.
+ */
+function inteiro(valor, maximo = 2147483647) {
   const digitos = (valor ?? '').replace(/\D/g, '');
-  if (!digitos) return null;
+  if (!digitos || digitos.length > 10) return null;
   const numero = Number.parseInt(digitos, 10);
-  return Number.isFinite(numero) ? numero : null;
+  if (!Number.isFinite(numero) || numero > maximo) return null;
+  return numero;
 }
 
 /** Aceita "-9.25912678" e "-9,25912678": a planilha vem dos dois jeitos. */
@@ -225,8 +234,8 @@ function cep(valor) {
 function secoes(valor) {
   const encontradas = (valor ?? '').match(/\d+/g) ?? [];
   const numeros = encontradas
-    .map((item) => Number.parseInt(item, 10))
-    .filter((numero) => Number.isFinite(numero) && numero > 0);
+    .map((item) => (item.length > 6 ? Number.NaN : Number.parseInt(item, 10)))
+    .filter((numero) => Number.isFinite(numero) && numero > 0 && numero <= 100000);
   return [...new Set(numeros)].sort((a, b) => a - b);
 }
 
@@ -293,8 +302,10 @@ for (let i = 1; i < linhas.length; i += 1) {
   if (linha.length === 1 && (linha[0] ?? '').trim() === '') continue;
 
   const uf = (valor(linha, 'uf') ?? '').trim().toUpperCase();
-  const cityCode = inteiro(valor(linha, 'city_code'));
-  const zone = inteiro(valor(linha, 'zone'));
+  const cityCode = inteiro(valor(linha, 'city_code'), 999_999_999);
+  // A coluna aceita 1..9999 (migration 042): fora disso a linha nao e uma
+  // zona eleitoral, e enviar derrubaria o lote.
+  const zone = inteiro(valor(linha, 'zone'), 9999);
   const name = texto(valor(linha, 'name'), 300);
 
   if (!/^[A-Z]{2}$/.test(uf) || !cityCode || !zone || !name) {
@@ -330,7 +341,7 @@ for (let i = 1; i < linhas.length; i += 1) {
     postal_code: cep(valor(linha, 'postal_code')),
     latitude: temCoordenada ? latitude : null,
     longitude: temCoordenada ? longitude : null,
-    section_count: inteiro(valor(linha, 'section_count')) ?? listaDeSecoes.length,
+    section_count: inteiro(valor(linha, 'section_count'), 2000) ?? listaDeSecoes.length,
     sections: listaDeSecoes,
   });
 }

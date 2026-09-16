@@ -386,6 +386,12 @@ npm run importar-locais -- supabase/dados/locais-de-votacao.csv --conferir
 npm run importar-locais -- supabase/dados/locais-de-votacao.csv
 ```
 
+Quem preferir não sair do navegador tem o mesmo resultado em três passos no
+SQL Editor, por `supabase/dados/carga-pelo-painel.sql`. O que **não** funciona
+é importar o CSV direto na tabela pelo painel: o importador entrega o texto cru
+ao Postgres e a coordenada em vírgula decimal (`-9,25912678`) não é número para
+ele — é exatamente para isso que existem o comando e aquele arquivo.
+
 As colunas são encontradas **pelo nome** (acento, caixa, pontuação e ordem não
 importam), e separador, aspas, BOM do Excel e coordenada com vírgula decimal
 são reconhecidos sozinhos. A carga é **idempotente**: a chave é UF + município
