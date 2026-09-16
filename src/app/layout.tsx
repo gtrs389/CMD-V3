@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { appConfig } from '@/config/app.config';
 import { ToastProvider } from '@/components/ui/Toast';
+import { AccessShield } from '@/components/security/AccessShield';
 import './globals.css';
 
 const inter = Inter({
@@ -32,6 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className={inter.variable}>
       <body className="antialiased">
         <ToastProvider>{children}</ToastProvider>
+        {/* Botao direito e F12: a tranca vale no sistema inteiro, painel e
+            links de cadastro. Desenha por cima, nunca desmonta a pagina. */}
+        <AccessShield />
       </body>
     </html>
   );
