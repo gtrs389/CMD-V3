@@ -15,6 +15,10 @@ import {
   normalizePlace,
   normalizeState,
   normalizeVoterId,
+  normalizeSection,
+  normalizeZone,
+  maskSection,
+  maskZone,
 } from '@/lib/utils/documents';
 import {
   canDeleteField,
@@ -219,5 +223,63 @@ describe('campos padrão do formulário', () => {
     expect(hasFixedOptions(porChave.get('gender')!)).toBe(true);
     expect(hasFixedOptions(porChave.get('state')!)).toBe(true);
     expect(hasFixedOptions(porChave.get('city')!)).toBe(false);
+  });
+});
+
+describe('zona e seção: zero à frente não é número', () => {
+  it('"044" é a zona 44, e "0003" é a seção 3', () => {
+    // O título imprime assim, a Justiça Eleitoral responde assim, e quem
+    // digita escreve dos dois jeitos. O que fica gravado é um só.
+    expect(normalizeZone('044')).toBe('44');
+    expect(normalizeZone('44')).toBe('44');
+    expect(normalizeSection('0003')).toBe('3');
+    expect(normalizeSection('3')).toBe('3');
+  });
+
+  it('o zero sai ANTES do corte de tamanho', () => {
+    // Cortando primeiro, "01234" viraria "0123" — a seção 123, que é outra
+    // seção, de outra escola, sem ninguém perceber.
+    expect(normalizeSection('01234')).toBe('1234');
+    expect(normalizeZone('0044')).toBe('44');
+  });
+
+  it('só dígitos, e o zero sozinho continua enquanto se digita', () => {
+    expect(normalizeZone('zona 44')).toBe('44');
+    expect(normalizeSection('0003-A')).toBe('3');
+    expect(normalizeZone('0')).toBe('0');
+    expect(normalizeSection('00')).toBe('0');
+    expect(normalizeZone('')).toBe('');
+  });
+});
+
+describe('máscara da zona e da seção enquanto se digita', () => {
+  it('o zero fica na tela: o título da pessoa diz "044"', () => {
+    // Apagar o zero na hora em que ele é digitado parece defeito do sistema.
+    // Quem tira é o envio, e aí "044" e "44" viram o mesmo cadastro.
+    expect(maskZone('044')).toBe('044');
+    expect(maskSection('0003')).toBe('0003');
+    expect(normalizeZone(maskZone('044'))).toBe('44');
+    expect(normalizeSection(maskSection('0003'))).toBe('3');
+  });
+
+  it('o zero à frente não gasta o limite de dígitos', () => {
+    // Sem isso, "01234" pararia em "0123" e viraria a seção 123 — outra
+    // seção, de outra escola.
+    expect(maskSection('01234')).toBe('01234');
+    expect(normalizeSection(maskSection('01234'))).toBe('1234');
+    expect(maskZone('0044')).toBe('0044');
+  });
+
+  it('passado o limite, nada mais entra', () => {
+    expect(maskZone('4444')).toBe('444');
+    expect(maskSection('123456')).toBe('1234');
+    expect(maskSection('000123456')).toBe('0001234');
+    expect(normalizeSection(maskSection('000123456'))).toBe('1234');
+  });
+
+  it('só dígitos', () => {
+    expect(maskZone('zona 044')).toBe('044');
+    expect(maskSection('0003-A')).toBe('0003');
+    expect(maskZone('')).toBe('');
   });
 });

@@ -191,12 +191,59 @@ export function formatVoterId(input: string): string {
 export const ZONE_MAX_LENGTH = 3;
 export const SECTION_MAX_LENGTH = 4;
 
-/** Somente digitos, no maximo 3. Sem separador: nao ha mascara a aplicar. */
-export function normalizeZone(input: string): string {
-  return onlyDigits(input, ZONE_MAX_LENGTH);
+/**
+ * Zero a frente NAO faz parte do numero.
+ *
+ * O titulo de eleitor imprime "044" e "0003", e a Justica Eleitoral responde
+ * assim tambem — mas a zona e a 44 e a secao e a 3. Quem digita escreve dos
+ * dois jeitos, e sem tirar os zeros o sistema passaria a ter duas zonas onde
+ * existe uma: a pessoa some do filtro do mapa, a escola se parte em dois
+ * grupos de secao, e a busca do local de votacao nao acha o que esta la.
+ *
+ * A retirada acontece ANTES do corte de tamanho, e essa ordem e o ponto: a
+ * secao "01234" cortada primeiro viraria "0123" — a secao 123, que e outra
+ * secao, de outra escola, sem ninguem perceber. Tirando o zero antes, ela e
+ * a 1234, que e o que estava escrito.
+ *
+ * "0" sozinho continua "0": ainda esta sendo digitado, e zona zero nao
+ * existe — quem recusa e a validacao, nao a mascara.
+ */
+function semZeroAFrente(digits: string): string {
+  return digits.replace(/^0+(?=\d)/, '');
 }
 
-/** Somente digitos, no maximo 4. Sem separador: nao ha mascara a aplicar. */
+/** Somente digitos, sem zero a frente, no maximo 3. */
+export function normalizeZone(input: string): string {
+  return semZeroAFrente(onlyDigits(input, ZONE_MAX_LENGTH + 4)).slice(0, ZONE_MAX_LENGTH);
+}
+
+/** Somente digitos, sem zero a frente, no maximo 4. */
 export function normalizeSection(input: string): string {
-  return onlyDigits(input, SECTION_MAX_LENGTH);
+  return semZeroAFrente(onlyDigits(input, SECTION_MAX_LENGTH + 4)).slice(0, SECTION_MAX_LENGTH);
+}
+
+/**
+ * O que a pessoa VE enquanto digita a zona ou a secao.
+ *
+ * Diferente do que fica gravado, e de proposito: o titulo dela diz "044", e
+ * um campo que apaga o zero na hora em que ele e digitado parece defeito. O
+ * que ela escreveu fica na tela; quem tira o zero e `normalizeZone` /
+ * `normalizeSection`, no envio — e ai "044" e "44" viram o mesmo cadastro.
+ *
+ * O teto conta so os digitos QUE VALEM: os zeros a frente nao gastam o
+ * limite, senao "01234" pararia em "0123" e viraria a secao 123, que e outra
+ * secao. Zero nenhum a mais e aceito depois do teto.
+ */
+function mascaraDeNumero(input: string, maximo: number): string {
+  const digitos = onlyDigits(input, maximo + 4);
+  const zeros = digitos.length - semZeroAFrente(digitos).length;
+  return digitos.slice(0, zeros + maximo);
+}
+
+export function maskZone(input: string): string {
+  return mascaraDeNumero(input, ZONE_MAX_LENGTH);
+}
+
+export function maskSection(input: string): string {
+  return mascaraDeNumero(input, SECTION_MAX_LENGTH);
 }

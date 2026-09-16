@@ -23,8 +23,8 @@ import {
   UF_OPTIONS,
   maskCpf,
   maskVoterId,
-  normalizeSection,
-  normalizeZone,
+  maskSection,
+  maskZone,
 } from '@/lib/utils/documents';
 import { cn } from '@/lib/utils/cn';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -351,8 +351,8 @@ export function DynamicFieldInput({
         : field.systemKey === 'voter_id'
           ? maskVoterId
           : field.systemKey === 'zone'
-            ? normalizeZone
-            : normalizeSection;
+            ? maskZone
+            : maskSection;
     return (
       <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
         <Input

@@ -347,13 +347,9 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
         <div className="relative min-h-0 flex-1 overflow-hidden">
           {loading ? (
             // Esta e a espera longa: o mapa le os integrantes, os vinculos e
-            // as coordenadas de todos eles. Num time grande sao milhares de
-            // linhas, e a tela precisa dizer que esta trabalhando.
-            <LoadingScreen
-              fill
-              label="Carregando o mapa"
-              description="Reunindo os integrantes, os locais de votação e as coordenadas."
-            />
+            // as coordenadas de todos eles. Uma palavra basta — a lista do
+            // que esta sendo lido nao ajuda quem espera.
+            <LoadingScreen fill label="Carregando" />
           ) : error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
               <p className="text-sm text-ink-500">Não foi possível carregar o mapa.</p>
