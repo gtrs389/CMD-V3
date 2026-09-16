@@ -2,15 +2,18 @@
 
 import type { Client, CustomField, Member } from '@/lib/types';
 import { clientRepository } from '@/lib/repositories';
-import { countResponses } from '@/lib/domain/form-config';
+import { countResponses, withVerificationRules } from '@/lib/domain/form-config';
 import { useToast } from '@/components/ui/Toast';
 import { FieldsBuilder } from './FieldsBuilder';
 import { FormPreview } from './FormPreview';
 import { FormSettingsCard } from './FormSettingsCard';
+import { VerificationCard } from './VerificationCard';
 
 interface FormBuilderPanelProps {
   client: Client;
   members: Member[];
+  /** Recarrega o time: a prévia acompanha a confirmação ligada ou desligada. */
+  onChanged?: () => void;
 }
 
 /**
@@ -22,8 +25,14 @@ interface FormBuilderPanelProps {
  * apenas as partes proprias do cadastro — de onde vem a lista, como ela e
  * gravada, a previa e os ajustes.
  */
-export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
+export function FormBuilderPanel({ client, members, onChanged }: FormBuilderPanelProps) {
   const toast = useToast();
+
+  // A previa mostra o formulario COMO ELE VALE hoje neste time: com a
+  // confirmacao desligada, zona e secao aparecem ligadas e obrigatorias, do
+  // mesmo jeito que quem abrir o link vai ver. A configuracao gravada nao e
+  // tocada — a regra e derivada aqui, como no formulario publico.
+  const previa = withVerificationRules(client.form, client.verificationEnabled);
 
   async function persist(next: CustomField[], message: string) {
     try {
@@ -39,8 +48,13 @@ export function FormBuilderPanel({ client, members }: FormBuilderPanelProps) {
       fields={client.form.fields}
       onPersist={(next, message) => void persist(next, message)}
       countResponses={(fieldId) => countResponses(members, fieldId)}
-      preview={<FormPreview config={client.form} teamName={client.name} photo={client.photo} />}
-      settings={<FormSettingsCard client={client} />}
+      preview={<FormPreview config={previa} teamName={client.name} photo={client.photo} />}
+      settings={
+        <div className="space-y-4">
+          <VerificationCard client={client} onChanged={onChanged} />
+          <FormSettingsCard client={client} />
+        </div>
+      }
       texts={{
         noun: 'campo',
         nounPlural: 'campos',

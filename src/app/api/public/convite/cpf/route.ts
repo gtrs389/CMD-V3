@@ -16,6 +16,11 @@ import { inviteCpfLookupSchema } from '@/lib/validation/server.schema';
  * o estado do link nem o consome. Falha do fornecedor nunca aparece para
  * quem preenche: a resposta apenas deixa de trazer nome e token, e o
  * cadastro segue normal.
+ *
+ * Time com a confirmacao de dados DESLIGADA (migration 041) nao chega ao
+ * fornecedor: a resposta sai vazia sem nenhuma consulta. A conferencia
+ * daquele time e a pergunta que a pessoa acabou de responder na tela, e a
+ * decisao e do servidor — uma requisicao montada a mao nao a contorna.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -40,6 +45,11 @@ export async function POST(request: NextRequest) {
     if (outcome === 'GONE') return jsonGone('expired');
 
     const { cpf } = await readJson(request, inviteCpfLookupSchema);
+
+    if (!context.client.verificationEnabled) {
+      return jsonOk({ nome: null, token: null });
+    }
+
     const result = await lookupCpfForInvite(cpf);
 
     return jsonOk(result);

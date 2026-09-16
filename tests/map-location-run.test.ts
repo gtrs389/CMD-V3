@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MapLocationRow, MemberLocationRow } from '@/lib/supabase/tables';
+import type { MapLocationRow, MemberLocationRow, PollingPlaceRow } from '@/lib/supabase/tables';
 
 /**
  * Resolucao das coordenadas com banco e provedor simulados.
  *
  * O objetivo e provar que o cache evita consultas repetidas (cada uma e
- * cobrada) e que moradia e local de votacao vivem separados.
+ * cobrada), que moradia e local de votacao vivem separados e que a ESCOLA
+ * nao chega mais a provedor nenhum: desde a migration 042 ela sai da nossa
+ * tabela, achada por UF + zona + secao.
  */
 
 const ESCOLA = {
@@ -22,9 +24,31 @@ interface DB {
   verifications: Record<string, Record<string, unknown>>;
   links: MemberLocationRow[];
   places: MapLocationRow[];
+  /** Locais de votacao do TSE, a nossa tabela (migration 042). */
+  pollingPlaces: PollingPlaceRow[];
 }
 
-const db: DB = { members: {}, verifications: {}, links: [], places: [] };
+const db: DB = { members: {}, verifications: {}, links: [], places: [], pollingPlaces: [] };
+
+/** Uma linha da planilha do TSE, do jeito que ela chega ao banco. */
+const LOCAL_DO_TSE: PollingPlaceRow = {
+  id: 'pp-1',
+  uf: 'SP',
+  city_code: 71072,
+  city: 'São Paulo',
+  zone: 5,
+  name: 'ESCOLA MUNICIPAL EXEMPLO',
+  place_type: 'Convencional',
+  address: 'RUA DAS FLORES S/N',
+  district: 'CENTRO',
+  postal_code: '01000000',
+  latitude: -23.5505,
+  longitude: -46.6333,
+  section_count: 2,
+  sections: [123, 124],
+  created_at: '2026-09-01T00:00:00.000Z',
+  updated_at: '2026-09-01T00:00:00.000Z',
+};
 
 /**
  * Filtro no formato do PostgREST.
@@ -33,7 +57,19 @@ const db: DB = { members: {}, verifications: {}, links: [], places: [] };
  * `client_id=eq.cli-1`), entao aqui isso falha na hora: valor sem operador
  * conhecido nao passa silenciosamente.
  */
-const OPERATORS = ['eq.', 'in.', 'is.', 'neq.', 'gt.', 'gte.', 'lt.', 'lte.', 'like.', 'ilike.'];
+const OPERATORS = [
+  'eq.',
+  'in.',
+  'is.',
+  'neq.',
+  'gt.',
+  'gte.',
+  'lt.',
+  'lte.',
+  'like.',
+  'ilike.',
+  'cs.',
+];
 
 function match(row: Record<string, unknown>, filters: Record<string, string>): boolean {
   return Object.entries(filters).every(([key, value]) => {
@@ -42,6 +78,13 @@ function match(row: Record<string, unknown>, filters: Record<string, string>): b
     if (value.startsWith('eq.')) return String(row[key]) === value.slice(3);
     if (value.startsWith('in.')) {
       return value.slice(4, -1).split(',').includes(String(row[key]));
+    }
+    // `cs.{16}`: a lista da linha contem aquele numero. E como a secao acha
+    // o local no banco de verdade.
+    if (value.startsWith('cs.{')) {
+      const procurado = Number(value.slice(4, -1));
+      const lista = row[key];
+      return Array.isArray(lista) && lista.includes(procurado);
     }
     if (!OPERATORS.some((operator) => value.startsWith(operator))) {
       throw new Error(`Filtro sem operador do PostgREST: ${key}=${value}`);
@@ -63,6 +106,15 @@ vi.mock('@/lib/supabase/rest', () => ({
     if (table === 'cmd_map_locations') {
       return db.places.find((row) => match(row as unknown as Record<string, unknown>, filters)) ?? null;
     }
+    if (table === 'cmd_polling_places') {
+      return (
+        db.pollingPlaces.find((row) => match(row as unknown as Record<string, unknown>, filters)) ??
+        null
+      );
+    }
+    // O time deste cenario informa o estado (migration 038): e ele que
+    // recorta a busca do local, porque numero de zona se repete entre UFs.
+    if (table === 'cmd_clients') return { id: 'cli-1', state_uf: 'SP' };
     return null;
   },
   selectRows: async (table: string, options: { filters?: Record<string, string> }) => {
@@ -185,6 +237,7 @@ beforeEach(() => {
   db.verifications = {};
   db.links = [];
   db.places = [];
+  db.pollingPlaces = [LOCAL_DO_TSE];
 });
 
 describe('resolução das coordenadas', () => {
@@ -290,13 +343,60 @@ describe('os dois tipos convivem', () => {
       'POLLING_PLACE',
       'RESIDENCE',
     ]);
-    expect(lookupPlace).toHaveBeenCalledTimes(2);
-    expect(lookupPlace.mock.calls[1][0]).toContain('ESCOLA MUNICIPAL EXEMPLO');
+    // UMA consulta paga, e so a da moradia: a escola veio da nossa tabela.
+    expect(lookupPlace).toHaveBeenCalledTimes(1);
+    expect(lookupPlace.mock.calls[0][0]).toBe('Rua das Flores, Centro, São Paulo - SP, Brasil');
 
-    // Nenhum dado da pessoa vai junto da consulta.
+    const votacao = db.links.find((link) => link.location_kind === 'POLLING_PLACE');
+    const escola = db.places.find((place) => place.id === votacao?.location_id);
+    expect(votacao?.status).toBe('SUCCESS');
+    expect(escola?.provider).toBe('CMD_LOCAIS_DE_VOTACAO');
+    expect(escola?.title).toBe('ESCOLA MUNICIPAL EXEMPLO');
+    expect(escola?.latitude).toBe(LOCAL_DO_TSE.latitude);
+
+    // Nenhum dado da pessoa vai junto da consulta que sobrou.
     for (const [query] of lookupPlace.mock.calls) {
       expect(query).not.toMatch(/Pessoa|cpf|telefone|zona|secao|005|0123/i);
     }
+  });
+
+  it('a escola nunca vira consulta paga: sem a tabela, fica não encontrada', async () => {
+    // UF ainda nao importada, secao nova ou numero digitado errado: o local
+    // simplesmente nao existe para nos. Nada e perguntado a provedor nenhum.
+    db.pollingPlaces = [];
+
+    await createPendingLocation('cli-1', 'm1', 'POLLING_PLACE');
+    await resolveLocation('m1', 'POLLING_PLACE');
+
+    expect(lookupPlace).not.toHaveBeenCalled();
+    expect(db.links[0].status).toBe('NOT_FOUND');
+    expect(db.links[0].location_id).toBeNull();
+  });
+
+  it('local sem coordenada na planilha não vira pino', async () => {
+    db.pollingPlaces = [{ ...LOCAL_DO_TSE, latitude: null, longitude: null }];
+
+    await createPendingLocation('cli-1', 'm1', 'POLLING_PLACE');
+    await resolveLocation('m1', 'POLLING_PLACE');
+
+    expect(lookupPlace).not.toHaveBeenCalled();
+    expect(db.links[0].status).toBe('NOT_FOUND');
+  });
+
+  it('a mesma escola de três pessoas é uma linha só no cache', async () => {
+    member('m2');
+    member('m3');
+    db.verifications.m2 = db.verifications.m1;
+    db.verifications.m3 = db.verifications.m1;
+
+    for (const id of ['m1', 'm2', 'm3']) {
+      await createPendingLocation('cli-1', id, 'POLLING_PLACE');
+      await resolveLocation(id, 'POLLING_PLACE');
+    }
+
+    expect(db.places).toHaveLength(1);
+    const ids = new Set(db.links.map((link) => link.location_id));
+    expect(ids.size).toBe(1);
   });
 
   it('um pedido por integrante e tipo: criar de novo não duplica', async () => {

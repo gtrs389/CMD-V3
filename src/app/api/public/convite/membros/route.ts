@@ -134,6 +134,14 @@ export async function POST(request: NextRequest) {
         throw badRequest('E necessário aceitar o aviso de privacidade para enviar o cadastro.');
       }
 
+      // Confirmacao de dados desligada neste time (migration 041): nao ha
+      // consulta eleitoral que preencha zona e secao, entao os dois sao
+      // obrigatorios. Conferido AQUI tambem, e nao so na tela: o formulario
+      // e publico, e um envio montado a mao chegaria sem eles.
+      if (!client.verificationEnabled && (!input.zone || !input.section)) {
+        throw badRequest('Informe a zona e a seção eleitoral.');
+      }
+
       // Conferencia do telefone ANTES de gravar qualquer coisa: numero ja em
       // uso naquele time interrompe o cadastro sem deixar integrante,
       // usuario ou link orfao. E o telefone que identifica a pessoa no
@@ -187,16 +195,25 @@ export async function POST(request: NextRequest) {
       // esta salvo.
       await recordConfirmation(client.id, member.id).catch(() => undefined);
 
-      // A verificacao pode ja ter acontecido no proprio formulario, se a
-      // pessoa confirmou CPF e/ou titulo durante o preenchimento: nesse caso
-      // o resultado so e gravado, sem consultar o fornecedor de novo (cada
-      // consulta e cobrada). Sem token valido, cai no fluxo de sempre.
-      const seed = await seedVerificationFromForm(client.id, member.id, member.cpf, {
-        cpfToken: input.cpfToken ?? null,
-        tseToken: input.tseToken ?? null,
-      }).catch(() => ({ seeded: false, tseSucceeded: false }));
+      // Confirmacao de dados desligada neste time (migration 041): nenhuma
+      // verificacao nasce e nenhum token e aproveitado — nem um que viesse
+      // forjado no corpo da requisicao. O cadastro daquele time e o que a
+      // pessoa declarou, e a ficha dele nao fica com uma verificacao
+      // "aguardando" que nunca vai acontecer.
+      //
+      // Com a confirmacao ligada, a verificacao pode ja ter acontecido no
+      // proprio formulario, se a pessoa confirmou CPF e/ou titulo durante o
+      // preenchimento: nesse caso o resultado so e gravado, sem consultar o
+      // fornecedor de novo (cada consulta e cobrada). Sem token valido, cai
+      // no fluxo de sempre.
+      const seed = client.verificationEnabled
+        ? await seedVerificationFromForm(client.id, member.id, member.cpf, {
+            cpfToken: input.cpfToken ?? null,
+            tseToken: input.tseToken ?? null,
+          }).catch(() => ({ seeded: false, tseSucceeded: false }))
+        : { seeded: false, tseSucceeded: false };
 
-      if (!seed.seeded) {
+      if (client.verificationEnabled && !seed.seeded) {
         await createPendingVerification(client.id, member.id).catch(() => undefined);
       }
 
@@ -205,16 +222,39 @@ export async function POST(request: NextRequest) {
       // A moradia aproximada nao espera pela consulta eleitoral.
       await createPendingLocation(client.id, member.id, 'RESIDENCE').catch(() => undefined);
 
+      // Local de votacao: nasce sempre que a pessoa informou zona e secao,
+      // com confirmacao ligada ou desligada. Desde a migration 042 a escola
+      // nao e mais consulta paga — ela e uma linha da nossa tabela, achada
+      // por UF + zona + secao. Sem os dois numeros nao ha o que procurar, e
+      // o vinculo nem chega a existir.
+      const temSecao = Boolean(member.zone?.trim() && member.section?.trim());
+      if (temSecao) {
+        await createPendingLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
+      }
+
       after(async () => {
         await resolveLocation(member.id, 'RESIDENCE').catch(() => undefined);
+
+        // A escola sai da nossa tabela: nenhum provedor e chamado, entao ela
+        // e resolvida em todo time, com a confirmacao ligada ou desligada.
+        if (temSecao) {
+          await resolveLocation(member.id, 'POLLING_PLACE').catch(() => undefined);
+        }
+
+        // Daqui para baixo e so o que depende da FonteData. A moradia e o
+        // local de votacao acima ja aconteceram, porque nenhum dos dois
+        // depende dela.
+        if (!client.verificationEnabled) return;
 
         if (!seed.seeded) {
           await runVerification(member.id).catch(() => undefined);
           return;
         }
 
-        // Etapa eleitoral ja resolvida no formulario: o local de votacao
-        // nasce e e resolvido aqui, igual ao que `runVerification` faria.
+        // Etapa eleitoral ja resolvida no formulario. A zona e a secao que a
+        // Justica Eleitoral respondeu ja estao no cadastro (o formulario as
+        // preencheu), entao o local acima ja e o certo; refazer o vinculo
+        // cobre o caso de o numero digitado antes da consulta ter mudado.
         if (seed.tseSucceeded) {
           await createPendingLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
           await invalidateLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);

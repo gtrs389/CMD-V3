@@ -821,6 +821,32 @@ export async function updateClientForm(
 }
 
 /**
+ * Liga ou desliga a confirmacao de dados pela FonteData neste time
+ * (migration 041).
+ *
+ * Desligada, nenhum cadastro daquele time consulta o fornecedor: nem no
+ * preenchimento do formulario, nem depois do envio, nem pelo botao da ficha
+ * do integrante. Em troca, zona e secao passam a ser obrigatorias e
+ * digitadas por quem preenche — sem consulta, o que ninguem digitar nao vai
+ * existir no cadastro.
+ *
+ * Nada e destruido e nada e reescrito: as verificacoes ja feitas continuam
+ * na ficha de quem as tem, e o formulario montado pelo ADMIN fica como
+ * esta. Religar devolve o comportamento anterior no cadastro seguinte.
+ */
+export async function setVerificationEnabled(id: string, enabled: boolean): Promise<Client> {
+  await requireClientRow(id);
+
+  const [row] = await updateRows<ClientRow>(
+    TABLES.clients,
+    { id: `eq.${id}` },
+    { verification_enabled: enabled },
+  );
+
+  return assemble(row ?? (await requireClientRow(id)));
+}
+
+/**
  * Liga ou desliga o recrutamento da operacao inteira.
  *
  * Desligado, TODOS os links daquele time param de aceitar cadastros:

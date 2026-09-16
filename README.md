@@ -104,6 +104,7 @@ Execute os SQLs de `supabase/` antes do primeiro login. Veja
 | `npm run verificar` | Lint + tipos + testes + build, em sequência |
 | `npm run gerar-hash` | Pergunta e-mail e senha (oculta) e imprime o SQL do ADMIN |
 | `npm run configurar-storage` | Cria ou confere o bucket privado `cmd-media` pela API do Storage |
+| `npm run importar-locais` | Carrega o CSV de locais de votação do TSE em `cmd_polling_places` |
 
 ---
 
@@ -181,6 +182,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/clients/[id]` | ADMIN | Lê, atualiza e exclui um cliente |
 | `/api/clients/[id]/form` | ADMIN | Atualiza campos, privacidade e textos |
 | `/api/clients/[id]/invite` | ADMIN | Ativa/desativa e renova o convite |
+| `/api/clients/[id]/verificacao` | ADMIN geral | Liga e desliga a confirmação de dados do time |
 | `/api/clients/[id]/members` | ADMIN | Equipe de um cliente |
 | `/api/members` | ADMIN | Lista e cadastra integrantes pelo painel |
 | `/api/members/[id]` | ADMIN | Atualiza e exclui um integrante |
@@ -283,6 +285,122 @@ público, que é o endereço que as pessoas recebem.
 
 Requer as migrations `029_api_links_cadastro.sql`, `030_api_agir_como_dono.sql`
 e `031_api_chave_vinculada.sql`.
+
+---
+
+## Confirmação dos dados pela FonteData
+
+Todo cadastro que chega pelo **Formulário 1** passava, sem exceção, por duas
+consultas pagas à FonteData: o CPF, que confere e corrige o nome, e a situação
+eleitoral, que preenche **zona e seção** sozinha, a partir do título.
+
+Nem todo time quer — ou pode — pagar por isso. Na aba **Formulários** do time,
+em "Confirmação dos dados", o ADMIN geral liga e desliga essa conferência
+**time a time** (migration 041, `cmd_clients.verification_enabled`). O padrão é
+ligado: nenhum time que já existia mudou de comportamento.
+
+Desligada, para os cadastros **daquele time**:
+
+- **nenhuma consulta à FonteData acontece, em lugar nenhum.** Nem durante o
+  preenchimento (`/api/public/convite/cpf` e `/titulo` respondem vazio **sem
+  chegar ao fornecedor**), nem depois do envio (`runVerification` não roda e
+  nem chega a nascer verificação pendente), nem pelo botão "Consultar de novo"
+  da ficha do integrante, que é recusado no servidor. Cada consulta é cobrada,
+  então esconder o botão na tela nunca seria a proteção: quem decide é o
+  servidor, em cada ponto que chegaria na FonteData;
+- **o formulário continua perguntando** se o CPF e o título digitados estão
+  corretos. A pergunta não é enfeite da consulta: com a confirmação desligada
+  ela passa a ser a **única** conferência daqueles números, e agora é de quem
+  preenche. Confirmado, a pessoa segue preenchendo normalmente;
+- **zona e seção viram campos obrigatórios**, ligados e digitados à mão. Sem
+  consulta que os preencha, o que ninguém digitar simplesmente não existiria no
+  cadastro. A regra é conferida **também no servidor**, no envio: um formulário
+  público montado à mão não passa sem os dois.
+
+O formulário montado pelo ADMIN **não é reescrito**. A obrigatoriedade é
+derivada do interruptor a cada abertura do link (`withVerificationRules`, em
+`src/lib/domain/form-config.ts`), e é a mesma função que a prévia do construtor
+usa — o que o ADMIN vê na prévia é o que quem abre o link recebe. Religar a
+confirmação devolve o formulário exatamente como ele foi montado.
+
+O que **não** para junto: nem a moradia aproximada nem o local de votação, que
+desde a migration 042 não dependem mais da FonteData nem de consulta paga
+nenhuma — a escola sai da nossa própria tabela, achada pela zona e pela seção
+que a pessoa digitou. É a seção seguinte.
+
+Na ficha do integrante, a **Verificação cadastral** diz que a confirmação está
+desligada naquele time, em vez de ficar eternamente "aguardando" uma consulta
+que nunca vai acontecer. As verificações já feitas antes de desligar continuam
+onde estão: nada é apagado nem reescrito.
+
+---
+
+## Locais de votação: a escola sai do nosso banco
+
+A escola onde a pessoa vota era descoberta **consultando o Google**, pela
+SerpAPI: montava-se o endereço que a Justiça Eleitoral tinha devolvido e
+perguntava-se as coordenadas ao provedor. Isso custava uma consulta paga por
+escola e devolvia o palpite do buscador para aquele texto — não o ponto
+oficial.
+
+O TSE publica a lista completa dos locais de votação, com a coordenada de cada
+um. Ela agora vive em `cmd_polling_places` (migration 042), e a escola deixou
+de ser uma pergunta: é uma consulta ao próprio banco, de graça, instantânea e
+exata.
+
+**A SerpAPI continua servindo apenas a moradia aproximada da pessoa** — o
+único endereço que ninguém publica em tabela, porque é digitado no cadastro.
+Não existe mais caminho que leve a escola a um provedor: a função que montava
+aquela consulta foi removida, e não só deixou de ser chamada.
+
+### Como se acha o local de uma pessoa
+
+Por **UF + zona + seção**. A seção é a unidade: cada uma existe em um único
+local, e por isso as seções ficam numa lista dentro da linha do local — a
+forma da própria planilha ("Seções neste local: 1, 2, 3…"), com um índice GIN
+para a busca não varrer a tabela.
+
+A UF entra porque **número de zona se repete entre estados**: a zona 39 existe
+em Alagoas e em São Paulo, e são locais diferentes. De onde vêm os três, em
+ordem:
+
+1. a **consulta eleitoral**, quando o time confirma dados e ela deu certo — é
+   a resposta da própria Justiça Eleitoral;
+2. o que está no **cadastro**, com a **UF do time**. Zona e seção foram
+   digitadas por quem preencheu (obrigatórias no time sem confirmação,
+   migration 041), e o estado do time já é informado no cadastro dele
+   (migration 038);
+3. a UF declarada pela pessoa, quando o time é antigo e não tem estado.
+
+Faltando qualquer um dos três, não há busca. **Não encontrado quer dizer não
+encontrado**: aquela UF ainda não foi importada, a seção é nova, ou o número
+digitado não existe. Nenhuma consulta paga tenta adivinhar — o integrante fica
+no mapa pela moradia, e o painel mostra que o local não foi encontrado, que é
+a verdade. Local sem coordenada na planilha é encontrado, mas não vira pino:
+inventar um ponto seria pior do que não ter nenhum.
+
+### Carregar a planilha
+
+```bash
+npm run importar-locais -- supabase/dados/locais-de-votacao.csv --conferir
+npm run importar-locais -- supabase/dados/locais-de-votacao.csv
+```
+
+Quem preferir não sair do navegador tem o mesmo resultado em três passos no
+SQL Editor, por `supabase/dados/carga-pelo-painel.sql`. O que **não** funciona
+é importar o CSV direto na tabela pelo painel: o importador entrega o texto cru
+ao Postgres e a coordenada em vírgula decimal (`-9,25912678`) não é número para
+ele — é exatamente para isso que existem o comando e aquele arquivo.
+
+As colunas são encontradas **pelo nome** (acento, caixa, pontuação e ordem não
+importam), e separador, aspas, BOM do Excel e coordenada com vírgula decimal
+são reconhecidos sozinhos. A carga é **idempotente**: a chave é UF + município
++ zona + local, então rodar de novo — ou carregar mais um estado — atualiza no
+lugar, nunca duplica e nunca apaga. Estado por estado funciona: um CSV por UF,
+na ordem que quiser. Os detalhes estão em `supabase/dados/README.md`.
+
+O CSV não é versionado: é dado público e grande. O que é versionado é o
+comando que o carrega.
 
 ---
 

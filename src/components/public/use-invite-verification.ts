@@ -6,6 +6,15 @@ import { lookupInviteCpf, lookupInviteTitulo } from '@/lib/repositories';
 export type PendingConfirmation = { kind: 'cpf' | 'titulo'; value: string } | null;
 
 interface UseInviteVerificationOptions {
+  /**
+   * A confirmacao de dados esta ligada NESTE time (migration 041).
+   *
+   * Desligada, a pergunta "esta correto?" continua existindo — ela e a unica
+   * conferencia que sobra, e agora e de quem preenche —, mas nenhuma
+   * consulta sai daqui: o nome nao e corrigido e zona e secao nao chegam
+   * prontas, porque viraram campos obrigatorios do proprio formulario.
+   */
+  enabled: boolean;
   /** Corrige o campo "Nome completo" silenciosamente, sem avisar a pessoa. */
   onNameCorrection: (nome: string) => void;
   /**
@@ -40,6 +49,7 @@ interface UseInviteVerificationOptions {
  * do titulo: zona e secao eram do CPF antigo e deixam de valer.
  */
 export function useInviteVerification({
+  enabled,
   onNameCorrection,
   onZonaSecaoFilled,
 }: UseInviteVerificationOptions) {
@@ -67,6 +77,16 @@ export function useInviteVerification({
     if (!pending) return;
     const { kind, value } = pending;
     setPending(null);
+
+    // Time com a confirmacao desligada: a pessoa confirmou o numero e segue
+    // preenchendo. Nenhuma consulta e feita, nem mesmo uma que voltaria
+    // vazia — o servidor tambem recusa, mas gastar a viagem seria inutil.
+    if (!enabled) {
+      if (kind === 'cpf') confirmedCpfRef.current = value;
+      else confirmedTituloRef.current = value;
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -102,7 +122,7 @@ export function useInviteVerification({
     } finally {
       setLoading(false);
     }
-  }, [pending, onNameCorrection, onZonaSecaoFilled]);
+  }, [pending, enabled, onNameCorrection, onZonaSecaoFilled]);
 
   const getTokens = useCallback(
     () => ({ cpfToken: cpfTokenRef.current, tseToken: tseTokenRef.current }),

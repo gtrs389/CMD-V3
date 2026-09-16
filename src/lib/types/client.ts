@@ -147,6 +147,16 @@ export interface Client extends Timestamped {
    * hora de que a conta foi desconectada.
    */
   demoAccessEnabled: boolean;
+  /**
+   * Confirmacao dos dados pela FonteData neste time (migration 041).
+   *
+   * Ligada (padrao), o formulario publico confere o CPF e a situacao
+   * eleitoral e preenche zona e secao sozinho. Desligada, NENHUMA consulta
+   * acontece para os cadastros deste time: o formulario apenas pergunta se o
+   * CPF e o titulo digitados estao certos, e zona e secao viram campos
+   * obrigatorios, preenchidos a mao.
+   */
+  verificationEnabled: boolean;
 }
 
 export interface ClientInput {

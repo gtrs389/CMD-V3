@@ -17,6 +17,7 @@ import {
   normalizeVoterId,
 } from '@/lib/utils/documents';
 import { linkCode } from '@/lib/domain/link-code';
+import { withVerificationRules } from '@/lib/domain/form-config';
 import {
   completionPercent,
   missingRequired,
@@ -86,13 +87,30 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   // so o navegador conhece, e nada disso bloqueia o formulario.
   useInviteDeviceReport();
 
-  const form = useDynamicForm(client.form);
-  const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
-  const allFields = useMemo(() => visibleFields(client.form), [client.form]);
-  const percent = completionPercent(client.form, form.values);
+  /**
+   * O formulario COMO ELE VALE NESTE TIME.
+   *
+   * Com a confirmacao de dados desligada (migration 041) nao existe consulta
+   * eleitoral: zona e secao viram campos ligados e obrigatorios, porque o
+   * que ninguem digitar nao vai existir no cadastro. A configuracao gravada
+   * pelo ADMIN nao e tocada — a regra e derivada aqui, e religar a
+   * confirmacao devolve o formulario exatamente como ele foi montado.
+   *
+   * Tudo nesta tela le daqui: os campos, a previa da confirmacao final, a
+   * validacao e o que e enviado. Um unico lugar decide.
+   */
+  const config = useMemo(
+    () => withVerificationRules(client.form, client.verificationEnabled),
+    [client.form, client.verificationEnabled],
+  );
+
+  const form = useDynamicForm(config);
+  const sections = useMemo(() => buildInviteSections(config), [config]);
+  const allFields = useMemo(() => visibleFields(config), [config]);
+  const percent = completionPercent(config, form.values);
   // Quanto falta para poder enviar. Numero de leitura: quem aceita o envio
   // continua sendo a validacao.
-  const faltam = missingRequired(client.form, form.values);
+  const faltam = missingRequired(config, form.values);
 
   /**
    * Campo fechado porque a consulta eleitoral ja respondeu por ele.
@@ -127,6 +145,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
 
   const { setValue } = form;
   const verification = useInviteVerification({
+    enabled: client.verificationEnabled,
     onNameCorrection: (nome) => {
       if (nameFieldId) setValue(nameFieldId, nome);
     },
@@ -184,7 +203,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
     setSubmitting(true);
 
     try {
-      const payload = toSubmission(client.form, values);
+      const payload = toSubmission(config, values);
       const { cpfToken, tseToken } = verification.getTokens();
       // O cliente de destino vem do contexto do link, guardado em cookie e
       // resolvido no servidor: o payload nao carrega token nenhum.
@@ -284,7 +303,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
       linkCode={linkCode(client.invite.token)}
       title="Ficha de cadastro"
       subtitle="Leva menos de 2 minutos."
-      introText={client.form.introText}
+      introText={config.introText}
       percent={percent}
       missing={faltam}
       desktopAction={submitButton(false)}
@@ -293,7 +312,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
         <>
           <ConfirmSubmissionModal
             open={confirming}
-            config={client.form}
+            config={config}
             values={form.values}
             submitting={submitting}
             onCancel={() => setConfirming(false)}
@@ -321,7 +340,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
       }
     >
       <PublicFormBody
-        config={client.form}
+        config={config}
         form={form}
         sections={sections}
         formId="cadastro-publico"

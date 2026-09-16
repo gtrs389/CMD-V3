@@ -14,13 +14,18 @@ import {
   type VerificationView,
 } from '@/lib/domain/verification';
 import { canonicalConfirmationText, CONFIRMATION_VERSION } from '@/lib/domain/confirmation';
-import { TABLES, type MemberRow, type MemberVerificationRow } from '@/lib/supabase/tables';
+import {
+  TABLES,
+  type ClientRow,
+  type MemberRow,
+  type MemberVerificationRow,
+} from '@/lib/supabase/tables';
 import { insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
 import { privacyHash } from './consent';
 import { decryptJson, encryptJson, hasEncryptionKey } from './crypto';
 import { consultCpf, consultTse, FonteDataError } from './fontedata.service';
 import { createPendingLocation, invalidateLocation, resolveLocation } from './map-location.service';
-import { notFound } from './http';
+import { badRequest, notFound } from './http';
 
 /**
  * Verificacao cadastral do integrante.
@@ -231,6 +236,25 @@ async function runStep<T>(
   }
 }
 
+/**
+ * A confirmacao de dados esta ligada NESTE time? (migration 041)
+ *
+ * Ultima barreira antes do fornecedor: nenhuma consulta sai deste arquivo
+ * sem passar por aqui. Esconder o botao na tela nao impede uma requisicao
+ * montada a mao, e cada consulta e cobrada.
+ *
+ * Banco ainda sem a coluna responde como sempre respondeu — ligada. Um erro
+ * de leitura nunca desliga sozinho uma confirmacao que o time contratou.
+ */
+async function verificationEnabledFor(clientId: string): Promise<boolean> {
+  const row = await selectOne<Pick<ClientRow, 'verification_enabled'>>(TABLES.clients, {
+    select: 'verification_enabled',
+    filters: { id: `eq.${clientId}` },
+  }).catch(() => null);
+
+  return row?.verification_enabled !== false;
+}
+
 function skipped(step: VerificationStep, attempts: number): StepOutcome {
   const columns = COLUMNS[step];
   return {
@@ -267,6 +291,11 @@ export async function runVerification(memberId: string): Promise<void> {
   if (!current || current.status === 'COMPLETED' || current.status === 'RUNNING') return;
   if (current.cpf_status !== 'PENDING' && current.tse_status !== 'PENDING') return;
 
+  // Time com a confirmacao desligada nao gera linha pendente, entao esta
+  // execucao nem deveria existir. Ela para aqui do mesmo jeito: o
+  // interruptor vale sobre o que ja estava na fila quando ele foi desligado.
+  if (!(await verificationEnabledFor(current.client_id))) return;
+
   const locked = await acquireLock(memberId);
   if (!locked) return;
 
@@ -286,6 +315,10 @@ export async function retryVerificationStep(
 ): Promise<VerificationView> {
   const current = await findRow(memberId);
   if (!current) throw notFound('Verificação não encontrada.');
+
+  if (!(await verificationEnabledFor(current.client_id))) {
+    throw badRequest('A confirmação de dados está desligada neste time.');
+  }
 
   const columns = COLUMNS[step];
   if (current[columns.status] === 'SUCCESS') return toView(current);

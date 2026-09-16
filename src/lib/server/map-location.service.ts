@@ -2,7 +2,6 @@ import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import {
   normalizeQuery,
-  pollingPlaceQuery,
   residenceLookup,
   type AddressParts,
   type LocationKind,
@@ -23,24 +22,37 @@ import {
 import type { TseResult } from '@/lib/domain/verification';
 import {
   TABLES,
+  type ClientRow,
   type MapLocationRow,
   type MemberLocationRow,
   type MemberRow,
   type MemberVerificationRow,
+  type PollingPlaceRow,
 } from '@/lib/supabase/tables';
 import { deleteRows, inFilter, insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
 import { signedUrls } from '@/lib/supabase/storage';
 import { decryptJson } from './crypto';
 import { withoutDemoClients } from './demo-scope';
 import { lookupPlace, MapLookupError } from './serpapi.service';
+import { findPollingPlace, pollingPlaceAddress } from './polling-place.service';
 
 /**
  * Coordenadas do integrante: moradia aproximada e local de votacao.
  *
+ * As duas vem de lugares diferentes, e essa e a distincao central do arquivo:
+ *
+ *   MORADIA         e digitada no cadastro e nao existe em tabela nenhuma:
+ *                   so um provedor sabe onde fica aquela rua. Ela E a
+ *                   consulta paga (SerpAPI), com cache por endereco.
+ *   LOCAL DE VOTACAO  e publico e ja esta no nosso banco, com a coordenada
+ *                   oficial (migration 042). Nao ha provedor, nao ha
+ *                   cobranca e nao ha palpite: acha-se por UF + zona + secao,
+ *                   ou nao se acha.
+ *
  * Regras que valem em todo o arquivo:
  *   - o cadastro e a verificacao nunca dependem daqui;
- *   - cada consulta e cobrada: nada repete sozinho e o cache por consulta
- *     normalizada faz uma mesma rua ou escola ser perguntada uma unica vez;
+ *   - cada consulta AO PROVEDOR e cobrada: nada repete sozinho e o cache por
+ *     consulta normalizada faz uma mesma rua ser perguntada uma unica vez;
  *   - um bloqueio atomico impede duas consultas simultaneas do mesmo vinculo;
  *   - nada disso vai para log: nem a consulta, nem a chave, nem a resposta.
  */
@@ -178,10 +190,14 @@ function errorCodeOf(error: unknown): MapErrorCode {
   return error instanceof MapLookupError ? error.code : 'UNEXPECTED';
 }
 
-/** Endereco de cada tipo, montado a partir do que ja esta guardado. */
+/**
+ * Endereco da MORADIA, montado a partir do que ja esta guardado.
+ *
+ * So da moradia: o local de votacao nao passa por aqui desde a migration
+ * 042, porque ele nao e uma consulta — e uma linha do nosso banco.
+ */
 async function addressFor(
   memberId: string,
-  kind: LocationKind,
 ): Promise<{ query: string; expected: AddressParts; precision: LocationPrecision } | null> {
   const member = await selectOne<MemberRow>(TABLES.members, {
     select: 'id,client_id,street,district,city,state',
@@ -189,35 +205,151 @@ async function addressFor(
   });
   if (!member) return null;
 
-  if (kind === 'RESIDENCE') {
-    const lookup = residenceLookup(member);
-    return lookup
-      ? {
-          query: lookup.query,
-          expected: { city: member.city, state: member.state },
-          precision: lookup.precision,
-        }
-      : null;
+  const lookup = residenceLookup(member);
+  return lookup
+    ? {
+        query: lookup.query,
+        expected: { city: member.city, state: member.state },
+        precision: lookup.precision,
+      }
+    : null;
+}
+
+/**
+ * Onde a pessoa vota, pela nossa tabela.
+ *
+ * Tres numeros decidem: UF, zona e secao. De onde eles vem, em ordem:
+ *
+ *   1. a consulta eleitoral, quando o time confirma dados e ela deu certo —
+ *      e a resposta da propria Justica Eleitoral;
+ *   2. o que esta no cadastro, com a UF DO TIME. Zona e secao foram digitadas
+ *      por quem preencheu (obrigatorias no time sem confirmacao, migration
+ *      041), e a UF do time e o recorte que o proprio cadastro do time ja
+ *      informa — numero de zona se repete entre estados;
+ *   3. a UF declarada pela pessoa, quando o time e antigo e nao tem estado.
+ *
+ * Devolve nulo quando falta qualquer um dos tres: sem os tres nao existe
+ * busca, e um local errado seria pior do que nenhum.
+ */
+async function pollingPlaceFor(memberId: string): Promise<PollingPlaceRow | null> {
+  const member = await selectOne<MemberRow>(TABLES.members, {
+    select: 'id,client_id,state,zone,section',
+    filters: { id: `eq.${memberId}` },
+  });
+  if (!member) return null;
+
+  const [client, verification] = await Promise.all([
+    selectOne<Pick<ClientRow, 'state_uf'>>(TABLES.clients, {
+      select: 'state_uf',
+      filters: { id: `eq.${member.client_id}` },
+    }).catch(() => null),
+    selectOne<MemberVerificationRow>(TABLES.memberVerifications, {
+      select: 'tse_payload,tse_status',
+      filters: { member_id: `eq.${memberId}` },
+    }).catch(() => null),
+  ]);
+
+  const eleitoral = decryptJson<TseResult>(verification?.tse_payload);
+
+  return findPollingPlace({
+    uf: eleitoral?.uf ?? client?.state_uf ?? member.state,
+    zone: eleitoral?.zona ?? member.zone,
+    section: eleitoral?.secao ?? member.section,
+  });
+}
+
+/**
+ * Guarda o local de votacao no cache de coordenadas.
+ *
+ * Nada e consultado: a linha e copiada da nossa tabela. O identificador da
+ * consulta e o proprio local, entao todos os integrantes que votam naquela
+ * escola apontam para a MESMA linha — que e o que o mapa agrupa em um pino.
+ */
+async function rememberPollingPlace(place: PollingPlaceRow): Promise<MapLocationRow | null> {
+  if (place.latitude === null || place.longitude === null) return null;
+
+  const hash = queryHash(`local-de-votacao:${place.id}`);
+  const hit = await cached(hash);
+  if (hit) return hit;
+
+  const row = await insertOne<MapLocationRow>(TABLES.mapLocations, {
+    query_hash: hash,
+    latitude: place.latitude,
+    longitude: place.longitude,
+    title: place.name,
+    address: pollingPlaceAddress(place),
+    place_id: null,
+    data_id: null,
+    image_url: null,
+    provider: 'CMD_LOCAIS_DE_VOTACAO',
+    searched_at: new Date().toISOString(),
+  }).catch(() => null);
+
+  // Corrida entre duas execucoes: a unicidade decide e a outra linha serve.
+  return row ?? (await cached(hash));
+}
+
+/**
+ * Resolve o local de votacao, SEM provedor nenhum.
+ *
+ * Nao encontrado quer dizer exatamente isso: aquela UF ainda nao foi
+ * importada, a secao e nova, ou o numero digitado nao existe. Nao ha
+ * tentativa paga de adivinhar — o integrante fica no mapa so pela moradia, e
+ * o painel mostra que o local nao foi encontrado, que e a verdade.
+ */
+async function resolvePollingPlaceLink(
+  memberId: string,
+  locked: MemberLocationRow,
+): Promise<void> {
+  const startedAt = new Date().toISOString();
+  const place = await pollingPlaceFor(memberId);
+
+  if (!place) {
+    await release(memberId, 'POLLING_PLACE', {
+      status: 'NOT_FOUND',
+      location_id: null,
+      error_code: null,
+      attempts: locked.attempts + 1,
+      requested_at: startedAt,
+      resolved_at: new Date().toISOString(),
+    });
+    return;
   }
 
-  const verification = await selectOne<MemberVerificationRow>(TABLES.memberVerifications, {
-    select: 'tse_payload,tse_status',
-    filters: { member_id: `eq.${memberId}` },
-  });
-  const eleitoral = decryptJson<TseResult>(verification?.tse_payload);
-  if (!eleitoral) return null;
+  const saved = await rememberPollingPlace(place);
 
-  const query = pollingPlaceQuery(eleitoral);
-  return query
-    ? { query, expected: { city: eleitoral.municipio, state: eleitoral.uf }, precision: 'STREET' }
-    : null;
+  if (!saved) {
+    // Local sem coordenada na planilha do TSE: ele existe, mas nao vira
+    // pino. Inventar um ponto seria pior do que nao ter nenhum.
+    await release(memberId, 'POLLING_PLACE', {
+      status: 'NOT_FOUND',
+      location_id: null,
+      error_code: null,
+      attempts: locked.attempts + 1,
+      requested_at: startedAt,
+      resolved_at: new Date().toISOString(),
+    });
+    return;
+  }
+
+  await release(memberId, 'POLLING_PLACE', {
+    status: 'SUCCESS',
+    query_hash: saved.query_hash,
+    location_id: saved.id,
+    location_precision: 'STREET',
+    error_code: null,
+    attempts: locked.attempts + 1,
+    requested_at: startedAt,
+    resolved_at: new Date().toISOString(),
+  });
 }
 
 /**
  * Resolve um vinculo pendente.
  *
- * Consulta o cache primeiro; so chama o provedor quando aquela consulta e
- * inedita. Nunca repete uma consulta que falhou: isso e decisao do ADMIN.
+ * Local de votacao sai da nossa tabela, sem provedor e sem cobranca. Moradia
+ * consulta o cache primeiro e so chama o provedor quando aquele endereco e
+ * inedito — e nunca repete uma consulta que falhou: isso e decisao do ADMIN.
  */
 export async function resolveLocation(memberId: string, kind: LocationKind): Promise<void> {
   const current = await findLink(memberId, kind);
@@ -226,7 +358,12 @@ export async function resolveLocation(memberId: string, kind: LocationKind): Pro
   const locked = await acquireLock(memberId, kind);
   if (!locked) return;
 
-  const address = await addressFor(memberId, kind);
+  if (kind === 'POLLING_PLACE') {
+    await resolvePollingPlaceLink(memberId, locked);
+    return;
+  }
+
+  const address = await addressFor(memberId);
   if (!address) {
     await release(memberId, kind, {
       status: 'NOT_FOUND',

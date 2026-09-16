@@ -22,6 +22,19 @@ O arquivo `001_cmd_initial.sql` roda inteiro dentro de uma transacao (`begin` /
 `commit`): ou tudo e aplicado, ou nada e. Ele e idempotente, pode ser executado
 novamente sem apagar nada, e nao contem `DROP` nem qualquer comando destrutivo.
 
+Alem dessas duas, as migrations numeradas (`002_...` em diante) sao executadas
+na ordem do nome. Uma delas pede um passo a mais: a `042_locais_de_votacao.sql`
+cria a tabela dos locais de votacao do TSE, mas nao traz os dados. Depois de
+roda-la, carregue a planilha:
+
+```bash
+npm run importar-locais -- supabase/dados/locais-de-votacao.csv
+```
+
+E dela que sai a escola onde cada pessoa vota, no mapa. Sem a carga, a tabela
+fica vazia e todo local aparece como "nao encontrado" — nada quebra, e nenhuma
+consulta paga acontece no lugar. Os detalhes estao em `supabase/dados/README.md`.
+
 O bucket de fotos **nao** e criado por SQL. Depois da migration, siga o
 passo 3.
 

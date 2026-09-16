@@ -220,6 +220,43 @@ export function createField(type: FieldType): CustomField {
   };
 }
 
+/**
+ * Zona e secao com a confirmacao de dados DESLIGADA.
+ *
+ * Ligada, a consulta eleitoral preenche os dois sozinha e a pessoa nao
+ * digita nada: por isso eles nascem opcionais e podem ate ser desativados
+ * pelo ADMIN. Desligada, nao existe consulta nenhuma — e o que ninguem
+ * preencher simplesmente nao vai existir no cadastro.
+ *
+ * Entao a regra muda para o time que desligou: os dois voltam a ser campos
+ * de verdade, LIGADOS e OBRIGATORIOS, com a ajuda dizendo que agora sao de
+ * quem preenche. Nada e gravado no formulario do time: o interruptor
+ * continua sendo a unica fonte da regra, e religar a confirmacao devolve o
+ * formulario exatamente como o ADMIN o montou.
+ */
+const ELEITORAIS: readonly SystemFieldKey[] = ['zone', 'section'];
+
+export function withVerificationRules(
+  config: ClientFormConfig,
+  verificationEnabled: boolean,
+): ClientFormConfig {
+  if (verificationEnabled) return config;
+
+  return {
+    ...config,
+    fields: config.fields.map((field) => {
+      if (field.systemKey === null || !ELEITORAIS.includes(field.systemKey)) return field;
+
+      return {
+        ...field,
+        enabled: true,
+        required: true,
+        helpText: 'Está no seu título de eleitor.',
+      };
+    }),
+  };
+}
+
 /** Campo nativo obrigatorio nunca pode ser removido nem ter o tipo alterado. */
 export function isSystemField(field: CustomField): boolean {
   return field.systemKey !== null;
