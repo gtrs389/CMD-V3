@@ -8,7 +8,8 @@ import { DEFAULT_BANNER_TAG } from '@/lib/types';
 /**
  * Banner oficial do convite, exclusivo do celular.
  *
- * A imagem e o ARQUIVO DE PRODUCAO, servido tal como foi entregue: nada aqui
+ * A imagem e o ARQUIVO tal como foi entregue, seja o banner do proprio time
+ * ou o padrao do sistema: nada aqui
  * recorta, estica, recompoe, adiciona borda ou reprocessa um unico pixel. O
  * `img` recebe largura total e altura automatica, entao a proporcao original
  * e a do proprio arquivo — nao existe caixa com proporcao fixa para a imagem
@@ -31,27 +32,19 @@ import { DEFAULT_BANNER_TAG } from '@/lib/types';
  * publico aberto pelo link de cadastro — login, painel, pagina do Time e
  * acesso por telefone nao o carregam.
  *
- * Enquanto o arquivo oficial nao estiver publicado em `public/`, o
- * componente desenha o `fallback` recebido — a faixa de convite de sempre —
- * em vez de deixar o topo da tela vazio.
+ * Qual arquivo aparece NAO se decide aqui: chega pronto em `src`, escolhido
+ * por `inviteBannerSrc` — o banner do proprio time, quando ele subiu um, e o
+ * padrao do sistema no resto. Sem `src`, ou se o arquivo nao carregar, o
+ * componente desenha o `fallback` recebido, a faixa de convite de sempre, em
+ * vez de deixar o topo da tela vazio.
  */
-
-/**
- * Arquivo oficial do banner, exatamente como esta publicado.
- *
- * Servido do proprio Storage do projeto, no endereco publico entregue pela
- * producao. O navegador baixa o arquivo original, byte a byte: nada aqui
- * recorta, converte, recomprime ou passa a imagem por qualquer
- * processamento.
- *
- * Para trocar o banner, troque o arquivo nesse endereco — ou publique um
- * arquivo em `public/banner/` e aponte esta constante para ele. Nenhuma
- * outra linha muda.
- */
-export const INVITE_BANNER_SRC =
-  'https://zpfhqweydlujotqbuwse.supabase.co/storage/v1/object/public/imagem_url/00.png';
 
 interface InviteBannerProps {
+  /**
+   * Endereco da imagem, ja decidido por `inviteBannerSrc`. Nulo desenha o
+   * `fallback`: nenhum time empresta o banner de outro.
+   */
+  src: string | null;
   /** Nome do time, exibido como `#{NOME}`. */
   teamName: string;
   /**
@@ -71,14 +64,18 @@ interface InviteBannerProps {
 }
 
 export function InviteBanner({
+  src,
   teamName,
   tag = DEFAULT_BANNER_TAG,
   code,
   fallback,
   className,
 }: InviteBannerProps) {
-  const [indisponivel, setIndisponivel] = useState(false);
-  if (indisponivel) return <>{fallback ?? null}</>;
+  const [quebrado, setQuebrado] = useState<string | null>(null);
+  // `quebrado` guarda QUAL endereco falhou, e nao apenas que algo falhou:
+  // trocar o banner do time precisa apagar a falha do anterior, senao a
+  // imagem nova nunca chegaria a ser tentada.
+  if (!src || quebrado === src) return <>{fallback ?? null}</>;
 
   return (
     <div
@@ -90,9 +87,9 @@ export function InviteBanner({
     >
       <div className="relative">
         <img
-          src={INVITE_BANNER_SRC}
+          src={src}
           alt={`Convite do time ${teamName}`}
-          onError={() => setIndisponivel(true)}
+          onError={() => setQuebrado(src)}
           className="block w-full object-contain"
           style={{ height: 'auto' }}
         />

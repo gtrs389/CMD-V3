@@ -190,6 +190,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/configuracoes/chaves/opcoes` | ADMIN geral | Times e administradores para vincular |
 | `/api/clients/demo` | ADMIN geral | Cria um Time DEMO completo |
 | `/api/clients/demo/:id/dados` | ADMIN geral | Refaz os dados gerados de um Time DEMO |
+| `/api/clients/demo/:id/acesso` | ADMIN geral | Liga e desliga o acesso de um Time DEMO |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
 | `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
 | `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
@@ -316,6 +317,12 @@ nenhum do gerador. Cada pessoa **mora no município em que vota** — quem vota
 em Arapiraca não mora em Penedo —, e a moradia cai na rua, no bairro ou no
 município, conforme até onde o endereço publicado chega.
 
+O time vai de 1 a **5.000 pessoas** (padrão 120). As escritas vão em lotes de
+500 linhas (`insertRowsInChunks`): um envio único de milhares de linhas não
+falha por limite de linhas, falha pelo tamanho do corpo e pelo tempo da
+requisição — e, quando falha, não grava nada, o que significaria perder a
+criação inteira no fim.
+
 As pessoas se dividem entre os locais **com peso**, sorteado pela semente:
 divisão igual é o jeito mais rápido de a demonstração parecer falsa, porque o
 ranking "onde você tem mais votos" empata em tudo e o mapa vira um tabuleiro
@@ -441,6 +448,75 @@ eles seguem úteis para demonstrar e diagnosticar. A listagem começa em
 **Reais**, cada linha de um Time DEMO leva o selo, e o ADMIN geral alterna
 entre `Reais`, `DEMO` e `Todos`.
 
+### O banner do celular
+
+O banner que aparece para quem abre o link de cadastro **no telefone** era um
+só, o mesmo arquivo para o sistema inteiro, com o endereço escrito dentro do
+próprio componente. Com um Time DEMO na mesma tela, a demonstração passou a
+exibir o **banner de produção de um cliente real** — a arte dele, o nome dele,
+na apresentação de outra pessoa.
+
+Agora cada time pode ter o seu (`cmd_clients.banner_path`, migration 035),
+enviado na página do time → menu de ações → **"Banner do celular"**, ou já na
+criação do Time DEMO. A imagem vive no Storage privado, como toda imagem do
+sistema, e é servida por URL assinada.
+
+A escolha do arquivo é uma regra só, em `src/lib/domain/invite-banner.ts`:
+
+| Situação | O que aparece |
+| --- | --- |
+| O time subiu o seu | O banner dele, sempre |
+| Time DEMO sem banner próprio | **Nenhum** — a tela cai na faixa de convite comum |
+| Qualquer outro time | O banner padrão do sistema, como sempre foi |
+
+O caso do meio é o ponto: emprestar a arte de produção de um cliente real para
+uma demonstração é pior do que não ter banner nenhum.
+
+O arquivo sobe **como veio**, sem redimensionar nem reencodar — o banner é
+arte chapada, larga, com letra fina, e o tratamento das fotos de perfil (720 px,
+JPEG) borraria o texto e transformaria um fundo transparente em preto. Só
+acima do teto do Storage (2 MB) ele passa por compressão, e ainda assim com o
+dobro da resolução usada nas fotos.
+
+### Ligar e desligar o acesso
+
+Na página do Time DEMO, ao lado dos links, o ADMIN geral tem a chave **"Acesso
+ao sistema"** (migration 036, `cmd_clients.demo_access_enabled`). Desligada:
+
+- **nenhuma sessão daquele time resolve** — a conferência vive em
+  `resolveSessionState`, o único ponto por onde passam todas as páginas e
+  todas as rotas de API, então não há tela, botão ou URL que escape;
+- **nenhum login novo passa** pelo link do time, e a recusa diz o motivo em
+  vez de repetir o erro genérico: quem tem o link na mão já sabe de que time
+  se trata, e esconder isso só faria a pessoa tentar o telefone de novo
+  achando que errou;
+- **quem está dentro é avisado na hora.** O painel mantém um batimento com o
+  servidor (`GET /api/auth/session`) e, ao ver a sessão bloqueada, cobre a
+  tela com **"Conta desconectada"** e o motivo. Não redireciona sozinho para
+  o login: sumir sem explicação é o que faz alguém achar que o sistema
+  quebrou.
+
+O batimento é de **5 segundos** para administradores de time — quem pode ser
+desligado — e de 30 para o ADMIN geral, que não pertence a time nenhum. Ele só
+corre com a aba à vista, e ao voltar para a aba a conferência é imediata.
+Falha de rede não decide nada: derrubar alguém porque a conexão piscou seria
+pior do que o problema que isso resolve. Não há conexão permanente — o sistema
+roda em funções que nascem e morrem a cada requisição, onde uma conexão aberta
+por aba custaria uma função viva o tempo todo.
+
+**Desligar não destrói nada:** nenhum usuário é desativado, nenhuma sessão é
+revogada, nenhuma senha muda. Por isso religar devolve as pessoas exatamente
+onde estavam — o aviso some sozinho e a tela se recompõe, sem ninguém precisar
+entrar de novo. É também por isso que a chave é conferida **antes** do aparelho
+autorizado: recusa por aparelho revoga a sessão, e aí religar não traria
+ninguém de volta.
+
+A rota é própria (`PATCH /api/clients/demo/:id/acesso`, ADMIN geral) e não um
+campo em "editar time": `client.update` também pertence ao Administrador do
+time, que religaria o próprio acesso. E o `check` da migration recusa desligar
+um time real — uma operação de verdade não fica sem acesso por um clique em
+uma tela de demonstração.
+
 ### O que o banco garante
 
 `is_demo` é **imutável**: o gatilho `cmd_clients_demo_guard` recusa converter
@@ -456,7 +532,8 @@ A marca da geração vive em `cmd_members.demo_seed`, e o gatilho
 DEMO — sem isso, um erro de código poderia levar a rotina de correção a apagar
 um cadastro de verdade.
 
-Requer as migrations `033_time_demo.sql` e `034_time_demo_alagoas.sql`.
+Requer as migrations `033_time_demo.sql`, `034_time_demo_alagoas.sql`,
+`035_banner_do_time.sql` e `036_acesso_do_time_demo.sql`.
 
 ---
 

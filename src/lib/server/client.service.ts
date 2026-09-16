@@ -141,10 +141,11 @@ async function requireClientRow(id: string): Promise<ClientRow> {
 }
 
 async function assemble(row: ClientRow, inviteToken?: string | null): Promise<Client> {
-  const [fields, invites, photo, people] = await Promise.all([
+  const [fields, invites, photo, banner, people] = await Promise.all([
     loadFields([row.id]),
     loadInvites([row.id]),
     signedUrl(row.photo_path),
+    signedUrl(row.banner_path),
     loadTeamPeople([row.id]),
   ]);
 
@@ -155,6 +156,7 @@ async function assemble(row: ClientRow, inviteToken?: string | null): Promise<Cl
     fields: fields.get(row.id) ?? [],
     invite: invites.get(row.id) ?? null,
     photoUrl: photo,
+    bannerUrl: banner,
     inviteToken: inviteToken ?? null,
     people: peopleRows.map((personRow, index) => ({
       row: personRow,
@@ -337,7 +339,13 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
   });
   if (!row) return null;
 
-  const [fields, photo] = await Promise.all([loadFields([row.id]), signedUrl(row.photo_path)]);
+  const [fields, photo, banner] = await Promise.all([
+    loadFields([row.id]),
+    signedUrl(row.photo_path),
+    // O banner do celular e desta tela: e ele que a pessoa ve primeiro ao
+    // abrir o link no telefone.
+    signedUrl(row.banner_path),
+  ]);
 
   const client = toClient(row, {
     fields: fields.get(row.id) ?? [],
@@ -350,6 +358,7 @@ export async function getInviteContext(token: string): Promise<PublicInviteConte
       expires_at: resolved.expiresAt,
     },
     photoUrl: photo,
+    bannerUrl: banner,
     inviteToken: token,
   });
 
@@ -556,6 +565,8 @@ export async function createClient(
   }
 
   const photo = input.photo && isDataUrl(input.photo) ? await uploadImage('clients', input.photo) : null;
+  const banner =
+    input.banner && isDataUrl(input.banner) ? await uploadImage('banners', input.banner) : null;
 
   const row = await insertOne<ClientRow>(TABLES.clients, {
     name: input.name.trim(),
@@ -564,6 +575,9 @@ export async function createClient(
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
+    banner_path: banner?.path ?? null,
+    banner_mime: banner?.mime ?? null,
+    banner_size: banner?.size ?? null,
     privacy_enabled: appConfig.privacy.enabledByDefault,
     privacy_title: appConfig.privacy.defaultTitle,
     privacy_text: appConfig.privacy.defaultText,
@@ -608,6 +622,25 @@ export async function updateClient(id: string, input: Partial<ClientInput>): Pro
     // Qualquer outro valor e a URL assinada devolvida antes: a foto nao mudou.
   }
 
+  if (input.banner !== undefined) {
+    // Mesmo desenho da foto: `null` remove e o time volta ao banner padrao
+    // do sistema; uma imagem nova sobe e a antiga sai do Storage, que a
+    // cascata do banco nao alcanca; qualquer outro valor e a URL assinada
+    // devolvida antes, e significa "nao mudou".
+    if (input.banner === null) {
+      await deleteImage(current.banner_path);
+      patch.banner_path = null;
+      patch.banner_mime = null;
+      patch.banner_size = null;
+    } else if (isDataUrl(input.banner)) {
+      const uploaded = await uploadImage('banners', input.banner);
+      await deleteImage(current.banner_path);
+      patch.banner_path = uploaded.path;
+      patch.banner_mime = uploaded.mime;
+      patch.banner_size = uploaded.size;
+    }
+  }
+
   if (input.bannerTag !== undefined) {
     // Porcentagem da propria imagem, nunca pixel de tela: a estampa fica no
     // mesmo ponto do banner em qualquer largura.
@@ -645,6 +678,7 @@ export async function deleteClient(id: string): Promise<void> {
   for (const person of people) await deleteImage(person.photo_path);
 
   await deleteImage(current.photo_path);
+  await deleteImage(current.banner_path);
 
   await deleteRows(TABLES.clients, { id: `eq.${id}` });
 }

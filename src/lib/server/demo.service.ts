@@ -25,7 +25,7 @@ import {
   callFunction,
   deleteRows,
   inFilter,
-  insertRows,
+  insertRowsInChunks,
   selectRows,
   updateRows,
 } from '@/lib/supabase/rest';
@@ -82,8 +82,16 @@ export interface DemoAdminInput {
 
 export interface CreateDemoTeamInput {
   name: string;
-  /** Foto ou banner do time. Opcional. */
+  /** Foto do time. Opcional. */
   photo?: string | null;
+  /**
+   * Banner do celular do proprio Time DEMO (migration 035). Opcional.
+   *
+   * Sem ele, a tela publica do time cai na faixa de convite comum — e nunca
+   * no banner de producao de um cliente real, que era o que acontecia quando
+   * havia um unico banner para o sistema inteiro.
+   */
+  banner?: string | null;
   admins: DemoAdminInput[];
   people: number;
   places: number;
@@ -147,6 +155,7 @@ export async function createDemoTeam(
       {
         name: nome,
         photo: input.photo ?? null,
+        banner: input.banner ?? null,
         notes: 'Time de demonstração. Os dados são fictícios e ficam fora dos números reais.',
         people: input.admins.map<TeamPersonInput>((person) => ({
           name: person.name,
@@ -346,6 +355,43 @@ async function dropOrphanSeededPoints(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------
+   Chave de acesso
+   ------------------------------------------------------------------------- */
+
+/**
+ * Liga e desliga o acesso de um Time DEMO ao sistema.
+ *
+ * Desligado, nenhuma sessao daquele time resolve — a conferencia vive em
+ * `resolveSessionState`, por onde passam TODAS as paginas e TODAS as rotas —
+ * e nenhum login novo passa pelo link do time.
+ *
+ * O que NAO acontece: nenhum usuario e desativado, nenhuma sessao e revogada
+ * e nenhuma senha muda. E por isso que religar devolve as pessoas exatamente
+ * onde elas estavam, sem ninguem precisar entrar de novo, e que desligar nao
+ * destroi nada que precise ser remontado depois.
+ *
+ * Time real nao passa daqui — e o banco recusa de novo, pelo `check` da
+ * migration 036. Uma operacao de verdade nao fica sem acesso por um clique
+ * em uma tela de demonstracao.
+ */
+export async function setDemoAccess(clientId: string, enabled: boolean): Promise<Client> {
+  const client = await getClient(clientId);
+  if (!client) throw notFound('Time não encontrado.');
+  if (!client.isDemo) throw badRequest('Só um Time DEMO pode ter o acesso desligado.');
+
+  await updateRows(
+    TABLES.clients,
+    { id: `eq.${clientId}` },
+    { demo_access_enabled: enabled },
+    'id',
+  );
+
+  const atualizado = await getClient(clientId);
+  if (!atualizado) throw notFound('Time não encontrado.');
+  return atualizado;
+}
+
+/* -------------------------------------------------------------------------
    Conteudo de demonstracao
    ------------------------------------------------------------------------- */
 
@@ -535,7 +581,9 @@ async function seedMembers(
     };
   });
 
-  return insertRows<MemberRow>(TABLES.members, linhas, 'id,name,phone');
+  // Em lotes: cinco mil pessoas em um envio so estouraria o corpo da
+  // requisicao, e a criacao inteira falharia no fim.
+  return insertRowsInChunks<MemberRow>(TABLES.members, linhas, 'id,name,phone');
 }
 
 /**
@@ -598,7 +646,8 @@ async function seedMemberLocations(
     linhas.push(link(memberId, 'POLLING_PLACE', locations.places[person.placeIndex]));
   });
 
-  if (linhas.length > 0) await insertRows(TABLES.memberLocations, linhas, 'id');
+  // Sao DUAS linhas por pessoa: o lote aqui e o dobro do de integrantes.
+  if (linhas.length > 0) await insertRowsInChunks(TABLES.memberLocations, linhas, 'id');
 }
 
 /** UF unica do Time DEMO, exposta para quem precisar conferir. */

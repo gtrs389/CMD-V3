@@ -139,6 +139,23 @@ export interface ClientRow {
    */
   demo_seed_version: string | null;
   /**
+   * Acesso do Time DEMO ao sistema (migration 036).
+   *
+   * Desligado, nenhuma sessao daquele time resolve e nenhum login novo passa.
+   * Nao desativa usuario, nao revoga sessao e nao troca senha: religar
+   * devolve tudo como estava. Time real e sempre `true`, por `check`.
+   */
+  demo_access_enabled: boolean;
+  /**
+   * Banner do celular deste time (migration 035), no Storage privado.
+   *
+   * Nulo no time que nao subiu o seu: ele continua exibindo o banner padrao
+   * do sistema, como sempre foi.
+   */
+  banner_path: string | null;
+  banner_mime: string | null;
+  banner_size: number | null;
+  /**
    * Estampa "#NOME DO TIME" sobre o banner do celular (migration 022).
    * Tudo em porcentagem da propria imagem, nunca em pixels da tela.
    */

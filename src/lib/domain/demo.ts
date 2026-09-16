@@ -64,7 +64,10 @@ export const DEMO_DEFAULTS = { people: 120, places: 12 } as const;
  */
 export const DEMO_LIMITS = {
   minPeople: 1,
-  maxPeople: 300,
+  // Cinco mil: um time de porte real, para a apresentacao mostrar as telas
+  // cheias de verdade. As escritas vao em lotes (`insertRowsInChunks`), que e
+  // o que torna esse tamanho possivel sem estourar o corpo da requisicao.
+  maxPeople: 5000,
   minPlaces: 1,
   // O teto de verdade e o tamanho do catalogo conferido; este numero so
   // existe para o servidor nao aceitar um valor absurdo vindo da tela.
@@ -459,12 +462,19 @@ export function buildDemoData(input: DemoInput): DemoData {
     ocupados.add(phone);
     posicaoTelefone += 1;
 
-    // Nome inedito no time: nome repetido em uma lista de apresentacao passa
-    // por descuido. Depois de algumas tentativas o sorteio aceita o que veio —
-    // xara existe na vida real, e travar a geracao seria pior.
+    // Nome inedito no time. Nome e sobrenome dao algumas milhares de
+    // combinacoes — pouco para um time de cinco mil pessoas, entao, quando a
+    // combinacao simples ja existe, entra um SEGUNDO sobrenome, que e como
+    // meio Brasil se chama mesmo. O espaco cresce cinquenta vezes, e a lista
+    // de apresentacao para de ter xara.
     let name = `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)}`;
-    for (let tentativa = 0; usados.has(name) && tentativa < 12; tentativa += 1) {
+    for (let tentativa = 0; usados.has(name) && tentativa < 8; tentativa += 1) {
       name = `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)}`;
+    }
+    for (let tentativa = 0; usados.has(name) && tentativa < 24; tentativa += 1) {
+      name =
+        `${pick(random, PRIMEIROS_NOMES)} ${pick(random, SOBRENOMES)} ` +
+        `${pick(random, SOBRENOMES)}`;
     }
     usados.add(name);
 

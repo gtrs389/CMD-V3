@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation';
 import type { SessionUser } from '@/lib/types';
 import { can } from '@/lib/permissions';
 import { SupabaseConfigError } from '@/lib/supabase/env';
-import { currentUser } from '@/lib/server/auth.service';
+import {
+  currentSessionState,
+  SESSION_BLOCK_MESSAGES,
+  type SessionState,
+} from '@/lib/server/auth.service';
 import { FIRST_ACCESS_PATH, homePathFor, LOGIN_PATH } from './constants';
 
 /**
@@ -13,15 +17,33 @@ import { FIRST_ACCESS_PATH, homePathFor, LOGIN_PATH } from './constants';
  * leva ao login. Em nenhum caso existe acesso liberado sem banco.
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
+  return (await getSessionState()).user;
+}
+
+/**
+ * A sessao atual e, quando ela deixou de valer, o motivo.
+ *
+ * O motivo existe para uma tela so: quem esta dentro do painel quando o
+ * ADMIN geral desliga o acesso do Time DEMO precisa ver que foi
+ * desconectado, em vez de simplesmente se encontrar no login.
+ *
+ * Falha fechado, como sempre: sem banco nao ha sessao, e nao ha motivo
+ * nenhum a apresentar — a pessoa vai para o login.
+ */
+export async function getSessionState(): Promise<SessionState & { message: string | null }> {
   try {
-    return await currentUser();
+    const state = await currentSessionState();
+    return {
+      ...state,
+      message: state.blocked ? SESSION_BLOCK_MESSAGES[state.blocked] : null,
+    };
   } catch (error) {
     if (error instanceof SupabaseConfigError) {
       console.error('[auth] Supabase não configurado:', error.message);
-      return null;
+      return { user: null, blocked: null, message: null };
     }
     console.error('[auth] Não foi possível validar a sessão:', error);
-    return null;
+    return { user: null, blocked: null, message: null };
   }
 }
 

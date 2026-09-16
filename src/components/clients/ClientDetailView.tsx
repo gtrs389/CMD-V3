@@ -31,6 +31,7 @@ import { DemoBadge } from './DemoBadge';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
+import { DemoAccessSwitch } from './DemoAccessSwitch';
 import { DemoDataDialog } from './DemoDataDialog';
 import { GenerateClientInviteButton } from './GenerateClientInviteButton';
 import { GenerateInviteButton } from './GenerateInviteButton';
@@ -259,6 +260,13 @@ export function ClientDetailView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* A chave do Time DEMO fica a vista, e nao no menu: ela costuma
+                ser usada ao vivo, no meio de uma apresentacao, e o estado
+                dela (ligado ou desligado) e informacao, nao acao escondida. */}
+            {client.isDemo && user?.role === 'ADMIN' ? (
+              <DemoAccessSwitch client={client} onChanged={reload} />
+            ) : null}
+
             {/* Os tres links do time ficam juntos e nomeados: cadastro,
                 administrador e equipe. Nada de endereco na tela — cada botao
                 copia o seu. Ligar/desligar o recrutamento e ver o token
@@ -311,7 +319,7 @@ export function ClientDetailView({
                           },
                           {
                             id: 'estampa',
-                            label: 'Estampa do banner',
+                            label: 'Banner do celular',
                             icon: <ImageIcon className="size-4" />,
                             onSelect: () => setBanner(true),
                           },

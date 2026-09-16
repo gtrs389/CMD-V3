@@ -108,6 +108,13 @@ export interface Client extends Timestamped {
   form: ClientFormConfig;
   /** Administradores do time, na ordem em que foram cadastrados. */
   people: TeamPerson[];
+  /**
+   * Banner do celular deste time (migration 035), ja como URL assinada.
+   *
+   * Nulo quando o time nao subiu o seu. Quem decide o que a tela publica
+   * mostra nesse caso e `inviteBannerSrc`, e nao o componente.
+   */
+  banner: StoredImage | null;
   /** Estampa sobre o banner do celular (migration 022). */
   bannerTag: BannerTag;
   /**
@@ -118,6 +125,14 @@ export interface Client extends Timestamped {
    * um time real para vira-lo DEMO, nem o contrario.
    */
   isDemo: boolean;
+  /**
+   * Acesso deste Time DEMO ao sistema (migration 036).
+   *
+   * Sempre `true` em time real. Desligado por um Time DEMO, os
+   * administradores dele param de entrar e quem estiver dentro e avisado na
+   * hora de que a conta foi desconectada.
+   */
+  demoAccessEnabled: boolean;
 }
 
 export interface ClientInput {
@@ -128,6 +143,11 @@ export interface ClientInput {
   people?: TeamPersonInput[];
   /** Ausente: a estampa do banner nao e alterada. */
   bannerTag?: BannerTag;
+  /**
+   * Banner do celular. Ausente nao mexe no atual; `null` remove e faz o time
+   * voltar ao banner padrao do sistema.
+   */
+  banner?: StoredImage | null;
 }
 
 /** Integrante resumido, usado na pilha de fotos do cartao de cliente. */

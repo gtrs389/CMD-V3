@@ -164,8 +164,38 @@ interface SessionJoinRow extends SessionRow {
         Pick<UserRow, 'is_active'> & {
           /** Administrador do time correspondente, so para a foto do menu. */
           team_person: { photo_path: string | null } | null;
+          /**
+           * Time do usuario, so para a chave de acesso do Time DEMO.
+           *
+           * Embutido com seguranca: entre `cmd_users` e `cmd_clients` existe
+           * UM caminho so (`client_id`, migration 011), diferente do que
+           * acontece com `cmd_members`. Nulo no ADMIN geral, que nao
+           * pertence a operacao nenhuma.
+           */
+          client: { is_demo: boolean; demo_access_enabled: boolean } | null;
         })
     | null;
+}
+
+/**
+ * Por que uma sessao existente deixou de valer.
+ *
+ * Hoje ha um motivo so, e ele nao e erro nem expiracao: o ADMIN geral
+ * desligou o acesso daquele Time DEMO. Guardar o motivo e o que permite a
+ * tela dizer "sua conta foi desconectada" em vez de mandar a pessoa para o
+ * login sem explicacao nenhuma.
+ */
+export type SessionBlock = 'DEMO_DESLIGADO';
+
+export const SESSION_BLOCK_MESSAGES: Record<SessionBlock, string> = {
+  DEMO_DESLIGADO:
+    'Sua conta foi desconectada. O acesso deste Time DEMO foi desligado pelo administrador do sistema.',
+};
+
+export interface SessionState {
+  user: SessionUser | null;
+  /** Preenchido quando a sessao era valida e o acesso foi desligado. */
+  blocked: SessionBlock | null;
 }
 
 /**
@@ -202,25 +232,52 @@ export async function resolveSession(
   token: string | undefined,
   deviceToken?: string | undefined,
 ): Promise<SessionUser | null> {
-  if (!token) return null;
+  return (await resolveSessionState(token, deviceToken)).user;
+}
+
+/**
+ * A mesma conferencia, dizendo TAMBEM por que a sessao nao vale.
+ *
+ * `resolveSession` devolve so a pessoa, que e o que as rotas precisam. Esta
+ * devolve o motivo junto, e existe por causa de um requisito de tela: quem
+ * esta dentro do painel quando o ADMIN geral desliga o acesso do Time DEMO
+ * precisa VER que foi desconectado, e nao apenas se ver de volta no login.
+ *
+ * O acesso desligado nao apaga nada: a sessao continua no banco, valida, e
+ * volta a valer no instante em que a chave for religada.
+ */
+export async function resolveSessionState(
+  token: string | undefined,
+  deviceToken?: string | undefined,
+): Promise<SessionState> {
+  const vazia: SessionState = { user: null, blocked: null };
+  if (!token) return vazia;
 
   const row = await selectOne<SessionJoinRow>(TABLES.sessions, {
     select:
       `id,expires_at,revoked_at,admin_device_id,` +
       `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
-      `team_person:${TABLES.teamPeople}(photo_path))`,
+      `team_person:${TABLES.teamPeople}(photo_path),` +
+      `client:${TABLES.clients}(is_demo,demo_access_enabled))`,
     filters: { token_hash: `eq.${hashToken(token)}` },
   });
 
-  if (!row || !row.user || !row.user.is_active) return null;
-  if (row.revoked_at !== null) return null;
-  if (new Date(row.expires_at).getTime() <= Date.now()) return null;
+  if (!row || !row.user || !row.user.is_active) return vazia;
+  if (row.revoked_at !== null) return vazia;
+  if (new Date(row.expires_at).getTime() <= Date.now()) return vazia;
+
+  // A chave do Time DEMO. Vem antes do aparelho de proposito: com o acesso
+  // desligado nao ha o que conferir, e a sessao NAO e revogada — religar
+  // precisa devolver a pessoa exatamente onde ela estava.
+  if (row.user.client && row.user.client.is_demo && !row.user.client.demo_access_enabled) {
+    return { user: null, blocked: 'DEMO_DESLIGADO' };
+  }
 
   if (usesTrustedDevice(row.user)) {
     const autorizado = await checkAdminDevice(row.user.id, row.admin_device_id, deviceToken);
     if (!autorizado) {
       await revokeSession(token);
-      return null;
+      return vazia;
     }
   }
 
@@ -231,7 +288,7 @@ export async function resolveSession(
     ? await signedUrl(row.user.team_person.photo_path)
     : await memberPhoto(row.user);
 
-  return toSessionUser(row.user, photo);
+  return { user: toSessionUser(row.user, photo), blocked: null };
 }
 
 /** Encerra a sessao correspondente ao token. */
@@ -276,19 +333,25 @@ export async function purgeExpiredSessions(): Promise<void> {
  * endereco devolve exatamente o acesso que a conta ja tinha.
  */
 export async function currentUser(): Promise<SessionUser | null> {
+  return (await currentSessionState()).user;
+}
+
+/** `currentUser`, dizendo tambem por que a sessao deixou de valer. */
+export async function currentSessionState(): Promise<SessionState> {
   const store = await cookies();
-  const user = await resolveSession(
+  const state = await resolveSessionState(
     store.get(SESSION_COOKIE)?.value,
     store.get(ADMIN_DEVICE_COOKIE)?.value,
   );
-  if (!user) return null;
+  if (!state.user) return state;
 
   const host = (await headers()).get('host');
+  const user = state.user;
 
-  if (user.role === 'ADMIN' && !servesAdminLogin(host)) return null;
-  if (user.role !== 'ADMIN' && isAdminHost(host)) return null;
+  if (user.role === 'ADMIN' && !servesAdminLogin(host)) return { user: null, blocked: null };
+  if (user.role !== 'ADMIN' && isAdminHost(host)) return { user: null, blocked: null };
 
-  return user;
+  return state;
 }
 
 export interface ChangePasswordOutcome {

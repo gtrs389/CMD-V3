@@ -10,6 +10,7 @@ import type {
 } from '@/lib/types';
 import { DEFAULT_SURVEY_SUCCESS, DEFAULT_SURVEY_TITLE } from '@/lib/types';
 import { createInviteToken, hashToken } from '@/lib/auth/tokens';
+import { inviteBannerSrc } from '@/lib/domain/invite-banner';
 import { linkCode } from '@/lib/domain/link-code';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
@@ -63,12 +64,15 @@ const INVITE_COLUMNS =
   'claim_hash,claimed_at,consumed_at,response_id,created_at';
 
 const SURVEY_CLIENT_COLUMNS =
-  'id,name,photo_path,survey_active,survey_title,survey_intro_text,survey_success_message,' +
-  'survey_updated_at,banner_tag_left,banner_tag_width,banner_tag_top,banner_tag_size,banner_tag_color';
+  'id,name,photo_path,is_demo,banner_path,survey_active,survey_title,survey_intro_text,' +
+  'survey_success_message,survey_updated_at,banner_tag_left,banner_tag_width,banner_tag_top,' +
+  'banner_tag_size,banner_tag_color';
 
 type SurveyClientRow = Pick<
   ClientRow,
   | 'id'
+  | 'is_demo'
+  | 'banner_path'
   | 'name'
   | 'photo_path'
   | 'survey_active'
@@ -375,9 +379,10 @@ export async function resolveSurveyLink(token: string): Promise<SurveyLinkState>
   });
   if (!row || !row.survey_active) return { kind: 'unavailable' };
 
-  const [fields, photo] = await Promise.all([
+  const [fields, photo, banner] = await Promise.all([
     loadSurveyFields(row.id),
     signedUrl(row.photo_path),
+    signedUrl(row.banner_path),
   ]);
 
   const visiveis = fields.filter((field) => field.enabled);
@@ -389,6 +394,9 @@ export async function resolveSurveyLink(token: string): Promise<SurveyLinkState>
     survey: {
       clientId: row.id,
       clientName: row.name,
+      // O questionario abre pela mesma moldura do cadastro, no mesmo
+      // celular: o banner e escolhido pela mesma regra.
+      bannerSrc: inviteBannerSrc({ banner, isDemo: row.is_demo === true }),
       bannerTag: {
         left: Number(row.banner_tag_left),
         width: Number(row.banner_tag_width),

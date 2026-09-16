@@ -247,6 +247,39 @@ export async function insertRows<T>(
   return rows ?? [];
 }
 
+/**
+ * Tamanho de cada lote de escrita.
+ *
+ * Um envio unico de milhares de linhas nao falha por limite de linhas: falha
+ * pelo TAMANHO do corpo e pelo tempo da requisicao, e quando falha nao grava
+ * nada — e com um Time DEMO de milhares de pessoas isso significa perder a
+ * criacao inteira no fim. Quinhentas linhas por vez cabem com folga em
+ * qualquer um dos dois limites.
+ */
+export const INSERT_CHUNK = 500;
+
+/**
+ * Insercao em lotes, para volumes grandes.
+ *
+ * Cada lote e uma requisicao propria: o PostgREST nao abre transacao entre
+ * elas, entao quem chama precisa saber desfazer o que ja entrou. Os Times
+ * DEMO sabem — a falha exclui o time, e a cascata do banco leva o resto.
+ */
+export async function insertRowsInChunks<T>(
+  table: string,
+  values: Record<string, QueryValue | object>[],
+  select = '*',
+  size = INSERT_CHUNK,
+): Promise<T[]> {
+  if (values.length <= size) return insertRows<T>(table, values, select);
+
+  const gravados: T[] = [];
+  for (let inicio = 0; inicio < values.length; inicio += size) {
+    gravados.push(...(await insertRows<T>(table, values.slice(inicio, inicio + size), select)));
+  }
+  return gravados;
+}
+
 export async function insertOne<T>(
   table: string,
   value: Record<string, QueryValue | object>,

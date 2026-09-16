@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
+import { inviteBannerSrc } from '@/lib/domain/invite-banner';
 import type { Client, CustomField, PublicInviteOwner } from '@/lib/types';
 import { PHONE_IN_USE } from '@/lib/types';
 import { submitInvite } from '@/lib/repositories';
@@ -279,6 +280,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
       owner={owner}
       teamName={client.name}
       bannerTag={client.bannerTag}
+      bannerSrc={inviteBannerSrc({ banner: client.banner, isDemo: client.isDemo })}
       linkCode={linkCode(client.invite.token)}
       title="Ficha de cadastro"
       subtitle="Leva menos de 2 minutos."
