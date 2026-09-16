@@ -132,13 +132,21 @@ const REGRAS_DO_BANCO: Record<string, { status: number; message: string }> = {
     message: 'Este cadastro não pertence a este time.',
   },
   // Recusa correta quando a troca chega sem registro (ou com registro
-  // falso). A troca legitima — "Alterar responsável", na ficha — passa pela
-  // guarda desde a migration 032, porque grava quando, quem e de quem era.
+  // falso). Dois caminhos legitimos passam pela guarda: a troca pela ficha
+  // ("Alterar responsável"), que grava quando, quem e de quem era, desde a
+  // migration 032; e a segunda camada do Time DEMO, que reescreve a origem
+  // FABRICADA das pessoas geradas, desde a 039.
+  //
+  // A mensagem cita as duas porque citar so a 032 mandava para o lugar
+  // errado quem tinha esbarrado na outra: o ADMIN geral ajustava a segunda
+  // camada de um Time DEMO e era orientado a executar uma migration que ja
+  // estava executada.
   'origem do cadastro nao pode ser alterada': {
     status: 409,
     message:
       'Quem cadastrou uma pessoa só muda em "Alterar responsável", na ficha do integrante, ' +
-      'e a mudança fica registrada. Se a ação veio de lá, falta executar a migration 032 no banco.',
+      'e a mudança fica registrada. Se a ação veio de lá, falta executar a migration 032 no banco; ' +
+      'se veio de "Pessoas que também recrutam", em um Time DEMO, falta a 039.',
   },
   'usuario nao encontrado': {
     status: 404,

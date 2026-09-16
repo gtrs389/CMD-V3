@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
 import { API_KEY_NAME_MAX } from '@/lib/domain/api-key';
 import { DEMO_DEFAULTS, DEMO_LIMITS } from '@/lib/domain/demo';
+import {
+  DEMO_RECRUITERS_DEFAULT,
+  DEMO_RECRUITERS_MAX,
+} from '@/lib/domain/demo-recruiters';
 import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
 import {
   GENDER_VALUES,
@@ -581,6 +585,19 @@ export const demoTeamCreateSchema = z.object({
     .min(DEMO_LIMITS.minPeople)
     .max(DEMO_LIMITS.maxPeople, `O máximo é ${DEMO_LIMITS.maxPeople} pessoas.`)
     .default(DEMO_DEFAULTS.people),
+  /**
+   * Segunda camada: quantas pessoas do time TAMBEM recrutam.
+   *
+   * OPCIONAL, e zero por padrao — um Time DEMO continua nascendo de uma
+   * camada so, como sempre nasceu. Quem quiser a segunda pede aqui, ou
+   * ajusta depois na pagina do time, quantas vezes quiser.
+   */
+  recruiters: z
+    .number()
+    .int('Informe um número inteiro.')
+    .min(0)
+    .max(DEMO_RECRUITERS_MAX, `O máximo é ${DEMO_RECRUITERS_MAX}.`)
+    .default(DEMO_RECRUITERS_DEFAULT),
   places: z
     .number()
     .int('Informe um número inteiro de locais.')
@@ -591,4 +608,13 @@ export const demoTeamCreateSchema = z.object({
     .string()
     .trim()
     .regex(/^[A-Za-z0-9_-]{8,64}$/, 'Chave de criação inválida.'),
+});
+
+/** Segunda camada do Time DEMO, ajustada depois da criacao. */
+export const demoRecruitersSchema = z.object({
+  recruiters: z
+    .number()
+    .int('Informe um número inteiro.')
+    .min(0)
+    .max(DEMO_RECRUITERS_MAX, `O máximo é ${DEMO_RECRUITERS_MAX}.`),
 });

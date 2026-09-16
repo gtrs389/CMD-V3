@@ -13,6 +13,7 @@ import {
   DEMO_SEED_VERSION,
   DEMO_STATE,
 } from '@/lib/domain/demo-catalog';
+import { clampRecruiters, shareAmongRecruiters } from '@/lib/domain/demo-recruiters';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
@@ -25,6 +26,7 @@ import {
   callFunction,
   deleteRows,
   inFilter,
+  insertOne,
   insertRowsInChunks,
   selectRows,
   updateRows,
@@ -96,6 +98,14 @@ export interface CreateDemoTeamInput {
   admins: DemoAdminInput[];
   people: number;
   places: number;
+  /**
+   * Segunda camada: quantas pessoas do time TAMBEM recrutam.
+   *
+   * Opcional na pratica — zero nao faz nada, e o time nasce de uma camada
+   * so. Pode ser ajustado depois, na pagina do time, quantas vezes for
+   * preciso.
+   */
+  recruiters?: number;
   /** Chave de idempotencia criada pelo navegador. */
   seedKey: string;
 }
@@ -174,6 +184,15 @@ export async function createDemoTeam(
     clientId = criado.id;
 
     await seedDemoContent(criado, { people, places, seedKey: input.seedKey }, pontos);
+
+    // Segunda camada, quando pedida. Fica DEPOIS das pessoas porque e sobre
+    // elas que ela trabalha: escolhe quem tambem recruta e redistribui os
+    // cadastros. Zero — o padrao — nao faz nada, e o time nasce de uma
+    // camada so, como sempre nasceu.
+    if ((input.recruiters ?? 0) > 0) {
+      await setDemoRecruiters(criado.id, input.recruiters ?? 0);
+    }
+
     await markSeeded(criado.id);
     await updateSeed(claim.seed_id, criado.id);
 
@@ -734,3 +753,179 @@ async function seedMemberLocations(
 
 /** UF unica do Time DEMO, exposta para quem precisar conferir. */
 export const DEMO_TEAM_STATE = DEMO_STATE;
+
+/* -------------------------------------------------------------------------
+   Segunda camada: quem da equipe tambem recruta
+   ------------------------------------------------------------------------- */
+
+/**
+ * Define quantas pessoas do Time DEMO tambem recrutam.
+ *
+ * Um time real tem DUAS camadas. O administrador cadastra gente pelo link
+ * dele; parte dessa gente ganha o proprio link e cadastra mais gente. O Time
+ * DEMO so tinha a primeira: as mil pessoas apareciam todas como cadastradas
+ * pelo administrador, e o "Ranking de cadastros equipe" — o quadro que
+ * responde "quem esta trazendo gente" — ficava com a lista inteira em zero.
+ *
+ * Chamar com um numero MENOR desfaz: os recrutadores que sobram perdem o
+ * acesso e os cadastros deles voltam para o administrador. Com zero, o time
+ * volta a ter uma camada so. E por isso que esta funcao recebe o TOTAL
+ * desejado, e nao "adicione mais um": o ADMIN geral diz como o time deve
+ * ficar, e nao que passo dar.
+ *
+ * O ACESSO CONTINUA FECHADO. O usuario de cada recrutador nasce
+ * `is_active: false`, e o login por link do time + telefone so aceita
+ * usuario ativo (ver `team-access.service`). Eles existem para a
+ * HIERARQUIA — aparecer em "Cadastrado por", no ranking e na arvore da
+ * equipe —, nunca para entrar. As pessoas de um Time DEMO sao dados, e os
+ * telefones delas sao ficticios: um telefone ficticio que abrisse o painel
+ * do time seria uma porta aberta por engano.
+ *
+ * Por isso tambem a linha em `cmd_users` e escrita AQUI, e nao por
+ * `createMemberAccess`: aquela funcao concede acesso de verdade e recusa
+ * Time DEMO de proposito. Chamar de la seria burlar a recusa; repetir a
+ * gravacao aqui, com o acesso desligado, e outra coisa — e esta e a unica
+ * porta por onde um integrante de Time DEMO ganha linha de usuario.
+ */
+export async function setDemoRecruiters(
+  clientId: string,
+  quantidade: number,
+): Promise<{ recruiters: number; moved: number }> {
+  const client = await getClient(clientId);
+  if (!client) throw notFound('Time não encontrado.');
+  if (!client.isDemo) throw badRequest('A segunda camada é só do Time DEMO.');
+
+  // As pessoas GERADAS, na ordem em que foram criadas. Quem foi cadastrado a
+  // mao durante uma demonstracao fica de fora: nao e dado de apresentacao, e
+  // mexer no responsavel dele seria reescrever um cadastro de verdade.
+  const pessoas = await selectRows<Pick<MemberRow, 'id' | 'name' | 'phone'>>(TABLES.members, {
+    select: 'id,name,phone',
+    filters: { client_id: `eq.${clientId}`, demo_seed: 'not.is.null' },
+    order: 'created_at.asc',
+  });
+
+  const alvo = clampRecruiters(quantidade, pessoas.length);
+  const admins = await demoAdmins(clientId);
+
+  // Quem ja e recrutador. Num Time DEMO, todo usuario EQUIPE veio daqui:
+  // `createMemberAccess` recusa conceder acesso a integrante de Time DEMO.
+  const atuais = await selectRows<Pick<UserRow, 'id' | 'member_id'>>(TABLES.users, {
+    select: 'id,member_id',
+    filters: { client_id: `eq.${clientId}`, role: 'eq.EQUIPE' },
+    order: 'created_at.asc',
+  });
+
+  const escolhidos = pessoas.slice(0, alvo);
+  const escolhidosIds = new Set(escolhidos.map((pessoa) => pessoa.id));
+
+  // 1. Quem saiu da lista: devolve os cadastros ao administrador e apaga o
+  //    usuario. O integrante em si NUNCA e apagado — ele e uma pessoa do
+  //    time, e so deixou de recrutar.
+  const sobrando = atuais.filter((user) => !user.member_id || !escolhidosIds.has(user.member_id));
+  if (sobrando.length > 0) {
+    const responsavel = admins[0];
+    await updateRows(
+      TABLES.members,
+      { recruited_by_user_id: inFilter(sobrando.map((user) => user.id)) },
+      {
+        recruited_by_user_id: responsavel.id,
+        recruited_by_name: responsavel.name,
+        recruited_by_role: 'CANDIDATE',
+      },
+      'id',
+    );
+    await deleteRows(TABLES.users, { id: inFilter(sobrando.map((user) => user.id)) });
+  }
+
+  if (alvo === 0) return { recruiters: 0, moved: 0 };
+
+  // 2. Quem entrou: ganha a linha de usuario, com o acesso DESLIGADO.
+  const jaTem = new Map(
+    atuais
+      .filter((user) => user.member_id && escolhidosIds.has(user.member_id))
+      .map((user) => [user.member_id as string, user.id]),
+  );
+
+  const recrutadores: { userId: string; name: string; memberId: string }[] = [];
+  for (const pessoa of escolhidos) {
+    const existente = jaTem.get(pessoa.id);
+    if (existente) {
+      recrutadores.push({ userId: existente, name: pessoa.name, memberId: pessoa.id });
+      continue;
+    }
+
+    const criado = await insertOne<Pick<UserRow, 'id'>>(
+      TABLES.users,
+      {
+        name: pessoa.name.slice(0, 120),
+        email: null,
+        phone: normalizePhone(pessoa.phone ?? ''),
+        role: 'EQUIPE',
+        client_id: clientId,
+        member_id: pessoa.id,
+        password_hash: null,
+        must_change_password: false,
+        // DESLIGADO. Ver a nota acima: hierarquia sim, entrada nao.
+        is_active: false,
+      },
+      'id',
+    );
+    recrutadores.push({ userId: criado.id, name: pessoa.name, memberId: pessoa.id });
+  }
+
+  // 3. Os cadastros mudam de dono. Os proprios recrutadores continuam sendo
+  //    do administrador: foi ele que os trouxe, e ninguem recruta a si mesmo.
+  const candidatos = pessoas.filter((pessoa) => !escolhidosIds.has(pessoa.id));
+  const fatias = shareAmongRecruiters(recrutadores.length, candidatos.length);
+
+  let cursor = 0;
+  let movidos = 0;
+
+  for (const fatia of fatias) {
+    const recrutador = recrutadores[fatia.index];
+    const lote = candidatos.slice(cursor, cursor + fatia.count);
+    cursor += fatia.count;
+    if (lote.length === 0) continue;
+
+    await updateRows(
+      TABLES.members,
+      { id: inFilter(lote.map((pessoa) => pessoa.id)) },
+      {
+        recruited_by_user_id: recrutador.userId,
+        recruited_by_name: recrutador.name,
+        recruited_by_role: 'EQUIPE',
+      },
+      'id',
+    );
+    movidos += lote.length;
+  }
+
+  // 4. O resto volta ao administrador. Sem isto, diminuir a segunda camada
+  //    deixaria para tras gente apontando para um recrutador que ja nao
+  //    existe mais.
+  const resto = candidatos.slice(cursor);
+  if (resto.length > 0) {
+    const responsavel = admins[0];
+    await updateRows(
+      TABLES.members,
+      { id: inFilter(resto.map((pessoa) => pessoa.id)) },
+      {
+        recruited_by_user_id: responsavel.id,
+        recruited_by_name: responsavel.name,
+        recruited_by_role: 'CANDIDATE',
+      },
+      'id',
+    );
+  }
+
+  return { recruiters: recrutadores.length, moved: movidos };
+}
+
+/** Quantas pessoas do Time DEMO recrutam hoje. */
+export async function countDemoRecruiters(clientId: string): Promise<number> {
+  const rows = await selectRows<Pick<UserRow, 'id'>>(TABLES.users, {
+    select: 'id',
+    filters: { client_id: `eq.${clientId}`, role: 'eq.EQUIPE' },
+  });
+  return rows.length;
+}

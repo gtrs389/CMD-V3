@@ -34,6 +34,7 @@ import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { DemoAccessSwitch } from './DemoAccessSwitch';
 import { DemoDataDialog } from './DemoDataDialog';
+import { DemoRecruitersModal } from './DemoRecruitersModal';
 import { GenerateClientInviteButton } from './GenerateClientInviteButton';
 import { GenerateInviteButton } from './GenerateInviteButton';
 import { TeamLinksBar } from './TeamLinksBar';
@@ -69,6 +70,7 @@ export function ClientDetailView({
 
   const [editing, setEditing] = useState(false);
   const [banner, setBanner] = useState(false);
+  const [recrutadores, setRecrutadores] = useState(false);
   const [deleting, setDeleting] = useState(false);
   /** Refazer os dados gerados: so aparece em Time DEMO, so para o ADMIN. */
   const [refazendo, setRefazendo] = useState(false);
@@ -359,6 +361,12 @@ export function ClientDetailView({
                             icon: <RefreshCw className="size-4" />,
                             onSelect: () => setRefazendo(true),
                           },
+                          {
+                            id: 'recrutadores-demo',
+                            label: 'Pessoas que também recrutam',
+                            icon: <Users className="size-4" />,
+                            onSelect: () => setRecrutadores(true),
+                          },
                         ]
                       : []),
                     ...(podeExcluir
@@ -432,6 +440,17 @@ export function ClientDetailView({
       <ClientFormModal open={editing} client={client} onClose={() => setEditing(false)} />
 
       <BannerTagModal open={banner} client={client} onClose={() => setBanner(false)} />
+
+      {/* Montado so quando abre: o valor de hoje e lido do servidor na
+          abertura, e um modal que fica montado guardaria o numero antigo. */}
+      {recrutadores ? (
+        <DemoRecruitersModal
+          open
+          client={client}
+          onClose={() => setRecrutadores(false)}
+          onChanged={reload}
+        />
+      ) : null}
 
       <DemoDataDialog
         open={refazendo}
