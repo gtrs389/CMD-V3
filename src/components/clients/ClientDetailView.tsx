@@ -192,7 +192,13 @@ export function ClientDetailView({
       ) : null}
 
       <header className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        {/* O grupo de botoes da direita e largo e nao encolhe: cada botao tem
+            `whitespace-nowrap`. Sem `flex-wrap` aqui, a conta de espaco fecha
+            negativa e sobra zero para o nome do time — que, com `min-w-0`,
+            aceita zero e quebra uma letra por linha. Com a quebra, o grupo
+            inteiro desce para a linha de baixo e o nome fica com a largura
+            do cartao. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
           {client.photo ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -209,7 +215,11 @@ export function ClientDetailView({
             </span>
           )}
 
-          <div className="min-w-0 flex-1">
+          {/* `flex-1` sozinho e `flex: 1 1 0%`: base ZERO. Num aperto o nome do
+              time e o primeiro a ser espremido, ate sumir. A base minima diz
+              qual largura ele pede antes de ceder; `min-w-0` continua, para o
+              texto poder truncar em vez de esticar o cartao. */}
+          <div className="min-w-0 flex-1 sm:basis-72">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl leading-tight font-bold tracking-tight break-words text-ink-900 sm:text-[1.375rem]">
                 {client.name}
