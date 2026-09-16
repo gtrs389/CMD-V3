@@ -221,3 +221,29 @@ export function normalizeZone(input: string): string {
 export function normalizeSection(input: string): string {
   return semZeroAFrente(onlyDigits(input, SECTION_MAX_LENGTH + 4)).slice(0, SECTION_MAX_LENGTH);
 }
+
+/**
+ * O que a pessoa VE enquanto digita a zona ou a secao.
+ *
+ * Diferente do que fica gravado, e de proposito: o titulo dela diz "044", e
+ * um campo que apaga o zero na hora em que ele e digitado parece defeito. O
+ * que ela escreveu fica na tela; quem tira o zero e `normalizeZone` /
+ * `normalizeSection`, no envio — e ai "044" e "44" viram o mesmo cadastro.
+ *
+ * O teto conta so os digitos QUE VALEM: os zeros a frente nao gastam o
+ * limite, senao "01234" pararia em "0123" e viraria a secao 123, que e outra
+ * secao. Zero nenhum a mais e aceito depois do teto.
+ */
+function mascaraDeNumero(input: string, maximo: number): string {
+  const digitos = onlyDigits(input, maximo + 4);
+  const zeros = digitos.length - semZeroAFrente(digitos).length;
+  return digitos.slice(0, zeros + maximo);
+}
+
+export function maskZone(input: string): string {
+  return mascaraDeNumero(input, ZONE_MAX_LENGTH);
+}
+
+export function maskSection(input: string): string {
+  return mascaraDeNumero(input, SECTION_MAX_LENGTH);
+}
