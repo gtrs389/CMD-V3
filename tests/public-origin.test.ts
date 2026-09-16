@@ -25,17 +25,17 @@ function derive(origin: string): string {
 
 describe('endereço dos links enviados', () => {
   it('troca o painel pelo domínio público', () => {
-    expect(derive('https://painel.appdemo.sbs')).toBe(
-      'https://www.appdemo.sbs',
+    expect(derive('https://painel.convitetimebezerra.com')).toBe(
+      'https://www.convitetimebezerra.com',
     );
   });
 
   it('deixa em paz quem não está no painel', () => {
     // Quem ainda nao separou os dominios continua gerando o link no proprio
     // endereco: trocar por um `www.` que talvez nao exista seria pior.
-    expect(derive('https://appdemo.sbs')).toBe('https://appdemo.sbs');
-    expect(derive('https://www.appdemo.sbs')).toBe(
-      'https://www.appdemo.sbs',
+    expect(derive('https://convitetimebezerra.com')).toBe('https://convitetimebezerra.com');
+    expect(derive('https://www.convitetimebezerra.com')).toBe(
+      'https://www.convitetimebezerra.com',
     );
     expect(derive('http://localhost:3000')).toBe('http://localhost:3000');
   });

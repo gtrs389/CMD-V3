@@ -208,9 +208,9 @@ eles sao:
 
 | Endereco | Para que serve |
 | --- | --- |
-| `7061696e656c2061646d.appdemo.sbs` | SO o ADMIN geral entra por aqui. E o unico endereco que serve a tela de e-mail e senha. |
-| `painel.appdemo.sbs` | Por onde o Administrador do time e a equipe entram, pelo link de acesso do proprio time + telefone. Nao ha tela de e-mail e senha aqui. |
-| `www.appdemo.sbs` | SO OS CADASTROS: Formulario 1 e Formulario 2, os links que vao por WhatsApp. Ninguem entra no sistema por este endereco. |
+| `7061696e656c2061646d.convitetimebezerra.com` | SO o ADMIN geral entra por aqui. E o unico endereco que serve a tela de e-mail e senha. |
+| `painel.convitetimebezerra.com` | Por onde o Administrador do time e a equipe entram, pelo link de acesso do proprio time + telefone. Nao ha tela de e-mail e senha aqui. |
+| `www.convitetimebezerra.com` | SO OS CADASTROS: Formulario 1 e Formulario 2, os links que vao por WhatsApp. Ninguem entra no sistema por este endereco. |
 
 Aponte os tres para o mesmo deploy (na Vercel, **Settings -> Domains**). Nao e
 um endereco por projeto: e o mesmo projeto respondendo aos tres, e quem separa
@@ -234,8 +234,10 @@ qualquer que seja o dominio abaixo deles. O que precisa ser feito e:
    consertaria isso. Deixar os dois em branco tambem resolve: vazio quer
    dizer "deduza", e a deducao ja da o dominio certo sozinha;
 3. se a troca ja aconteceu com enderecos gravados, rode a migration de troca
-   correspondente (a `037_troca_de_dominio.sql` fez isso para
-   `convitetimebezerra.com` -> `appdemo.sbs`).
+   correspondente. A `037_troca_de_dominio.sql` fez
+   `convitetimebezerra.com` -> `appdemo.sbs`, e a
+   `040_troca_de_dominio_de_volta.sql` fez o caminho de volta,
+   `appdemo.sbs` -> `convitetimebezerra.com`, que e o dominio de hoje.
 
 O endereco `*.vercel.app` da propria publicacao continua aceitando o login do
 ADMIN. Essa e a SAIDA DE EMERGENCIA: se o DNS do endereco exclusivo cair ou
