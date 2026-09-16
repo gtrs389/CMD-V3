@@ -47,6 +47,47 @@ function matches(row: Row, filters: Record<string, string> = {}): boolean {
   });
 }
 
+/**
+ * O gatilho `cmd_members_recruiter_guard`, como ele existe no Postgres.
+ *
+ * Sem isto o banco em memoria aceitava qualquer reescrita da origem do
+ * cadastro, e os testes passavam enquanto a producao recusava com
+ * 'origem do cadastro nao pode ser alterada' (P0001) — que foi exatamente o
+ * que aconteceu. Um banco de teste sem os gatilhos do banco de verdade
+ * aprova codigo que o banco de verdade reprova.
+ *
+ * Tres saidas aceitas, iguais as das migrations 012, 032 e 039:
+ *   1. o responsavel foi excluido (identificador nulo, snapshots intactos);
+ *   2. a troca veio REGISTRADA — quando, quem, e de quem era;
+ *   3. a linha e GERADA de demonstracao (`demo_seed`), cuja origem e
+ *      fabricada desde o INSERT.
+ */
+function guardaDoResponsavel(old: Row, next: Row): void {
+  const mudou = (['recruited_by_user_id', 'recruited_by_name', 'recruited_by_role'] as const).some(
+    (coluna) => coluna in next && next[coluna] !== old[coluna],
+  );
+  if (!mudou) return;
+
+  const desligou =
+    next.recruited_by_user_id === null &&
+    (!('recruited_by_name' in next) || next.recruited_by_name === old.recruited_by_name);
+
+  const registrou =
+    Boolean(next.recruited_by_user_id) &&
+    Boolean(next.recruiter_changed_at) &&
+    next.recruiter_changed_at !== old.recruiter_changed_at &&
+    Boolean(next.recruiter_changed_by) &&
+    next.recruiter_previous_name === old.recruited_by_name;
+
+  // A marca so e escrita pela geracao: cadastro real, e cadastro feito a mao
+  // dentro de um Time DEMO, nao a tem.
+  const gerado = old.demo_seed !== null && old.demo_seed !== undefined;
+
+  if (!desligou && !registrou && !gerado) {
+    throw new Error('origem do cadastro nao pode ser alterada');
+  }
+}
+
 vi.mock('@/lib/supabase/rest', () => ({
   inFilter: (values: readonly string[]) => `in.(${values.map((v) => `"${v}"`).join(',')})`,
   notInFilter: (values: readonly string[]) => `not.in.(${values.map((v) => `"${v}"`).join(',')})`,
@@ -75,6 +116,7 @@ vi.mock('@/lib/supabase/rest', () => ({
     const alterados: Row[] = [];
     for (const row of db[table]) {
       if (!matches(row, filters)) continue;
+      if (table === 'cmd_members') guardaDoResponsavel(row, values);
       Object.assign(row, values);
       alterados.push({ ...row });
     }
@@ -223,5 +265,51 @@ describe('segunda camada do Time DEMO', () => {
     await setDemoRecruiters(TIME, 3);
 
     expect(db.cmd_users.filter((u) => u.role === 'EQUIPE')).toHaveLength(3);
+  });
+});
+
+describe('a guarda do banco continua de pe', () => {
+  it('recusa reescrever a origem de um cadastro NAO gerado', () => {
+    // Uma pessoa cadastrada a mao durante a demonstracao: sem `demo_seed`,
+    // ela tem origem de verdade e continua protegida.
+    const aMao: Row = {
+      id: 'm-mao',
+      client_id: TIME,
+      name: 'Cadastrada a mao',
+      demo_seed: null,
+      recruited_by_user_id: ADMIN_USER,
+      recruited_by_name: 'Marcos',
+      recruited_by_role: 'CANDIDATE',
+    };
+
+    expect(() =>
+      guardaDoResponsavel(aMao, {
+        recruited_by_user_id: 'outro',
+        recruited_by_name: 'Jose',
+        recruited_by_role: 'EQUIPE',
+      }),
+    ).toThrow('origem do cadastro nao pode ser alterada');
+  });
+
+  it('aceita a troca REGISTRADA, com o nome de quem esta saindo', () => {
+    const real: Row = {
+      id: 'm-real',
+      demo_seed: null,
+      recruited_by_user_id: ADMIN_USER,
+      recruited_by_name: 'Marcos',
+      recruited_by_role: 'CANDIDATE',
+      recruiter_changed_at: null,
+    };
+
+    expect(() =>
+      guardaDoResponsavel(real, {
+        recruited_by_user_id: 'outro',
+        recruited_by_name: 'Jose',
+        recruited_by_role: 'EQUIPE',
+        recruiter_changed_at: '2026-09-16T00:00:00.000Z',
+        recruiter_changed_by: ADMIN_USER,
+        recruiter_previous_name: 'Marcos',
+      }),
+    ).not.toThrow();
   });
 });
