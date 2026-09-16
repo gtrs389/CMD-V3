@@ -362,18 +362,50 @@ export async function retryLocation(memberId: string, kind: LocationKind): Promi
    ------------------------------------------------------------------------- */
 
 /** Restringe os vinculos aos integrantes de um unico time. */
-async function scopeLinksToClient(
-  links: MemberLocationRow[],
-  clientId: string,
-): Promise<MemberLocationRow[]> {
+/** Teto de vinculos desenhados de uma vez, no mapa geral e no do time. */
+const MAP_LINK_LIMIT = 2000;
+
+/**
+ * Vinculos de UM time, buscados NO BANCO pelos integrantes dele.
+ *
+ * Antes, o mapa do time lia os 2.000 vinculos mais recentes do sistema
+ * INTEIRO e so depois peneirava, em memoria, os que eram daquele time. Isso
+ * funcionou enquanto o sistema todo cabia em 2.000 vinculos. Quando um Time
+ * DEMO — que hoje vai a 5.000 pessoas — foi gerado, os vinculos dele, recem
+ * gravados, tomaram a janela inteira por serem os mais RECENTES, e o time
+ * real, mais antigo, simplesmente nao vinha na consulta. A peneira entao
+ * nao achava nada e a pagina do time mostrava o mapa vazio, com todos os
+ * numeros zerados — inclusive "pendentes", que e o sinal de que nao houve
+ * filtro nenhum: nao havia dado.
+ *
+ * Agora o recorte e do BANCO: pedimos os vinculos DESTE time. O que outro
+ * time gravou, por mais recente e por mais numeroso que seja, nao disputa
+ * mais espaco com ele.
+ */
+async function clientLinks(clientId: string): Promise<MemberLocationRow[]> {
   const clientMembers = await selectRows<{ id: string }>(TABLES.members, {
     // O filtro do PostgREST precisa do operador: sem o `eq.` o banco recusa a
     // consulta e o mapa do time nao abre.
     select: 'id',
     filters: { client_id: `eq.${clientId}` },
   });
-  const memberIds = new Set(clientMembers.map((member) => member.id));
-  return links.filter((link) => memberIds.has(link.member_id));
+
+  if (clientMembers.length === 0) return [];
+
+  const links = await selectRows<MemberLocationRow>(TABLES.memberLocations, {
+    select: '*',
+    filters: { member_id: inFilter(clientMembers.map((member) => member.id)) },
+    order: 'updated_at.desc',
+    // Sem `limit` AQUI de proposito: uma lista longa de identificadores sai
+    // em LOTES (`selectRows`), e um teto na consulta cortaria cada lote, e
+    // nao o conjunto — devolvendo um pedaco de cada pedaco. O teto e
+    // aplicado abaixo, sobre o total ja reunido.
+  });
+
+  return links
+    .slice()
+    .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
+    .slice(0, MAP_LINK_LIMIT);
 }
 
 /**
@@ -383,20 +415,18 @@ async function scopeLinksToClient(
  * numero, ou qualquer parte do retorno da consulta cadastral.
  */
 export async function mapOverview(clientId?: string): Promise<MapOverviewPayload> {
-  const links = await selectRows<MemberLocationRow>(TABLES.memberLocations, {
-    select: '*',
-    // Mapa GERAL: os Times DEMO ficam de fora, como em toda metrica global.
-    // Com `clientId` o recorte e o time pedido — inclusive quando ele e o
-    // proprio Time DEMO, que dentro da propria pagina mostra tudo.
-    filters: clientId ? {} : await withoutDemoClients(),
-    order: 'updated_at.desc',
-    limit: 2000,
-  });
-
-  // Com `clientId`, o mapa so considera a equipe daquele time: o
-  // recorte acontece antes de somar os totais, para nao contar vinculo de
-  // outra operacao.
-  const scopedLinks = clientId ? await scopeLinksToClient(links, clientId) : links;
+  // Mapa do TIME: o recorte e do banco, pelos integrantes dele — inclusive
+  // quando ele e o proprio Time DEMO, que dentro da propria pagina mostra
+  // tudo. Mapa GERAL: os Times DEMO ficam de fora, como em toda metrica
+  // global.
+  const scopedLinks = clientId
+    ? await clientLinks(clientId)
+    : await selectRows<MemberLocationRow>(TABLES.memberLocations, {
+        select: '*',
+        filters: await withoutDemoClients(),
+        order: 'updated_at.desc',
+        limit: MAP_LINK_LIMIT,
+      });
 
   const totals = { residence: 0, pollingPlace: 0, pending: 0, notFound: 0 };
   const resolved = scopedLinks.filter((link) => link.status === 'SUCCESS' && link.location_id);
