@@ -33,6 +33,15 @@ export const ACCESS_STATUSES = [
   'DISABLED',
   'NO_PHONE',
   'DUPLICATE_PHONE',
+  /**
+   * Pessoa ficticia de um Time DEMO.
+   *
+   * Nao e pendencia: ela foi criada de proposito SEM acesso, e nao existe
+   * nada a resolver. Sem este estado, um cadastro de demonstracao aparecia
+   * como "Acesso pendente" no meio de uma apresentacao — um alarme sobre um
+   * problema que nao existe.
+   */
+  'DEMO_NO_ACCESS',
 ] as const;
 export type AccessStatus = (typeof ACCESS_STATUSES)[number];
 
@@ -42,6 +51,7 @@ export const ACCESS_STATUS_LABELS: Record<AccessStatus, string> = {
   DISABLED: 'Desativado',
   NO_PHONE: 'Telefone necessário',
   DUPLICATE_PHONE: 'Telefone duplicado — corrija para liberar o acesso',
+  DEMO_NO_ACCESS: 'Sem acesso — demonstração',
 };
 
 /**

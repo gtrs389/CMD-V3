@@ -23,6 +23,23 @@ export async function demoClientIds(): Promise<string[]> {
 }
 
 /**
+ * Este time e de demonstracao?
+ *
+ * Usado antes de CONCEDER ACESSO: em um Time DEMO, so os administradores
+ * cadastrados a mao pelo ADMIN geral entram no painel. As pessoas ficticias
+ * sao dados, e nao gente que faz login.
+ */
+export async function isDemoClient(clientId: string | null | undefined): Promise<boolean> {
+  if (!clientId) return false;
+
+  const rows = await selectRows<Pick<ClientRow, 'id'>>(TABLES.clients, {
+    select: 'id',
+    filters: { id: `eq.${clientId}`, is_demo: 'is.true' },
+  });
+  return rows.length > 0;
+}
+
+/**
  * Filtro pronto para uma consulta que tem `client_id`.
  *
  * Devolve `{}` quando nao ha Time DEMO: a consulta sai exatamente como

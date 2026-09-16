@@ -87,6 +87,10 @@ const STATUS_CLASSES: Record<AccessStatus, string> = {
   DISABLED: 'bg-danger-50 text-danger-600',
   NO_PHONE: 'bg-ink-100 text-ink-700',
   DUPLICATE_PHONE: 'bg-warning-50 text-warning-600',
+  // Neutro, sem cor de alerta: nao ha nada a resolver. Na pratica nao
+  // aparece aqui — pessoa ficticia nao tem usuario, e a lista de pendentes
+  // ja exclui os Times DEMO —, mas o estado existe e a tabela fica completa.
+  DEMO_NO_ACCESS: 'bg-ink-100 text-ink-700',
 };
 
 /**

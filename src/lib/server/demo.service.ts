@@ -11,7 +11,6 @@ import {
 import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
-  type ClientRow,
   type MapLocationRow,
   type MemberRow,
   type UserRow,
@@ -390,24 +389,4 @@ async function seedMemberLocations(
   });
 
   if (linhas.length > 0) await insertRows(TABLES.memberLocations, linhas, 'id');
-}
-
-/** Time existente e de demonstracao? Usado pelas rotas que precisam recusar. */
-export async function isDemoClient(clientId: string): Promise<boolean> {
-  const rows = await selectRows<Pick<ClientRow, 'id'>>(TABLES.clients, {
-    select: 'id',
-    filters: { id: `eq.${clientId}`, is_demo: 'is.true' },
-  });
-  return rows.length > 0;
-}
-
-/** Times DEMO por identificador, para a tela marcar o selo. */
-export async function demoClientSet(ids: readonly string[]): Promise<Set<string>> {
-  if (ids.length === 0) return new Set();
-
-  const rows = await selectRows<Pick<ClientRow, 'id'>>(TABLES.clients, {
-    select: 'id',
-    filters: { id: inFilter([...new Set(ids)]), is_demo: 'is.true' },
-  });
-  return new Set(rows.map((row) => row.id));
 }

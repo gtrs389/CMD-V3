@@ -29,7 +29,7 @@ import {
 } from '@/lib/supabase/rest';
 import { signedUrls } from '@/lib/supabase/storage';
 import { activeAdminDevices, releaseAdminDevice } from './admin-device';
-import { withoutDemoClients } from './demo-scope';
+import { isDemoClient, withoutDemoClients } from './demo-scope';
 import { ensurePersonalInvite } from './invite.service';
 import { ApiError, badRequest, notFound } from './http';
 
@@ -536,10 +536,26 @@ export interface MemberAccessSeed {
  * A conferencia do telefone acontece ANTES (ver `assertTeamPhoneAvailable`),
  * para o cadastro parar sem deixar integrante orfao. Idempotente: chamada de
  * novo para o mesmo integrante, apenas devolve o usuario existente.
+ *
+ * TIME DEMO NAO CONCEDE ACESSO A INTEGRANTE. Ali, quem entra no painel sao
+ * apenas os administradores que o ADMIN geral cadastrou a mao; as pessoas do
+ * time — as ficticias da criacao e as que se cadastrarem pelo link durante
+ * uma demonstracao — sao DADOS, e nada mais.
+ *
+ * A recusa mora aqui, e nao em cada rota, porque aqui e por onde TODO
+ * caminho de concessao passa: o cadastro pelo painel, o envio do formulario
+ * publico e a sincronizacao do acesso quando o telefone muda. Recusar em uma
+ * rota e esquecer de outra seria conceder acesso pela porta esquecida.
+ *
+ * Recusar nao e falhar: o cadastro continua, e por isso a resposta e `null`
+ * em vez de erro — derrubar o envio publico quebraria justamente a
+ * demonstracao do formulario.
  */
-export async function createMemberAccess(seed: MemberAccessSeed): Promise<string> {
+export async function createMemberAccess(seed: MemberAccessSeed): Promise<string | null> {
   const existing = await findUserByMember(seed.memberId);
   if (existing) return existing.id;
+
+  if (await isDemoClient(seed.clientId)) return null;
 
   const row = await insertOne<Pick<UserRow, 'id'>>(
     TABLES.users,
@@ -585,6 +601,8 @@ export async function syncMemberAccess(
 
   if (!user) {
     if (!phone || phone.length < 10 || !name) return;
+    // Em Time DEMO isto devolve `null` e nada e criado: corrigir o telefone
+    // de uma pessoa ficticia nao pode virar uma conta com acesso ao painel.
     await createMemberAccess({
       clientId: patch.clientId,
       memberId,

@@ -327,6 +327,17 @@ consulta dos pendentes exclui os times com `is_demo = true`. A alternativa —
 criar trinta contas para calar o aviso — seria fabricar acesso que ninguém
 pediu.
 
+Na ficha, dentro da página do próprio Time DEMO, o estado delas é
+**"Sem acesso — demonstração"** (`DEMO_NO_ACCESS`), em aparência neutra: não
+é pendência e não há nada a resolver.
+
+A recusa vive em `createMemberAccess`, que é por onde **todo** caminho de
+concessão passa — cadastro pelo painel, envio do formulário público e a
+sincronização do acesso quando o telefone muda. Recusar em uma rota e
+esquecer de outra concederia acesso pela porta esquecida. Recusar não é
+falhar: o cadastro continua e a função devolve `null`, porque derrubar o envio
+público quebraria justamente a demonstração do formulário.
+
 ### Mapa sem API externa
 
 Cada local de votação e cada rua viram uma linha em `cmd_map_locations` com
