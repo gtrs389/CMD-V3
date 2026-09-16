@@ -183,7 +183,7 @@ beforeEach(() => {
       client_id: TIME,
       name: `Pessoa ${i}`,
       phone: `8298888${String(i).padStart(4, '0')}`,
-      demo_seed: 'v1',
+      demo_seed: 'al-tre-2026-2',
       created_at: `2026-02-${String((i % 27) + 1).padStart(2, '0')}T00:00:00.000Z`,
       recruited_by_user_id: ADMIN_USER,
       recruited_by_name: 'Marcos',
@@ -345,5 +345,49 @@ describe('a guarda do banco continua de pe', () => {
         recruiter_previous_name: 'Marcos',
       }),
     ).not.toThrow();
+  });
+});
+
+describe('herança da versão anterior', () => {
+  /**
+   * Uma versao anterior desta funcao nao acrescentava gente: ela REPARTIA as
+   * pessoas que ja existiam, passando parte da primeira camada para a
+   * equipe. Quem usou aquela versao tem, no banco, pessoas do administrador
+   * com responsavel do perfil EQUIPE.
+   *
+   * Reconhecer a segunda camada por "responsavel do perfil EQUIPE" apagaria
+   * essas pessoas — cadastro que o administrador trouxe, destruido por uma
+   * limpeza que deveria mexer so no que ela propria criou. Por isso a camada
+   * tem MARCA propria.
+   */
+  it('nao apaga as pessoas repartidas pela versao anterior: devolve ao administrador', async () => {
+    const { setDemoRecruiters } = await import('@/lib/server/demo.service');
+
+    // O estado deixado pela versao anterior: um recrutador, e 600 pessoas da
+    // PRIMEIRA camada passadas para ele.
+    db.cmd_users.push({
+      id: 'user-antigo',
+      name: 'Verônica Martins',
+      role: 'EQUIPE',
+      client_id: TIME,
+      member_id: 'm-0',
+      is_active: false,
+      created_at: '2026-03-01T00:00:00.000Z',
+    });
+    for (const membro of db.cmd_members.slice(0, 600)) {
+      membro.recruited_by_user_id = 'user-antigo';
+      membro.recruited_by_name = 'Verônica Martins';
+      membro.recruited_by_role = 'EQUIPE';
+    }
+
+    await setDemoRecruiters(TIME, { recruiters: 3, people: 100 });
+
+    // As mil continuam inteiras: nenhuma foi apagada.
+    const daPrimeira = db.cmd_members.filter((m) => m.demo_seed === 'al-tre-2026-2');
+    expect(daPrimeira).toHaveLength(TOTAL_PESSOAS);
+
+    // E voltaram para quem as trouxe.
+    const orfas = daPrimeira.filter((m) => m.recruited_by_user_id === 'user-antigo');
+    expect(orfas).toHaveLength(0);
   });
 });

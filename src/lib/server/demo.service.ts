@@ -10,6 +10,7 @@ import {
 } from '@/lib/domain/demo';
 import {
   DEMO_POLLING_PLACES,
+  DEMO_SECOND_LAYER_SEED,
   DEMO_SEED_VERSION,
   DEMO_STATE,
 } from '@/lib/domain/demo-catalog';
@@ -807,11 +808,14 @@ export interface DemoRecruitersReport {
   points: { resolved: number; missing: number };
 }
 
-/** As pessoas da segunda camada: geradas E trazidas por alguem da equipe. */
-const SECOND_LAYER_FILTERS = {
-  demo_seed: 'not.is.null',
-  recruited_by_role: 'eq.EQUIPE',
-} as const;
+/**
+ * As pessoas da segunda camada, reconhecidas pela MARCA PROPRIA.
+ *
+ * Nao por "tem responsavel do perfil EQUIPE": esse criterio pegaria tambem
+ * as pessoas da PRIMEIRA camada que uma versao anterior desta funcao passou
+ * para a equipe — e apagaria gente que o administrador trouxe.
+ */
+const SECOND_LAYER_FILTERS = { demo_seed: `eq.${DEMO_SECOND_LAYER_SEED}` } as const;
 
 /**
  * Tira a segunda camada inteira: pessoas, vinculos de mapa e recrutadores.
@@ -826,6 +830,9 @@ const SECOND_LAYER_FILTERS = {
  * que foi quem as trouxe.
  */
 async function clearSecondLayer(clientId: string): Promise<void> {
+  // 1. As pessoas TRAZIDAS pela equipe. So as que tem a marca propria: e
+  //    isso que separa a gente gerada por esta funcao das pessoas que o
+  //    administrador trouxe.
   const pessoas = await selectRows<Pick<MemberRow, 'id'>>(TABLES.members, {
     select: 'id',
     filters: { client_id: `eq.${clientId}`, ...SECOND_LAYER_FILTERS },
@@ -838,6 +845,39 @@ async function clearSecondLayer(clientId: string): Promise<void> {
     await deleteRows(TABLES.members, { id: inFilter(ids) });
   }
 
+  // 2. HERANCA de uma versao anterior desta funcao, que em vez de acrescentar
+  //    gente repartia as pessoas que ja existiam: parte da PRIMEIRA camada
+  //    ficou com responsavel do perfil EQUIPE. Elas sao do administrador, que
+  //    foi quem as trouxe, e voltam para ele — apagar seria destruir cadastro
+  //    que nunca foi desta camada.
+  //
+  //    Este e um UPDATE de origem, e passa pela guarda do banco justamente
+  //    pela excecao da migration 039: sao linhas GERADAS, de marca conhecida.
+  const herdadas = await selectRows<Pick<MemberRow, 'id'>>(TABLES.members, {
+    select: 'id',
+    filters: {
+      client_id: `eq.${clientId}`,
+      demo_seed: `eq.${DEMO_SEED_VERSION}`,
+      recruited_by_role: 'eq.EQUIPE',
+    },
+  });
+
+  if (herdadas.length > 0) {
+    const [responsavel] = await demoAdmins(clientId);
+    await updateRows(
+      TABLES.members,
+      { id: inFilter(herdadas.map((pessoa) => pessoa.id)) },
+      {
+        recruited_by_user_id: responsavel.id,
+        recruited_by_name: responsavel.name,
+        recruited_by_role: 'CANDIDATE',
+      },
+      'id',
+    );
+  }
+
+  // 3. Os recrutadores. Por ultimo: com o usuario apagado antes, o
+  //    `on delete set null` tocaria a origem de quem ainda apontava para ele.
   const recrutadores = await selectRows<Pick<UserRow, 'id'>>(TABLES.users, {
     select: 'id',
     filters: { client_id: `eq.${clientId}`, role: 'eq.EQUIPE' },
@@ -873,7 +913,7 @@ export async function setDemoRecruiters(
     select: 'id,name,phone',
     filters: {
       client_id: `eq.${clientId}`,
-      demo_seed: 'not.is.null',
+      demo_seed: `eq.${DEMO_SEED_VERSION}`,
       recruited_by_role: 'eq.CANDIDATE',
     },
     order: 'created_at.asc',
@@ -996,7 +1036,9 @@ async function seedSecondLayerMembers(
       relationship_option_id: opcao?.id ?? null,
       relationship_label: opcao?.label ?? null,
       source: 'invite',
-      demo_seed: DEMO_SEED_VERSION,
+      // Marca PROPRIA: e por ela que esta camada e refeita sem tocar em
+      // quem o administrador trouxe.
+      demo_seed: DEMO_SECOND_LAYER_SEED,
       recruited_by_user_id: dono.userId,
       recruited_by_name: dono.name,
       // E o que poe a pessoa no ranking da EQUIPE, e nao no do administrador.

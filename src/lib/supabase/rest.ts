@@ -358,18 +358,59 @@ export async function insertOne<T>(
   return row;
 }
 
+/**
+ * Escrita por lista longa, em lotes.
+ *
+ * O mesmo limite de `selectInChunks`, e pela mesma razao: o filtro
+ * `in.(...)` viaja na URL, e mil identificadores sao cerca de 37 KB de
+ * endereco — acima do que o servidor aceita. A requisicao INTEIRA volta como
+ * erro, e sem codigo do Postgres, porque nem chegou a virar consulta.
+ *
+ * Faltava aqui. A regra estava escrita so na leitura, e a promessa de que
+ * "uma regra em um lugar so nao tem como ser esquecida" nao se cumpriu: a
+ * primeira escrita que recebeu centenas de identificadores — apagar a
+ * segunda camada de um Time DEMO — morreu exatamente assim.
+ */
+async function writeInChunks<T>(
+  table: string,
+  filters: Record<string, string>,
+  select: string,
+  longo: { key: string; values: string[] },
+  enviar: (url: string) => Promise<T[] | null>,
+): Promise<T[]> {
+  const linhas: T[] = [];
+
+  for (let inicio = 0; inicio < longo.values.length; inicio += IN_FILTER_CHUNK) {
+    const lote = longo.values.slice(inicio, inicio + IN_FILTER_CHUNK);
+    const url = buildUrl(table, {
+      // Os pedacos voltam EXATAMENTE como estavam: `inFilter` ja pos as
+      // aspas, e aspear de novo geraria `""uuid""`, que o banco recusa.
+      filters: { ...filters, [longo.key]: `in.(${lote.join(',')})` },
+      select,
+    });
+    linhas.push(...((await enviar(url)) ?? []));
+  }
+
+  return linhas;
+}
+
 export async function updateRows<T>(
   table: string,
   filters: Record<string, string>,
   values: Record<string, QueryValue | object>,
   select = '*',
 ): Promise<T[]> {
-  const rows = await request<T[] | null>(buildUrl(table, { filters, select }), {
-    method: 'PATCH',
-    body: JSON.stringify(values),
-    prefer: ['return=representation'],
-  });
-  return rows ?? [];
+  const enviar = (url: string) =>
+    request<T[] | null>(url, {
+      method: 'PATCH',
+      body: JSON.stringify(values),
+      prefer: ['return=representation'],
+    });
+
+  const longo = longInFilter(filters);
+  if (longo) return writeInChunks<T>(table, filters, select, longo, enviar);
+
+  return (await enviar(buildUrl(table, { filters, select }))) ?? [];
 }
 
 export async function deleteRows<T>(
@@ -377,11 +418,13 @@ export async function deleteRows<T>(
   filters: Record<string, string>,
   select = 'id',
 ): Promise<T[]> {
-  const rows = await request<T[] | null>(buildUrl(table, { filters, select }), {
-    method: 'DELETE',
-    prefer: ['return=representation'],
-  });
-  return rows ?? [];
+  const enviar = (url: string) =>
+    request<T[] | null>(url, { method: 'DELETE', prefer: ['return=representation'] });
+
+  const longo = longInFilter(filters);
+  if (longo) return writeInChunks<T>(table, filters, select, longo, enviar);
+
+  return (await enviar(buildUrl(table, { filters, select }))) ?? [];
 }
 
 /**
