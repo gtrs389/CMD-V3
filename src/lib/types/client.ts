@@ -125,6 +125,14 @@ export interface Client extends Timestamped {
    * um time real para vira-lo DEMO, nem o contrario.
    */
   isDemo: boolean;
+  /**
+   * Acesso deste Time DEMO ao sistema (migration 036).
+   *
+   * Sempre `true` em time real. Desligado por um Time DEMO, os
+   * administradores dele param de entrar e quem estiver dentro e avisado na
+   * hora de que a conta foi desconectada.
+   */
+  demoAccessEnabled: boolean;
 }
 
 export interface ClientInput {

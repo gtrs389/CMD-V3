@@ -355,6 +355,43 @@ async function dropOrphanSeededPoints(): Promise<void> {
 }
 
 /* -------------------------------------------------------------------------
+   Chave de acesso
+   ------------------------------------------------------------------------- */
+
+/**
+ * Liga e desliga o acesso de um Time DEMO ao sistema.
+ *
+ * Desligado, nenhuma sessao daquele time resolve — a conferencia vive em
+ * `resolveSessionState`, por onde passam TODAS as paginas e TODAS as rotas —
+ * e nenhum login novo passa pelo link do time.
+ *
+ * O que NAO acontece: nenhum usuario e desativado, nenhuma sessao e revogada
+ * e nenhuma senha muda. E por isso que religar devolve as pessoas exatamente
+ * onde elas estavam, sem ninguem precisar entrar de novo, e que desligar nao
+ * destroi nada que precise ser remontado depois.
+ *
+ * Time real nao passa daqui — e o banco recusa de novo, pelo `check` da
+ * migration 036. Uma operacao de verdade nao fica sem acesso por um clique
+ * em uma tela de demonstracao.
+ */
+export async function setDemoAccess(clientId: string, enabled: boolean): Promise<Client> {
+  const client = await getClient(clientId);
+  if (!client) throw notFound('Time não encontrado.');
+  if (!client.isDemo) throw badRequest('Só um Time DEMO pode ter o acesso desligado.');
+
+  await updateRows(
+    TABLES.clients,
+    { id: `eq.${clientId}` },
+    { demo_access_enabled: enabled },
+    'id',
+  );
+
+  const atualizado = await getClient(clientId);
+  if (!atualizado) throw notFound('Time não encontrado.');
+  return atualizado;
+}
+
+/* -------------------------------------------------------------------------
    Conteudo de demonstracao
    ------------------------------------------------------------------------- */
 

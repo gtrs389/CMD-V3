@@ -181,6 +181,16 @@ const GENERIC_ACCESS_ERROR = 'Não foi possível acessar com os dados informados
 /** Link inexistente, revogado ou substituido. */
 export const GENERIC_LINK_ERROR = 'Este link de acesso não está disponível.';
 
+/**
+ * Time DEMO com o acesso desligado.
+ *
+ * Aqui a mensagem e clara de proposito, e nao generica: ela nao fala de
+ * ninguem — fala do TIME, cujo link a pessoa ja tem na mao. Esconder o
+ * motivo so faria alguem tentar o telefone de novo achando que errou.
+ */
+export const DEMO_OFF_MESSAGE =
+  'O acesso deste Time DEMO está desligado pelo administrador do sistema.';
+
 function linkIsLocked(link: TeamAccessLinkRow): boolean {
   return link.locked_until !== null && new Date(link.locked_until).getTime() > Date.now();
 }
@@ -228,6 +238,24 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
 
   if (!link || !link.active) {
     return { user: null, sessionToken: null, message: GENERIC_LINK_ERROR, throttled: false };
+  }
+
+  // A chave do Time DEMO, conferida ANTES do telefone: com o acesso
+  // desligado ninguem entra por este link, e a recusa acontece no mesmo
+  // ponto para qualquer telefone — certo, errado ou inexistente. Conferir
+  // depois criaria uma diferenca de tempo que diria se aquele numero existe.
+  const time = await selectOne<Pick<ClientRow, 'is_demo' | 'demo_access_enabled'>>(
+    TABLES.clients,
+    { select: 'is_demo,demo_access_enabled', filters: { id: `eq.${link.client_id}` } },
+  );
+
+  if (time?.is_demo && time.demo_access_enabled === false) {
+    return {
+      user: null,
+      sessionToken: null,
+      message: DEMO_OFF_MESSAGE,
+      throttled: false,
+    };
   }
 
   if (linkIsLocked(link)) {

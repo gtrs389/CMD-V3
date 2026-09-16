@@ -105,6 +105,9 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       // O painel do integrante nao desenha banner: o valor de fabrica basta,
       // e a imagem nem e carregada.
       banner: null,
+      // Quem chegou aqui ja passou pela sessao, que so resolve com o acesso
+      // do time ligado.
+      demoAccessEnabled: true,
       bannerTag: { ...DEFAULT_BANNER_TAG },
       createdAt: member.created_at,
       updatedAt: member.created_at,

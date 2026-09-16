@@ -486,6 +486,9 @@ export const apiKeyCreateSchema = z.object({
  * `seedKey` e a chave de idempotencia criada pelo navegador: e ela que
  * impede um duplo clique de criar dois times.
  */
+/** Chave de acesso do Time DEMO: so o valor, e nada mais. */
+export const demoAccessSchema = z.object({ enabled: z.boolean() });
+
 export const demoTeamCreateSchema = z.object({
   name: trimmed(80).min(2, 'Dê um nome ao Time DEMO.'),
   photo: photoValue.default(null),

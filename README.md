@@ -190,6 +190,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/configuracoes/chaves/opcoes` | ADMIN geral | Times e administradores para vincular |
 | `/api/clients/demo` | ADMIN geral | Cria um Time DEMO completo |
 | `/api/clients/demo/:id/dados` | ADMIN geral | Refaz os dados gerados de um Time DEMO |
+| `/api/clients/demo/:id/acesso` | ADMIN geral | Liga e desliga o acesso de um Time DEMO |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
 | `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
 | `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
@@ -471,6 +472,45 @@ JPEG) borraria o texto e transformaria um fundo transparente em preto. Só
 acima do teto do Storage (2 MB) ele passa por compressão, e ainda assim com o
 dobro da resolução usada nas fotos.
 
+### Ligar e desligar o acesso
+
+Na página do Time DEMO, ao lado dos links, o ADMIN geral tem a chave **"Acesso
+ao sistema"** (migration 036, `cmd_clients.demo_access_enabled`). Desligada:
+
+- **nenhuma sessão daquele time resolve** — a conferência vive em
+  `resolveSessionState`, o único ponto por onde passam todas as páginas e
+  todas as rotas de API, então não há tela, botão ou URL que escape;
+- **nenhum login novo passa** pelo link do time, e a recusa diz o motivo em
+  vez de repetir o erro genérico: quem tem o link na mão já sabe de que time
+  se trata, e esconder isso só faria a pessoa tentar o telefone de novo
+  achando que errou;
+- **quem está dentro é avisado na hora.** O painel mantém um batimento com o
+  servidor (`GET /api/auth/session`) e, ao ver a sessão bloqueada, cobre a
+  tela com **"Conta desconectada"** e o motivo. Não redireciona sozinho para
+  o login: sumir sem explicação é o que faz alguém achar que o sistema
+  quebrou.
+
+O batimento é de **5 segundos** para administradores de time — quem pode ser
+desligado — e de 30 para o ADMIN geral, que não pertence a time nenhum. Ele só
+corre com a aba à vista, e ao voltar para a aba a conferência é imediata.
+Falha de rede não decide nada: derrubar alguém porque a conexão piscou seria
+pior do que o problema que isso resolve. Não há conexão permanente — o sistema
+roda em funções que nascem e morrem a cada requisição, onde uma conexão aberta
+por aba custaria uma função viva o tempo todo.
+
+**Desligar não destrói nada:** nenhum usuário é desativado, nenhuma sessão é
+revogada, nenhuma senha muda. Por isso religar devolve as pessoas exatamente
+onde estavam — o aviso some sozinho e a tela se recompõe, sem ninguém precisar
+entrar de novo. É também por isso que a chave é conferida **antes** do aparelho
+autorizado: recusa por aparelho revoga a sessão, e aí religar não traria
+ninguém de volta.
+
+A rota é própria (`PATCH /api/clients/demo/:id/acesso`, ADMIN geral) e não um
+campo em "editar time": `client.update` também pertence ao Administrador do
+time, que religaria o próprio acesso. E o `check` da migration recusa desligar
+um time real — uma operação de verdade não fica sem acesso por um clique em
+uma tela de demonstração.
+
 ### O que o banco garante
 
 `is_demo` é **imutável**: o gatilho `cmd_clients_demo_guard` recusa converter
@@ -486,8 +526,8 @@ A marca da geração vive em `cmd_members.demo_seed`, e o gatilho
 DEMO — sem isso, um erro de código poderia levar a rotina de correção a apagar
 um cadastro de verdade.
 
-Requer as migrations `033_time_demo.sql`, `034_time_demo_alagoas.sql` e
-`035_banner_do_time.sql`.
+Requer as migrations `033_time_demo.sql`, `034_time_demo_alagoas.sql`,
+`035_banner_do_time.sql` e `036_acesso_do_time_demo.sql`.
 
 ---
 
