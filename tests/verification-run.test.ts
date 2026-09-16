@@ -34,14 +34,17 @@ const TITULO = {
 /** Estado do banco simulado, recriado a cada teste. */
 const db: {
   member: Record<string, unknown>;
+  /** O time do integrante, com o interruptor da migration 041. */
+  client: Record<string, unknown> | null;
   verification: MemberVerificationRow | null;
   inserts: { table: string; value: Record<string, unknown> }[];
-} = { member: {}, verification: null, inserts: [] };
+} = { member: {}, client: null, verification: null, inserts: [] };
 
 vi.mock('@/lib/supabase/rest', () => ({
   selectOne: async (table: string) => {
     if (table === 'cmd_members') return db.member;
     if (table === 'cmd_member_verifications') return db.verification;
+    if (table === 'cmd_clients') return db.client;
     return null;
   },
   insertOne: async (table: string, value: Record<string, unknown>) => {
@@ -124,6 +127,9 @@ beforeEach(() => {
   consultCpf.mockReset().mockResolvedValue(parseCpfResult(CADASTRO));
   consultTse.mockReset().mockResolvedValue(parseTseResult(TITULO));
   db.member = { id: 'mem-1', client_id: 'cli-1', name: 'Maria', cpf: '12345678901' };
+  // Time com a confirmacao ligada: e o padrao do banco e o de todo time que
+  // ja existia quando a migration 041 entrou.
+  db.client = { id: 'cli-1', verification_enabled: true };
   db.verification = base() as MemberVerificationRow;
   db.inserts = [];
 });
@@ -364,5 +370,38 @@ describe('leitura pelo ADMIN', () => {
       user_id: 'user-1',
     });
     expect(JSON.stringify(auditoria?.value)).not.toContain('Maria');
+  });
+});
+
+describe('confirmação de dados desligada no time (migration 041)', () => {
+  beforeEach(() => {
+    db.client = { id: 'cli-1', verification_enabled: false };
+  });
+
+  it('nenhuma consulta acontece, mesmo com verificação pendente na fila', async () => {
+    await runVerification('mem-1');
+
+    expect(consultCpf).not.toHaveBeenCalled();
+    expect(consultTse).not.toHaveBeenCalled();
+    // A linha pendente fica como estava: nada foi consultado nem concluído.
+    expect(db.verification?.status).toBe('PENDING');
+  });
+
+  it('a repetição manual é recusada: o botão não contorna o interruptor', async () => {
+    await expect(retryVerificationStep('mem-1', 'cpf')).rejects.toThrow(
+      /confirmação de dados está desligada/i,
+    );
+
+    expect(consultCpf).not.toHaveBeenCalled();
+  });
+
+  it('banco ainda sem a coluna responde como sempre respondeu: consulta acontece', async () => {
+    // Linha de um banco anterior à migration: a coluna não existe. Um erro de
+    // leitura nunca pode desligar sozinho uma confirmação contratada.
+    db.client = { id: 'cli-1' };
+
+    await runVerification('mem-1');
+
+    expect(consultCpf).toHaveBeenCalledTimes(1);
   });
 });

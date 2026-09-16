@@ -559,6 +559,9 @@ export const apiKeyCreateSchema = z.object({
 /** Chave de acesso do Time DEMO: so o valor, e nada mais. */
 export const demoAccessSchema = z.object({ enabled: z.boolean() });
 
+/** Confirmacao de dados pela FonteData (migration 041): so o valor. */
+export const verificationToggleSchema = z.object({ enabled: z.boolean() });
+
 export const demoTeamCreateSchema = z.object({
   name: trimmed(80).min(2, 'Dê um nome ao Time DEMO.'),
   photo: photoValue.default(null),

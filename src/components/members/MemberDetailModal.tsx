@@ -335,7 +335,12 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
         </>
       ) : null}
 
-      {podeVerificar ? <MemberVerificationSection member={member} /> : null}
+      {podeVerificar ? (
+        <MemberVerificationSection
+          member={member}
+          verificationEnabled={client.verificationEnabled}
+        />
+      ) : null}
 
       {podeVerAparelho ? <MemberDeviceSection memberId={member.id} /> : null}
     </div>

@@ -7,6 +7,7 @@ import {
   duplicateField,
   moveField,
   reindex,
+  withVerificationRules,
 } from '@/lib/domain/form-config';
 import type { Member } from '@/lib/types';
 
@@ -110,5 +111,73 @@ describe('contagem de respostas', () => {
 
     expect(countResponses(members, 'f1')).toBe(2);
     expect(countResponses(members, 'inexistente')).toBe(0);
+  });
+});
+
+describe('confirmação de dados desligada (migration 041)', () => {
+  /** O formulário como o ADMIN o montou, com zona e seção opcionais. */
+  function base() {
+    return createDefaultFormConfig();
+  }
+
+  function campo(config: ReturnType<typeof base>, systemKey: string) {
+    const encontrado = config.fields.find((field) => field.systemKey === systemKey);
+    expect(encontrado, `campo ${systemKey} não existe`).toBeDefined();
+    return encontrado!;
+  }
+
+  it('ligada, não altera nada: o formulário é o que o ADMIN montou', () => {
+    const config = base();
+    expect(withVerificationRules(config, true)).toBe(config);
+  });
+
+  it('desligada, zona e seção ficam obrigatórias e ligadas', () => {
+    const config = withVerificationRules(base(), false);
+
+    for (const chave of ['zone', 'section']) {
+      const field = campo(config, chave);
+      expect(field.required, `${chave} deveria ser obrigatório`).toBe(true);
+      expect(field.enabled, `${chave} deveria estar ligado`).toBe(true);
+    }
+  });
+
+  it('desligada, religa zona e seção que o ADMIN tinha desativado', () => {
+    const original = base();
+    const semEleitorais = {
+      ...original,
+      fields: original.fields.map((field) =>
+        field.systemKey === 'zone' || field.systemKey === 'section'
+          ? { ...field, enabled: false }
+          : field,
+      ),
+    };
+
+    const config = withVerificationRules(semEleitorais, false);
+    expect(campo(config, 'zone').enabled).toBe(true);
+    expect(campo(config, 'section').enabled).toBe(true);
+  });
+
+  it('desligada, não mexe em nenhum outro campo', () => {
+    const original = base();
+    const config = withVerificationRules(original, false);
+
+    const intocados = (c: ReturnType<typeof base>) =>
+      c.fields
+        .filter((field) => field.systemKey !== 'zone' && field.systemKey !== 'section')
+        .map((field) => [field.systemKey, field.required, field.enabled]);
+
+    expect(intocados(config)).toEqual(intocados(original));
+  });
+
+  it('não reescreve a configuração gravada: religar devolve o formulário como estava', () => {
+    const original = base();
+    const antes = JSON.stringify(original);
+
+    withVerificationRules(original, false);
+
+    // A regra é derivada, nunca gravada: o objeto do ADMIN sai intacto, e é
+    // ele que volta a valer quando a confirmação é religada.
+    expect(JSON.stringify(original)).toBe(antes);
+    expect(campo(original, 'zone').required).toBe(false);
   });
 });

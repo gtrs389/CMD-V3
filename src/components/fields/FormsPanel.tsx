@@ -10,6 +10,8 @@ import { SurveyPanel } from '@/components/survey/SurveyPanel';
 interface FormsPanelProps {
   client: Client;
   members: Member[];
+  /** Recarrega o time depois de uma troca que muda as regras do formulário. */
+  onChanged?: () => void;
 }
 
 type Qual = 'form1' | 'form2';
@@ -31,7 +33,7 @@ type Qual = 'form1' | 'form2';
  * Quem configura os dois e o mesmo ADMIN geral. O lider nao edita nada: ele
  * apenas envia o link do Formulario 2.
  */
-export function FormsPanel({ client, members }: FormsPanelProps) {
+export function FormsPanel({ client, members, onChanged }: FormsPanelProps) {
   const [qual, setQual] = useState<Qual>('form1');
 
   const opcoes: { id: Qual; label: string; icon: typeof FileText; hint: string }[] = [
@@ -95,7 +97,7 @@ export function FormsPanel({ client, members }: FormsPanelProps) {
       </div>
 
       {qual === 'form1' ? (
-        <FormBuilderPanel client={client} members={members} />
+        <FormBuilderPanel client={client} members={members} onChanged={onChanged} />
       ) : (
         // Aqui o ADMIN CONFIGURA. Quem envia o link do Formulario 2 e o
         // lider, no painel dele: um botao de gerar nesta tela seria um

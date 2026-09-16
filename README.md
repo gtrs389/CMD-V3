@@ -181,6 +181,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/clients/[id]` | ADMIN | Lê, atualiza e exclui um cliente |
 | `/api/clients/[id]/form` | ADMIN | Atualiza campos, privacidade e textos |
 | `/api/clients/[id]/invite` | ADMIN | Ativa/desativa e renova o convite |
+| `/api/clients/[id]/verificacao` | ADMIN geral | Liga e desliga a confirmação de dados do time |
 | `/api/clients/[id]/members` | ADMIN | Equipe de um cliente |
 | `/api/members` | ADMIN | Lista e cadastra integrantes pelo painel |
 | `/api/members/[id]` | ADMIN | Atualiza e exclui um integrante |
@@ -283,6 +284,52 @@ público, que é o endereço que as pessoas recebem.
 
 Requer as migrations `029_api_links_cadastro.sql`, `030_api_agir_como_dono.sql`
 e `031_api_chave_vinculada.sql`.
+
+---
+
+## Confirmação dos dados pela FonteData
+
+Todo cadastro que chega pelo **Formulário 1** passava, sem exceção, por duas
+consultas pagas à FonteData: o CPF, que confere e corrige o nome, e a situação
+eleitoral, que preenche **zona e seção** sozinha, a partir do título.
+
+Nem todo time quer — ou pode — pagar por isso. Na aba **Formulários** do time,
+em "Confirmação dos dados", o ADMIN geral liga e desliga essa conferência
+**time a time** (migration 041, `cmd_clients.verification_enabled`). O padrão é
+ligado: nenhum time que já existia mudou de comportamento.
+
+Desligada, para os cadastros **daquele time**:
+
+- **nenhuma consulta à FonteData acontece, em lugar nenhum.** Nem durante o
+  preenchimento (`/api/public/convite/cpf` e `/titulo` respondem vazio **sem
+  chegar ao fornecedor**), nem depois do envio (`runVerification` não roda e
+  nem chega a nascer verificação pendente), nem pelo botão "Consultar de novo"
+  da ficha do integrante, que é recusado no servidor. Cada consulta é cobrada,
+  então esconder o botão na tela nunca seria a proteção: quem decide é o
+  servidor, em cada ponto que chegaria na FonteData;
+- **o formulário continua perguntando** se o CPF e o título digitados estão
+  corretos. A pergunta não é enfeite da consulta: com a confirmação desligada
+  ela passa a ser a **única** conferência daqueles números, e agora é de quem
+  preenche. Confirmado, a pessoa segue preenchendo normalmente;
+- **zona e seção viram campos obrigatórios**, ligados e digitados à mão. Sem
+  consulta que os preencha, o que ninguém digitar simplesmente não existiria no
+  cadastro. A regra é conferida **também no servidor**, no envio: um formulário
+  público montado à mão não passa sem os dois.
+
+O formulário montado pelo ADMIN **não é reescrito**. A obrigatoriedade é
+derivada do interruptor a cada abertura do link (`withVerificationRules`, em
+`src/lib/domain/form-config.ts`), e é a mesma função que a prévia do construtor
+usa — o que o ADMIN vê na prévia é o que quem abre o link recebe. Religar a
+confirmação devolve o formulário exatamente como ele foi montado.
+
+O que **não** para junto: a moradia aproximada do mapa continua sendo
+resolvida, porque ela não vem da FonteData. O que depende da consulta
+eleitoral — o local de votação — é que deixa de existir.
+
+Na ficha do integrante, a **Verificação cadastral** diz que a confirmação está
+desligada naquele time, em vez de ficar eternamente "aguardando" uma consulta
+que nunca vai acontecer. As verificações já feitas antes de desligar continuam
+onde estão: nada é apagado nem reescrito.
 
 ---
 

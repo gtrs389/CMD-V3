@@ -140,19 +140,34 @@ function Comparison({
   );
 }
 
-export function MemberVerificationSection({ member }: { member: Member | null }) {
+interface MemberVerificationSectionProps {
+  member: Member | null;
+  /**
+   * A confirmacao de dados esta ligada NESTE time (migration 041).
+   *
+   * Desligada, nao ha o que carregar nem o que repetir: nenhum cadastro do
+   * time consulta o fornecedor. A secao diz isso em vez de deixar a ficha
+   * com uma verificacao "aguardando" que nunca vai acontecer.
+   */
+  verificationEnabled: boolean;
+}
+
+export function MemberVerificationSection({
+  member,
+  verificationEnabled,
+}: MemberVerificationSectionProps) {
   const memberId = member?.id ?? null;
   const [retrying, setRetrying] = useState<VerificationStep | null>(null);
   // Os dados nascem cobertos: revelar e uma escolha de quem esta olhando.
   const [revealed, setRevealed] = useState(false);
 
   const loader = useCallback(async (): Promise<VerificationView | null> => {
-    if (!memberId) return null;
+    if (!memberId || !verificationEnabled) return null;
     const { verification } = await api<{ verification: VerificationView | null }>(
       `/api/members/${memberId}/verificacao`,
     );
     return verification;
-  }, [memberId]);
+  }, [memberId, verificationEnabled]);
 
   const { data, loading, error, reload } = useRepositoryQuery<VerificationView | null>(loader);
 
@@ -170,6 +185,25 @@ export function MemberVerificationSection({ member }: { member: Member | null })
   }
 
   if (!member) return null;
+
+  if (!verificationEnabled) {
+    return (
+      <section aria-labelledby="verificacao-cadastral" className="space-y-3">
+        <h3
+          id="verificacao-cadastral"
+          className="flex items-center gap-2 text-sm font-semibold text-ink-900"
+        >
+          <ShieldCheck aria-hidden="true" className="size-4 text-ink-400" />
+          Verificação cadastral
+        </h3>
+
+        <p className="rounded-control border border-line bg-ink-50 p-3 text-sm text-ink-500">
+          A confirmação de dados está desligada neste time: nenhum cadastro dele é conferido na
+          FonteData. O que aparece na ficha é o que a pessoa declarou.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="verificacao-cadastral" className="space-y-3">

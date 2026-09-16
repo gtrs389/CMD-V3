@@ -131,6 +131,9 @@ export function createLocalClientRepository(
         // O modo local nao tem Storage: banner proprio e coisa do servidor.
         banner: null,
         demoAccessEnabled: true,
+        // Sem servidor nao ha fornecedor para consultar; o time nasce como
+        // nasce no banco, com a confirmacao ligada.
+        verificationEnabled: true,
         bannerTag: { ...DEFAULT_BANNER_TAG },
         createdAt: timestamp,
         updatedAt: timestamp,

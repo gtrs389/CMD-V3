@@ -68,6 +68,7 @@ function clienteComFormulario(): Client {
     cities: [],
     banner: null,
   demoAccessEnabled: true,
+    verificationEnabled: true,
   bannerTag: { ...DEFAULT_BANNER_TAG },
     people: [],
     createdAt: '2026-01-01T00:00:00.000Z',

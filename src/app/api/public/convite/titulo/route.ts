@@ -15,6 +15,10 @@ import { inviteTseLookupSchema } from '@/lib/validation/server.schema';
  * no token recebido aqui. Sem um token de CPF valido — CPF nao confirmado,
  * consulta anterior sem sucesso ou token expirado — zona e secao ficam para
  * a pessoa preencher a mao, sem nenhuma cobranca e sem travar o cadastro.
+ *
+ * Time com a confirmacao de dados DESLIGADA (migration 041) tambem nao chega
+ * ao fornecedor: zona e secao sao campos obrigatorios do formulario daquele
+ * time, digitados pela propria pessoa.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +43,11 @@ export async function POST(request: NextRequest) {
     if (outcome === 'GONE') return jsonGone('expired');
 
     const { cpfToken } = await readJson(request, inviteTseLookupSchema);
+
+    if (!context.client.verificationEnabled) {
+      return jsonOk({ zona: null, secao: null, token: null });
+    }
+
     const result = await lookupTseForInvite(cpfToken);
 
     return jsonOk(result);

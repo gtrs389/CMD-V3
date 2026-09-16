@@ -151,6 +151,14 @@ export interface ClientRow {
    */
   demo_access_enabled: boolean;
   /**
+   * Confirmacao de CPF e titulo pela FonteData neste time (migration 041).
+   *
+   * Em false nenhuma consulta e feita para os cadastros dele — nem durante o
+   * preenchimento, nem depois do envio, nem pelo botao da ficha — e zona e
+   * secao passam a ser obrigatorias e digitadas a mao.
+   */
+  verification_enabled: boolean;
+  /**
    * Banner do celular deste time (migration 035), no Storage privado.
    *
    * Nulo no time que nao subiu o seu: ele continua exibindo o banner padrao

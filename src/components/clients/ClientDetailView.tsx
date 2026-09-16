@@ -426,7 +426,7 @@ export function ClientDetailView({
 
       {mostrarFormulario ? (
         <TabPanel id="formulario" active={abaAtiva}>
-          <FormsPanel client={client} members={memberList} />
+          <FormsPanel client={client} members={memberList} onChanged={reload} />
         </TabPanel>
       ) : null}
 

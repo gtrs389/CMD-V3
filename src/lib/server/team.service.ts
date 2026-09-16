@@ -112,6 +112,10 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       // Quem chegou aqui ja passou pela sessao, que so resolve com o acesso
       // do time ligado.
       demoAccessEnabled: true,
+      // Acompanha o time, e nao um valor fixo: e o mesmo sinal que o painel
+      // do ADMIN le, e e ele que diz se os cadastros desta operacao sao
+      // conferidos na FonteData (migration 041).
+      verificationEnabled: client.verification_enabled !== false,
       bannerTag: { ...DEFAULT_BANNER_TAG },
       createdAt: member.created_at,
       updatedAt: member.created_at,

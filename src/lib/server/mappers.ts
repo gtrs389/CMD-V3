@@ -139,6 +139,9 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     // Time real nunca tem acesso desligado: a coluna existe para o DEMO, e o
     // `check` da migration 036 garante o resto.
     demoAccessEnabled: row.demo_access_enabled !== false,
+    // Linha de um banco ainda sem a migration 041 nao tem a coluna: vale o
+    // padrao, que e o comportamento de sempre — confirmacao ligada.
+    verificationEnabled: row.verification_enabled !== false,
     banner: options.bannerUrl ?? null,
     bannerTag: {
       left: Number(row.banner_tag_left),
