@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 /** O endereco exclusivo do ADMIN geral, como ele existe em producao. */
-const ADMIN_HOST = '7061696e656c2061646d.appdemo.sbs';
+const ADMIN_HOST = '7061696e656c2061646d.convitetimebezerra.com';
 
 describe('endereço do painel', () => {
   it('sem variável nenhuma, o painel é o subdomínio painel.', () => {
@@ -39,11 +39,11 @@ describe('endereço do painel', () => {
     // sem configuracao.
     delete process.env.CMD_PANEL_HOST;
 
-    expect(isPanelHost('painel.appdemo.sbs')).toBe(true);
+    expect(isPanelHost('painel.convitetimebezerra.com')).toBe(true);
 
-    expect(isPanelHost('appdemo.sbs')).toBe(false);
-    expect(isPanelHost('www.appdemo.sbs')).toBe(false);
-    expect(isPanelHost('outro.appdemo.sbs')).toBe(false);
+    expect(isPanelHost('convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('www.convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('outro.convitetimebezerra.com')).toBe(false);
     expect(isPanelHost(null)).toBe(false);
   });
 
@@ -58,31 +58,31 @@ describe('endereço do painel', () => {
   });
 
   it('reconhece o painel e recusa o domínio público', () => {
-    process.env.CMD_PANEL_HOST = 'painel.appdemo.sbs';
+    process.env.CMD_PANEL_HOST = 'painel.convitetimebezerra.com';
 
-    expect(isPanelHost('painel.appdemo.sbs')).toBe(true);
+    expect(isPanelHost('painel.convitetimebezerra.com')).toBe(true);
     // Porta, maiuscula e ponto final do FQDN nao mudam o endereco.
-    expect(isPanelHost('PAINEL.AppDemo.SBS:443')).toBe(true);
-    expect(isPanelHost('painel.appdemo.sbs.')).toBe(true);
+    expect(isPanelHost('PAINEL.ConviteTimeBezerra.COM:443')).toBe(true);
+    expect(isPanelHost('painel.convitetimebezerra.com.')).toBe(true);
 
-    expect(isPanelHost('appdemo.sbs')).toBe(false);
-    expect(isPanelHost('www.appdemo.sbs')).toBe(false);
-    expect(isPanelHost('outro.appdemo.sbs')).toBe(false);
+    expect(isPanelHost('convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('www.convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('outro.convitetimebezerra.com')).toBe(false);
     expect(isPanelHost(null)).toBe(false);
   });
 
   it('trata www e o domínio raiz como o mesmo endereço', () => {
-    process.env.CMD_PANEL_HOST = 'painel.appdemo.sbs';
-    expect(isPanelHost('www.painel.appdemo.sbs')).toBe(true);
+    process.env.CMD_PANEL_HOST = 'painel.convitetimebezerra.com';
+    expect(isPanelHost('www.painel.convitetimebezerra.com')).toBe(true);
   });
 
   it('a variável manda quando o painel não é o subdomínio padrão', () => {
-    process.env.CMD_PANEL_HOST = 'admin.appdemo.sbs';
+    process.env.CMD_PANEL_HOST = 'admin.convitetimebezerra.com';
 
-    expect(isPanelHost('admin.appdemo.sbs')).toBe(true);
+    expect(isPanelHost('admin.convitetimebezerra.com')).toBe(true);
     // Configurada, ela decide sozinha: nem o subdominio da convencao passa.
-    expect(isPanelHost('painel.appdemo.sbs')).toBe(false);
-    expect(isPanelHost('www.appdemo.sbs')).toBe(false);
+    expect(isPanelHost('painel.convitetimebezerra.com')).toBe(false);
+    expect(isPanelHost('www.convitetimebezerra.com')).toBe(false);
   });
 });
 
@@ -132,26 +132,26 @@ describe('endereço exclusivo do ADMIN geral', () => {
     expect(isAdminHost(`${ADMIN_HOST}:443`)).toBe(true);
     expect(isAdminHost(ADMIN_HOST.toUpperCase())).toBe(true);
 
-    expect(isAdminHost('painel.appdemo.sbs')).toBe(false);
-    expect(isAdminHost('www.appdemo.sbs')).toBe(false);
-    expect(isAdminHost('appdemo.sbs')).toBe(false);
+    expect(isAdminHost('painel.convitetimebezerra.com')).toBe(false);
+    expect(isAdminHost('www.convitetimebezerra.com')).toBe(false);
+    expect(isAdminHost('convitetimebezerra.com')).toBe(false);
     expect(isAdminHost(null)).toBe(false);
   });
 
   it('serve o painel, inclusive com CMD_PANEL_HOST apontando para outro', () => {
     // Sem isso, configurar o endereco do painel jogaria o endereco do ADMIN
     // no dominio publico: o proprio ADMIN cairia na tela de saida.
-    process.env.CMD_PANEL_HOST = 'painel.appdemo.sbs';
+    process.env.CMD_PANEL_HOST = 'painel.convitetimebezerra.com';
 
     expect(isPanelHost(ADMIN_HOST)).toBe(true);
-    expect(isPanelHost('painel.appdemo.sbs')).toBe(true);
-    expect(isPanelHost('www.appdemo.sbs')).toBe(false);
+    expect(isPanelHost('painel.convitetimebezerra.com')).toBe(true);
+    expect(isPanelHost('www.convitetimebezerra.com')).toBe(false);
   });
 
   it('a variável manda quando o subdomínio é outro', () => {
-    process.env.CMD_ADMIN_HOST = 'cofre.appdemo.sbs';
+    process.env.CMD_ADMIN_HOST = 'cofre.convitetimebezerra.com';
 
-    expect(isAdminHost('cofre.appdemo.sbs')).toBe(true);
+    expect(isAdminHost('cofre.convitetimebezerra.com')).toBe(true);
     expect(isAdminHost(ADMIN_HOST)).toBe(false);
   });
 
@@ -194,16 +194,16 @@ describe('endereço público deduzido do painel', () => {
     delete process.env.CMD_ADMIN_HOST;
     delete process.env.CMD_PANEL_HOST;
 
-    expect(publicHostFrom(ADMIN_HOST)).toBe('www.appdemo.sbs');
-    expect(publicHostFrom('painel.appdemo.sbs')).toBe('www.appdemo.sbs');
+    expect(publicHostFrom(ADMIN_HOST)).toBe('www.convitetimebezerra.com');
+    expect(publicHostFrom('painel.convitetimebezerra.com')).toBe('www.convitetimebezerra.com');
   });
 
   it('não deduz nada onde não há painel para trocar', () => {
     delete process.env.CMD_ADMIN_HOST;
     delete process.env.CMD_PANEL_HOST;
 
-    expect(publicHostFrom('www.appdemo.sbs')).toBe(null);
-    expect(publicHostFrom('appdemo.sbs')).toBe(null);
+    expect(publicHostFrom('www.convitetimebezerra.com')).toBe(null);
+    expect(publicHostFrom('convitetimebezerra.com')).toBe(null);
     expect(publicHostFrom('localhost:3000')).toBe(null);
     expect(publicHostFrom(null)).toBe(null);
   });
@@ -220,8 +220,8 @@ describe('porta de entrada do ADMIN geral', () => {
 
     expect(servesAdminLogin(ADMIN_HOST)).toBe(true);
 
-    expect(servesAdminLogin('painel.appdemo.sbs')).toBe(false);
-    expect(servesAdminLogin('www.appdemo.sbs')).toBe(false);
+    expect(servesAdminLogin('painel.convitetimebezerra.com')).toBe(false);
+    expect(servesAdminLogin('www.convitetimebezerra.com')).toBe(false);
     expect(servesAdminLogin(null)).toBe(false);
   });
 
@@ -258,15 +258,15 @@ describe('endereço do painel deduzido', () => {
     delete process.env.CMD_ADMIN_HOST;
     delete process.env.CMD_PANEL_HOST;
 
-    expect(panelHostFrom(ADMIN_HOST)).toBe('painel.appdemo.sbs');
-    expect(panelHostFrom('painel.appdemo.sbs')).toBe('painel.appdemo.sbs');
-    expect(panelHostFrom('www.appdemo.sbs')).toBe('painel.appdemo.sbs');
-    expect(panelHostFrom('appdemo.sbs')).toBe('painel.appdemo.sbs');
+    expect(panelHostFrom(ADMIN_HOST)).toBe('painel.convitetimebezerra.com');
+    expect(panelHostFrom('painel.convitetimebezerra.com')).toBe('painel.convitetimebezerra.com');
+    expect(panelHostFrom('www.convitetimebezerra.com')).toBe('painel.convitetimebezerra.com');
+    expect(panelHostFrom('convitetimebezerra.com')).toBe('painel.convitetimebezerra.com');
   });
 
   it('a variável manda quando o painel está em outro subdomínio', () => {
-    process.env.CMD_PANEL_HOST = 'equipe.appdemo.sbs';
-    expect(panelHostFrom(ADMIN_HOST)).toBe('equipe.appdemo.sbs');
+    process.env.CMD_PANEL_HOST = 'equipe.convitetimebezerra.com';
+    expect(panelHostFrom(ADMIN_HOST)).toBe('equipe.convitetimebezerra.com');
   });
 
   it('não mexe em desenvolvimento nem em prévia', () => {
