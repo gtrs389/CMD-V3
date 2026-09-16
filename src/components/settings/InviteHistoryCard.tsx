@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { DemoBadge } from '@/components/clients/DemoBadge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { InviteTrackingDetail } from './InviteTrackingDetail';
 
@@ -62,7 +63,22 @@ const TODOS = 'todos';
  * Nenhum token, URL de convite, hash de token, hash de IP, segredo da
  * reserva, CPF, titulo de eleitor ou dado de consulta cadastral chega aqui.
  */
+/**
+ * Recorte DEMO do rastreamento.
+ *
+ * Comeca em "Reais": o rastreamento e ferramenta de operacao, e um link de
+ * apresentacao no meio dele atrapalha quem investiga um link de verdade.
+ * Nada e apagado — "DEMO" e "Todos" trazem os eventos de volta a qualquer
+ * momento, e eles seguem uteis para demonstrar e para diagnosticar.
+ */
+const ESCOPOS = [
+  { id: 'reais', label: 'Reais' },
+  { id: 'demo', label: 'DEMO' },
+  { id: 'todos', label: 'Todos' },
+] as const;
+
 export function InviteHistoryCard() {
+  const [scope, setScope] = useState<(typeof ESCOPOS)[number]['id']>('reais');
   const [client, setClient] = useState(TODOS);
   const [owner, setOwner] = useState(TODOS);
   const [role, setRole] = useState(TODOS);
@@ -76,6 +92,7 @@ export function InviteHistoryCard() {
   // ficam no navegador porque as opcoes saem da propria lista carregada.
   const query = useMemo(() => {
     const params = new URLSearchParams();
+    if (scope !== 'reais') params.set('demo', scope);
     if (client !== TODOS) params.set('time', client);
     if (role !== TODOS) params.set('perfil', role);
     if (state !== TODOS) params.set('status', state);
@@ -83,7 +100,7 @@ export function InviteHistoryCard() {
     if (from) params.set('de', new Date(`${from}T00:00:00`).toISOString());
     if (to) params.set('ate', new Date(`${to}T23:59:59`).toISOString());
     return params.toString();
-  }, [client, role, state, from, to]);
+  }, [scope, client, role, state, from, to]);
 
   const loader = useCallback(
     () =>
@@ -141,6 +158,26 @@ export function InviteHistoryCard() {
 
       <CardBody className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Field
+            id="rastreio-escopo"
+            label="Times"
+            help="Os links de demonstração continuam gravados: escolha DEMO ou Todos para vê-los."
+          >
+            <Select
+              id="rastreio-escopo"
+              value={scope}
+              onChange={(event) =>
+                setScope(event.target.value as (typeof ESCOPOS)[number]['id'])
+              }
+            >
+              {ESCOPOS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
           <Field id="rastreio-time" label="Time">
             <Select
               id="rastreio-time"
@@ -286,7 +323,14 @@ export function InviteHistoryCard() {
                       <td className="px-3 py-2.5 text-ink-700">
                         {row.ownerRole ? ROLE_LABELS[row.ownerRole] : '--'}
                       </td>
-                      <td className="px-3 py-2.5 text-ink-700">{row.clientName}</td>
+                      <td className="px-3 py-2.5 text-ink-700">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {row.clientName}
+                          {/* Link de demonstracao: identificado na propria
+                              linha, mesmo quando o recorte e "Todos". */}
+                          {row.isDemo ? <DemoBadge /> : null}
+                        </span>
+                      </td>
                       <td className="px-3 py-2.5 text-ink-700">{row.generatedByName}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-ink-500">
                         {row.generatedAt ? formatDateTime(row.generatedAt) : '--'}
@@ -325,8 +369,11 @@ export function InviteHistoryCard() {
                         <p className="truncate text-sm font-semibold text-ink-900">
                           {row.ownerName}
                         </p>
-                        <p className="truncate text-xs text-ink-500">
-                          {row.ownerRole ? ROLE_LABELS[row.ownerRole] : '--'} · {row.clientName}
+                        <p className="flex flex-wrap items-center gap-1.5 truncate text-xs text-ink-500">
+                          <span>
+                            {row.ownerRole ? ROLE_LABELS[row.ownerRole] : '--'} · {row.clientName}
+                          </span>
+                          {row.isDemo ? <DemoBadge /> : null}
                         </p>
                       </div>
                       <StateBadge state={row.state} />

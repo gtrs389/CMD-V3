@@ -48,6 +48,14 @@ import { badRequest, notFound } from './http';
  * NENHUM DADO PESSOAL REAL entra: sem CPF, sem titulo de eleitor, sem
  * e-mail, e os telefones sao de uma faixa de demonstracao.
  *
+ * QUEM TEM ACESSO AO PAINEL: somente os administradores que o ADMIN geral
+ * cadastrou a mao. As pessoas ficticias sao DADOS, e nada mais — elas
+ * existem em `cmd_members` e em nenhum outro lugar. Sem usuario, sem senha,
+ * sem sessao, sem link de acesso, sem aparelho vinculado e sem convite
+ * pessoal: nao ha por onde entrar nem o que gerar em nome delas. Criar trinta
+ * contas so para calar um aviso de tela seria fabricar acesso que ninguem
+ * pediu.
+ *
  * A criacao e ATOMICA na pratica: o PostgREST nao abre transacao entre
  * chamadas, entao qualquer falha depois do time criado desfaz tudo pelo
  * caminho que o proprio sistema ja usa — excluir o time, que leva junto, em
@@ -102,10 +110,6 @@ export async function createDemoTeam(
   if (!input.admins?.length) {
     throw badRequest('Cadastre pelo menos um administrador do time.');
   }
-  if (input.admins.length > DEMO_LIMITS.maxAdmins) {
-    throw badRequest(`O Time DEMO aceita até ${DEMO_LIMITS.maxAdmins} administradores.`);
-  }
-
   const people = clampCount(input.people, DEMO_LIMITS.minPeople, DEMO_LIMITS.maxPeople);
   const places = clampCount(input.places, DEMO_LIMITS.minPlaces, DEMO_LIMITS.maxPlaces);
 
@@ -201,12 +205,15 @@ interface SeedOptions {
 }
 
 /**
- * Gera e grava o conteudo: locais, pessoas, acessos e vinculos de mapa.
+ * Gera e grava o conteudo: locais, pessoas e vinculos de mapa.
  *
  * Tudo em lote, nas tabelas reais. As pessoas nascem com responsavel (um dos
  * administradores do time), endereco, zona, secao e data de cadastro
  * espalhada entre hoje, os ultimos sete dias e o mes — os mesmos registros
  * que os cartoes, o grafico, as listas e o mapa vao ler.
+ *
+ * O que elas NAO ganham e acesso: nenhuma linha em `cmd_users`. Elas sao
+ * dados de demonstracao, e nao pessoas que entram no sistema.
  */
 async function seedDemoContent(
   client: Client,
@@ -233,7 +240,6 @@ async function seedDemoContent(
   const locations = await seedLocations(client.id, data);
   pontos.push(...locations.places, ...locations.streets);
   const members = await seedMembers(client, data, admins);
-  await seedMemberAccess(client.id, members);
   await seedMemberLocations(client.id, data, members, locations);
 }
 
@@ -333,40 +339,6 @@ async function seedMembers(
   });
 
   return insertRows<MemberRow>(TABLES.members, linhas, 'id,name,phone');
-}
-
-/**
- * Acesso dos integrantes: usuario EQUIPE com telefone, como no cadastro real.
- *
- * Sem isso, as trinta pessoas apareceriam em Configuracoes como "sem acesso"
- * — um alarme falso em uma tela que existe para mostrar problemas de acesso
- * de verdade.
- *
- * O link pessoal de cada um nao e emitido agora: ele nasce na primeira vez
- * que a pessoa (ou a tela dela) precisa dele, exatamente como acontece nos
- * acessos criados antes da migration 012.
- */
-async function seedMemberAccess(
-  clientId: string,
-  members: Pick<MemberRow, 'id' | 'name' | 'phone'>[],
-): Promise<void> {
-  if (members.length === 0) return;
-
-  await insertRows(
-    TABLES.users,
-    members.map((member) => ({
-      name: member.name,
-      email: null,
-      phone: member.phone,
-      role: 'EQUIPE',
-      client_id: clientId,
-      member_id: member.id,
-      password_hash: null,
-      must_change_password: false,
-      is_active: true,
-    })),
-    'id',
-  );
 }
 
 /**

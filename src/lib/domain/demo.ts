@@ -24,14 +24,22 @@ export const DEMO_PROVIDER = 'DEMO_SEED';
 /** Valores iniciais do formulario de criacao. O ADMIN pode alterar. */
 export const DEMO_DEFAULTS = { people: 30, places: 6 } as const;
 
-/** Limites conferidos no servidor, e nao apenas na tela. */
+/**
+ * Limites conferidos no servidor, e nao apenas na tela.
+ *
+ * Eles existem para uma apresentacao nao virar uma carga de milhares de
+ * linhas por engano — e valem para o que e GERADO automaticamente.
+ *
+ * Administrador nao entra nesta lista de proposito: quem os cadastra e o
+ * ADMIN geral, um por um, e nao ha numero certo de administradores para um
+ * time. Cada um continua passando pelas mesmas regras de nome, telefone e
+ * telefone unico no time.
+ */
 export const DEMO_LIMITS = {
   minPeople: 1,
   maxPeople: 300,
   minPlaces: 1,
   maxPlaces: 30,
-  minAdmins: 1,
-  maxAdmins: 10,
 } as const;
 
 /* -------------------------------------------------------------------------
@@ -189,7 +197,10 @@ export interface DemoInput {
   seed: string;
   people: number;
   places: number;
-  /** Quantos administradores o time tem: as pessoas se dividem entre eles. */
+  /**
+   * Quantos administradores o time tem: as pessoas se dividem entre todos,
+   * sejam dois ou vinte. Nao ha limite.
+   */
   admins: number;
   /** Telefones ja usados no time (os dos administradores). */
   usedPhones?: readonly string[];
@@ -269,7 +280,10 @@ export function buildDemoData(input: DemoInput): DemoData {
 
   const totalPessoas = clampCount(input.people, DEMO_LIMITS.minPeople, DEMO_LIMITS.maxPeople);
   const totalLocais = clampCount(input.places, DEMO_LIMITS.minPlaces, DEMO_LIMITS.maxPlaces);
-  const totalAdmins = clampCount(input.admins, DEMO_LIMITS.minAdmins, DEMO_LIMITS.maxAdmins);
+  // Quantos administradores o time tiver: as pessoas se dividem entre todos
+  // eles, sem teto. O minimo e um, porque um time sem administrador nao
+  // teria como ser acessado.
+  const totalAdmins = Math.max(1, Math.trunc(input.admins) || 1);
 
   const cidade = pick(random, CIDADES);
   const ocupados = new Set((input.usedPhones ?? []).map((phone) => normalizePhone(phone)));

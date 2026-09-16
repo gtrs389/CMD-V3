@@ -100,11 +100,23 @@ describe('dados de demonstração', () => {
     }
   });
 
-  it('divide as pessoas entre todos os administradores', () => {
-    const data = gerar({ people: 30, admins: 3 });
-    const responsaveis = new Set(data.people.map((person) => person.adminIndex));
+  it('divide as pessoas entre todos os administradores, sem teto', () => {
+    const tres = gerar({ people: 30, admins: 3 });
+    expect(new Set(tres.people.map((person) => person.adminIndex))).toEqual(new Set([0, 1, 2]));
 
-    expect(responsaveis).toEqual(new Set([0, 1, 2]));
+    // Nao existe limite de administradores: o time se divide entre todos.
+    const muitos = gerar({ people: 60, admins: 25 });
+    const responsaveis = new Set(muitos.people.map((person) => person.adminIndex));
+    expect(responsaveis.size).toBe(25);
+    expect(Math.max(...responsaveis)).toBe(24);
+
+    // Mesmo com mais administradores do que pessoas, ninguem fica sem
+    // responsavel e nenhum indice aponta para administrador inexistente.
+    const poucos = gerar({ people: 4, admins: 12 });
+    for (const person of poucos.people) {
+      expect(person.adminIndex).toBeGreaterThanOrEqual(0);
+      expect(person.adminIndex).toBeLessThan(12);
+    }
   });
 
   it('não repete telefone e não usa o de um administrador', () => {

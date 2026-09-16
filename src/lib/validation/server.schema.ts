@@ -499,8 +499,9 @@ export const demoTeamCreateSchema = z.object({
         photo: photoValue.default(null),
       }),
     )
-    .min(1, 'Cadastre pelo menos um administrador do time.')
-    .max(DEMO_LIMITS.maxAdmins, `O Time DEMO aceita até ${DEMO_LIMITS.maxAdmins} administradores.`),
+    // Sem teto: sao cadastrados um a um pelo ADMIN geral, e cada um passa
+    // pelas mesmas regras de nome e telefone de qualquer time.
+    .min(1, 'Cadastre pelo menos um administrador do time.'),
   people: z
     .number()
     .int('Informe um número inteiro de pessoas.')

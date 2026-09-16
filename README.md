@@ -310,7 +310,22 @@ locais de votação, já preenchidas com valores razoáveis. Ao concluir, a
 página do próprio time abre com os cartões, as pessoas e o mapa cheios.
 
 Os administradores do Time DEMO entram pelo **mesmo fluxo dos times reais**:
-link de acesso do time + telefone. Não há segundo sistema de autenticação.
+link de acesso do time + telefone. Não há segundo sistema de autenticação, e
+não há limite de quantos administradores o time pode ter.
+
+### Quem tem acesso
+
+**Somente os administradores cadastrados à mão pelo ADMIN geral.** As pessoas
+fictícias são dados de demonstração: existem em `cmd_members` e em nenhum
+outro lugar — sem usuário, sem senha, sem sessão, sem link de acesso, sem
+aparelho vinculado e sem convite pessoal. Não há por onde entrar nem o que
+gerar em nome delas.
+
+Por isso elas também não aparecem em **Configurações → Usuários do sistema**:
+não estão com acesso pendente, foram criadas sem acesso de propósito, e a
+consulta dos pendentes exclui os times com `is_demo = true`. A alternativa —
+criar trinta contas para calar o aviso — seria fabricar acesso que ninguém
+pediu.
 
 ### Mapa sem API externa
 
@@ -335,7 +350,14 @@ nenhum Time DEMO cadastrado, nenhuma consulta ganha uma cláusula sequer.
 
 Na listagem de Times o ADMIN geral vê o Time DEMO com o selo **DEMO**, mas os
 dois indicadores acima da lista continuam somando apenas `is_demo = false`.
-Dentro da página do próprio time, tudo aparece normalmente.
+Dentro da página do próprio time, tudo aparece normalmente: total de pessoas,
+gráfico, cadastros de hoje e dos sete dias, listas, mapa, locais de votação e
+contagens por gênero e por responsável.
+
+No **rastreamento de links** os eventos DEMO não são apagados nem escondidos —
+eles seguem úteis para demonstrar e diagnosticar. A listagem começa em
+**Reais**, cada linha de um Time DEMO leva o selo, e o ADMIN geral alterna
+entre `Reais`, `DEMO` e `Todos`.
 
 ### O que o banco garante
 

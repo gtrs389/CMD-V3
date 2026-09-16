@@ -68,9 +68,22 @@ const EVENT_LIMIT = 2000;
 /** Teto de aberturas lidas por consulta. */
 const CLICK_LIMIT = 5000;
 
+/**
+ * Recorte DEMO do rastreamento.
+ *
+ * 'reais' e o padrao: o rastreamento e ferramenta de operacao, e um link de
+ * apresentacao no meio dele so atrapalha quem esta investigando um link de
+ * verdade. Os eventos DEMO nao sao apagados nem escondidos em definitivo —
+ * eles continuam uteis para demonstrar e para diagnosticar —, e o ADMIN
+ * geral alterna quando quiser.
+ */
+export type InviteTrackingScope = 'reais' | 'demo' | 'todos';
+
 export interface InviteTrackingFilter {
   /** Time (operacao). */
   clientId?: string;
+  /** Recorte DEMO. Ausente: somente times reais. */
+  scope?: InviteTrackingScope;
   /** Dono do link, pelo nome exibido. */
   owner?: string;
   role?: 'CANDIDATE' | 'EQUIPE';
@@ -242,8 +255,10 @@ export async function listInviteTracking(
       select: INVITE_COLUMNS,
       filters: { id: inFilter(refs) },
     }),
-    selectRows<Pick<ClientRow, 'id' | 'name'>>(TABLES.clients, {
-      select: 'id,name',
+    selectRows<Pick<ClientRow, 'id' | 'name' | 'is_demo'>>(TABLES.clients, {
+      // `is_demo` acompanha o time ate aqui: cada linha do rastreamento diz
+      // se o link e de demonstracao, e o recorte usa o mesmo sinal.
+      select: 'id,name,is_demo',
       filters: { id: inFilter(clientIds) },
     }),
     selectRows<InviteAccessDeviceRow>(TABLES.inviteAccessDevices, {
@@ -261,6 +276,7 @@ export async function listInviteTracking(
 
   const inviteById = new Map(invites.map((row) => [row.id, row]));
   const clientName = new Map(clients.map((row) => [row.id, row.name]));
+  const demoClients = new Set(clients.filter((row) => row.is_demo).map((row) => row.id));
   const deviceByKey = new Map(
     devices.map((row) => [`${row.invite_ref}:${row.generation}`, row]),
   );
@@ -326,6 +342,7 @@ export async function listInviteTracking(
       ownerRole: draft.ownerRole,
       clientId: draft.clientId,
       clientName: clientName.get(draft.clientId) ?? '--',
+      isDemo: demoClients.has(draft.clientId),
       // Sem registro proprio (link anterior a esta migration), quem gerou e o
       // proprio dono: era o unico caminho possivel.
       generatedByName: draft.generatedByName ?? draft.ownerName,
@@ -351,6 +368,12 @@ export async function listInviteTracking(
         : null,
     } satisfies InviteTrackingEntry;
   });
+
+  // Recorte DEMO antes de tudo: sem escolha, o rastreamento e o da operacao
+  // real. Nenhum evento e apagado — 'demo' e 'todos' trazem tudo de volta.
+  const scope: InviteTrackingScope = filter.scope ?? 'reais';
+  if (scope === 'reais') entries = entries.filter((row) => !row.isDemo);
+  else if (scope === 'demo') entries = entries.filter((row) => row.isDemo);
 
   if (filter.clientId) entries = entries.filter((row) => row.clientId === filter.clientId);
   if (filter.owner) entries = entries.filter((row) => sameName(row.ownerName, filter.owner!));

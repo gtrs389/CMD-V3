@@ -29,6 +29,7 @@ import {
 } from '@/lib/supabase/rest';
 import { signedUrls } from '@/lib/supabase/storage';
 import { activeAdminDevices, releaseAdminDevice } from './admin-device';
+import { withoutDemoClients } from './demo-scope';
 import { ensurePersonalInvite } from './invite.service';
 import { ApiError, badRequest, notFound } from './http';
 
@@ -295,6 +296,13 @@ export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]>
   >(TABLES.members, {
     select:
       'id,client_id,name,phone,photo_path,recruited_by_user_id,recruited_by_name,recruited_by_role',
+    // As pessoas de um Time DEMO ficam fora desta lista. Elas nao estao com
+    // acesso pendente: foram criadas de proposito SEM acesso, porque sao
+    // dados de demonstracao. Mostra-las aqui seria um alarme falso em uma
+    // tela que existe justamente para apontar problema de acesso de verdade
+    // — e a saida contraria, criar usuarios para elas, seria fabricar trinta
+    // contas so para calar o aviso.
+    filters: await withoutDemoClients(),
     order: 'created_at.asc',
   });
   if (members.length === 0) return [];

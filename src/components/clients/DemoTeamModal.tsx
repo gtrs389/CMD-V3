@@ -180,10 +180,10 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
                 fictícias são divididas entre eles em &quot;Cadastrado por&quot;.
               </p>
             </div>
+            {/* Sem limite: quantos administradores o time precisar. */}
             <Button
               variant="secondary"
               size="sm"
-              disabled={admins.length >= DEMO_LIMITS.maxAdmins}
               onClick={() => setAdmins((atual) => [...atual, novoAdministrador()])}
             >
               <Plus aria-hidden="true" className="size-4" />
