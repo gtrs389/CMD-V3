@@ -3,7 +3,6 @@ import {
   buildQuery,
   normalizeQuery,
   parsePlace,
-  pollingPlaceQuery,
   providerError,
   residenceLookup,
 } from '@/lib/domain/map-location';
@@ -88,22 +87,9 @@ describe('montagem da consulta', () => {
     expect(query).not.toMatch(/\d{11}|cpf|telefone|nascimento|mae|titulo|zona|secao/i);
   });
 
-  it('local de votação usa o domicílio eleitoral', () => {
-    expect(
-      pollingPlaceQuery({
-        local: 'ESCOLA MUNICIPAL EXEMPLO',
-        logradouro: 'RUA DAS FLORES S/N',
-        bairro: 'CENTRO',
-        municipio: 'SÃO PAULO',
-        uf: 'SP',
-      }),
-    ).toBe('ESCOLA MUNICIPAL EXEMPLO, RUA DAS FLORES S/N, CENTRO, SÃO PAULO - SP, Brasil');
-  });
-
   it('sem município, UF ou endereço não há consulta', () => {
     expect(residenceLookup({ street: 'Rua A', district: 'Centro', city: '', state: 'SP' })).toBeNull();
     expect(residenceLookup({ street: 'Rua A', city: 'São Paulo', state: '' })).toBeNull();
-    expect(pollingPlaceQuery({ local: '', municipio: 'São Paulo', uf: 'SP' })).toBeNull();
     expect(buildQuery({ city: 'São Paulo', state: 'SP' })).toBeNull();
   });
 

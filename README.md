@@ -104,6 +104,7 @@ Execute os SQLs de `supabase/` antes do primeiro login. Veja
 | `npm run verificar` | Lint + tipos + testes + build, em sequência |
 | `npm run gerar-hash` | Pergunta e-mail e senha (oculta) e imprime o SQL do ADMIN |
 | `npm run configurar-storage` | Cria ou confere o bucket privado `cmd-media` pela API do Storage |
+| `npm run importar-locais` | Carrega o CSV de locais de votação do TSE em `cmd_polling_places` |
 
 ---
 
@@ -322,14 +323,78 @@ derivada do interruptor a cada abertura do link (`withVerificationRules`, em
 usa — o que o ADMIN vê na prévia é o que quem abre o link recebe. Religar a
 confirmação devolve o formulário exatamente como ele foi montado.
 
-O que **não** para junto: a moradia aproximada do mapa continua sendo
-resolvida, porque ela não vem da FonteData. O que depende da consulta
-eleitoral — o local de votação — é que deixa de existir.
+O que **não** para junto: nem a moradia aproximada nem o local de votação, que
+desde a migration 042 não dependem mais da FonteData nem de consulta paga
+nenhuma — a escola sai da nossa própria tabela, achada pela zona e pela seção
+que a pessoa digitou. É a seção seguinte.
 
 Na ficha do integrante, a **Verificação cadastral** diz que a confirmação está
 desligada naquele time, em vez de ficar eternamente "aguardando" uma consulta
 que nunca vai acontecer. As verificações já feitas antes de desligar continuam
 onde estão: nada é apagado nem reescrito.
+
+---
+
+## Locais de votação: a escola sai do nosso banco
+
+A escola onde a pessoa vota era descoberta **consultando o Google**, pela
+SerpAPI: montava-se o endereço que a Justiça Eleitoral tinha devolvido e
+perguntava-se as coordenadas ao provedor. Isso custava uma consulta paga por
+escola e devolvia o palpite do buscador para aquele texto — não o ponto
+oficial.
+
+O TSE publica a lista completa dos locais de votação, com a coordenada de cada
+um. Ela agora vive em `cmd_polling_places` (migration 042), e a escola deixou
+de ser uma pergunta: é uma consulta ao próprio banco, de graça, instantânea e
+exata.
+
+**A SerpAPI continua servindo apenas a moradia aproximada da pessoa** — o
+único endereço que ninguém publica em tabela, porque é digitado no cadastro.
+Não existe mais caminho que leve a escola a um provedor: a função que montava
+aquela consulta foi removida, e não só deixou de ser chamada.
+
+### Como se acha o local de uma pessoa
+
+Por **UF + zona + seção**. A seção é a unidade: cada uma existe em um único
+local, e por isso as seções ficam numa lista dentro da linha do local — a
+forma da própria planilha ("Seções neste local: 1, 2, 3…"), com um índice GIN
+para a busca não varrer a tabela.
+
+A UF entra porque **número de zona se repete entre estados**: a zona 39 existe
+em Alagoas e em São Paulo, e são locais diferentes. De onde vêm os três, em
+ordem:
+
+1. a **consulta eleitoral**, quando o time confirma dados e ela deu certo — é
+   a resposta da própria Justiça Eleitoral;
+2. o que está no **cadastro**, com a **UF do time**. Zona e seção foram
+   digitadas por quem preencheu (obrigatórias no time sem confirmação,
+   migration 041), e o estado do time já é informado no cadastro dele
+   (migration 038);
+3. a UF declarada pela pessoa, quando o time é antigo e não tem estado.
+
+Faltando qualquer um dos três, não há busca. **Não encontrado quer dizer não
+encontrado**: aquela UF ainda não foi importada, a seção é nova, ou o número
+digitado não existe. Nenhuma consulta paga tenta adivinhar — o integrante fica
+no mapa pela moradia, e o painel mostra que o local não foi encontrado, que é
+a verdade. Local sem coordenada na planilha é encontrado, mas não vira pino:
+inventar um ponto seria pior do que não ter nenhum.
+
+### Carregar a planilha
+
+```bash
+npm run importar-locais -- supabase/dados/locais-de-votacao.csv --conferir
+npm run importar-locais -- supabase/dados/locais-de-votacao.csv
+```
+
+As colunas são encontradas **pelo nome** (acento, caixa, pontuação e ordem não
+importam), e separador, aspas, BOM do Excel e coordenada com vírgula decimal
+são reconhecidos sozinhos. A carga é **idempotente**: a chave é UF + município
++ zona + local, então rodar de novo — ou carregar mais um estado — atualiza no
+lugar, nunca duplica e nunca apaga. Estado por estado funciona: um CSV por UF,
+na ordem que quiser. Os detalhes estão em `supabase/dados/README.md`.
+
+O CSV não é versionado: é dado público e grande. O que é versionado é o
+comando que o carrega.
 
 ---
 

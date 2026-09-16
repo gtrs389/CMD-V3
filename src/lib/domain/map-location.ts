@@ -124,23 +124,19 @@ export function residenceLookup(parts: {
   return query ? { query, precision } : null;
 }
 
-/** Consulta do local de votacao, a partir do domicilio eleitoral. */
-export function pollingPlaceQuery(parts: {
-  local?: string | null;
-  logradouro?: string | null;
-  bairro?: string | null;
-  municipio?: string | null;
-  uf?: string | null;
-}): string | null {
-  if (!clean(parts.local)) return null;
-  return buildQuery({
-    place: parts.local,
-    street: parts.logradouro,
-    district: parts.bairro,
-    city: parts.municipio,
-    state: parts.uf,
-  });
-}
+/**
+ * A escola NAO se consulta mais.
+ *
+ * Ate a migration 042 havia aqui uma `pollingPlaceQuery`, que montava o
+ * endereco do local de votacao para perguntar as coordenadas ao provedor.
+ * Ela saiu junto com a consulta: o local de votacao vem da nossa tabela
+ * (`cmd_polling_places`), achado por UF + zona + secao, com a coordenada
+ * oficial do TSE. Nao ha consulta paga, nao ha palpite de buscador e nao
+ * existe caminho que leve a escola de volta ao provedor.
+ *
+ * O que continua consultando e a MORADIA, logo acima: ela e digitada no
+ * cadastro e nao existe em tabela nenhuma.
+ */
 
 /** Forma estavel da consulta, usada para o hash do cache. */
 export function normalizeQuery(query: string): string {

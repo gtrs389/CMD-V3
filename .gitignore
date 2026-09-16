@@ -41,3 +41,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# planilhas de locais de votacao (dado publico do TSE, grande demais para o
+# repositorio). O comando que as carrega e `npm run importar-locais`.
+/supabase/dados/*.csv

@@ -27,6 +27,7 @@ export const TABLES = {
   memberVerificationViews: 'cmd_member_verification_views',
   mapLocations: 'cmd_map_locations',
   memberLocations: 'cmd_member_locations',
+  pollingPlaces: 'cmd_polling_places',
   settings: 'cmd_settings',
   inviteEvents: 'cmd_invite_events',
   inviteAccessDevices: 'cmd_invite_access_devices',
@@ -657,6 +658,35 @@ export interface MapLocationRow {
   provider: string;
   searched_at: string;
   created_at: string;
+}
+
+/**
+ * Local de votacao publicado pelo TSE (migration 042).
+ *
+ * Dado publico de escolas: nada aqui pertence a um integrante, a um time ou
+ * a uma consulta. Uma linha por LOCAL, com as secoes que votam nele — e por
+ * `sections` que se acha o local de uma pessoa, a partir de UF + zona +
+ * secao.
+ */
+export interface PollingPlaceRow {
+  id: string;
+  uf: string;
+  /** Codigo do municipio no TSE, nao o do IBGE. */
+  city_code: number;
+  city: string;
+  zone: number;
+  name: string;
+  place_type: string | null;
+  address: string | null;
+  district: string | null;
+  postal_code: string | null;
+  /** Nulas quando a planilha nao traz a coordenada daquele local. */
+  latitude: number | null;
+  longitude: number | null;
+  section_count: number | null;
+  sections: number[];
+  created_at: string;
+  updated_at: string;
 }
 
 /** Vinculo do integrante com a moradia aproximada e o local de votacao. */

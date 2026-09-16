@@ -222,13 +222,28 @@ export async function POST(request: NextRequest) {
       // A moradia aproximada nao espera pela consulta eleitoral.
       await createPendingLocation(client.id, member.id, 'RESIDENCE').catch(() => undefined);
 
+      // Local de votacao: nasce sempre que a pessoa informou zona e secao,
+      // com confirmacao ligada ou desligada. Desde a migration 042 a escola
+      // nao e mais consulta paga — ela e uma linha da nossa tabela, achada
+      // por UF + zona + secao. Sem os dois numeros nao ha o que procurar, e
+      // o vinculo nem chega a existir.
+      const temSecao = Boolean(member.zone?.trim() && member.section?.trim());
+      if (temSecao) {
+        await createPendingLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
+      }
+
       after(async () => {
         await resolveLocation(member.id, 'RESIDENCE').catch(() => undefined);
 
-        // A moradia aproximada nao vem do fornecedor de dados: ela continua
-        // sendo resolvida mesmo no time que desligou a confirmacao. O que
-        // para aqui e tudo o que dependeria da FonteData — inclusive o local
-        // de votacao, que so existe a partir da consulta eleitoral.
+        // A escola sai da nossa tabela: nenhum provedor e chamado, entao ela
+        // e resolvida em todo time, com a confirmacao ligada ou desligada.
+        if (temSecao) {
+          await resolveLocation(member.id, 'POLLING_PLACE').catch(() => undefined);
+        }
+
+        // Daqui para baixo e so o que depende da FonteData. A moradia e o
+        // local de votacao acima ja aconteceram, porque nenhum dos dois
+        // depende dela.
         if (!client.verificationEnabled) return;
 
         if (!seed.seeded) {
@@ -236,8 +251,10 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        // Etapa eleitoral ja resolvida no formulario: o local de votacao
-        // nasce e e resolvido aqui, igual ao que `runVerification` faria.
+        // Etapa eleitoral ja resolvida no formulario. A zona e a secao que a
+        // Justica Eleitoral respondeu ja estao no cadastro (o formulario as
+        // preencheu), entao o local acima ja e o certo; refazer o vinculo
+        // cobre o caso de o numero digitado antes da consulta ter mudado.
         if (seed.tseSucceeded) {
           await createPendingLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
           await invalidateLocation(client.id, member.id, 'POLLING_PLACE').catch(() => undefined);
