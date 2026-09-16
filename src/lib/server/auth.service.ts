@@ -12,7 +12,14 @@ import {
 } from '@/lib/auth/constants';
 import { isAdminHost, servesAdminLogin } from '@/lib/domain/hosts';
 import { TABLES, type SessionRow, type UserRow } from '@/lib/supabase/tables';
-import { callFunction, deleteRows, insertOne, selectOne, updateRows } from '@/lib/supabase/rest';
+import {
+  callFunction,
+  deleteRows,
+  insertOne,
+  selectOne,
+  SupabaseRequestError,
+  updateRows,
+} from '@/lib/supabase/rest';
 import { signedUrl } from '@/lib/supabase/storage';
 import { ADMIN_DEVICE_COOKIE, checkAdminDevice } from './admin-device';
 
@@ -253,14 +260,30 @@ export async function resolveSessionState(
   const vazia: SessionState = { user: null, blocked: null };
   if (!token) return vazia;
 
-  const row = await selectOne<SessionJoinRow>(TABLES.sessions, {
-    select:
-      `id,expires_at,revoked_at,admin_device_id,` +
-      `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
-      `team_person:${TABLES.teamPeople}(photo_path),` +
-      `client:${TABLES.clients}(is_demo,demo_access_enabled))`,
-    filters: { token_hash: `eq.${hashToken(token)}` },
-  });
+  const filtro = { token_hash: `eq.${hashToken(token)}` };
+  const base =
+    `id,expires_at,revoked_at,admin_device_id,` +
+    `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
+    `team_person:${TABLES.teamPeople}(photo_path)`;
+
+  let row: SessionJoinRow | null;
+  try {
+    row = await selectOne<SessionJoinRow>(TABLES.sessions, {
+      select: `${base},client:${TABLES.clients}(is_demo,demo_access_enabled))`,
+      filters: filtro,
+    });
+  } catch (error) {
+    // Banco ainda sem a migration 036: `demo_access_enabled` nao existe. Esta
+    // consulta e a porta de TODO o sistema — se ela falhar, ninguem entra em
+    // lugar nenhum. Uma funcionalidade que ainda nao foi ao banco nao pode
+    // derrubar o login de todo mundo, entao a sessao resolve sem a chave, que
+    // e exatamente como era antes de ela existir.
+    if (!(error instanceof SupabaseRequestError) || !error.isMissingSchema) throw error;
+    row = await selectOne<SessionJoinRow>(TABLES.sessions, {
+      select: `${base})`,
+      filters: filtro,
+    });
+  }
 
   if (!row || !row.user || !row.user.is_active) return vazia;
   if (row.revoked_at !== null) return vazia;

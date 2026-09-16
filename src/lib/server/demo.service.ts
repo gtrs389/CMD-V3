@@ -208,14 +208,21 @@ async function updateSeed(seedId: string, clientId: string): Promise<void> {
   );
 }
 
-/** Anota no time qual catalogo gerou os dados que ele tem agora. */
+/**
+ * Anota no time qual catalogo gerou os dados que ele tem agora.
+ *
+ * Falha em silencio de proposito. Isto e ANOTACAO: serve para a rotina de
+ * correcao saber em que versao o time esta. Um banco ainda sem a migration
+ * 034 nao tem a coluna — e perder um time inteiro de mil pessoas, ja gravado,
+ * por causa de uma anotacao seria absurdo.
+ */
 async function markSeeded(clientId: string): Promise<void> {
   await updateRows(
     TABLES.clients,
     { id: `eq.${clientId}` },
     { demo_seed_version: DEMO_SEED_VERSION },
     'id',
-  );
+  ).catch(() => []);
 }
 
 /* -------------------------------------------------------------------------
@@ -258,10 +265,21 @@ export async function refreshDemoTeam(clientId: string): Promise<DemoRefreshRepo
   const admins = await demoAdmins(clientId);
 
   // Quantas pessoas o time tinha: a escolha de quem o criou e mantida.
+  // Sem a migration 034 a coluna da marca nao existe: nesse caso a correcao
+  // trata TODAS as pessoas do Time DEMO como geradas — que e o que elas sao,
+  // porque sem a coluna tambem nao houve como marcar outra coisa.
   const anteriores = await selectRows<Pick<MemberRow, 'id' | 'photo_path'>>(TABLES.members, {
     select: 'id,photo_path',
     filters: { client_id: `eq.${clientId}`, demo_seed: 'not.is.null' },
     limit: DEMO_LIMITS.maxPeople,
+  }).catch(async (error: unknown) => {
+    const faltaColuna = error instanceof SupabaseRequestError && error.isMissingSchema;
+    if (!faltaColuna) throw error;
+    return selectRows<Pick<MemberRow, 'id' | 'photo_path'>>(TABLES.members, {
+      select: 'id,photo_path',
+      filters: { client_id: `eq.${clientId}` },
+      limit: DEMO_LIMITS.maxPeople,
+    });
   });
   // A equipe nunca encolhe na correcao: um time criado com o padrao antigo
   // (trinta pessoas em seis escolas) sobe para o padrao atual, e um time que
