@@ -108,6 +108,11 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     email: row.email,
     photo: options.photoUrl,
     notes: row.notes,
+    stateUf: row.state_uf ?? null,
+    // A coluna e jsonb e o banco garante que e um array (038). A guarda aqui
+    // e para a linha que veio de um banco ainda sem a migration: melhor um
+    // time sem municipio do que a tela inteira quebrada.
+    cities: Array.isArray(row.cities) ? row.cities : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     people: (options.people ?? [])

@@ -10,6 +10,7 @@ import {
   FileText,
   Image as ImageIcon,
   LayoutList,
+  MapPin,
   Pencil,
   Settings,
   Trash2,
@@ -230,6 +231,21 @@ export function ClientDetailView({
                   aparecendo no meio da demonstracao. */}
               {client.isDemo && user?.role === 'ADMIN' ? <DemoBadge /> : null}
             </div>
+
+            {/* De onde o time e (038). Cadastrar sem nunca mostrar seria
+                guardar dado que ninguem confere — e o estado errado so
+                aparece quando alguem o ve. Nada e desenhado nos times
+                antigos, que ainda nao tem estado: um traco ali nao diz nada
+                a mais do que o silencio. */}
+            {client.stateUf ? (
+              <p className="mt-1 flex items-center gap-1.5 text-[0.8125rem] text-ink-500">
+                <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  {client.stateUf}
+                  {client.cities.length > 0 ? ` · ${client.cities.join(', ')}` : ''}
+                </span>
+              </p>
+            ) : null}
 
             {/* No lugar do contato do time: quem administra a operacao. */}
             {client.people.length > 0 ? (

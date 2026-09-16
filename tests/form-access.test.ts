@@ -64,6 +64,8 @@ function clienteComFormulario(): Client {
     email: 'candidata@exemplo.test',
     photo: null,
     notes: '',
+    stateUf: 'AL',
+    cities: [],
     banner: null,
   demoAccessEnabled: true,
   bannerTag: { ...DEFAULT_BANNER_TAG },

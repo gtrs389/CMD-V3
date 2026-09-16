@@ -28,6 +28,9 @@ const photoValue = z
 
 const trimmed = (max: number) => z.string().trim().max(max);
 
+/** As 27 siglas, na unica lista do sistema. Usada pelo time e pelo integrante. */
+const UF_CODES = UF_OPTIONS.map((option) => option.id) as [string, ...string[]];
+
 /**
  * Pessoa do time: registro interno do ADMIN, sem relacao com integrantes
  * recrutados nem com acesso ao sistema. `id` ausente indica pessoa nova.
@@ -49,10 +52,42 @@ const teamPersonSchema = z.object({
  * Sem e-mail: quem entra no painel do time e sempre um administrador, pelo
  * link do time + telefone. Por isso todo time novo precisa de pelo menos um.
  */
+/**
+ * Estado do time: a SIGLA, sempre.
+ *
+ * Um estado escrito a mao ("Sao Paulo", "sp ") nunca cruzaria com o endereco
+ * dos integrantes, que o sistema ja grava pela sigla — e cruzar as duas
+ * coisas e a razao de o campo existir. A lista e a mesma do resto do
+ * sistema, e o banco repete o `check` na 038: a tela nunca e a unica
+ * barreira.
+ */
+const ufValue = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .refine((value) => UF_CODES.includes(value), 'Selecione o estado do time.');
+
+/**
+ * Municipios onde o time atua. Opcional e PLURAL, de proposito: uma operacao
+ * raramente cabe em um municipio so, e obrigar a escolher um seria pedir uma
+ * resposta errada. Vazio quer dizer "nao restringiu".
+ */
+const citiesValue = z
+  .array(trimmed(120).min(1))
+  .max(200, 'Municípios demais.')
+  // Escolher o mesmo municipio duas vezes na tela nao pode virar dois no
+  // banco.
+  .transform((lista) => Array.from(new Set(lista)));
+
 export const clientCreateSchema = z.object({
   name: trimmed(80).min(2, 'Informe o nome do time.'),
   photo: photoValue.default(null),
   notes: trimmed(500).default(''),
+  // Obrigatorio no time NOVO. Na edicao (`clientUpdateSchema`) ele fica
+  // opcional, porque os times criados antes da 038 nao tem estado e
+  // recusa-los seria trancar a propria tela que os conserta.
+  stateUf: ufValue,
+  cities: citiesValue.default([]),
   people: z
     .array(teamPersonSchema)
     .min(1, 'Cadastre pelo menos um administrador do time.')
@@ -104,6 +139,10 @@ export const bannerTagSchema = z.object({
 export const clientUpdateSchema = clientCreateSchema.partial().extend({
   photo: photoValue.optional(),
   notes: trimmed(500).optional(),
+  // Mesmo motivo do `photo` e do `notes` acima: `.partial()` nao tira o
+  // `.default([])` herdado, e uma edicao que nao mandou municipio nenhum
+  // apagaria a lista do time sem ninguem pedir.
+  cities: citiesValue.optional(),
   bannerTag: bannerTagSchema.optional(),
   banner: photoValue.optional(),
 });
@@ -160,7 +199,6 @@ const responsesSchema = z
   .array(z.object({ fieldId: z.string().min(1).max(64), value: fieldValueSchema }))
   .max(appConfig.limits.maxFieldsPerForm);
 
-const UF_CODES = UF_OPTIONS.map((option) => option.id) as [string, ...string[]];
 
 /** Vazio conta como nao informado, e nao como valor invalido. */
 const opcional = <T extends z.ZodType>(schema: T) =>

@@ -35,6 +35,21 @@ export const clientSchema = z.object({
     .max(80, 'Use no máximo 80 caracteres.'),
   photo: z.string().nullable(),
   notes: z.string().trim().max(500, 'Use no máximo 500 caracteres.'),
+  /**
+   * Estado do time (migration 038). OBRIGATORIO.
+   *
+   * Vazio e a unica coisa que esta tela recusa aqui: a lista so oferece as
+   * 27 siglas, entao nao ha como escolher um estado errado — so deixar de
+   * escolher. O servidor confere de novo, contra a mesma lista, e o banco
+   * repete no `check`.
+   */
+  stateUf: z.string().trim().min(1, 'Selecione o estado do time.'),
+  /**
+   * Municipios onde o time atua (migration 038). OPCIONAL, e varios: uma
+   * operacao raramente cabe em um municipio so, e obrigar a escolher um
+   * seria pedir uma resposta errada. Vazio quer dizer "nao restringiu".
+   */
+  cities: z.array(z.string().trim().min(1)),
   people: z.array(teamPersonSchema).min(1, 'Cadastre pelo menos um administrador do time.'),
 });
 

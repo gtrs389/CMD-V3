@@ -127,6 +127,10 @@ export interface ClientRow {
   privacy_consent_label: string;
   /** Interruptor da operacao: em false nenhum link daquele time aceita cadastro. */
   recruiting_active: boolean;
+  /** Estado do time, pela sigla (migration 038). Nulo nos times anteriores. */
+  state_uf: string | null;
+  /** Municipios onde o time atua (migration 038). Array de nomes. */
+  cities: string[];
   /**
    * Time de demonstracao (migration 033). Imutavel depois de criado, e fora
    * de toda metrica global: total de times, integrantes, graficos, mapa

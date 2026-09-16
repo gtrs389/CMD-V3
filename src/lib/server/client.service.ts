@@ -582,21 +582,43 @@ export async function createClient(
     privacy_consent_label: appConfig.privacy.defaultConsentLabel,
   };
 
+  const colunasBanner = {
+    banner_path: banner?.path ?? null,
+    banner_mime: banner?.mime ?? null,
+    banner_size: banner?.size ?? null,
+  };
+
+  // Estado e municipios (migration 038).
+  const colunasLugar = {
+    state_uf: input.stateUf ?? null,
+    cities: input.cities ?? [],
+  };
+
+  const semEsquema = (error: unknown) =>
+    error instanceof SupabaseRequestError && error.isMissingSchema;
+
   let row: ClientRow;
   try {
     row = await insertOne<ClientRow>(TABLES.clients, {
       ...novo,
-      banner_path: banner?.path ?? null,
-      banner_mime: banner?.mime ?? null,
-      banner_size: banner?.size ?? null,
+      ...colunasBanner,
+      ...colunasLugar,
     });
   } catch (error) {
-    // Banco ainda sem a migration 035: as colunas do banner nao existem. O
-    // time nao pode deixar de nascer por causa de uma imagem opcional — ele
-    // nasce sem banner proprio, e o banner padrao do sistema continua
-    // valendo, como sempre valeu.
-    if (!(error instanceof SupabaseRequestError) || !error.isMissingSchema) throw error;
-    row = await insertOne<ClientRow>(TABLES.clients, novo);
+    // Banco ainda sem uma das migrations recentes: a coluna nao existe. O
+    // time nao pode deixar de nascer por causa disso — ele nasce sem aquele
+    // campo, e o ADMIN preenche depois em "Editar time". Duas tentativas,
+    // da migration mais nova para a mais antiga: primeiro sai o lugar (038),
+    // depois o banner (035), cujo padrao do sistema continua valendo como
+    // sempre valeu.
+    if (!semEsquema(error)) throw error;
+
+    try {
+      row = await insertOne<ClientRow>(TABLES.clients, { ...novo, ...colunasBanner });
+    } catch (erroBanner) {
+      if (!semEsquema(erroBanner)) throw erroBanner;
+      row = await insertOne<ClientRow>(TABLES.clients, novo);
+    }
   }
 
   await insertDefaultFields(row.id);
@@ -616,10 +638,16 @@ export async function createClient(
 export async function updateClient(id: string, input: Partial<ClientInput>): Promise<Client> {
   const current = await requireClientRow(id);
 
-  const patch: Record<string, string | number | null> = {};
+  // `string[]` entra por causa de `cities` (038), que e uma coluna jsonb.
+  const patch: Record<string, string | number | null | string[]> = {};
 
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.notes !== undefined) patch.notes = input.notes.trim();
+
+  // Estado e municipios (migration 038). Ausentes nao alteram: e assim que
+  // salvar a estampa do banner nao apaga o lugar do time.
+  if (input.stateUf !== undefined) patch.state_uf = input.stateUf;
+  if (input.cities !== undefined) patch.cities = input.cities;
 
   if (input.photo !== undefined) {
     if (input.photo === null) {

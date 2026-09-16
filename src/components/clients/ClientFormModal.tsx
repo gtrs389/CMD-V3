@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
 import { PhotoUpload } from '@/components/common/PhotoUpload';
 import { TeamAccessLinkField } from './TeamAccessLinkField';
+import { TeamPlaceFields } from './TeamPlaceFields';
 
 interface ClientFormModalProps {
   open: boolean;
@@ -35,7 +36,14 @@ interface ClientFormModalProps {
   onSaved?: (client: Client) => void;
 }
 
-const EMPTY: ClientFormValues = { name: '', photo: null, notes: '', people: [] };
+const EMPTY: ClientFormValues = {
+  name: '',
+  photo: null,
+  notes: '',
+  stateUf: '',
+  cities: [],
+  people: [],
+};
 
 /** Criacao e edicao de time. Mesma validacao nos dois modos. */
 export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormModalProps) {
@@ -65,6 +73,10 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
 
   // A foto vive no proprio formulario: nao ha estado duplicado para sincronizar.
   const photo = useWatch({ control, name: 'photo' });
+  const stateUf = useWatch({ control, name: 'stateUf' });
+  // `useFieldArray` nao serve aqui: municipio e uma lista de textos, sem
+  // identidade propria — o proprio nome ja identifica cada item.
+  const cities = useWatch({ control, name: 'cities' });
 
   const {
     fields: peopleFields,
@@ -86,6 +98,11 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
             name: client.name,
             photo: client.photo,
             notes: client.notes,
+            // Time criado antes da 038 vem sem estado: o campo abre vazio e
+            // o ADMIN preenche aqui — e por isso que a edicao nao recusa
+            // quem ainda nao tem.
+            stateUf: client.stateUf ?? '',
+            cities: client.cities,
             people: client.people.map((person) => ({
               id: person.id,
               name: person.name,
@@ -204,6 +221,16 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
               {...register('name')}
             />
           </Field>
+
+          {/* De onde o time e. Logo abaixo do nome, porque e identidade do
+              time — nao configuracao. */}
+          <TeamPlaceFields
+            stateUf={stateUf}
+            cities={cities}
+            onStateChange={(uf) => setValue('stateUf', uf, { shouldDirty: true, shouldValidate: true })}
+            onCitiesChange={(lista) => setValue('cities', lista, { shouldDirty: true })}
+            stateError={errors.stateUf?.message}
+          />
 
           <Field
             id="cliente-notas"
