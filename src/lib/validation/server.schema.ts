@@ -76,9 +76,37 @@ export const bannerTagSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, 'Informe uma cor em hexadecimal, como #0b5c2c.'),
 });
 
-export const clientUpdateSchema = clientCreateSchema
-  .partial()
-  .extend({ bannerTag: bannerTagSchema.optional(), banner: photoValue.optional() });
+/**
+ * Edicao do time: SO o que foi enviado.
+ *
+ * `photo` e `notes` sao redeclarados SEM `.default()`, e essa e a linha
+ * inteira do arquivo que importa aqui.
+ *
+ * `.partial()` torna o campo opcional, mas NAO tira o `.default()` que ele
+ * herda de `clientCreateSchema`: com a chave ausente, o padrao e aplicado
+ * do mesmo jeito. Na criacao isso esta certo — time novo sem foto e
+ * `photo: null`. Numa edicao PARCIAL vira outra coisa: salvar so a estampa
+ * do banner chegava ao servidor como
+ *
+ *     { bannerTag: {...}, photo: null, notes: '' }
+ *
+ * e `photo: null` nao quer dizer "nao mexi", quer dizer "REMOVA A FOTO" —
+ * `updateClient` apagava a imagem do Storage e zerava a coluna. `notes: ''`
+ * levava as anotacoes junto, sem ninguem notar. Mexer no banner apagava a
+ * foto do time.
+ *
+ * Por isso a edicao nao herda padrao NENHUM: aqui, ausente tem de continuar
+ * ausente ate o servico, que e quem sabe que `null` remove, data URL sobe
+ * imagem nova, e qualquer outro valor e a URL assinada de antes — "nao
+ * mudou". `memberUpdateSchema` ja fazia assim, redeclarando os campos em
+ * vez de derivar do schema de criacao.
+ */
+export const clientUpdateSchema = clientCreateSchema.partial().extend({
+  photo: photoValue.optional(),
+  notes: trimmed(500).optional(),
+  bannerTag: bannerTagSchema.optional(),
+  banner: photoValue.optional(),
+});
 
 const fieldOptionSchema = z.object({
   id: z.string().min(1).max(64),
