@@ -257,12 +257,30 @@ describe('dados de demonstração', () => {
     }
   });
 
-  it('não repete nome dentro do time', () => {
-    const data = gerar({ people: 150 });
-    const nomes = data.people.map((person) => person.name);
+  it('não repete nome nem telefone, mesmo no time cheio', () => {
+    // Cinco mil pessoas: mais do que o número de combinações de um nome com
+    // um sobrenome só. É aqui que o segundo sobrenome entra.
+    const data = gerar({ people: DEMO_LIMITS.maxPeople, places: 12 });
+    expect(data.people).toHaveLength(5000);
 
-    // Nome repetido em uma lista de apresentação passa por descuido.
+    const nomes = data.people.map((person) => person.name);
     expect(new Set(nomes).size).toBe(nomes.length);
+
+    const telefones = data.people.map((person) => normalizePhone(person.phone));
+    expect(new Set(telefones).size).toBe(telefones.length);
+    for (const telefone of telefones) {
+      expect(isValidPhone(telefone)).toBe(true);
+      // Nenhum vira documento por acaso, em nenhum tamanho de time.
+      expect(isValidCpf(telefone)).toBe(false);
+    }
+
+    // Os locais continuam fechando com o total, sem nenhum vazio.
+    const porLocal = new Map<number, number>();
+    for (const person of data.people) {
+      porLocal.set(person.placeIndex, (porLocal.get(person.placeIndex) ?? 0) + 1);
+    }
+    expect(porLocal.size).toBe(data.places.length);
+    expect([...porLocal.values()].reduce((total, valor) => total + valor, 0)).toBe(5000);
   });
 
   it('usa somente locais de votação do catálogo conferido', () => {

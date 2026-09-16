@@ -317,6 +317,12 @@ nenhum do gerador. Cada pessoa **mora no município em que vota** — quem vota
 em Arapiraca não mora em Penedo —, e a moradia cai na rua, no bairro ou no
 município, conforme até onde o endereço publicado chega.
 
+O time vai de 1 a **5.000 pessoas** (padrão 120). As escritas vão em lotes de
+500 linhas (`insertRowsInChunks`): um envio único de milhares de linhas não
+falha por limite de linhas, falha pelo tamanho do corpo e pelo tempo da
+requisição — e, quando falha, não grava nada, o que significaria perder a
+criação inteira no fim.
+
 As pessoas se dividem entre os locais **com peso**, sorteado pela semente:
 divisão igual é o jeito mais rápido de a demonstração parecer falsa, porque o
 ranking "onde você tem mais votos" empata em tudo e o mapa vira um tabuleiro

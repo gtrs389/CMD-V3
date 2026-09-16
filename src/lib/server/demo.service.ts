@@ -25,7 +25,7 @@ import {
   callFunction,
   deleteRows,
   inFilter,
-  insertRows,
+  insertRowsInChunks,
   selectRows,
   updateRows,
 } from '@/lib/supabase/rest';
@@ -581,7 +581,9 @@ async function seedMembers(
     };
   });
 
-  return insertRows<MemberRow>(TABLES.members, linhas, 'id,name,phone');
+  // Em lotes: cinco mil pessoas em um envio so estouraria o corpo da
+  // requisicao, e a criacao inteira falharia no fim.
+  return insertRowsInChunks<MemberRow>(TABLES.members, linhas, 'id,name,phone');
 }
 
 /**
@@ -644,7 +646,8 @@ async function seedMemberLocations(
     linhas.push(link(memberId, 'POLLING_PLACE', locations.places[person.placeIndex]));
   });
 
-  if (linhas.length > 0) await insertRows(TABLES.memberLocations, linhas, 'id');
+  // Sao DUAS linhas por pessoa: o lote aqui e o dobro do de integrantes.
+  if (linhas.length > 0) await insertRowsInChunks(TABLES.memberLocations, linhas, 'id');
 }
 
 /** UF unica do Time DEMO, exposta para quem precisar conferir. */

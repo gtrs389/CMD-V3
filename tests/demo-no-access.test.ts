@@ -32,6 +32,27 @@ const TIME = {
 
 const escritas: { tabela: string; linhas: Record<string, unknown>[] }[] = [];
 
+/** Guarda o que foi gravado e devolve as linhas com identificador. */
+async function registrar(
+  table: string,
+  linhas: Record<string, unknown>[],
+  select?: string,
+): Promise<Record<string, unknown>[]> {
+  escritas.push({ tabela: table, linhas });
+
+  if (table === 'cmd_map_locations') {
+    return linhas.map((linha, index) => ({ id: `loc-${index}`, query_hash: linha.query_hash }));
+  }
+  if (table === 'cmd_members') {
+    return linhas.map((linha, index) => ({
+      id: `mem-${index}`,
+      name: linha.name,
+      phone: linha.phone,
+    }));
+  }
+  return linhas.map((_, index) => ({ id: `${select ?? 'row'}-${index}` }));
+}
+
 vi.mock('@/lib/server/client.service', () => ({
   createClient: async () => TIME,
   getClient: async () => TIME,
@@ -53,24 +74,10 @@ vi.mock('@/lib/supabase/rest', () => ({
     }
     return [];
   },
-  insertRows: async (table: string, linhas: Record<string, unknown>[], select?: string) => {
-    escritas.push({ tabela: table, linhas });
-
-    if (table === 'cmd_map_locations') {
-      return linhas.map((linha, index) => ({
-        id: `loc-${index}`,
-        query_hash: linha.query_hash,
-      }));
-    }
-    if (table === 'cmd_members') {
-      return linhas.map((linha, index) => ({
-        id: `mem-${index}`,
-        name: linha.name,
-        phone: linha.phone,
-      }));
-    }
-    return linhas.map((_, index) => ({ id: `${select ?? 'row'}-${index}` }));
-  },
+  // O servico grava em LOTES: cinco mil pessoas em um envio so estouraria o
+  // corpo da requisicao. O teste registra as duas portas do mesmo jeito.
+  insertRowsInChunks: registrar,
+  insertRows: registrar,
   insertOne: async (table: string, linha: Record<string, unknown>) => {
     // As coordenadas entram uma a uma, pelo cache do proprio sistema.
     escritas.push({ tabela: table, linhas: [linha] });
