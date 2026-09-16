@@ -5,6 +5,10 @@ import { FlaskConical, Plus, Trash2 } from 'lucide-react';
 import type { ClientSummary, TeamAccessLinks } from '@/lib/types';
 import { DEMO_DEFAULTS, DEMO_LIMITS } from '@/lib/domain/demo';
 import { DEMO_CITIES, DEMO_POLLING_PLACES } from '@/lib/domain/demo-catalog';
+import {
+  DEMO_RECRUITERS_DEFAULT,
+  DEMO_RECRUITERS_MAX,
+} from '@/lib/domain/demo-recruiters';
 import { api } from '@/lib/repositories/http/api';
 import { createId } from '@/lib/utils/id';
 import { Button } from '@/components/ui/Button';
@@ -57,6 +61,7 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
   const [admins, setAdmins] = useState<DemoAdmin[]>([novoAdministrador()]);
   const [people, setPeople] = useState(String(DEMO_DEFAULTS.people));
   const [places, setPlaces] = useState(String(DEMO_DEFAULTS.places));
+  const [recruiters, setRecruiters] = useState(String(DEMO_RECRUITERS_DEFAULT));
   /**
    * Chave de idempotencia desta tentativa.
    *
@@ -113,6 +118,7 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
             admins: equipe,
             people: pessoas,
             places: locais,
+            recruiters: Number(recruiters) || 0,
             // Repetir a requisicao com esta chave devolve o mesmo time.
             seedKey,
           },
@@ -278,6 +284,24 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
               value={people}
               inputMode="numeric"
               onChange={(event) => setPeople(event.target.value.replace(/\D/g, ''))}
+            />
+          </Field>
+
+          {/* Segunda camada. OPCIONAL: em branco ou zero, o time nasce como
+              sempre nasceu — todo mundo cadastrado pelo administrador. E
+              ajustavel depois, na pagina do time, quantas vezes for
+              preciso. */}
+          <Field
+            id="demo-recrutadores"
+            label="Pessoas que também recrutam"
+            help={`Opcional, até ${DEMO_RECRUITERS_MAX}. Elas aparecem no ranking da equipe. Pode mudar depois.`}
+          >
+            <Input
+              id="demo-recrutadores"
+              value={recruiters}
+              inputMode="numeric"
+              placeholder="0"
+              onChange={(event) => setRecruiters(event.target.value.replace(/\D/g, ''))}
             />
           </Field>
 
