@@ -236,7 +236,10 @@ async function selectInChunks<T>(
       ...(await request<T[] | null>(
         buildUrl(table, {
           ...options,
-          filters: { ...options.filters, [longo.key]: inFilter(lote) },
+          // Os pedacos voltam EXATAMENTE como estavam: `inFilter` ja pos as
+          // aspas quando o filtro foi montado, e aspear de novo geraria
+          // `""uuid""`, que o banco recusa (22P02).
+          filters: { ...options.filters, [longo.key]: `in.(${lote.join(',')})` },
         }),
         { method: 'GET' },
       ).then((rows) => rows ?? [])),

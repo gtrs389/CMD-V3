@@ -74,7 +74,12 @@ describe('lote de insert', () => {
  */
 describe('consulta por lista longa', () => {
   it('parte a lista em lotes e devolve tudo junto', async () => {
-    const ids = Array.from({ length: 1000 }, (_, index) => `id-${index}`);
+    // Identificadores de verdade: o banco recusa uuid mal formado, e foi
+    // exatamente uma aspa a mais que quebrou a primeira versao disto.
+    const ids = Array.from(
+      { length: 1000 },
+      (_, index) => `141976cc-7e6d-4fc4-8cc1-${String(index).padStart(12, '0')}`,
+    );
     const urls: string[] = [];
 
     process.env.SUPABASE_URL = 'https://exemplo.supabase.co';
@@ -107,8 +112,15 @@ describe('consulta por lista longa', () => {
     expect(urls.length).toBe(Math.ceil(1000 / IN_FILTER_CHUNK));
     for (const url of urls) expect(url.length).toBeLessThan(8000);
     expect(linhas).toHaveLength(1000);
-    expect(linhas[0].id).toBe('id-0');
-    expect(linhas[999].id).toBe('id-999');
+    expect(linhas[0].id).toBe(ids[0]);
+    expect(linhas[999].id).toBe(ids[999]);
+
+    // Nenhum valor pode chegar ao banco com aspas a mais: `""uuid""` e
+    // recusado com 22P02, e foi assim que o mapa e a equipe caíram.
+    for (const url of urls) {
+      const filtro = new URL(url).searchParams.get('id') ?? '';
+      expect(filtro).not.toContain('""');
+    }
 
     vi.restoreAllMocks();
   });
