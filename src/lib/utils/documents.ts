@@ -191,12 +191,33 @@ export function formatVoterId(input: string): string {
 export const ZONE_MAX_LENGTH = 3;
 export const SECTION_MAX_LENGTH = 4;
 
-/** Somente digitos, no maximo 3. Sem separador: nao ha mascara a aplicar. */
-export function normalizeZone(input: string): string {
-  return onlyDigits(input, ZONE_MAX_LENGTH);
+/**
+ * Zero a frente NAO faz parte do numero.
+ *
+ * O titulo de eleitor imprime "044" e "0003", e a Justica Eleitoral responde
+ * assim tambem — mas a zona e a 44 e a secao e a 3. Quem digita escreve dos
+ * dois jeitos, e sem tirar os zeros o sistema passaria a ter duas zonas onde
+ * existe uma: a pessoa some do filtro do mapa, a escola se parte em dois
+ * grupos de secao, e a busca do local de votacao nao acha o que esta la.
+ *
+ * A retirada acontece ANTES do corte de tamanho, e essa ordem e o ponto: a
+ * secao "01234" cortada primeiro viraria "0123" — a secao 123, que e outra
+ * secao, de outra escola, sem ninguem perceber. Tirando o zero antes, ela e
+ * a 1234, que e o que estava escrito.
+ *
+ * "0" sozinho continua "0": ainda esta sendo digitado, e zona zero nao
+ * existe — quem recusa e a validacao, nao a mascara.
+ */
+function semZeroAFrente(digits: string): string {
+  return digits.replace(/^0+(?=\d)/, '');
 }
 
-/** Somente digitos, no maximo 4. Sem separador: nao ha mascara a aplicar. */
+/** Somente digitos, sem zero a frente, no maximo 3. */
+export function normalizeZone(input: string): string {
+  return semZeroAFrente(onlyDigits(input, ZONE_MAX_LENGTH + 4)).slice(0, ZONE_MAX_LENGTH);
+}
+
+/** Somente digitos, sem zero a frente, no maximo 4. */
 export function normalizeSection(input: string): string {
-  return onlyDigits(input, SECTION_MAX_LENGTH);
+  return semZeroAFrente(onlyDigits(input, SECTION_MAX_LENGTH + 4)).slice(0, SECTION_MAX_LENGTH);
 }

@@ -15,6 +15,8 @@ import {
   normalizePlace,
   normalizeState,
   normalizeVoterId,
+  normalizeSection,
+  normalizeZone,
 } from '@/lib/utils/documents';
 import {
   canDeleteField,
@@ -219,5 +221,31 @@ describe('campos padrão do formulário', () => {
     expect(hasFixedOptions(porChave.get('gender')!)).toBe(true);
     expect(hasFixedOptions(porChave.get('state')!)).toBe(true);
     expect(hasFixedOptions(porChave.get('city')!)).toBe(false);
+  });
+});
+
+describe('zona e seção: zero à frente não é número', () => {
+  it('"044" é a zona 44, e "0003" é a seção 3', () => {
+    // O título imprime assim, a Justiça Eleitoral responde assim, e quem
+    // digita escreve dos dois jeitos. O que fica gravado é um só.
+    expect(normalizeZone('044')).toBe('44');
+    expect(normalizeZone('44')).toBe('44');
+    expect(normalizeSection('0003')).toBe('3');
+    expect(normalizeSection('3')).toBe('3');
+  });
+
+  it('o zero sai ANTES do corte de tamanho', () => {
+    // Cortando primeiro, "01234" viraria "0123" — a seção 123, que é outra
+    // seção, de outra escola, sem ninguém perceber.
+    expect(normalizeSection('01234')).toBe('1234');
+    expect(normalizeZone('0044')).toBe('44');
+  });
+
+  it('só dígitos, e o zero sozinho continua enquanto se digita', () => {
+    expect(normalizeZone('zona 44')).toBe('44');
+    expect(normalizeSection('0003-A')).toBe('3');
+    expect(normalizeZone('0')).toBe('0');
+    expect(normalizeSection('00')).toBe('0');
+    expect(normalizeZone('')).toBe('');
   });
 });
