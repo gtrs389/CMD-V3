@@ -384,6 +384,12 @@ async function seedMemberLocations(
       location_kind: 'POLLING_PLACE',
       status: 'SUCCESS',
       location_id: locations.places[person.placeIndex] ?? null,
+      // Nula de proposito, e escrita: precisao e coisa de endereco
+      // declarado, nao de local de votacao. Mas a chave PRECISA existir —
+      // em um envio em lote, o PostgREST exige que todas as linhas tenham
+      // exatamente as mesmas chaves, e recusa o lote inteiro quando uma
+      // delas falta (PGRST102).
+      location_precision: null,
       resolved_at: agora,
     });
   });

@@ -145,6 +145,15 @@ describe('pessoas fictícias do Time DEMO', () => {
     // Duas linhas de mapa por pessoa: moradia e local de votação.
     const vinculos = escritas.find((item) => item.tabela === 'cmd_member_locations');
     expect(vinculos?.linhas).toHaveLength(24);
+
+    // Todas com as MESMAS chaves. O PostgREST recusa o lote inteiro quando
+    // uma linha tem uma coluna a mais que a outra (PGRST102) — foi assim que
+    // a criação quebrou: só a moradia levava `location_precision`.
+    const chaves = (vinculos?.linhas ?? []).map((linha) =>
+      Object.keys(linha).sort().join(','),
+    );
+    expect(new Set(chaves).size).toBe(1);
+    expect(chaves[0]).toContain('location_precision');
   });
 
   it('aceitam quantos administradores forem necessários', async () => {

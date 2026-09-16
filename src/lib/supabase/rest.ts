@@ -196,6 +196,43 @@ export async function selectOne<T>(table: string, options: QueryOptions = {}): P
   return rows[0] ?? null;
 }
 
+/**
+ * Iguala as chaves de um envio em lote.
+ *
+ * O PostgREST exige que TODAS as linhas de um insert em lote tenham
+ * exatamente as mesmas chaves: uma linha a menos e ele recusa o lote inteiro
+ * com `PGRST102 All object keys must match` — sem dizer qual chave, qual
+ * linha, nem qual tabela.
+ *
+ * E facil demais escrever duas linhas quase iguais e esquecer uma coluna que
+ * so faz sentido em uma delas. Em vez de confiar na disciplina de quem
+ * escreve, o lote e alinhado aqui: quem nao tem a chave recebe `null`
+ * explicito.
+ *
+ * Isso nao muda comportamento nenhum que funcionasse antes — um lote com
+ * chaves diferentes SEMPRE falhava. E o null explicito falha alto, e nao em
+ * silencio: coluna obrigatoria sem valor vira 23502, que a tela ja traduz
+ * como dado faltando.
+ */
+export function alignRowKeys(
+  values: Record<string, QueryValue | object>[],
+): Record<string, QueryValue | object>[] {
+  if (values.length < 2) return values;
+
+  const chaves = new Set<string>();
+  for (const value of values) for (const chave of Object.keys(value)) chaves.add(chave);
+
+  // Todas ja iguais: nada a fazer, e o objeto original segue intacto.
+  const iguais = values.every((value) => Object.keys(value).length === chaves.size);
+  if (iguais) return values;
+
+  return values.map((value) => {
+    const completa: Record<string, QueryValue | object> = {};
+    for (const chave of chaves) completa[chave] = chave in value ? value[chave] : null;
+    return completa;
+  });
+}
+
 export async function insertRows<T>(
   table: string,
   values: Record<string, QueryValue | object>[],
@@ -204,7 +241,7 @@ export async function insertRows<T>(
   if (values.length === 0) return [];
   const rows = await request<T[] | null>(buildUrl(table, { select }), {
     method: 'POST',
-    body: JSON.stringify(values),
+    body: JSON.stringify(alignRowKeys(values)),
     prefer: ['return=representation'],
   });
   return rows ?? [];
