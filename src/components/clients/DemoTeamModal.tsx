@@ -14,6 +14,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { PhotoUpload } from '@/components/common/PhotoUpload';
+import { BannerUpload } from '@/components/common/BannerUpload';
 
 /**
  * Criacao do Time DEMO. EXCLUSIVO do ADMIN geral.
@@ -52,6 +53,7 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
 
   const [name, setName] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
   const [admins, setAdmins] = useState<DemoAdmin[]>([novoAdministrador()]);
   const [people, setPeople] = useState(String(DEMO_DEFAULTS.people));
   const [places, setPlaces] = useState(String(DEMO_DEFAULTS.places));
@@ -107,6 +109,7 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
           body: {
             name: nome,
             photo,
+            banner,
             admins: equipe,
             people: pessoas,
             places: locais,
@@ -168,8 +171,24 @@ export function DemoTeamModal({ onClose, onCreated }: DemoTeamModalProps) {
         </Field>
 
         <div>
-          <p className="mb-2 text-sm font-medium text-ink-700">Foto ou banner do time</p>
+          <p className="mb-2 text-sm font-medium text-ink-700">Foto do time</p>
           <PhotoUpload value={photo} onChange={setPhoto} onError={(message) => toast.error(message)} />
+        </div>
+
+        <div>
+          <p className="mb-1 text-sm font-medium text-ink-700">Banner do celular</p>
+          <p className="mb-2 text-xs text-ink-500">
+            É o que a pessoa vê ao abrir o link de cadastro no telefone. Sem banner próprio, o
+            Time DEMO mostra a faixa de convite comum — nunca o banner de produção de um time
+            real. Dá para trocar depois, na página do time.
+          </p>
+          <BannerUpload
+            value={banner}
+            teamName={name || 'Time Demonstração'}
+            onChange={setBanner}
+            onError={(message) => toast.error(message)}
+            onNotice={(message) => toast.info(message)}
+          />
         </div>
 
         <section className="space-y-3">

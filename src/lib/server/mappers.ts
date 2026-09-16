@@ -87,6 +87,8 @@ export interface ToClientOptions {
   fields: FormFieldRow[];
   invite: InviteSummary | null;
   photoUrl: string | null;
+  /** Banner do celular deste time, ja assinado. Nulo: usa o padrao. */
+  bannerUrl?: string | null;
   /**
    * Token bruto do convite. So e preenchido no momento em que ele e criado ou
    * renovado, ou na rota publica (onde o visitante ja possui o token).
@@ -129,6 +131,7 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     },
     form: toFormConfig(row, options.fields),
     isDemo: row.is_demo === true,
+    banner: options.bannerUrl ?? null,
     bannerTag: {
       left: Number(row.banner_tag_left),
       width: Number(row.banner_tag_width),

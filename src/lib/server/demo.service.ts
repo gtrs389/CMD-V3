@@ -82,8 +82,16 @@ export interface DemoAdminInput {
 
 export interface CreateDemoTeamInput {
   name: string;
-  /** Foto ou banner do time. Opcional. */
+  /** Foto do time. Opcional. */
   photo?: string | null;
+  /**
+   * Banner do celular do proprio Time DEMO (migration 035). Opcional.
+   *
+   * Sem ele, a tela publica do time cai na faixa de convite comum — e nunca
+   * no banner de producao de um cliente real, que era o que acontecia quando
+   * havia um unico banner para o sistema inteiro.
+   */
+  banner?: string | null;
   admins: DemoAdminInput[];
   people: number;
   places: number;
@@ -147,6 +155,7 @@ export async function createDemoTeam(
       {
         name: nome,
         photo: input.photo ?? null,
+        banner: input.banner ?? null,
         notes: 'Time de demonstração. Os dados são fictícios e ficam fora dos números reais.',
         people: input.admins.map<TeamPersonInput>((person) => ({
           name: person.name,

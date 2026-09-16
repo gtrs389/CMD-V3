@@ -311,7 +311,7 @@ export function ClientDetailView({
                           },
                           {
                             id: 'estampa',
-                            label: 'Estampa do banner',
+                            label: 'Banner do celular',
                             icon: <ImageIcon className="size-4" />,
                             onSelect: () => setBanner(true),
                           },

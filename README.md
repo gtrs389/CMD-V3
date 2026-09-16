@@ -441,6 +441,36 @@ eles seguem úteis para demonstrar e diagnosticar. A listagem começa em
 **Reais**, cada linha de um Time DEMO leva o selo, e o ADMIN geral alterna
 entre `Reais`, `DEMO` e `Todos`.
 
+### O banner do celular
+
+O banner que aparece para quem abre o link de cadastro **no telefone** era um
+só, o mesmo arquivo para o sistema inteiro, com o endereço escrito dentro do
+próprio componente. Com um Time DEMO na mesma tela, a demonstração passou a
+exibir o **banner de produção de um cliente real** — a arte dele, o nome dele,
+na apresentação de outra pessoa.
+
+Agora cada time pode ter o seu (`cmd_clients.banner_path`, migration 035),
+enviado na página do time → menu de ações → **"Banner do celular"**, ou já na
+criação do Time DEMO. A imagem vive no Storage privado, como toda imagem do
+sistema, e é servida por URL assinada.
+
+A escolha do arquivo é uma regra só, em `src/lib/domain/invite-banner.ts`:
+
+| Situação | O que aparece |
+| --- | --- |
+| O time subiu o seu | O banner dele, sempre |
+| Time DEMO sem banner próprio | **Nenhum** — a tela cai na faixa de convite comum |
+| Qualquer outro time | O banner padrão do sistema, como sempre foi |
+
+O caso do meio é o ponto: emprestar a arte de produção de um cliente real para
+uma demonstração é pior do que não ter banner nenhum.
+
+O arquivo sobe **como veio**, sem redimensionar nem reencodar — o banner é
+arte chapada, larga, com letra fina, e o tratamento das fotos de perfil (720 px,
+JPEG) borraria o texto e transformaria um fundo transparente em preto. Só
+acima do teto do Storage (2 MB) ele passa por compressão, e ainda assim com o
+dobro da resolução usada nas fotos.
+
 ### O que o banco garante
 
 `is_demo` é **imutável**: o gatilho `cmd_clients_demo_guard` recusa converter
@@ -456,7 +486,8 @@ A marca da geração vive em `cmd_members.demo_seed`, e o gatilho
 DEMO — sem isso, um erro de código poderia levar a rotina de correção a apagar
 um cadastro de verdade.
 
-Requer as migrations `033_time_demo.sql` e `034_time_demo_alagoas.sql`.
+Requer as migrations `033_time_demo.sql`, `034_time_demo_alagoas.sql` e
+`035_banner_do_time.sql`.
 
 ---
 

@@ -4,7 +4,9 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { BannerTag, Client } from '@/lib/types';
 import { DEFAULT_BANNER_TAG } from '@/lib/types';
 import { clientRepository } from '@/lib/repositories';
+import { inviteBannerSrc } from '@/lib/domain/invite-banner';
 import { InviteBanner } from '@/components/public/InviteBanner';
+import { BannerUpload } from '@/components/common/BannerUpload';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -34,7 +36,11 @@ function round2(value: number): number {
 }
 
 /**
- * Ajuste da estampa "#NOME DO TIME" sobre o banner do celular.
+ * O banner do celular do time: a imagem e a estampa sobre ela.
+ *
+ * Os dois moram na mesma tela porque sao a mesma decisao. Posicionar a
+ * estampa sem ver o banner em que ela vai cair e chutar — cada arte tem a
+ * camisa em um lugar.
  *
  * A previa e o BANNER DE VERDADE, com a mesma camada de texto que a pessoa
  * convidada vai ver. Arrastar a estampa move a posicao; os campos ao lado
@@ -52,6 +58,17 @@ export function BannerTagModal({ open, client, onClose }: BannerTagModalProps) {
   const areaRef = useRef<HTMLDivElement>(null);
   const [tag, setTag] = useState<BannerTag>(client.bannerTag);
   const [saving, setSaving] = useState(false);
+  /**
+   * Imagem escolhida agora, ainda nao salva.
+   *
+   * `undefined` e "nao mexi no banner"; uma data URL e uma imagem nova; e
+   * `null` e "remover o banner deste time". Os tres casos vao para o
+   * servidor exatamente assim.
+   */
+  const [banner, setBanner] = useState<string | null | undefined>(undefined);
+
+  const atual = banner === undefined ? client.banner : banner;
+  const previa = inviteBannerSrc({ banner: atual, isDemo: client.isDemo });
 
   function patch(parte: Partial<BannerTag>) {
     setTag((atual) => ({ ...atual, ...parte }));
@@ -95,8 +112,13 @@ export function BannerTagModal({ open, client, onClose }: BannerTagModalProps) {
     if (saving) return;
     setSaving(true);
     try {
-      await clientRepository.update(client.id, { bannerTag: tag });
-      toast.success('Estampa do banner salva.');
+      await clientRepository.update(client.id, {
+        bannerTag: tag,
+        // Ausente de proposito quando ninguem mexeu na imagem: o servidor so
+        // toca no Storage quando o campo chega.
+        ...(banner === undefined ? {} : { banner }),
+      });
+      toast.success(banner === undefined ? 'Estampa do banner salva.' : 'Banner salvo.');
       onClose();
     } catch (error) {
       toast.error(
@@ -115,8 +137,8 @@ export function BannerTagModal({ open, client, onClose }: BannerTagModalProps) {
       onClose={onClose}
       busy={saving}
       size="lg"
-      title="Estampa do banner"
-      description="Arraste o texto sobre a camisa e ajuste tamanho e cor. É assim que a pessoa convidada verá no celular."
+      title="Banner do celular"
+      description="É o que a pessoa convidada vê ao abrir o link no telefone. Envie a arte do time e arraste o texto sobre ela."
       footer={
         <>
           <Button variant="ghost" onClick={() => setTag({ ...DEFAULT_BANNER_TAG })}>
@@ -144,8 +166,36 @@ export function BannerTagModal({ open, client, onClose }: BannerTagModalProps) {
           {/* O codigo e um exemplo: cada link gera o seu. Ele entra na
               previa para o ajuste levar em conta as DUAS linhas da estampa,
               e nao so o nome. */}
-          <InviteBanner teamName={client.name} tag={tag} code="H03" />
+          <InviteBanner
+            src={previa}
+            teamName={client.name}
+            tag={tag}
+            code="H03"
+            fallback={
+              <div className="flex min-h-32 items-center justify-center bg-ink-50 p-6 text-center text-sm text-ink-500">
+                Este time ainda não tem banner. Envie uma imagem para vê-la aqui.
+              </div>
+            }
+          />
         </div>
+
+        {/* A imagem em si. Fica logo abaixo da prévia porque é ela que a
+            prévia mostra: trocar o arquivo muda o que está na tela na hora. */}
+        <BannerUpload
+          value={atual}
+          teamName={client.name}
+          preview="none"
+          onChange={setBanner}
+          onError={(message) => toast.error(message)}
+          onNotice={(message) => toast.info(message)}
+          hint={
+            atual
+              ? 'Banner próprio deste time.'
+              : client.isDemo
+                ? 'Sem banner próprio: o Time DEMO não usa o banner de produção.'
+                : 'Sem banner próprio: este time usa o banner padrão do sistema.'
+          }
+        />
 
         <p className="text-xs text-ink-500">
           Toque ou clique sobre a imagem para posicionar. O ponto marcado vira o centro da estampa.

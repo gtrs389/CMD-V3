@@ -99,3 +99,35 @@ export async function processImageFile(
 
   return { dataUrl, width, height, bytes: dataUrlBytes(dataUrl) };
 }
+
+/**
+ * Le o arquivo do BANNER, de preferencia sem tocar em um pixel.
+ *
+ * O banner nao e um retrato: e arte chapada, com letra fina e cor lisa, e
+ * ocupa a largura inteira do celular. O tratamento das fotos — reduzir para
+ * 720 px e reencodar em JPEG — arruinaria justamente isso, e ainda
+ * transformaria o fundo transparente de um PNG em preto.
+ *
+ * Entao o caminho normal aqui e NAO processar: valida tipo e tamanho e
+ * devolve o arquivo original, byte a byte, como o componente do banner
+ * promete exibir. So um arquivo acima do teto do Storage passa pela
+ * compressao — e, mesmo assim, com o dobro da resolucao usada nas fotos,
+ * porque abaixo disso o banner sai borrado no celular.
+ */
+export async function readBannerFile(
+  file: File,
+): Promise<{ dataUrl: string; bytes: number; recomprimido: boolean }> {
+  validateImageFile(file);
+
+  const teto = appConfig.limits.maxStoredImageBytes;
+  if (file.size <= teto) {
+    const dataUrl = await readAsDataUrl(file);
+    return { dataUrl, bytes: dataUrlBytes(dataUrl), recomprimido: false };
+  }
+
+  const processado = await processImageFile(file, {
+    maxEdge: 1440,
+    targetBytes: Math.floor(teto * 0.8),
+  });
+  return { dataUrl: processado.dataUrl, bytes: processado.bytes, recomprimido: true };
+}

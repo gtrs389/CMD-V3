@@ -82,6 +82,8 @@ export interface SurveyResponse {
 export interface PublicSurvey {
   clientId: string;
   clientName: string;
+  /** Banner do celular ja escolhido pelo servidor. Nulo: a faixa comum. */
+  bannerSrc: string | null;
   /** Estampa do banner do celular, ajustada pelo ADMIN (migration 022). */
   bannerTag: BannerTag;
   /** Quem enviou o link: apenas nome, foto e perfil. */

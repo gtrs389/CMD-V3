@@ -126,6 +126,8 @@ export function createLocalClientRepository(
         email: null,
         photo: input.photo ?? null,
         notes: input.notes?.trim() ?? '',
+        // O modo local nao tem Storage: banner proprio e coisa do servidor.
+        banner: null,
         bannerTag: { ...DEFAULT_BANNER_TAG },
         createdAt: timestamp,
         updatedAt: timestamp,

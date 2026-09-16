@@ -143,6 +143,11 @@ interface PublicFormShellProps {
   teamName: string;
   /** Estampa do banner do celular, ajustada pelo ADMIN (migration 022). */
   bannerTag?: BannerTag;
+  /**
+   * Endereco do banner do celular, ja decidido por `inviteBannerSrc`. Nulo
+   * cai na faixa de convite comum.
+   */
+  bannerSrc?: string | null;
   /** Codigo visual daquele link, impresso abaixo do nome do time. */
   linkCode?: string | null;
   title: string;
@@ -169,6 +174,7 @@ export function PublicFormShell({
   owner,
   teamName,
   bannerTag,
+  bannerSrc = null,
   linkCode,
   title,
   subtitle,
@@ -199,6 +205,7 @@ export function PublicFormShell({
             e renderizado. */}
         <div className="safe-top md:hidden">
           <InviteBanner
+            src={bannerSrc}
             teamName={teamName}
             tag={bannerTag}
             code={linkCode}

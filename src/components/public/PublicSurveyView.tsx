@@ -277,6 +277,7 @@ function SurveyForm({ survey }: { survey: PublicSurvey }) {
       owner={survey.owner}
       teamName={survey.clientName}
       bannerTag={survey.bannerTag}
+      bannerSrc={survey.bannerSrc}
       linkCode={survey.linkCode}
       title={survey.title}
       subtitle="Leva menos de 2 minutos."

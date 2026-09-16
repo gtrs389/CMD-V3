@@ -78,7 +78,7 @@ export const bannerTagSchema = z.object({
 
 export const clientUpdateSchema = clientCreateSchema
   .partial()
-  .extend({ bannerTag: bannerTagSchema.optional() });
+  .extend({ bannerTag: bannerTagSchema.optional(), banner: photoValue.optional() });
 
 const fieldOptionSchema = z.object({
   id: z.string().min(1).max(64),
@@ -489,6 +489,10 @@ export const apiKeyCreateSchema = z.object({
 export const demoTeamCreateSchema = z.object({
   name: trimmed(80).min(2, 'Dê um nome ao Time DEMO.'),
   photo: photoValue.default(null),
+  // Banner do celular do proprio Time DEMO. Sem ele, a tela publica do time
+  // cai na faixa de convite comum — nunca no banner de producao de um
+  // cliente real.
+  banner: photoValue.default(null),
   admins: z
     .array(
       z.object({
