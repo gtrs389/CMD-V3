@@ -186,7 +186,72 @@ export function notInFilter(values: readonly string[]): string {
   return `not.in.(${escaped.join(',')})`;
 }
 
+/**
+ * Quantos identificadores cabem em UMA consulta por lista.
+ *
+ * O filtro `in.(...)` viaja na URL. Mil identificadores sao cerca de 37 KB de
+ * endereco — muito acima do que o servidor aceita, e a consulta INTEIRA volta
+ * como erro. Foi assim que a pagina de um Time DEMO de mil pessoas ficou
+ * zerada: as pessoas estavam gravadas, o mapa (que le por outro caminho, com
+ * menos linhas) as mostrava, e a lista morria montando a resposta.
+ *
+ * Cento e cinquenta por vez cabem com folga em qualquer limite de URL.
+ */
+export const IN_FILTER_CHUNK = 150;
+
+/** A consulta carrega uma lista longa demais para uma URL? */
+function longInFilter(
+  filters: Record<string, string> | undefined,
+): { key: string; values: string[] } | null {
+  for (const [key, value] of Object.entries(filters ?? {})) {
+    if (!value.startsWith('in.(')) continue;
+    const values = value.slice(4, -1).split(',');
+    if (values.length > IN_FILTER_CHUNK) return { key, values };
+  }
+  return null;
+}
+
+/**
+ * Consulta por lista longa, em lotes.
+ *
+ * O fatiamento acontece AQUI, e nao em cada chamada, de proposito: o limite e
+ * da URL, nao de quem consulta, e uma regra escrita em um lugar so nao tem
+ * como ser esquecida na proxima consulta que um dia receber mil
+ * identificadores. As linhas dos lotes sao juntadas, entao a resposta e a
+ * mesma que uma consulta unica daria.
+ *
+ * Um segundo filtro `in.(...)` no mesmo lugar continua inteiro: o fatiado e o
+ * primeiro que passa do limite, que e o que cresce com o tamanho do time.
+ */
+async function selectInChunks<T>(
+  table: string,
+  options: QueryOptions,
+  longo: { key: string; values: string[] },
+): Promise<T[]> {
+  const linhas: T[] = [];
+
+  for (let inicio = 0; inicio < longo.values.length; inicio += IN_FILTER_CHUNK) {
+    const lote = longo.values.slice(inicio, inicio + IN_FILTER_CHUNK);
+    linhas.push(
+      ...(await request<T[] | null>(
+        buildUrl(table, {
+          ...options,
+          filters: { ...options.filters, [longo.key]: inFilter(lote) },
+        }),
+        { method: 'GET' },
+      ).then((rows) => rows ?? [])),
+    );
+  }
+
+  return linhas;
+}
+
 export async function selectRows<T>(table: string, options: QueryOptions = {}): Promise<T[]> {
+  // Lista longa demais para a URL: a consulta sai em lotes, e quem chamou nem
+  // fica sabendo — a resposta e a mesma.
+  const longo = longInFilter(options.filters);
+  if (longo) return selectInChunks<T>(table, options, longo);
+
   const rows = await request<T[] | null>(buildUrl(table, options), { method: 'GET' });
   return rows ?? [];
 }
