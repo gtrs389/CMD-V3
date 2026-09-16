@@ -201,7 +201,49 @@ painel volta para a tela de entrada com o aviso de configuracao ausente.
 
 ---
 
-## 6. Conferencia final
+## 6. Dominios
+
+O sistema e servido em TRES enderecos, e cada um tem uma porta so dele. Hoje
+eles sao:
+
+| Endereco | Para que serve |
+| --- | --- |
+| `7061696e656c2061646d.appdemo.sbs` | SO o ADMIN geral entra por aqui. E o unico endereco que serve a tela de e-mail e senha. |
+| `painel.appdemo.sbs` | Por onde o Administrador do time e a equipe entram, pelo link de acesso do proprio time + telefone. Nao ha tela de e-mail e senha aqui. |
+| `www.appdemo.sbs` | SO OS CADASTROS: Formulario 1 e Formulario 2, os links que vao por WhatsApp. Ninguem entra no sistema por este endereco. |
+
+Aponte os tres para o mesmo deploy (na Vercel, **Settings -> Domains**). Nao e
+um endereco por projeto: e o mesmo projeto respondendo aos tres, e quem separa
+os papeis e `src/proxy.ts`, a cada requisicao.
+
+**Nao e preciso configurar variavel nenhuma** para esse desenho: sem
+`CMD_PANEL_HOST` e `CMD_ADMIN_HOST`, valem os rotulos `painel.` e
+`7061696e656c2061646d.`. As variaveis existem so para quem usa outros rotulos.
+
+### Quando o dominio mudar
+
+O CODIGO NAO MUDA. `src/lib/domain/hosts.ts` nunca soube qual e o dominio: ele
+trabalha com os rotulos e deduz um endereco do outro (`painel.x` vira `www.x`),
+qualquer que seja o dominio abaixo deles. O que precisa ser feito e:
+
+1. apontar os tres enderecos novos para o deploy, e emitir os certificados;
+2. conferir **Configuracoes -> "Entrada pelo dominio publico"**, no painel do
+   ADMIN. Os dois campos dali ficam gravados no banco e MANDAM na frente da
+   deducao — preenchidos com o dominio velho, todo convite novo sairia
+   apontando para um dominio que nao responde mais, e nenhum acerto de DNS
+   consertaria isso. Deixar os dois em branco tambem resolve: vazio quer
+   dizer "deduza", e a deducao ja da o dominio certo sozinha;
+3. se a troca ja aconteceu com enderecos gravados, rode a migration de troca
+   correspondente (a `037_troca_de_dominio.sql` fez isso para
+   `convitetimebezerra.com` -> `appdemo.sbs`).
+
+O endereco `*.vercel.app` da propria publicacao continua aceitando o login do
+ADMIN. Essa e a SAIDA DE EMERGENCIA: se o DNS do endereco exclusivo cair ou
+ainda nao estiver no ar, o ADMIN entra por ele.
+
+---
+
+## 7. Conferencia final
 
 1. Confira que o bucket existe: `npm run configurar-storage` deve terminar com
    "Storage configurado".
@@ -216,7 +258,7 @@ endereco anterior deixa de funcionar na hora.
 
 ---
 
-## 7. O que este projeto nao usa
+## 8. O que este projeto nao usa
 
 - `supabase.auth` em qualquer forma
 - tabela `auth.users`
