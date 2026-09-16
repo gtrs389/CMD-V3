@@ -26,26 +26,34 @@ describe('divisao entre os recrutadores', () => {
     expect(contagens[0]).toBeGreaterThan(contagens[contagens.length - 1]);
   });
 
-  it('o administrador continua com cadastros proprios', () => {
-    const disponiveis = 1000;
-    const levado = shareAmongRecruiters(5, disponiveis).reduce((s, f) => s + f.count, 0);
+  it('reparte TUDO por padrao: a gente nova foi trazida por eles', () => {
+    // A segunda camada ACRESCENTA pessoas ao time, e todas elas vieram de
+    // algum recrutador — nao ha sobra a deixar com o administrador, cujos
+    // cadastros continuam intactos porque nao sao tocados.
+    const pessoas = 300;
+    const levado = shareAmongRecruiters(5, pessoas).reduce((s, f) => s + f.count, 0);
 
-    // Se a equipe levasse tudo, a demonstracao mostraria um administrador que
-    // nao trouxe ninguem.
-    expect(levado).toBeLessThan(disponiveis);
-    expect(levado).toBeGreaterThan(0);
+    expect(levado).toBe(pessoas);
   });
 
-  it('a soma fecha: nenhum cadastro se perde no arredondamento', () => {
-    for (const [recrutadores, disponiveis] of [
+  it('a fracao pode ser outra, quando quem chama pedir', () => {
+    const levado = shareAmongRecruiters(5, 1000, 0.6).reduce((s, f) => s + f.count, 0);
+
+    expect(levado).toBe(600);
+    expect(levado).toBeLessThan(1000);
+  });
+
+  it('a soma fecha: ninguem fica de fora no arredondamento', () => {
+    for (const [recrutadores, pessoas] of [
       [3, 100],
       [7, 999],
       [1, 50],
       [11, 137],
     ]) {
-      const fatias = shareAmongRecruiters(recrutadores, disponiveis);
+      const fatias = shareAmongRecruiters(recrutadores, pessoas);
       const soma = fatias.reduce((s, f) => s + f.count, 0);
-      expect(soma).toBe(Math.floor(disponiveis * 0.6));
+      // Cada pessoa gerada precisa ter um responsavel.
+      expect(soma).toBe(pessoas);
       expect(fatias.every((f) => f.count >= 0)).toBe(true);
     }
   });

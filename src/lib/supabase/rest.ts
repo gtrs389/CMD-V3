@@ -122,6 +122,8 @@ export interface QueryOptions {
   filters?: Record<string, string>;
   order?: string;
   limit?: number;
+  /** Ponto de partida, para ler alem da primeira pagina. */
+  offset?: number;
   single?: boolean;
 }
 
@@ -135,6 +137,9 @@ function buildUrl(table: string, options: QueryOptions): string {
   }
   if (options.order) search.set('order', options.order);
   if (typeof options.limit === 'number') search.set('limit', String(options.limit));
+  if (typeof options.offset === 'number' && options.offset > 0) {
+    search.set('offset', String(options.offset));
+  }
 
   const query = search.toString();
   return `${url}/rest/v1/${table}${query ? `?${query}` : ''}`;
@@ -249,14 +254,62 @@ async function selectInChunks<T>(
   return linhas;
 }
 
+/**
+ * Quantas linhas o servidor devolve de uma vez.
+ *
+ * Nao e escolha nossa: o Supabase corta toda resposta em 1.000 linhas (o
+ * "Max rows" do projeto). Passar `limit` maior nao adianta — quem corta e o
+ * servidor, e ele corta EM SILENCIO: a resposta chega com 1.000 linhas e
+ * status 200, sem aviso nenhum de que havia mais.
+ *
+ * Foi assim que a pagina de um Time DEMO de 1.553 pessoas mostrou 1.000 em
+ * todos os quadros, com o ranking da equipe zerado: os recrutadores, que sao
+ * as pessoas mais ANTIGAS, ficavam fora da janela devolvida.
+ */
+const PAGE_SIZE = 1000;
+
+/** Teto de seguranca: 50 paginas. Nenhuma tela do sistema le tanto. */
+const MAX_PAGES = 50;
+
 export async function selectRows<T>(table: string, options: QueryOptions = {}): Promise<T[]> {
   // Lista longa demais para a URL: a consulta sai em lotes, e quem chamou nem
   // fica sabendo — a resposta e a mesma.
   const longo = longInFilter(options.filters);
   if (longo) return selectInChunks<T>(table, options, longo);
 
-  const rows = await request<T[] | null>(buildUrl(table, options), { method: 'GET' });
-  return rows ?? [];
+  // Com `limit` explicito, quem chamou disse quantas linhas quer: uma
+  // requisicao so, como sempre foi.
+  if (typeof options.limit === 'number') {
+    const rows = await request<T[] | null>(buildUrl(table, options), { method: 'GET' });
+    return rows ?? [];
+  }
+
+  // Sem `limit`, "todas" quer dizer TODAS. A primeira pagina e uma
+  // requisicao igual a de antes; so quando ela volta CHEIA — sinal de que o
+  // servidor cortou — e que vem a seguinte. Quase toda consulta do sistema
+  // traz menos de mil linhas e continua custando uma requisicao.
+  const todas: T[] = [];
+
+  for (let pagina = 0; pagina < MAX_PAGES; pagina += 1) {
+    const linhas =
+      (await request<T[] | null>(
+        buildUrl(table, {
+          ...options,
+          limit: PAGE_SIZE,
+          offset: pagina * PAGE_SIZE,
+          // Paginar sem ordem definida pode repetir uma linha em duas
+          // paginas e perder outra: sem `order`, o banco nao promete ordem
+          // nenhuma entre uma consulta e a seguinte.
+          order: options.order ?? 'id.asc',
+        }),
+        { method: 'GET' },
+      )) ?? [];
+
+    todas.push(...linhas);
+    if (linhas.length < PAGE_SIZE) break;
+  }
+
+  return todas;
 }
 
 export async function selectOne<T>(table: string, options: QueryOptions = {}): Promise<T | null> {
@@ -358,18 +411,59 @@ export async function insertOne<T>(
   return row;
 }
 
+/**
+ * Escrita por lista longa, em lotes.
+ *
+ * O mesmo limite de `selectInChunks`, e pela mesma razao: o filtro
+ * `in.(...)` viaja na URL, e mil identificadores sao cerca de 37 KB de
+ * endereco — acima do que o servidor aceita. A requisicao INTEIRA volta como
+ * erro, e sem codigo do Postgres, porque nem chegou a virar consulta.
+ *
+ * Faltava aqui. A regra estava escrita so na leitura, e a promessa de que
+ * "uma regra em um lugar so nao tem como ser esquecida" nao se cumpriu: a
+ * primeira escrita que recebeu centenas de identificadores — apagar a
+ * segunda camada de um Time DEMO — morreu exatamente assim.
+ */
+async function writeInChunks<T>(
+  table: string,
+  filters: Record<string, string>,
+  select: string,
+  longo: { key: string; values: string[] },
+  enviar: (url: string) => Promise<T[] | null>,
+): Promise<T[]> {
+  const linhas: T[] = [];
+
+  for (let inicio = 0; inicio < longo.values.length; inicio += IN_FILTER_CHUNK) {
+    const lote = longo.values.slice(inicio, inicio + IN_FILTER_CHUNK);
+    const url = buildUrl(table, {
+      // Os pedacos voltam EXATAMENTE como estavam: `inFilter` ja pos as
+      // aspas, e aspear de novo geraria `""uuid""`, que o banco recusa.
+      filters: { ...filters, [longo.key]: `in.(${lote.join(',')})` },
+      select,
+    });
+    linhas.push(...((await enviar(url)) ?? []));
+  }
+
+  return linhas;
+}
+
 export async function updateRows<T>(
   table: string,
   filters: Record<string, string>,
   values: Record<string, QueryValue | object>,
   select = '*',
 ): Promise<T[]> {
-  const rows = await request<T[] | null>(buildUrl(table, { filters, select }), {
-    method: 'PATCH',
-    body: JSON.stringify(values),
-    prefer: ['return=representation'],
-  });
-  return rows ?? [];
+  const enviar = (url: string) =>
+    request<T[] | null>(url, {
+      method: 'PATCH',
+      body: JSON.stringify(values),
+      prefer: ['return=representation'],
+    });
+
+  const longo = longInFilter(filters);
+  if (longo) return writeInChunks<T>(table, filters, select, longo, enviar);
+
+  return (await enviar(buildUrl(table, { filters, select }))) ?? [];
 }
 
 export async function deleteRows<T>(
@@ -377,11 +471,13 @@ export async function deleteRows<T>(
   filters: Record<string, string>,
   select = 'id',
 ): Promise<T[]> {
-  const rows = await request<T[] | null>(buildUrl(table, { filters, select }), {
-    method: 'DELETE',
-    prefer: ['return=representation'],
-  });
-  return rows ?? [];
+  const enviar = (url: string) =>
+    request<T[] | null>(url, { method: 'DELETE', prefer: ['return=representation'] });
+
+  const longo = longInFilter(filters);
+  if (longo) return writeInChunks<T>(table, filters, select, longo, enviar);
+
+  return (await enviar(buildUrl(table, { filters, select }))) ?? [];
 }
 
 /**

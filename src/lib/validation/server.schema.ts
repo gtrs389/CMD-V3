@@ -598,6 +598,14 @@ export const demoTeamCreateSchema = z.object({
     .min(0)
     .max(DEMO_RECRUITERS_MAX, `O máximo é ${DEMO_RECRUITERS_MAX}.`)
     .default(DEMO_RECRUITERS_DEFAULT),
+  /** Quantas pessoas a segunda camada traz. Zero em qualquer um dos dois
+   *  numeros deixa o time com uma camada so. */
+  recruiterPeople: z
+    .number()
+    .int('Informe um número inteiro de pessoas.')
+    .min(0)
+    .max(DEMO_LIMITS.maxPeople, `O máximo é ${DEMO_LIMITS.maxPeople} pessoas.`)
+    .default(0),
   places: z
     .number()
     .int('Informe um número inteiro de locais.')
@@ -610,11 +618,22 @@ export const demoTeamCreateSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{8,64}$/, 'Chave de criação inválida.'),
 });
 
-/** Segunda camada do Time DEMO, ajustada depois da criacao. */
+/**
+ * Segunda camada do Time DEMO, ajustada depois da criacao.
+ *
+ * Dois numeros: quantas pessoas recrutam, e quantas elas TRAZEM. O segundo e
+ * gente nova — a segunda camada acrescenta ao time, nao reparte quem ja
+ * estava nele.
+ */
 export const demoRecruitersSchema = z.object({
   recruiters: z
     .number()
     .int('Informe um número inteiro.')
     .min(0)
     .max(DEMO_RECRUITERS_MAX, `O máximo é ${DEMO_RECRUITERS_MAX}.`),
+  people: z
+    .number()
+    .int('Informe um número inteiro de pessoas.')
+    .min(0)
+    .max(DEMO_LIMITS.maxPeople, `O máximo é ${DEMO_LIMITS.maxPeople} pessoas.`),
 });

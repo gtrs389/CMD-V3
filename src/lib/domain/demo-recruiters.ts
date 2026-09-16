@@ -30,15 +30,8 @@ export interface RecruiterShare {
   count: number;
 }
 
-/**
- * Quanto do time fica com a segunda camada.
- *
- * Nao e tudo: o administrador tem de continuar com cadastros proprios, ou a
- * demonstracao mostraria uma operacao onde quem administra nao trouxe
- * ninguem — o oposto do que acontece em campo, onde ele costuma ser o maior
- * cadastrador.
- */
-const SHARE_OF_TEAM = 0.6;
+/** Fracao usada quando quem chama nao diz outra. */
+const DEFAULT_SHARE = 1;
 
 /**
  * Divide os cadastros entre os recrutadores, de forma DESIGUAL.
@@ -52,17 +45,19 @@ const SHARE_OF_TEAM = 0.6;
  * Deterministico: os mesmos numeros entram, a mesma divisao sai. Refazer os
  * dados de um time nao embaralha o ranking sem motivo.
  *
- * @param disponiveis Cadastros que podem mudar de dono (todos menos os
- *                    proprios recrutadores, que continuam sendo do
- *                    administrador que os trouxe).
+ * @param disponiveis Pessoas a repartir entre os recrutadores.
+ * @param share       Quanto do total vai para eles. Um, o padrao, reparte
+ *                    tudo: a gente da segunda camada foi trazida POR ELES, e
+ *                    nao ha sobra a deixar com o administrador.
  */
 export function shareAmongRecruiters(
   recruiters: number,
   disponiveis: number,
+  share: number = DEFAULT_SHARE,
 ): RecruiterShare[] {
   if (recruiters <= 0 || disponiveis <= 0) return [];
 
-  const total = Math.floor(disponiveis * SHARE_OF_TEAM);
+  const total = Math.floor(disponiveis * share);
   if (total <= 0) return [];
 
   // Peso decrescente: o primeiro pesa `recruiters`, o ultimo pesa 1.

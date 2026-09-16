@@ -41,6 +41,22 @@
  */
 export const DEMO_SEED_VERSION = 'al-tre-2026-2' as const;
 
+/**
+ * Marca das pessoas da SEGUNDA CAMADA: as que a equipe trouxe.
+ *
+ * Marca propria, e nao a mesma da geracao, por uma razao concreta: e por ela
+ * que a segunda camada e refeita sem tocar em quem ja estava no time. Sem
+ * essa distincao, "quem tem responsavel do perfil EQUIPE" seria o unico
+ * criterio disponivel — e ele pegaria tambem as pessoas da primeira camada
+ * que uma versao anterior tenha passado para a equipe, apagando gente que o
+ * administrador trouxe.
+ *
+ * Cabe no `check` da migration 034 (`^[a-z0-9-]{3,40}$`), e a rotina de
+ * "Refazer dados" continua alcancando estas pessoas: ela trata como gerado
+ * tudo o que tem marca, qualquer que seja.
+ */
+export const DEMO_SECOND_LAYER_SEED = 'al-tre-2026-2-equipe' as const;
+
 /** Unico estado aceito no Time DEMO. */
 export const DEMO_STATE = 'AL' as const;
 

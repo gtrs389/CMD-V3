@@ -27,9 +27,9 @@ export async function PATCH(
     if (user.role !== 'ADMIN') throw forbidden();
 
     const { id } = await ctx.params;
-    const { recruiters } = await readJson(request, demoRecruitersSchema);
+    const entrada = await readJson(request, demoRecruitersSchema);
 
-    return jsonOk(await setDemoRecruiters(id, recruiters));
+    return jsonOk(await setDemoRecruiters(id, entrada));
   } catch (error) {
     return toErrorResponse(error);
   }
@@ -45,7 +45,7 @@ export async function GET(
     if (user.role !== 'ADMIN') throw forbidden();
 
     const { id } = await ctx.params;
-    return jsonOk({ recruiters: await countDemoRecruiters(id) });
+    return jsonOk(await countDemoRecruiters(id));
   } catch (error) {
     return toErrorResponse(error);
   }
