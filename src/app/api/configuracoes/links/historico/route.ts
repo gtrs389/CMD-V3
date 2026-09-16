@@ -4,6 +4,7 @@ import { forbidden, jsonOk, toErrorResponse } from '@/lib/server/http';
 import {
   listInviteTracking,
   type InviteTrackingFilter,
+  type InviteTrackingScope,
 } from '@/lib/server/invite-tracking.service';
 import type { InviteState } from '@/lib/domain/invite-expiration';
 
@@ -43,7 +44,15 @@ export async function GET(request: NextRequest) {
     const role = params.get('perfil');
     const state = params.get('status');
 
+    // Recorte DEMO: sem escolha, o rastreamento e o da operacao real. Os
+    // eventos de demonstracao continuam gravados e alcancaveis — 'demo' e
+    // 'todos' trazem tudo de volta.
+    const demo = params.get('demo');
+    const scope: InviteTrackingScope =
+      demo === 'demo' || demo === 'todos' ? demo : 'reais';
+
     const filter: InviteTrackingFilter = {
+      scope,
       clientId: text(params.get('time'), 64),
       owner: text(params.get('dono')),
       role: role === 'CANDIDATE' || role === 'EQUIPE' ? role : undefined,

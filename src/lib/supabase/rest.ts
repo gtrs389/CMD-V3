@@ -48,17 +48,53 @@ export class SupabaseRequestError extends Error {
   }
 
   /**
-   * O banco nao tem a coluna ou a tabela que o codigo pediu.
+   * O banco nao tem a coluna, a tabela ou a funcao que o codigo pediu.
    *
    * Na pratica isso significa UMA coisa: a migration correspondente ainda
-   * nao foi executada. Sem distinguir esse caso, toda falha assim vira a
-   * mesma mensagem generica de erro e a tela nao diz o que fazer — o que
-   * transforma um `alter table` esquecido em uma caca ao bug.
+   * nao foi executada — ou foi, e o PostgREST ainda nao recarregou o cache
+   * do schema. Sem distinguir esse caso, toda falha assim vira a mesma
+   * mensagem generica de erro e a tela nao diz o que fazer, o que transforma
+   * um `alter table` esquecido em uma caca ao bug.
    *
-   * 42703 = coluna inexistente; 42P01 = tabela inexistente.
+   * Dois mundos, e os dois precisam entrar:
+   *
+   *   POSTGRES   42703 coluna inexistente, 42P01 tabela inexistente. Sao os
+   *              erros de quem consultou o banco direto.
+   *   POSTGREST  PGRST202 funcao, PGRST204 coluna e PGRST205 tabela que nao
+   *              estao NO CACHE dele. O PostgREST nem chega a perguntar ao
+   *              banco: ele recusa antes, com codigo proprio.
+   *
+   * Faltava o segundo grupo, e e justamente o que aparece logo depois de uma
+   * migration nova — o caso mais comum de todos.
    */
   get isMissingSchema(): boolean {
-    return this.code === '42703' || this.code === '42P01';
+    if (
+      this.code === '42703' ||
+      this.code === '42P01' ||
+      this.code === 'PGRST202' ||
+      this.code === 'PGRST204' ||
+      this.code === 'PGRST205'
+    ) {
+      return true;
+    }
+
+    // Rede de seguranca por TEXTO: algumas versoes do PostgREST recusam a
+    // funcao ou a coluna ausente sem mandar `code` nenhum. Sem isto, o caso
+    // mais comum depois de uma migration nova — "ja rodei o SQL, e continua
+    // dando erro" — volta a ser um 500 que nao explica nada.
+    const texto = this.message.toLowerCase();
+    return texto.includes('schema cache') || texto.includes('does not exist');
+  }
+
+  /**
+   * O banco existe, tem a estrutura, mas recusou por permissao.
+   *
+   * Tambem e configuracao pendente, e nao defeito: quase sempre a parte de
+   * `grant` da migration nao foi executada. Merece mensagem propria, porque
+   * a acao e outra — rodar o bloco de permissoes, e nao criar coluna.
+   */
+  get isMissingGrant(): boolean {
+    return this.code === '42501';
   }
 
   /**
@@ -144,6 +180,12 @@ export function inFilter(values: readonly string[]): string {
   return `in.(${escaped.join(',')})`;
 }
 
+/** Monta um filtro `not.in.(a,b,c)`. Usado para tirar os Times DEMO das metricas. */
+export function notInFilter(values: readonly string[]): string {
+  const escaped = values.map((value) => `"${value.replace(/"/g, '""')}"`);
+  return `not.in.(${escaped.join(',')})`;
+}
+
 export async function selectRows<T>(table: string, options: QueryOptions = {}): Promise<T[]> {
   const rows = await request<T[] | null>(buildUrl(table, options), { method: 'GET' });
   return rows ?? [];
@@ -154,6 +196,43 @@ export async function selectOne<T>(table: string, options: QueryOptions = {}): P
   return rows[0] ?? null;
 }
 
+/**
+ * Iguala as chaves de um envio em lote.
+ *
+ * O PostgREST exige que TODAS as linhas de um insert em lote tenham
+ * exatamente as mesmas chaves: uma linha a menos e ele recusa o lote inteiro
+ * com `PGRST102 All object keys must match` — sem dizer qual chave, qual
+ * linha, nem qual tabela.
+ *
+ * E facil demais escrever duas linhas quase iguais e esquecer uma coluna que
+ * so faz sentido em uma delas. Em vez de confiar na disciplina de quem
+ * escreve, o lote e alinhado aqui: quem nao tem a chave recebe `null`
+ * explicito.
+ *
+ * Isso nao muda comportamento nenhum que funcionasse antes — um lote com
+ * chaves diferentes SEMPRE falhava. E o null explicito falha alto, e nao em
+ * silencio: coluna obrigatoria sem valor vira 23502, que a tela ja traduz
+ * como dado faltando.
+ */
+export function alignRowKeys(
+  values: Record<string, QueryValue | object>[],
+): Record<string, QueryValue | object>[] {
+  if (values.length < 2) return values;
+
+  const chaves = new Set<string>();
+  for (const value of values) for (const chave of Object.keys(value)) chaves.add(chave);
+
+  // Todas ja iguais: nada a fazer, e o objeto original segue intacto.
+  const iguais = values.every((value) => Object.keys(value).length === chaves.size);
+  if (iguais) return values;
+
+  return values.map((value) => {
+    const completa: Record<string, QueryValue | object> = {};
+    for (const chave of chaves) completa[chave] = chave in value ? value[chave] : null;
+    return completa;
+  });
+}
+
 export async function insertRows<T>(
   table: string,
   values: Record<string, QueryValue | object>[],
@@ -162,7 +241,7 @@ export async function insertRows<T>(
   if (values.length === 0) return [];
   const rows = await request<T[] | null>(buildUrl(table, { select }), {
     method: 'POST',
-    body: JSON.stringify(values),
+    body: JSON.stringify(alignRowKeys(values)),
     prefer: ['return=representation'],
   });
   return rows ?? [];

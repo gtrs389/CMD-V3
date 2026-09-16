@@ -20,6 +20,7 @@ import {
   relationshipColor,
   relationshipLabel,
 } from '@/lib/domain/relationship';
+import { ALAGOAS_CENTER } from '@/lib/domain/demo-catalog';
 import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { copyText } from '@/lib/utils/clipboard';
 import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
@@ -250,7 +251,14 @@ export function ClientOverviewPanel({
         </div>
       </div>
 
-      {podeVerMapa ? <MobilizationMap clientId={client.id} /> : null}
+      {podeVerMapa ? (
+        <MobilizationMap
+          clientId={client.id}
+          // O Time DEMO e todo de Alagoas: enquanto nao houver pino resolvido,
+          // o mapa abre no centro do estado, e nao em outra regiao do pais.
+          fallbackCenter={client.isDemo ? ALAGOAS_CENTER : undefined}
+        />
+      ) : null}
     </div>
   );
 }

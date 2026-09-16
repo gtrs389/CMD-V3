@@ -60,6 +60,7 @@ function clienteComFormulario(): Client {
   return {
     id: 'cli-a',
     name: 'Candidata',
+    isDemo: false,
     email: 'candidata@exemplo.test',
     photo: null,
     notes: '',

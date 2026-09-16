@@ -169,6 +169,8 @@ export interface InviteTrackingEntry {
   ownerRole: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;
   clientId: string | null;
   clientName: string;
+  /** Link de um Time DEMO: a linha ganha o selo e sai do recorte real. */
+  isDemo: boolean;
   /** Quem clicou para gerar ou renovar. Pode ser o ADMIN geral. */
   generatedByName: string;
   generatedByRole: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;

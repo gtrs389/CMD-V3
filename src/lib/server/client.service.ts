@@ -163,9 +163,24 @@ async function assemble(row: ClientRow, inviteToken?: string | null): Promise<Cl
   });
 }
 
-export async function listClientSummaries(): Promise<ClientSummary[]> {
+export interface ListClientOptions {
+  /**
+   * Inclui os Times DEMO na lista.
+   *
+   * A pagina "Times" do ADMIN geral pede `true`: ele precisa ver o time de
+   * demonstracao, com o selo, para abrir e apresentar. Todo o resto do
+   * sistema usa o padrao — sem DEMO —, porque e de numero da operacao real
+   * que as outras telas tratam.
+   */
+  includeDemo?: boolean;
+}
+
+export async function listClientSummaries(
+  options: ListClientOptions = {},
+): Promise<ClientSummary[]> {
   const rows = await selectRows<ClientRow>(TABLES.clients, {
     select: CLIENT_COLUMNS,
+    filters: options.includeDemo ? {} : { is_demo: 'is.false' },
     order: 'created_at.desc',
   });
   if (rows.length === 0) return [];
@@ -522,7 +537,19 @@ async function syncTeamPeople(clientId: string, people: TeamPersonInput[]): Prom
   }
 }
 
-export async function createClient(input: ClientInput): Promise<Client> {
+export interface CreateClientOptions {
+  /**
+   * Nasce como Time DEMO. So o servico de demonstracao passa `true`, e o
+   * valor nunca muda depois: o gatilho da migration 033 recusa a conversao
+   * nos dois sentidos.
+   */
+  isDemo?: boolean;
+}
+
+export async function createClient(
+  input: ClientInput,
+  options: CreateClientOptions = {},
+): Promise<Client> {
   // Time sem administrador nao teria como ser acessado por ninguem.
   if (!input.people?.length) {
     throw badRequest('Cadastre pelo menos um administrador do time.');
@@ -533,6 +560,7 @@ export async function createClient(input: ClientInput): Promise<Client> {
   const row = await insertOne<ClientRow>(TABLES.clients, {
     name: input.name.trim(),
     notes: input.notes?.trim() ?? '',
+    is_demo: options.isDemo === true,
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,

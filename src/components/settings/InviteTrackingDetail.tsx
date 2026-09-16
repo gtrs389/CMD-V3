@@ -57,7 +57,10 @@ function Conteudo({ entry }: { entry: InviteTrackingEntry }) {
           label="Perfil"
           value={entry.ownerRole ? ROLE_LABELS[entry.ownerRole] : EMPTY}
         />
-        <Linha label="Time" value={entry.clientName} />
+        <Linha
+          label="Time"
+          value={entry.isDemo ? `${entry.clientName} (DEMO)` : entry.clientName}
+        />
         <Linha
           label="Gerado por"
           value={

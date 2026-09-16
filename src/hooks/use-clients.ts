@@ -6,8 +6,19 @@ import { fetchPublicInvite, type PublicInviteOutcome } from '@/lib/repositories/
 import type { Client, ClientSummary } from '@/lib/types';
 import { useRepositoryQuery } from './use-repository-query';
 
-export function useClientSummaries() {
-  const loader = useCallback(() => clientRepository.listSummaries(), []);
+/**
+ * Times para a tela.
+ *
+ * `includeDemo` e da pagina "Times": o ADMIN geral precisa ver o time de
+ * demonstracao, com o selo, para abrir e apresentar. O painel usa o padrao,
+ * sem DEMO, porque os cartoes dele somam a operacao real.
+ */
+export function useClientSummaries(options: { includeDemo?: boolean } = {}) {
+  const { includeDemo = false } = options;
+  const loader = useCallback(
+    () => clientRepository.listSummaries({ includeDemo }),
+    [includeDemo],
+  );
   return useRepositoryQuery<ClientSummary[]>(loader);
 }
 

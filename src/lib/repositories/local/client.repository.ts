@@ -120,6 +120,8 @@ export function createLocalClientRepository(
       const client: Client = {
         id: createId('cli'),
         name: input.name.trim(),
+        // Time DEMO nasce somente pelo servico proprio, no servidor.
+        isDemo: false,
         // Legado: o cadastro nao pede mais e-mail do time.
         email: null,
         photo: input.photo ?? null,

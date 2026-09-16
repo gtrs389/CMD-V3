@@ -102,4 +102,46 @@ describe('erros do banco', () => {
     expect(response.status).toBe(503);
     expect((await corpo(response)).message).toContain('migration');
   });
+
+  it('reconhece também a recusa do PostgREST, que vem antes do banco', async () => {
+    // Depois de uma migration nova, o erro mais comum nao e do Postgres: e do
+    // PostgREST, que recusa pelo CACHE dele antes de perguntar ao banco.
+    // Sem reconhecer estes codigos, "já rodei o SQL e continua dando erro"
+    // virava um 500 que nao dizia o que fazer.
+    for (const code of ['PGRST202', 'PGRST204', 'PGRST205']) {
+      const resposta = toErrorResponse(
+        new SupabaseRequestError(
+          "Could not find the 'is_demo' column of 'cmd_clients' in the schema cache",
+          400,
+          code,
+        ),
+      );
+
+      expect(resposta.status, code).toBe(503);
+      const { message } = await corpo(resposta);
+      expect(message).toContain('migration');
+      // A segunda ação possível precisa estar escrita: já executei, e agora?
+      expect(message).toContain('cache do schema');
+    }
+
+    // Sem `code` nenhum, o texto ainda identifica o caso.
+    const semCodigo = toErrorResponse(
+      new SupabaseRequestError(
+        'Could not find the function public.cmd_demo_claim(p_seed_key, p_user_id) in the schema cache',
+        404,
+        null,
+      ),
+    );
+    expect(semCodigo.status).toBe(503);
+  });
+
+  it('separa a falta de permissão da falta de estrutura', async () => {
+    const resposta = toErrorResponse(
+      new SupabaseRequestError('permission denied for table cmd_demo_seeds', 401, '42501'),
+    );
+
+    expect(resposta.status).toBe(503);
+    // A ação é outra: rodar o bloco de permissões, e não criar coluna.
+    expect((await corpo(resposta)).message).toContain('permissão');
+  });
 });

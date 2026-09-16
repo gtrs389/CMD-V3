@@ -37,7 +37,16 @@ function matches(row: Row, filters: Record<string, string> = {}): boolean {
   return Object.entries(filters).every(([column, expression]) => {
     const value = row[column];
     if (expression === 'is.null') return value === null || value === undefined;
+    if (expression === 'is.true') return value === true;
+    if (expression === 'is.false') return value === false;
     if (expression.startsWith('eq.')) return String(value) === expression.slice(3);
+    if (expression.startsWith('not.in.')) {
+      const fora = expression
+        .slice(8, -1)
+        .split(',')
+        .map((item) => item.replace(/^"|"$/g, ''));
+      return !fora.includes(String(value));
+    }
     if (expression.startsWith('in.')) {
       const list = expression
         .slice(4, -1)
@@ -179,8 +188,22 @@ function seed() {
   sequence = 0;
 
   db.cmd_clients.push(
-    { id: OPERACAO_A, name: 'Marina Alves', email: 'marina@exemplo.test', recruiting_active: true },
-    { id: OPERACAO_B, name: 'Candidato B', email: 'candb@exemplo.test', recruiting_active: true },
+    // `is_demo: false` e o default do banco: estes sao times reais, e a
+    // concessao de acesso segue o caminho de sempre.
+    {
+      id: OPERACAO_A,
+      name: 'Marina Alves',
+      email: 'marina@exemplo.test',
+      recruiting_active: true,
+      is_demo: false,
+    },
+    {
+      id: OPERACAO_B,
+      name: 'Candidato B',
+      email: 'candb@exemplo.test',
+      recruiting_active: true,
+      is_demo: false,
+    },
   );
 
   db.cmd_users.push(

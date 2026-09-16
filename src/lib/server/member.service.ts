@@ -30,6 +30,7 @@ import {
   updateRows,
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
+import { demoClientIds, withoutDemoClients } from './demo-scope';
 import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
@@ -80,12 +81,26 @@ type AccessColumns = Pick<UserRow, 'id' | 'member_id' | 'is_active' | 'phone'>;
  * como identificar a pessoa, e o estado fica em "Telefone necessário". O
  * usuario desativado por telefone duplicado aparece como DISABLED ate o
  * ADMIN geral corrigir o numero.
+ *
+ * Em um Time DEMO, a pessoa sem usuario NAO esta pendente: ela foi criada de
+ * proposito sem acesso, e nao ha nada a resolver. Chamar isso de "Acesso
+ * pendente" seria um alarme sobre um problema que nao existe — ainda por
+ * cima no meio de uma apresentacao.
  */
-function statusOf(row: AccessColumns | undefined, phone: string | null): AccessStatus {
+function statusOf(
+  row: AccessColumns | undefined,
+  phone: string | null,
+  demo = false,
+): AccessStatus {
+  if (row) {
+    if (!row.is_active) return 'DISABLED';
+    return row.phone ? 'ACTIVE' : 'NO_PHONE';
+  }
+
+  // Sem usuario: em Time DEMO isso e o esperado, e nao uma pendencia.
+  if (demo) return 'DEMO_NO_ACCESS';
   if (!phone || normalizePhone(phone).length < 10) return 'NO_PHONE';
-  if (!row) return 'PENDING';
-  if (!row.is_active) return 'DISABLED';
-  return row.phone ? 'ACTIVE' : 'NO_PHONE';
+  return 'PENDING';
 }
 
 async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
@@ -114,9 +129,21 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
   ]);
 
   const byMember = new Map(users.map((row) => [row.member_id, row]));
+
+  /**
+   * Quais destes times sao de demonstracao.
+   *
+   * A pergunta so e feita quando existe alguem SEM usuario — que e o unico
+   * caso em que a resposta muda alguma coisa. Em uma operacao real, onde
+   * todo mundo tem acesso, nenhuma consulta a mais acontece.
+   */
+  const semUsuario = rows.filter((row) => !byMember.has(row.id));
+  const demo =
+    semUsuario.length > 0 ? new Set(await demoClientIds()) : new Set<string>();
+
   for (const row of rows) {
     const user = byMember.get(row.id);
-    context.access.set(row.id, statusOf(user ?? undefined, row.phone));
+    context.access.set(row.id, statusOf(user ?? undefined, row.phone, demo.has(row.client_id)));
     if (user) context.userId.set(row.id, user.id);
   }
 
@@ -303,9 +330,21 @@ async function writeResponses(
   );
 }
 
+/**
+ * Todos os integrantes REAIS, do mais novo para o mais antigo.
+ *
+ * Alimenta os numeros globais do painel do ADMIN — total, cadastros de hoje,
+ * dos sete dias, do mes e o grafico. Por isso os Times DEMO ficam de fora
+ * aqui: sao dados de apresentacao, e um deles somando ao total da operacao
+ * real tornaria o numero inutil.
+ *
+ * A pagina do proprio Time DEMO usa `listMembersByClient`, que continua
+ * mostrando tudo.
+ */
 export async function listAllMembers(): Promise<Member[]> {
   const rows = await selectRows<MemberRow>(TABLES.members, {
     select: '*',
+    filters: await withoutDemoClients(),
     order: 'created_at.desc',
   });
   return assembleMany(rows);

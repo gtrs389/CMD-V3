@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { ApiDocsCard } from './ApiDocsCard';
 import { ApiKeysCard } from './ApiKeysCard';
+import { DemoBadge } from '@/components/clients/DemoBadge';
 import { CredentialsModal } from './CredentialsModal';
 import { InviteExpirationCard } from './InviteExpirationCard';
 import { InviteHistoryCard } from './InviteHistoryCard';
@@ -71,6 +72,8 @@ interface Row {
   role: Role;
   status: AccessStatus;
   candidate: { id: string; name: string; photo: string | null } | null;
+  /** Acesso de um Time DEMO: a linha ganha o selo. */
+  isDemo: boolean;
   /** Responsavel pelo cadastro. Preenchido nos integrantes. */
   recruitedBy: Recruiter | null;
   photo: string | null;
@@ -84,6 +87,10 @@ const STATUS_CLASSES: Record<AccessStatus, string> = {
   DISABLED: 'bg-danger-50 text-danger-600',
   NO_PHONE: 'bg-ink-100 text-ink-700',
   DUPLICATE_PHONE: 'bg-warning-50 text-warning-600',
+  // Neutro, sem cor de alerta: nao ha nada a resolver. Na pratica nao
+  // aparece aqui — pessoa ficticia nao tem usuario, e a lista de pendentes
+  // ja exclui os Times DEMO —, mas o estado existe e a tabela fica completa.
+  DEMO_NO_ACCESS: 'bg-ink-100 text-ink-700',
 };
 
 /**
@@ -125,6 +132,7 @@ export function SettingsView() {
       role: item.role,
       status: item.status,
       candidate: item.candidate,
+      isDemo: item.candidate?.isDemo === true,
       recruitedBy: item.recruitedBy,
       photo: item.photo ?? item.candidate?.photo ?? null,
       lastLoginAt: item.lastLoginAt,
@@ -144,6 +152,8 @@ export function SettingsView() {
       role: 'CANDIDATE' as Role,
       status: 'PENDING' as AccessStatus,
       candidate: { id: item.clientId, name: item.name, photo: item.photo },
+      // Time DEMO nasce com administrador: ele nunca aparece nesta lista.
+      isDemo: false,
       recruitedBy: null,
       photo: item.photo,
       lastLoginAt: null,
@@ -165,6 +175,8 @@ export function SettingsView() {
       role: 'EQUIPE' as Role,
       status: item.status,
       candidate: { id: item.clientId, name: item.candidateName, photo: null },
+      // As pessoas do Time DEMO nascem com acesso: nao caem aqui.
+      isDemo: false,
       recruitedBy: item.recruitedBy,
       photo: item.photo,
       lastLoginAt: null,
@@ -393,9 +405,14 @@ export function SettingsView() {
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-ink-500">{row.contact}</p>
-                  <p className="mt-0.5 truncate text-xs text-ink-500">
-                    {ROLE_LABELS[row.role]}
-                    {row.candidate ? ` · ${row.candidate.name}` : ''}
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 truncate text-xs text-ink-500">
+                    <span>
+                      {ROLE_LABELS[row.role]}
+                      {row.candidate ? ` · ${row.candidate.name}` : ''}
+                    </span>
+                    {/* Acesso de um Time DEMO: o selo evita confundi-lo com
+                        um acesso da operacao real. */}
+                    {row.isDemo ? <DemoBadge /> : null}
                   </p>
                   {row.recruitedBy ? (
                     <p className="mt-0.5 truncate text-xs text-ink-400">

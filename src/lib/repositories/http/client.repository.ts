@@ -26,8 +26,11 @@ export function createHttpClientRepository(): ClientRepository {
       return clients;
     },
 
-    async listSummaries() {
-      const { clients } = await api<{ clients: ClientSummary[] }>('/api/clients');
+    async listSummaries(options) {
+      // A pagina "Times" pede os DEMO junto; o painel e o resto do sistema
+      // recebem somente os times reais.
+      const query = options?.includeDemo ? '?demo=incluir' : '';
+      const { clients } = await api<{ clients: ClientSummary[] }>(`/api/clients${query}`);
       return clients;
     },
 

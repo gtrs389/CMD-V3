@@ -30,9 +30,18 @@ export interface ClientCreation {
   accessLinks: TeamAccessLinks | null;
 }
 
+/** Recorte da listagem de times. */
+export interface ListSummariesOptions {
+  /**
+   * Inclui os Times DEMO. So a pagina "Times" do ADMIN geral pede: as demais
+   * telas tratam de numero da operacao real.
+   */
+  includeDemo?: boolean;
+}
+
 export interface ClientRepository {
   list(): Promise<Client[]>;
-  listSummaries(): Promise<ClientSummary[]>;
+  listSummaries(options?: ListSummariesOptions): Promise<ClientSummary[]>;
   getById(id: string): Promise<Client | null>;
   create(input: ClientInput): Promise<ClientCreation>;
   update(id: string, input: Partial<ClientInput>): Promise<Client>;

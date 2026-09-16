@@ -128,6 +128,7 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
       expiresAt: options.invite?.expires_at ?? row.created_at,
     },
     form: toFormConfig(row, options.fields),
+    isDemo: row.is_demo === true,
     bannerTag: {
       left: Number(row.banner_tag_left),
       width: Number(row.banner_tag_width),

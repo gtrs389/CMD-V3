@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
 import { API_KEY_NAME_MAX } from '@/lib/domain/api-key';
+import { DEMO_DEFAULTS, DEMO_LIMITS } from '@/lib/domain/demo';
 import { FIELD_TYPES, SYSTEM_FIELD_KEYS } from '@/lib/types';
 import {
   GENDER_VALUES,
@@ -468,4 +469,53 @@ export const apiKeyCreateSchema = z.object({
     .trim()
     .min(1, 'Escolha o administrador do time.')
     .max(64, 'Identificador inválido.'),
+});
+
+/* -------------------------------------------------------------------------
+   Time DEMO (migration 033)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Criacao do Time DEMO, so pelo ADMIN geral.
+ *
+ * Os administradores chegam como em qualquer time: nome, telefone e foto
+ * opcional — e o acesso deles e o mesmo dos times reais (link do time +
+ * telefone). As quantidades tem teto para uma apresentacao nao virar uma
+ * carga de milhares de linhas por engano.
+ *
+ * `seedKey` e a chave de idempotencia criada pelo navegador: e ela que
+ * impede um duplo clique de criar dois times.
+ */
+export const demoTeamCreateSchema = z.object({
+  name: trimmed(80).min(2, 'Dê um nome ao Time DEMO.'),
+  photo: photoValue.default(null),
+  admins: z
+    .array(
+      z.object({
+        name: trimmed(120).min(2, 'Informe o nome do administrador.'),
+        phone: trimmed(30)
+          .min(1, 'Informe o telefone.')
+          .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+        photo: photoValue.default(null),
+      }),
+    )
+    // Sem teto: sao cadastrados um a um pelo ADMIN geral, e cada um passa
+    // pelas mesmas regras de nome e telefone de qualquer time.
+    .min(1, 'Cadastre pelo menos um administrador do time.'),
+  people: z
+    .number()
+    .int('Informe um número inteiro de pessoas.')
+    .min(DEMO_LIMITS.minPeople)
+    .max(DEMO_LIMITS.maxPeople, `O máximo é ${DEMO_LIMITS.maxPeople} pessoas.`)
+    .default(DEMO_DEFAULTS.people),
+  places: z
+    .number()
+    .int('Informe um número inteiro de locais.')
+    .min(DEMO_LIMITS.minPlaces)
+    .max(DEMO_LIMITS.maxPlaces, `O máximo é ${DEMO_LIMITS.maxPlaces} locais de votação.`)
+    .default(DEMO_DEFAULTS.places),
+  seedKey: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{8,64}$/, 'Chave de criação inválida.'),
 });
