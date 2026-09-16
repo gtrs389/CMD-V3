@@ -148,6 +148,84 @@
 }
 
 /* ==========================================================================
+   TELA DE ACESSO BLOQUEADO
+   ==========================================================================
+   O REPOUSO E O ESTADO BASE DO ELEMENTO, e nao um quadro da animacao. O
+   bloco de "menos movimento", no fim deste arquivo, nao congela nada no
+   comeco: ele encurta a animacao para 0.001ms e uma repeticao so, entao ela
+   corre ate o FIM e o elemento volta ao que o CSS dele diz fora da animacao.
+   Por isso a linha de leitura nasce `opacity: 0` na propria classe — sem
+   isso ela fica parada, acesa e atravessada na tela de quem pediu menos
+   movimento, que e o oposto do favor pretendido. O resto ja repousa certo:
+   anel sem giro, brilho e halo acesos, titulo legivel. Nada aqui depende de
+   movimento para ser lido. */
+
+/* O aviso chega: um golpe de luz, e nao um aparecimento suave. */
+@keyframes bloqueio-chegada {
+  0% { opacity: 0; transform: scale(1.06); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+
+/* O brilho vermelho respira. Escala e opacidade, nunca `filter`: e o par que
+   a placa de video anima sozinha, sem repintar a tela a cada quadro. */
+@keyframes bloqueio-respiro {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+}
+
+/* O halo do proprio simbolo, em compasso mais curto que o do fundo: os dois
+   nunca batem juntos, e e isso que faz a tela parecer viva em vez de piscar. */
+@keyframes bloqueio-halo {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.35; }
+}
+
+/* Os aneis varrem, um para cada lado. */
+@keyframes bloqueio-varredura-anel {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes bloqueio-varredura-anel-inversa {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+/* A linha que desce a tela, como a de um monitor sendo lido. Nasce e morre
+   invisivel: parada no primeiro quadro, ela simplesmente nao esta la. */
+@keyframes bloqueio-leitura {
+  0% { opacity: 0; transform: translateY(-10vh); }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(110vh); }
+}
+
+/* Falha de sinal no titulo: rara e curta. Uma tela que pisca o tempo todo
+   vira enfeite; esta vacila de vez em quando, como aparelho sob tensao. */
+@keyframes bloqueio-falha {
+  0%, 94%, 100% { opacity: 1; transform: none; }
+  95% { opacity: 0.25; transform: translate3d(-2px, 0, 0); }
+  96% { opacity: 1; transform: translate3d(2px, 0, 0); }
+  97% { opacity: 0.4; transform: none; }
+}
+
+.bloqueio-chegada { animation: bloqueio-chegada 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bloqueio-respiro { animation: bloqueio-respiro 3.2s ease-in-out infinite; }
+.bloqueio-halo { animation: bloqueio-halo 2.1s ease-in-out infinite; }
+.bloqueio-anel {
+  animation: bloqueio-varredura-anel 14s linear infinite;
+}
+.bloqueio-anel-inversa {
+  animation: bloqueio-varredura-anel-inversa 9s linear infinite;
+}
+.bloqueio-leitura {
+  /* Invisivel por natureza: quem a acende e a animacao. Ver a nota acima. */
+  opacity: 0;
+  animation: bloqueio-leitura 4.5s linear infinite;
+}
+.bloqueio-falha { animation: bloqueio-falha 7s steps(1, end) infinite; }
+
+/* ==========================================================================
    BASE
    ========================================================================== */
 * {

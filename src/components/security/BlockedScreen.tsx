@@ -15,7 +15,7 @@ export function BlockedScreen() {
     <div
       role="alertdialog"
       aria-label="Acesso bloqueado"
-      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-[#050505] px-6 text-center select-none"
+      className="bloqueio-chegada fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-[#050505] px-6 text-center select-none"
       style={{
         // A grade vermelha: as cruzes nos cruzamentos e, atras delas, as
         // linhas bem fracas. A cruz e um SVG escrito aqui mesmo, no proprio
@@ -29,26 +29,51 @@ export function BlockedScreen() {
         backgroundSize: '78px 78px, 78px 78px, 78px 78px',
       }}
     >
-      {/* Brilho vermelho ao fundo, atras do triangulo. */}
+      {/* Brilho vermelho ao fundo, atras do triangulo: respira. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        className="bloqueio-respiro pointer-events-none absolute top-1/2 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{
           background:
             'radial-gradient(circle, rgba(220,38,38,0.18) 0%, rgba(220,38,38,0.05) 42%, transparent 70%)',
         }}
       />
 
+      {/* A linha que desce a tela, como a de um monitor sendo lido. */}
+      <div
+        aria-hidden="true"
+        className="bloqueio-leitura pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent, rgba(239,68,68,0.65) 20%, rgba(239,68,68,0.9) 50%, rgba(239,68,68,0.65) 80%, transparent)',
+          boxShadow: '0 0 12px rgba(239,68,68,0.55)',
+        }}
+      />
+
       <div className="relative flex flex-col items-center">
         {/* Anel discreto atras do simbolo, como no desenho aprovado. */}
         <div className="relative flex items-center justify-center">
+          {/* Dois aneis varrendo em sentidos opostos. Sao tracejados: um
+              circulo inteiro girando seria um circulo parado. */}
           <div
             aria-hidden="true"
-            className="absolute size-[15rem] rounded-full border border-red-900/40 sm:size-[17rem]"
+            className="bloqueio-anel absolute size-[15rem] rounded-full border border-dashed border-red-800/50 sm:size-[17rem]"
           />
           <div
             aria-hidden="true"
-            className="absolute size-[12.5rem] rounded-full border border-red-900/25 sm:size-[14rem]"
+            className="bloqueio-anel-inversa absolute size-[12.5rem] rounded-full border border-dashed border-red-900/40 sm:size-[14rem]"
+          />
+
+          {/* O halo pulsa em camada propria, com `opacity`, e nao no
+              `filter` do desenho: assim o simbolo nao e repintado a cada
+              quadro, so a camada por cima dele muda de forca. */}
+          <div
+            aria-hidden="true"
+            className="bloqueio-halo pointer-events-none absolute size-[11rem] rounded-full sm:size-[13rem]"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(239,68,68,0.45) 0%, rgba(239,68,68,0.12) 45%, transparent 68%)',
+            }}
           />
 
           <svg
@@ -69,7 +94,7 @@ export function BlockedScreen() {
           </svg>
         </div>
 
-        <h1 className="mt-10 text-4xl leading-none font-extrabold tracking-tight text-white uppercase sm:text-5xl">
+        <h1 className="bloqueio-falha mt-10 text-4xl leading-none font-extrabold tracking-tight text-white uppercase sm:text-5xl">
           Acesso bloqueado
         </h1>
 
