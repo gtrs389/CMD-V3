@@ -182,6 +182,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/clients/[id]` | ADMIN | Lê, atualiza e exclui um cliente |
 | `/api/clients/[id]/form` | ADMIN | Atualiza campos, privacidade e textos |
 | `/api/clients/[id]/invite` | ADMIN | Ativa/desativa e renova o convite |
+| `/api/clients/[id]/invite/lote` | ADMIN | Gera vários links de cadastro de uma vez |
 | `/api/clients/[id]/verificacao` | ADMIN geral | Liga e desliga a confirmação de dados do time |
 | `/api/clients/[id]/members` | ADMIN | Equipe de um cliente |
 | `/api/members` | ADMIN | Lista e cadastra integrantes pelo painel |
@@ -285,6 +286,41 @@ público, que é o endereço que as pessoas recebem.
 
 Requer as migrations `029_api_links_cadastro.sql`, `030_api_agir_como_dono.sql`
 e `031_api_chave_vinculada.sql`.
+
+---
+
+## Links de cadastro em lote
+
+Cada link de cadastro vale para **uma pessoa**: é reservado pelo primeiro
+navegador que o abre e consumido quando o cadastro é enviado. Até aqui cada
+dono podia ter **um** link por vez — um índice único garantia isso, e gerar um
+novo revogava o anterior na hora. Mandar o cadastro para dez pessoas eram dez
+idas ao painel: gerar, enviar, esperar a pessoa se cadastrar, gerar de novo.
+
+O botão **"Gerar em lote"**, no cabeçalho do time, gera quantos links forem
+pedidos de uma vez (migration 043). Não há teto de produto: o número grande no
+schema existe só para o corpo da requisição ter um fim.
+
+Os links que já existiam **continuam valendo** — o lote não revoga nenhum. O
+dono continua sendo o Administrador do time, e é o nome dele que permanece em
+"Cadastrado por". Cada link mantém o mesmo prazo, a mesma reserva por navegador
+e o mesmo histórico de sempre.
+
+**A cor diz o que falta.** Na lista, verde é o link que ainda não foi copiado;
+cinza, o que já foi. Quem está distribuindo trinta endereços precisa saber, de
+relance, onde parou. Há um **"Copiar todos"**, que copia um por linha — o
+formato que se cola em planilha, bloco de notas ou conversa. Esse estado vive
+só naquela tela: "já copiei este" é assunto de quem está copiando agora, não um
+dado do cadastro.
+
+Os endereços aparecem **uma única vez**, porque o banco guarda apenas o hash de
+cada token — por isso a tela avisa antes de fechar com algum ainda por copiar.
+
+O botão "Gerar link" de sempre continua fazendo o de sempre: um link novo,
+revogando o anterior. O que mudou foi **qual** anterior — agora é sempre o mais
+recente do dono, e não uma linha qualquer entre os vários que ele pode ter. A
+numeração das gerações segue o dono, para o histórico dele continuar sendo uma
+linha do tempo só.
 
 ---
 

@@ -41,6 +41,8 @@ import {
   resolveInvite,
   rotatePersonalInvite,
   type InviteOwner,
+  issueInviteBatch,
+  type IssuedBatchInvite,
 } from './invite.service';
 import {
   assertTeamPhoneAvailable,
@@ -879,6 +881,40 @@ export async function setInviteActive(id: string, active: boolean): Promise<Clie
  * nome do Administrador do time. O DONO do link continua sendo o
  * administrador do time, e e o nome dele que permanece em "Cadastrado por".
  */
+/**
+ * Gera VARIOS links de cadastro do time de uma vez (migration 043).
+ *
+ * Mesmo dono de sempre — o administrador do time ATIVO mais antigo —, e os
+ * links que ja existiam continuam valendo: aqui nada e revogado. Cada
+ * endereco e de uso unico, um por pessoa, e por isso gerar dez de uma vez e
+ * o que permite mandar o cadastro para dez pessoas na mesma tacada.
+ *
+ * Os tokens voltam UMA unica vez, nesta chamada: o banco guarda apenas o
+ * hash de cada um.
+ */
+export async function issueTeamInviteBatch(
+  id: string,
+  quantidade: number,
+  generatedByUserId?: string | null,
+): Promise<IssuedBatchInvite[]> {
+  await requireClientRow(id);
+
+  // O mesmo dono do botao "Gerar link": administrador ATIVO mais antigo. O
+  // dono e quem recebe os cadastros e o nome que fica em "Cadastrado por".
+  const user = await selectOne<Pick<UserRow, 'id'>>(TABLES.users, {
+    select: 'id',
+    filters: { client_id: `eq.${id}`, role: 'eq.CANDIDATE', is_active: 'is.true' },
+    order: 'created_at.asc',
+  });
+  if (!user) throw notFound('Cadastre um administrador do time antes de criar o link.');
+
+  // Garante que o dono ja tenha link proprio (adotando o convite legado sem
+  // dono, quando houver) antes de acrescentar os do lote.
+  await ensurePersonalInvite(user.id, id, generatedByUserId);
+
+  return issueInviteBatch(user.id, quantidade, generatedByUserId);
+}
+
 export async function regenerateInvite(
   id: string,
   generatedByUserId?: string | null,

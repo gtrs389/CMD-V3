@@ -559,6 +559,18 @@ export const apiKeyCreateSchema = z.object({
 /** Chave de acesso do Time DEMO: so o valor, e nada mais. */
 export const demoAccessSchema = z.object({ enabled: z.boolean() });
 
+/**
+ * Quantidade de links de um lote (migration 043).
+ *
+ * Sem teto de produto: quem pede e o painel do ADMIN, e nao cabe ao sistema
+ * dizer quantas pessoas uma equipe vai convidar hoje. O numero grande existe
+ * so para o corpo da requisicao ter um fim — e um limite de maquina, nao uma
+ * regra de negocio.
+ */
+export const inviteBatchSchema = z.object({
+  quantidade: z.number().int().min(1, 'Gere ao menos um link.').max(10_000),
+});
+
 /** Confirmacao de dados pela FonteData (migration 041): so o valor. */
 export const verificationToggleSchema = z.object({ enabled: z.boolean() });
 

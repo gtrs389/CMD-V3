@@ -86,6 +86,32 @@ export function createHttpClientRepository(): ClientRepository {
  * Separada de `clientRepository` porque a interface do repositorio devolve
  * o time, e aqui interessa tambem o endereco.
  */
+/** Um link de cadastro recem gerado. O endereco vem UMA vez do servidor. */
+export interface BatchInviteLink {
+  token: string;
+  url: string | null;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+/**
+ * Gera varios links de cadastro do time de uma vez (migration 043).
+ *
+ * Os que ja existiam continuam valendo: o lote nao revoga nada. Cada
+ * endereco volta uma unica vez — o banco guarda apenas o hash.
+ */
+export async function issueTeamInviteBatch(
+  id: string,
+  quantidade: number,
+): Promise<BatchInviteLink[]> {
+  const { links } = await api<{ links: BatchInviteLink[] }>(
+    `/api/clients/${id}/invite/lote`,
+    { method: 'POST', body: { quantidade } },
+  );
+  notifyDataChanged();
+  return links;
+}
+
 export async function regenerateTeamInvite(
   id: string,
 ): Promise<{ client: Client; url: string | null }> {

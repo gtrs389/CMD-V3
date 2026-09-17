@@ -25,6 +25,7 @@ export {
   type InviteTituloLookup,
 } from './http/public';
 export { regenerateTeamInvite } from './http/client.repository';
+export { issueTeamInviteBatch, type BatchInviteLink } from './http/client.repository';
 export {
   fetchSurvey,
   updateSurvey,
