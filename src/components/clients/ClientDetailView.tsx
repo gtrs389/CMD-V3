@@ -9,6 +9,7 @@ import {
   RefreshCw,
   FileText,
   Image as ImageIcon,
+  Layers,
   LayoutList,
   MapPin,
   Pencil,
@@ -33,6 +34,7 @@ import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
 import { DemoAccessSwitch } from './DemoAccessSwitch';
+import { BatchLinksModal } from './BatchLinksModal';
 import { DemoDataDialog } from './DemoDataDialog';
 import { DemoRecruitersModal } from './DemoRecruitersModal';
 import { GenerateClientInviteButton } from './GenerateClientInviteButton';
@@ -75,6 +77,8 @@ export function ClientDetailView({
   /** Refazer os dados gerados: so aparece em Time DEMO, so para o ADMIN. */
   const [refazendo, setRefazendo] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
+  /** Links de cadastro em lote: vários de uma vez, para distribuir. */
+  const [lote, setLote] = useState(false);
   /**
    * Aba pedida pelo endereco, depois que a pagina ja esta aberta.
    *
@@ -311,6 +315,17 @@ export function ClientDetailView({
               }
             />
 
+            {podeGerenciarConvite ? (
+              <button
+                type="button"
+                onClick={() => setLote(true)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill border border-line bg-surface px-4 text-sm font-medium whitespace-nowrap text-accent-600 shadow-card transition-colors hover:bg-accent-50"
+              >
+                <Layers aria-hidden="true" className="size-4" />
+                Gerar em lote
+              </button>
+            ) : null}
+
             {podeEditar ? (
               <button
                 type="button"
@@ -429,6 +444,8 @@ export function ClientDetailView({
           <FormsPanel client={client} members={memberList} onChanged={reload} />
         </TabPanel>
       ) : null}
+
+      <BatchLinksModal open={lote} client={client} onClose={() => setLote(false)} />
 
       <InviteLinkModal
         open={invite}

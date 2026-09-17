@@ -155,11 +155,61 @@ export function inviteFinished(invite: ResolvedInvite | null): boolean {
   return invite.state === 'CONSUMED' || invite.state === 'EXPIRED' || invite.state === 'REVOKED';
 }
 
+/**
+ * O link ATUAL de um dono: o mais recente.
+ *
+ * Desde a migration 043 um dono pode ter varios links valendo ao mesmo tempo
+ * (o lote). O "meu link" do painel e o ultimo gerado — que era exatamente o
+ * que acontecia quando so existia um.
+ */
 export async function findInviteByUser(userId: string): Promise<InviteRow | null> {
   return selectOne<InviteRow>(TABLES.invites, {
     select: INVITE_COLUMNS,
     filters: { user_id: `eq.${userId}` },
+    order: 'issued_at.desc,generation.desc',
   });
+}
+
+export interface IssuedBatchInvite {
+  inviteId: string;
+  token: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+/**
+ * Gera VARIOS links do mesmo dono de uma vez, sem revogar os que ja existem.
+ *
+ * Cada link continua de uso unico: um por pessoa. E isso que permite mandar
+ * o cadastro para dez pessoas em uma tacada, em vez de gerar, enviar e
+ * esperar cada uma se cadastrar para gerar o proximo.
+ *
+ * Os tokens nascem AQUI, no servidor, com a mesma entropia do link de
+ * sempre; o banco confere a forma de cada um, decide o prazo pelo perfil do
+ * dono e registra a geracao no historico, um evento por link.
+ */
+export async function issueInviteBatch(
+  userId: string,
+  quantidade: number,
+  generatedByUserId?: string | null,
+): Promise<IssuedBatchInvite[]> {
+  const tokens = Array.from({ length: quantidade }, () => createInviteToken());
+
+  const rows = await callFunction<
+    { invite_id: string; token: string; issued_at: string; expires_at: string }[]
+  >('cmd_invite_issue_lote', {
+    p_user_id: userId,
+    p_tokens: tokens,
+    p_token_hashes: tokens.map((token) => hashToken(token)),
+    p_generated_by: generatedByUserId ?? null,
+  });
+
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    inviteId: row.invite_id,
+    token: row.token,
+    issuedAt: row.issued_at,
+    expiresAt: row.expires_at,
+  }));
 }
 
 /**
