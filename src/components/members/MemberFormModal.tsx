@@ -19,6 +19,7 @@ import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 import { PublicFormBody } from '@/components/public/PublicFormBody';
 import { focusFirstInvalid } from '@/components/public/PublicFormShell';
 import { buildInviteSections } from '@/components/public/invite-sections';
+import { ChatFillBox } from './ChatFillBox';
 
 interface MemberFormModalProps {
   open: boolean;
@@ -274,6 +275,17 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           />
         </div>
       </div>
+
+      {/* So no cadastro novo: corrigir uma ficha existente e mexer em um
+          campo, nao reescrever a pessoa inteira. */}
+      {!member ? (
+        <div className="mt-3">
+          <ChatFillBox
+            config={client.form}
+            setValue={(fieldId, valor) => form.setValue(fieldId, valor)}
+          />
+        </div>
+      ) : null}
 
       <PublicFormBody
         config={client.form}
