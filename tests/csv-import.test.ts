@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   EXEMPLO_CSV,
   MODELO_SEPARADOR,
+  MUNICIPIO_PADRAO,
+  UF_PADRAO,
   lerPlanilha,
   problemasDaLinha,
+  separarEndereco,
 } from '@/lib/domain/csv-import';
 
 /**
@@ -14,7 +17,8 @@ import {
  * derruba as outras.
  */
 
-const CABECALHO = 'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral';
+const CABECALHO =
+  'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral,Endereço';
 
 describe('leitura da planilha', () => {
   it('lê as cinco colunas, na ordem que vierem', () => {
@@ -35,21 +39,20 @@ describe('leitura da planilha', () => {
     });
   });
 
-  it('o endereço NÃO vem da planilha: ele é escolhido na conferência', () => {
-    // Endereço é a cadeia Estado -> Município -> Bairro -> Rua, e cada passo
-    // só existe dentro do anterior. Um texto solto não se encaixa nela.
-    const { linhas, ignoradas } = lerPlanilha(
-      [`${CABECALHO},Endereço`, 'Ana Lima,82999990002,,1,2,Rua das Flores 100'].join('\n'),
+  it('o endereço vem em uma coluna só e chega separado em bairro e rua', () => {
+    const { linhas } = lerPlanilha(
+      [CABECALHO, 'Ana Lima,82999990002,,1,2,"Rua Brasil Novo, Nº 269 – Jardim Brasil"'].join('\n'),
     );
 
-    expect(linhas).toHaveLength(1);
-    expect(linhas[0]).not.toHaveProperty('address');
-    expect(ignoradas).toEqual(['Endereço']);
+    expect(linhas[0].street).toBe('Rua Brasil Novo, Nº 269');
+    expect(linhas[0].district).toBe('Jardim Brasil');
+    // O texto original fica guardado, para quem for conferir.
+    expect(linhas[0].address).toBe('Rua Brasil Novo, Nº 269 – Jardim Brasil');
   });
 
   it('normaliza como a ficha normaliza', () => {
     const { linhas } = lerPlanilha(
-      [CABECALHO, 'Maria da Silva,(82) 99999-0001,1000 0000 2720,044,0003'].join('\n'),
+      [CABECALHO, 'Maria da Silva,(82) 99999-0001,1000 0000 2720,044,0003,'].join('\n'),
     );
 
     // Telefone sem máscara, título só com dígitos, e o zero à frente fora:
@@ -62,14 +65,16 @@ describe('leitura da planilha', () => {
 
   it('aceita aspas e vírgula dentro do campo', () => {
     const { linhas } = lerPlanilha(
-      [CABECALHO, '"Lima, Ana Beatriz",82999990002,,1,2'].join('\n'),
+      [CABECALHO, '"Lima, Ana Beatriz",82999990002,,1,2,'].join('\n'),
     );
     expect(linhas[0].name).toBe('Lima, Ana Beatriz');
   });
 
   it('coluna a mais é ignorada, e a planilha diz quais', () => {
     const { linhas, ignoradas } = lerPlanilha(
-      [`${CABECALHO},CPF,Observações`, 'Ana Lima,82999990002,,1,2,12345678901,anotação'].join('\n'),
+      [`${CABECALHO},CPF,Observações`, 'Ana Lima,82999990002,,1,2,,12345678901,anotação'].join(
+        '\n',
+      ),
     );
 
     expect(linhas).toHaveLength(1);
@@ -78,7 +83,9 @@ describe('leitura da planilha', () => {
 
   it('linha vazia é pulada sem alarde', () => {
     const { linhas, vazias } = lerPlanilha(
-      [CABECALHO, 'Ana Lima,82999990002,,1,2', ',,,,', '', 'Bruno Sá,82988887777,,3,4'].join('\n'),
+      [CABECALHO, 'Ana Lima,82999990002,,1,2,', ',,,,,', '', 'Bruno Sá,82988887777,,3,4,'].join(
+        '\n',
+      ),
     );
 
     expect(linhas).toHaveLength(2);
@@ -88,7 +95,7 @@ describe('leitura da planilha', () => {
 
   it('guarda o número da linha da planilha, para quem for corrigir achar', () => {
     const { linhas } = lerPlanilha(
-      [CABECALHO, 'Ana Lima,82999990002,,1,2', 'Bruno Sá,82988887777,,3,4'].join('\n'),
+      [CABECALHO, 'Ana Lima,82999990002,,1,2,', 'Bruno Sá,82988887777,,3,4,'].join('\n'),
     );
     expect(linhas.map((linha) => linha.linha)).toEqual([2, 3]);
   });
@@ -115,6 +122,9 @@ describe('o que impede uma linha de ser cadastrada', () => {
       voterId: '',
       zone: '',
       section: '',
+      district: '',
+      street: '',
+      address: '',
       ...extra,
     };
   }
@@ -139,9 +149,9 @@ describe('planilha de exemplo', () => {
     expect(MODELO_SEPARADOR).toBe(';');
 
     const [cabecalho] = EXEMPLO_CSV.split(/\r?\n/);
-    expect(cabecalho.split(';')).toHaveLength(5);
+    expect(cabecalho.split(';')).toHaveLength(6);
     expect(cabecalho).toBe(
-      'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral',
+      'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
     );
   });
 
@@ -149,7 +159,7 @@ describe('planilha de exemplo', () => {
     const { linhas, ignoradas } = lerPlanilha(EXEMPLO_CSV);
 
     expect(ignoradas).toEqual([]);
-    expect(linhas).toHaveLength(2);
+    expect(linhas).toHaveLength(3);
     expect(linhas.every((item) => problemasDaLinha(item).length === 0)).toBe(true);
     expect(linhas[0].voterId).toBe('100000002720');
   });
@@ -177,5 +187,103 @@ describe('arquivos que o Excel exporta', () => {
     expect(comPontoEVirgula.name).toBe('Ana Lima');
     expect(comVirgula).toMatchObject({ name: 'Ana Lima', phone: '82999990002' });
     expect(comTab).toMatchObject({ name: 'Ana Lima', phone: '82999990002' });
+  });
+});
+
+describe('endereço escrito em uma linha só', () => {
+  /**
+   * Os casos são os da planilha REAL que chegou: é ela que decide se a
+   * separação presta, e não um exemplo inventado.
+   */
+  const casos: [string, string, string][] = [
+    // texto da planilha ................................. bairro ............ rua
+    ['Rua Brasil Novo, Nº 269 – Jardim Brasil', 'Jardim Brasil', 'Rua Brasil Novo, Nº 269'],
+    ['Rua Leonardo Pinto, Nº 201 – Jardim Brasil', 'Jardim Brasil', 'Rua Leonardo Pinto, Nº 201'],
+    ['Rua Vila Esperança, Nº 18 – Bairro Vila Maria', 'Vila Maria', 'Rua Vila Esperança, Nº 18'],
+    [
+      'Rua Getúlio Vargas, Nº 572 – Bairro São Cristóvão',
+      'São Cristóvão',
+      'Rua Getúlio Vargas, Nº 572',
+    ],
+    ['Rua Ezequiel Pereira, S/N – Jardim Brasil', 'Jardim Brasil', 'Rua Ezequiel Pereira, S/N'],
+    ['Aldeia, Fazenda Canto', 'Aldeia', 'Fazenda Canto'],
+    ['Aldeia, Campina de Baixo', 'Aldeia', 'Campina de Baixo'],
+    ['Conjunto Brivaldo Medeiros, QJ Nº 11', 'Conjunto Brivaldo Medeiros', 'QJ Nº 11'],
+    ['Conjunto Brivaldo Medeiros, QJ Nº 08', 'Conjunto Brivaldo Medeiros', 'QJ Nº 08'],
+    [
+      'Alto do Cruzeiro, Rua Santa Isabel, Nº 7',
+      'Alto do Cruzeiro',
+      'Rua Santa Isabel, Nº 7',
+    ],
+    ['Alto do Cruzeiro, Rua Boa Vista, Nº 94', 'Alto do Cruzeiro', 'Rua Boa Vista, Nº 94'],
+  ];
+
+  it.each(casos)('%s', (texto, bairro, rua) => {
+    expect(separarEndereco(texto)).toMatchObject({ district: bairro, street: rua });
+  });
+
+  it('rua com número não vira bairro pela vírgula do número', () => {
+    // "Rua Padre Cícero, Nº 14" é uma rua com número, e não uma rua em um
+    // bairro chamado "Nº 14".
+    expect(separarEndereco('Rua Padre Cícero, Nº 14')).toMatchObject({
+      district: '',
+      street: 'Rua Padre Cícero, Nº 14',
+    });
+    expect(separarEndereco('Rua Boa Vista, Nº 163')).toMatchObject({
+      district: '',
+      street: 'Rua Boa Vista, Nº 163',
+    });
+  });
+
+  it('sem certeza, o texto inteiro fica na rua', () => {
+    // Melhor um campo com tudo legível do que dois repartidos no palpite
+    // errado.
+    expect(separarEndereco('Perto da igreja')).toMatchObject({
+      district: '',
+      street: 'Perto da igreja',
+    });
+  });
+
+  it('endereço vazio não inventa nada', () => {
+    expect(separarEndereco('')).toEqual({ district: '', street: '', address: '' });
+  });
+});
+
+describe('estado e município', () => {
+  it('toda planilha é de Alagoas, de Palmeira dos Índios', () => {
+    expect(UF_PADRAO).toBe('AL');
+    expect(MUNICIPIO_PADRAO).toBe('Palmeira dos Índios');
+  });
+});
+
+describe('telefone com dígito a mais', () => {
+  it('não é cortado em silêncio: fica marcado para correção', () => {
+    // "829999493112" tem doze dígitos. Cortar o último daria um telefone que
+    // PARECE certo e liga para outra pessoa — e ninguém descobriria.
+    const { linhas } = lerPlanilha(
+      [CABECALHO, 'Valéria dos Santos Neves,829999493112,,10,326,'].join('\n'),
+    );
+
+    expect(linhas[0].phone).toBe('829999493112');
+    expect(problemasDaLinha(linhas[0])).toContain('telefone');
+  });
+
+  it('código do país não é dígito a mais', () => {
+    // "5582..." é o mesmo número escrito para fora do Brasil.
+    const { linhas } = lerPlanilha(
+      [CABECALHO, 'Ana Lima,5582999990002,,1,2,'].join('\n'),
+    );
+
+    expect(linhas[0].phone).toBe('82999990002');
+    expect(problemasDaLinha(linhas[0])).toEqual([]);
+  });
+
+  it('telefone de dez e de onze dígitos passa como sempre', () => {
+    const { linhas } = lerPlanilha(
+      [CABECALHO, 'Ana Lima,8299280204,,1,2,', 'Bruno Sá,82999871807,,1,2,'].join('\n'),
+    );
+
+    expect(linhas.map((l) => l.phone)).toEqual(['8299280204', '82999871807']);
+    expect(linhas.every((l) => problemasDaLinha(l).length === 0)).toBe(true);
   });
 });

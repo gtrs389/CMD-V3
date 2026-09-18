@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import {
   EXEMPLO_CSV,
+  MUNICIPIO_PADRAO,
+  UF_PADRAO,
   lerPlanilha,
   problemasDaLinha,
   type LinhaImportada,
@@ -108,7 +110,22 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
     setLinhas(leitura.linhas);
     setSituacoes({});
-    setEnderecos({});
+    // Toda planilha e de Alagoas, de Palmeira dos Indios: os dois entram
+    // prontos, e o bairro e a rua vem separados do texto da coluna
+    // Endereco. Tudo continua editavel aqui.
+    setEnderecos(
+      Object.fromEntries(
+        leitura.linhas.map((linha) => [
+          linha.id,
+          {
+            state: UF_PADRAO,
+            city: MUNICIPIO_PADRAO,
+            district: linha.district,
+            street: linha.street,
+          },
+        ]),
+      ),
+    );
     setIgnoradas(leitura.ignoradas);
     setArquivo(file.name);
     setProgresso(0);
@@ -289,8 +306,8 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
               Uma coluna para cada informação: <strong>Nome completo</strong>,{' '}
               <strong>Telefone</strong>, <strong>Título de eleitor</strong>,{' '}
-              <strong>Zona eleitoral</strong> e <strong>Seção eleitoral</strong>. A ordem não
-              importa, e coluna a mais é ignorada.
+              <strong>Zona eleitoral</strong>, <strong>Seção eleitoral</strong> e{' '}
+              <strong>Endereço</strong>. A ordem não importa, e coluna a mais é ignorada.
             </p>
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
               O modelo abre direto no Excel, já em colunas. Exportado de outro programa, serve
@@ -462,9 +479,10 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
             <p className="text-[0.8125rem] leading-relaxed text-ink-500">
               Corrija o que precisar aqui mesmo — nada foi gravado ainda. Nome e telefone são
-              obrigatórios; título, zona, seção e endereço podem ficar em branco. O endereço não
-              vem da planilha: escolha aqui, nas mesmas listas do formulário. Quem já foi
-              cadastrado fica em verde e não é cadastrado de novo.
+              obrigatórios; título, zona, seção e endereço podem ficar em branco. O endereço da
+              planilha chega separado em bairro e rua, com <strong>Alagoas</strong> e{' '}
+              <strong>Palmeira dos Índios</strong> já preenchidos. Quem já foi cadastrado fica em
+              verde e não é cadastrado de novo.
             </p>
           </>
         )}

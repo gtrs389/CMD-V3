@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { CustomField } from '@/lib/types';
 import type { DynamicFormValues, DynamicValue } from '@/lib/validation/dynamic-form';
 import { DynamicFieldInput } from '@/components/form-renderer/DynamicFieldInput';
-import { LocationProvider } from '@/components/form-renderer/location-context';
+import { LocationProvider, useLocationChain } from '@/components/form-renderer/location-context';
 
 export interface EnderecoDaLinha {
   state: string;
@@ -117,8 +117,15 @@ export function ImportAddressFields({ id, endereco, onChange, disabled }: Import
     else if (fieldId === `${id}-street`) onChange({ ...endereco, street: texto });
   }
 
+  // Bairro e rua que vieram da planilha sao texto de gente: "Conjunto
+  // Brivaldo Medeiros", "QJ Nº 11", "Fazenda Canto". Quase nenhum deles esta
+  // na lista oficial de bairros e ruas, e um campo de lista deixaria o valor
+  // que a planilha trouxe invisivel — como se nao tivesse vindo.
+  const daPlanilha = Boolean(endereco.district || endereco.street);
+
   return (
     <LocationProvider fields={fields} values={values} setValue={setValue}>
+      {daPlanilha ? <AbrirParaDigitar /> : null}
       <div className="sm:col-span-2">
         <p className="text-sm font-semibold text-ink-900">Endereço</p>
         <p className="mt-0.5 mb-2 text-[0.8125rem] text-ink-500">
@@ -140,4 +147,25 @@ export function ImportAddressFields({ id, endereco, onChange, disabled }: Import
       </div>
     </LocationProvider>
   );
+}
+
+/**
+ * Deixa bairro e rua abertos para digitar.
+ *
+ * Vive DENTRO do provedor porque e de la que vem `setManual` — e roda uma
+ * vez, na montagem: depois disso quem manda e quem esta conferindo, que pode
+ * voltar para a lista pelo botao do proprio campo.
+ */
+function AbrirParaDigitar() {
+  const chain = useLocationChain();
+  const aplicado = useRef(false);
+
+  useEffect(() => {
+    if (aplicado.current || !chain) return;
+    aplicado.current = true;
+    chain.setManual('district', true);
+    chain.setManual('street', true);
+  }, [chain]);
+
+  return null;
 }
