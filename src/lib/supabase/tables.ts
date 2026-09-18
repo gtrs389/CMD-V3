@@ -256,6 +256,12 @@ export interface SurveyResponseRow {
   id: string;
   client_id: string;
   invite_id: string | null;
+  /**
+   * Integrante criado junto com esta resposta (migration 044), quando o
+   * Formulario 2 foi preenchido no painel pelo proprio lider. Nulo em toda
+   * resposta que chegou por link: ali nao existe integrante.
+   */
+  member_id: string | null;
   sender_user_id: string | null;
   sender_name: string | null;
   sender_role: 'ADMIN' | 'CANDIDATE' | 'EQUIPE' | null;

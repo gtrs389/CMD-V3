@@ -31,6 +31,7 @@ export {
   updateSurvey,
   fetchSurveyResponses,
   fetchOwnSurvey,
+  submitOwnSurveyAnswer,
   generateSurveyLink,
   fetchPublicSurvey,
   submitSurvey,

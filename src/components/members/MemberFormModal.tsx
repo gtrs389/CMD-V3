@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import { Send } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Send, UserPlus } from 'lucide-react';
 import type { Client, Member } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
 import { NetworkError } from '@/lib/repositories';
@@ -49,6 +49,16 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
   const toast = useToast();
   const form = useDynamicForm(client.form);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  /**
+   * Quantos ja foram cadastrados sem fechar esta tela.
+   *
+   * Cadastrar uma pessoa por vez — abrir, preencher, salvar, abrir de novo —
+   * e o que torna cansativo registrar a lista inteira de um mutirao. Aqui a
+   * ficha volta em branco e a contagem diz o que ja entrou, para quem esta
+   * digitando nao perder a conta.
+   */
+  const [cadastrados, setCadastrados] = useState(0);
 
   const sections = useMemo(() => buildInviteSections(client.form), [client.form]);
   const percent = completionPercent(client.form, form.values);
@@ -61,12 +71,32 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
     reset(member ? valuesFromMember(client.form, member) : undefined);
   }, [open, member, client.form, reset]);
 
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    void salvar();
+  /**
+   * Abriu a tela: a contagem recomeca.
+   *
+   * Durante a renderizacao, comparando com o ultimo valor visto — e nao em
+   * um efeito: assim a primeira pintura ja sai com a contagem certa, sem um
+   * quadro intermediario mostrando o total da vez anterior.
+   */
+  const [estavaAberto, setEstavaAberto] = useState(open);
+  if (open !== estavaAberto) {
+    setEstavaAberto(open);
+    if (open) setCadastrados(0);
   }
 
-  async function salvar() {
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    void salvar(false);
+  }
+
+  /**
+   * `continuar` decide o que acontece DEPOIS de gravar: fechar a tela, ou
+   * deixa-la aberta com a ficha em branco para a proxima pessoa. Gravar e
+   * exatamente a mesma coisa nos dois casos.
+   */
+  async function salvar(continuar: boolean) {
+    if (salvando) return;
+
     const values = form.validate();
     if (!values) {
       toast.error('Revise os campos destacados.');
@@ -75,6 +105,7 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
     }
 
     const payload = toSubmission(client.form, values);
+    setSalvando(true);
 
     try {
       if (member) {
@@ -116,6 +147,26 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           consentAt: payload.consentAt,
           source: 'admin',
         });
+
+        if (continuar) {
+          const total = cadastrados + 1;
+          setCadastrados(total);
+          // Ficha em branco para a proxima pessoa. Nada do cadastro anterior
+          // fica para tras: repetir um telefone seria recusado no servidor,
+          // e repetir um nome passaria despercebido.
+          reset(undefined);
+          toast.success(
+            total === 1
+              ? 'Integrante cadastrado. Pode preencher o próximo.'
+              : `${total} integrantes cadastrados. Pode preencher o próximo.`,
+          );
+          // De volta ao topo: a proxima ficha comeca do primeiro campo.
+          window.requestAnimationFrame(() =>
+            formRef.current?.scrollIntoView({ block: 'start' }),
+          );
+          return;
+        }
+
         toast.success('Integrante cadastrado.');
       }
       onClose();
@@ -129,6 +180,8 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
           ? error.message
           : 'Não foi possível salvar o integrante.',
       );
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -155,18 +208,44 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
               faltam === 0 ? 'text-success-600' : 'text-ink-500',
             )}
           >
-            {faltam === 0
-              ? 'Tudo pronto para salvar.'
-              : `Ainda ${faltam === 1 ? 'falta' : 'faltam'} ${faltam} ${
-                  faltam === 1 ? 'campo obrigatório' : 'campos obrigatórios'
-                }.`}
+            {/* Enquanto se cadastra um atras do outro, o que importa saber e
+                quantos ja entraram: a contagem toma a frente do aviso de
+                campos, que volta assim que a ficha nova comeca a ser
+                preenchida. */}
+            {cadastrados > 0 && faltam > 0 && percent === 0
+              ? `${cadastrados} ${cadastrados === 1 ? 'cadastrado' : 'cadastrados'} nesta tela. Preencha o próximo.`
+              : faltam === 0
+                ? 'Tudo pronto para salvar.'
+                : `Ainda ${faltam === 1 ? 'falta' : 'faltam'} ${faltam} ${
+                    faltam === 1 ? 'campo obrigatório' : 'campos obrigatórios'
+                  }.`}
           </p>
 
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
+          <Button variant="secondary" onClick={onClose} disabled={salvando}>
+            {cadastrados > 0 ? 'Concluir' : 'Cancelar'}
           </Button>
-          <Button type="submit" form="cadastro-painel" variant="accent">
-            <Send aria-hidden="true" className="size-4" />
+
+          {/* So no cadastro: editar uma ficha existente nao tem "proximo". */}
+          {!member ? (
+            <Button
+              variant="secondary"
+              onClick={() => void salvar(true)}
+              loading={salvando}
+              disabled={salvando}
+            >
+              {!salvando ? <UserPlus aria-hidden="true" className="size-4" /> : null}
+              Cadastrar e adicionar outro
+            </Button>
+          ) : null}
+
+          <Button
+            type="submit"
+            form="cadastro-painel"
+            variant="accent"
+            loading={salvando}
+            disabled={salvando}
+          >
+            {!salvando ? <Send aria-hidden="true" className="size-4" /> : null}
             {member ? 'Salvar alterações' : 'Cadastrar'}
           </Button>
         </>

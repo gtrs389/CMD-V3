@@ -152,7 +152,16 @@ export function TeamDetailView() {
       </TabPanel>
 
       <TabPanel id="equipe" active={tab}>
-        <MembersPanel client={client} members={members} loading={false} />
+        {/* O formulario do lider e o Formulario 2: e ele que o lider envia
+            adiante, e e ele que deve aparecer quando a pessoa esta na frente
+            dele. Quem responde nao vira integrante — a resposta aparece na
+            aba "Formulário 2", como qualquer outra. */}
+        <MembersPanel
+          client={client}
+          members={members}
+          loading={false}
+          addForm="formulario-2"
+        />
       </TabPanel>
 
       {/* Sem `clientId`: a rota resolve o time pela sessao, e devolve apenas

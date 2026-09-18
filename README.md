@@ -183,6 +183,7 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/clients/[id]/form` | ADMIN | Atualiza campos, privacidade e textos |
 | `/api/clients/[id]/invite` | ADMIN | Ativa/desativa e renova o convite |
 | `/api/clients/[id]/invite/lote` | ADMIN | Gera vários links de cadastro de uma vez |
+| `/api/questionario/resposta` | EQUIPE / time | Cadastra um integrante pelo Formulário 2, no painel |
 | `/api/clients/[id]/verificacao` | ADMIN geral | Liga e desliga a confirmação de dados do time |
 | `/api/clients/[id]/members` | ADMIN | Equipe de um cliente |
 | `/api/members` | ADMIN | Lista e cadastra integrantes pelo painel |

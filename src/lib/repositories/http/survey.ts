@@ -61,6 +61,31 @@ export async function fetchOwnSurvey(): Promise<OwnSurvey> {
 }
 
 /**
+ * Cadastro pelo Formulario 2, preenchido DENTRO do painel pelo lider.
+ *
+ * Mesmo formulario do link, preenchido com a pessoa na frente — e, por isso,
+ * a pessoa entra na EQUIPE de quem cadastrou (migration 044). O que e campo
+ * padrao vira o integrante; `answers` sao as perguntas proprias do
+ * Formulario 2, que continuam na tabela de respostas.
+ *
+ * O time e o responsavel saem da SESSAO, no servidor: nada aqui decide para
+ * onde o cadastro vai nem de quem ele e.
+ */
+export async function submitOwnSurveyAnswer(
+  input: Record<string, unknown> & {
+    name: string;
+    phone: string;
+    answers: { fieldId: string; value: FieldValue }[];
+  },
+): Promise<void> {
+  await api<{ member: unknown }>('/api/questionario/resposta', {
+    method: 'POST',
+    body: input,
+  });
+  notifyDataChanged();
+}
+
+/**
  * Gera o link de uso unico do questionario.
  *
  * Sem `clientId`, o link e o do PROPRIO usuario. Com `clientId`, e o link do

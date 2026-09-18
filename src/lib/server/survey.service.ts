@@ -27,6 +27,7 @@ import {
   callFunction,
   deleteRows,
   inFilter,
+  insertOne,
   insertRows,
   selectOne,
   selectRows,
@@ -542,6 +543,94 @@ export async function submitSurveyAnswer(
 
   const row = Array.isArray(rows) ? rows[0] : (rows as unknown as AnswerRow);
   return row?.outcome ?? 'GONE';
+}
+
+/**
+ * Resposta preenchida DENTRO do painel, pelo proprio lider.
+ *
+ * E o Formulario 2 sem o link: em vez de mandar o endereco e esperar a
+ * pessoa responder, o lider preenche ali, com ela na frente. O que fica
+ * gravado e exatamente uma resposta do Formulario 2 — as mesmas perguntas,
+ * a mesma tabela, a mesma lista — e nao um integrante: quem responde o
+ * Formulario 2 nunca vira integrante nem recebe acesso, e preencher a mao
+ * nao muda isso.
+ *
+ * Sem `invite_id`, porque nao houve link: o que identifica a origem e o
+ * remetente, que e a sessao de quem preencheu. O time tambem vem da sessao —
+ * nenhum identificador do corpo da requisicao decide para onde a resposta
+ * vai.
+ *
+ * Ela nasce ligada ao INTEGRANTE que o mesmo cadastro criou (migration 044).
+ * As perguntas proprias do Formulario 2 ficam aqui, onde sempre estiveram; o
+ * que e campo padrao virou coluna do integrante, e e por isso que a pessoa
+ * aparece na equipe de quem a cadastrou.
+ */
+export async function submitSurveyAnswerFromPanel(
+  sender: { clientId: string; userId: string; name: string; role: string },
+  input: SurveySubmission,
+  /**
+   * Integrante criado junto com esta resposta (migration 044).
+   *
+   * E o que faz a pessoa aparecer na equipe de quem a cadastrou. Nulo nunca
+   * acontece por aqui hoje; o parametro existe porque a resposta por LINK
+   * continua sem integrante, e as duas passam pela mesma gravacao.
+   */
+  memberId?: string | null,
+): Promise<{ id: string }> {
+  const perguntas = await selectRows<SurveyFieldRow>(TABLES.surveyFields, {
+    select: FIELD_COLUMNS,
+    filters: { client_id: `eq.${sender.clientId}`, enabled: 'is.true' },
+    order: 'position.asc',
+  });
+
+  const porId = new Map(perguntas.map((field) => [field.id, field]));
+  const valores: {
+    field_id: string;
+    field_label: string;
+    field_type: string;
+    position: number;
+    value: SurveyAnswer['value'];
+  }[] = [];
+
+  for (const answer of input.answers) {
+    const field = porId.get(answer.fieldId);
+    if (!field) continue;
+
+    valores.push({
+      field_id: field.id,
+      // Copia do momento do envio: renomear a pergunta depois nao muda o
+      // sentido do que ja foi respondido.
+      field_label: field.label,
+      field_type: field.type,
+      position: valores.length,
+      value: await gravavel(field, answer.value),
+    });
+  }
+
+  const resposta = await insertOne<{ id: string }>(
+    TABLES.surveyResponses,
+    {
+      client_id: sender.clientId,
+      invite_id: null,
+      member_id: memberId ?? null,
+      sender_user_id: sender.userId,
+      sender_name: sender.name,
+      sender_role: sender.role,
+      name: input.name.trim(),
+      phone: normalizePhone(input.phone),
+    },
+    'id',
+  );
+
+  if (valores.length > 0) {
+    await insertRows(
+      TABLES.surveyResponseValues,
+      valores.map((valor) => ({ ...valor, response_id: resposta.id })),
+      'id',
+    );
+  }
+
+  return resposta;
 }
 
 /**

@@ -26,10 +26,21 @@ import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/components/layout/SessionProvider';
 import { MemberDetailModal } from './MemberDetailModal';
 import { MemberFormModal } from './MemberFormModal';
+import { SurveyAnswerModal } from '@/components/survey/SurveyAnswerModal';
 import { RecruitedBy } from './RecruitedBy';
 
 interface MembersPanelProps {
   client: Client;
+  /**
+   * Formulario que o botao de adicionar abre.
+   *
+   *   'integrante'   a ficha do Formulario 1 — o cadastro de integrante, com
+   *                  acesso ao painel. E o que a pagina do TIME usa.
+   *   'formulario-2' as perguntas que ESTE lider envia adiante. E o que a
+   *                  pagina do integrante usa: o Formulario 2 e o formulario
+   *                  dele, e quem responde nao vira integrante.
+   */
+  addForm?: 'integrante' | 'formulario-2';
   members: Member[];
   loading: boolean;
   /**
@@ -59,12 +70,19 @@ export function MembersPanel({
   loading,
   openMemberId = null,
   onDeepLinkClose,
+  addForm = 'integrante',
 }: MembersPanelProps) {
   const toast = useToast();
   // Perfil somente leitura nao recebe as acoes. O servidor recusa do mesmo
   // jeito: esconder o botao nunca e a protecao.
   const { can, user } = useSession();
   const podeCriar = can('member.create');
+  /**
+   * Os dois formularios cadastram INTEGRANTE — o que muda sao as perguntas.
+   * Na pagina do lider e o Formulario 2, e a pessoa entra na equipe dele
+   * igual a quem se cadastra pelo link (migration 044).
+   */
+  const rotuloAdicionar = 'Adicionar integrante';
   const podeEditar = can('member.update');
   const podeExcluir = can('member.delete');
   // O integrante da equipe ve apenas nome, foto e telefone: nada de e-mail,
@@ -149,22 +167,30 @@ export function MembersPanel({
         <EmptyState
           icon={<Users className="size-6" />}
           title="Nenhum integrante cadastrado"
-          description="Compartilhe o link de convite para receber cadastros ou adicione um integrante manualmente."
+          description={
+            addForm === 'formulario-2'
+              ? 'Compartilhe o seu link para receber cadastros, ou preencha o Formulário 2 com a pessoa na frente de você.'
+              : 'Compartilhe o link de convite para receber cadastros ou adicione um integrante manualmente.'
+          }
           action={
             podeCriar ? (
               <Button onClick={openCreate}>
                 <UserPlus aria-hidden="true" className="size-4" />
-                Adicionar integrante
+                {rotuloAdicionar}
               </Button>
             ) : undefined
           }
         />
-        <MemberFormModal
-          open={formOpen}
-          client={client}
-          member={null}
-          onClose={() => setFormOpen(false)}
-        />
+        {addForm === 'formulario-2' ? (
+          <SurveyAnswerModal open={formOpen} onClose={() => setFormOpen(false)} />
+        ) : (
+          <MemberFormModal
+            open={formOpen}
+            client={client}
+            member={null}
+            onClose={() => setFormOpen(false)}
+          />
+        )}
       </>
     );
   }
@@ -204,7 +230,9 @@ export function MembersPanel({
             {filtered.length} de {ordered.length}
           </p>
           {podeCriar ? (
-            <Button onClick={openCreate}>
+            // O rotulo curto cabe na barra; o completo fica no titulo e na
+            // leitura por tecnologia assistiva, dizendo QUAL formulario abre.
+            <Button onClick={openCreate} title={rotuloAdicionar} aria-label={rotuloAdicionar}>
               <UserPlus aria-hidden="true" className="size-4" />
               Adicionar
             </Button>
@@ -391,15 +419,22 @@ export function MembersPanel({
         onEdit={openEdit}
       />
 
-      <MemberFormModal
-        open={formOpen}
-        client={client}
-        member={editing}
-        onClose={() => {
-          setFormOpen(false);
-          setEditing(null);
-        }}
-      />
+      {/* Adicionar abre o formulario que a pagina escolheu; EDITAR e sempre a
+          ficha do integrante, porque e uma ficha de integrante que esta
+          sendo corrigida. */}
+      {addForm === 'formulario-2' && !editing ? (
+        <SurveyAnswerModal open={formOpen} onClose={() => setFormOpen(false)} />
+      ) : (
+        <MemberFormModal
+          open={formOpen}
+          client={client}
+          member={editing}
+          onClose={() => {
+            setFormOpen(false);
+            setEditing(null);
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={removing !== null}
