@@ -559,10 +559,23 @@ export async function submitSurveyAnswer(
  * remetente, que e a sessao de quem preencheu. O time tambem vem da sessao —
  * nenhum identificador do corpo da requisicao decide para onde a resposta
  * vai.
+ *
+ * Ela nasce ligada ao INTEGRANTE que o mesmo cadastro criou (migration 044).
+ * As perguntas proprias do Formulario 2 ficam aqui, onde sempre estiveram; o
+ * que e campo padrao virou coluna do integrante, e e por isso que a pessoa
+ * aparece na equipe de quem a cadastrou.
  */
 export async function submitSurveyAnswerFromPanel(
   sender: { clientId: string; userId: string; name: string; role: string },
   input: SurveySubmission,
+  /**
+   * Integrante criado junto com esta resposta (migration 044).
+   *
+   * E o que faz a pessoa aparecer na equipe de quem a cadastrou. Nulo nunca
+   * acontece por aqui hoje; o parametro existe porque a resposta por LINK
+   * continua sem integrante, e as duas passam pela mesma gravacao.
+   */
+  memberId?: string | null,
 ): Promise<{ id: string }> {
   const perguntas = await selectRows<SurveyFieldRow>(TABLES.surveyFields, {
     select: FIELD_COLUMNS,
@@ -599,6 +612,7 @@ export async function submitSurveyAnswerFromPanel(
     {
       client_id: sender.clientId,
       invite_id: null,
+      member_id: memberId ?? null,
       sender_user_id: sender.userId,
       sender_name: sender.name,
       sender_role: sender.role,

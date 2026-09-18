@@ -479,6 +479,33 @@ export const surveyAnswerSchema = z.object({
 });
 
 /**
+ * Cadastro feito pelo lider com o FORMULARIO 2, dentro do painel
+ * (migration 044).
+ *
+ * Duas metades, e elas vao para lugares diferentes de proposito: o que e
+ * campo padrao vira o INTEGRANTE — e por isso a pessoa aparece na equipe de
+ * quem a cadastrou —, e `answers` sao as perguntas proprias do Formulario 2,
+ * que continuam na tabela de respostas.
+ *
+ * Sem `clientId`: o time vem da sessao. Sem `responses`: pergunta do
+ * Formulario 2 nao e resposta de integrante, e o banco recusaria.
+ */
+export const surveyMemberSchema = z.object({
+  ...standardMemberFields,
+  name: trimmed(120).min(2, 'Informe o nome completo.'),
+  phone: memberPhone,
+  photo: photoValue.default(null),
+  consentAt: z.iso.datetime().nullable().default(null),
+  answers: z
+    .array(z.object({ fieldId: z.string().min(1).max(64), value: surveyValueSchema }))
+    .max(appConfig.limits.maxFieldsPerForm)
+    .default([]),
+});
+
+export type SurveyMemberInput = z.infer<typeof surveyMemberSchema>;
+
+
+/**
  * Destino de quem chega ao dominio publico sem um link valido.
  *
  * Vazio desliga o redirecionamento. Preenchido, tem de ser um endereco

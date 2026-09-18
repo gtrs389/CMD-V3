@@ -10,7 +10,7 @@ import {
   identityFrom,
   toSurveyFormConfig,
 } from '@/lib/domain/survey-config';
-import { completionPercent, missingRequired } from '@/lib/validation/dynamic-form';
+import { completionPercent, missingRequired, toSubmission } from '@/lib/validation/dynamic-form';
 import { cn } from '@/lib/utils/cn';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { Button } from '@/components/ui/Button';
@@ -44,7 +44,7 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
   const toast = useToast();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [salvando, setSalvando] = useState(false);
-  /** Quantos ja foram anotados sem fechar esta tela. */
+  /** Quantos ja foram cadastrados sem fechar esta tela. */
   const [anotados, setAnotados] = useState(0);
 
   // So carrega quando abre: as perguntas podem ter mudado desde a ultima vez.
@@ -99,13 +99,23 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
     setSalvando(true);
 
     try {
-      // Nome e telefone viajam a parte, como identificacao da resposta: eles
-      // tem coluna propria e nao entram de novo entre as respostas.
+      // A ficha do integrante sai dos campos PADRAO do Formulario 2 — nome,
+      // telefone e o que o ADMIN tiver copiado do Formulario 1. E ela que faz
+      // a pessoa aparecer na equipe de quem cadastrou.
+      const ficha = toSubmission(config, values);
+      // Nome e telefone tem coluna propria; `identityFrom` acha os dois
+      // venham eles dos campos fixos do questionario ou dos padrao.
       const { name, phone } = identityFrom(config, values);
 
       await submitOwnSurveyAnswer({
+        ...ficha,
         name,
         phone,
+        // `responses` do `toSubmission` carrega os identificadores das
+        // perguntas do Formulario 2, que NAO sao campos do Formulario 1: elas
+        // vao em `answers`, para a tabela de respostas, e o servidor recusa
+        // qualquer outra coisa.
+        responses: undefined,
         answers: answerableFields(config).map((field) => ({
           fieldId: field.id,
           value: (values[field.id] ?? null) as FieldValue,
@@ -118,20 +128,20 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
         reset(undefined);
         toast.success(
           total === 1
-            ? 'Resposta registrada. Pode preencher a próxima.'
-            : `${total} respostas registradas. Pode preencher a próxima.`,
+            ? 'Integrante cadastrado. Pode preencher o próximo.'
+            : `${total} integrantes cadastrados. Pode preencher o próximo.`,
         );
         window.requestAnimationFrame(() => formRef.current?.scrollIntoView({ block: 'start' }));
         return;
       }
 
-      toast.success('Resposta registrada.');
+      toast.success('Integrante cadastrado.');
       onClose();
     } catch (falha) {
       toast.error(
         falha instanceof Error && falha.message
           ? falha.message
-          : 'Não foi possível registrar a resposta.',
+          : 'Não foi possível cadastrar o integrante.',
       );
     } finally {
       setSalvando(false);
@@ -145,8 +155,8 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
       open={open}
       onClose={onClose}
       size="lg"
-      title="Adicionar pelo Formulário 2"
-      description="As mesmas perguntas do link que você envia, preenchidas por você."
+      title="Adicionar integrante"
+      description="As perguntas do Formulário 2, preenchidas por você. A pessoa entra na sua equipe."
       footer={
         <>
           <p
@@ -157,7 +167,7 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
             )}
           >
             {anotados > 0 && faltam > 0 && percent === 0
-              ? `${anotados} ${anotados === 1 ? 'registrada' : 'registradas'} nesta tela. Preencha a próxima.`
+              ? `${anotados} ${anotados === 1 ? 'cadastrado' : 'cadastrados'} nesta tela. Preencha o próximo.`
               : faltam === 0
                 ? 'Tudo pronto para salvar.'
                 : `Ainda ${faltam === 1 ? 'falta' : 'faltam'} ${faltam} ${
@@ -178,7 +188,7 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
                 disabled={salvando || loading}
               >
                 {!salvando ? <UserPlus aria-hidden="true" className="size-4" /> : null}
-                Salvar e adicionar outro
+                Cadastrar e adicionar outro
               </Button>
 
               <Button
@@ -189,7 +199,7 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
                 disabled={salvando || loading}
               >
                 {!salvando ? <Send aria-hidden="true" className="size-4" /> : null}
-                Salvar
+                Cadastrar
               </Button>
             </>
           ) : null}

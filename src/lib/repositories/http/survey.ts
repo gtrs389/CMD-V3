@@ -61,18 +61,24 @@ export async function fetchOwnSurvey(): Promise<OwnSurvey> {
 }
 
 /**
- * Resposta do Formulario 2 preenchida DENTRO do painel, pelo proprio lider.
+ * Cadastro pelo Formulario 2, preenchido DENTRO do painel pelo lider.
  *
- * Mesmo formulario do link, preenchido com a pessoa na frente. O time e o
- * remetente saem da SESSAO, no servidor: nada aqui decide para onde a
- * resposta vai. Quem responde continua NAO virando integrante.
+ * Mesmo formulario do link, preenchido com a pessoa na frente — e, por isso,
+ * a pessoa entra na EQUIPE de quem cadastrou (migration 044). O que e campo
+ * padrao vira o integrante; `answers` sao as perguntas proprias do
+ * Formulario 2, que continuam na tabela de respostas.
+ *
+ * O time e o responsavel saem da SESSAO, no servidor: nada aqui decide para
+ * onde o cadastro vai nem de quem ele e.
  */
-export async function submitOwnSurveyAnswer(input: {
-  name: string;
-  phone: string;
-  answers: { fieldId: string; value: FieldValue }[];
-}): Promise<void> {
-  await api<{ ok: true; id: string }>('/api/questionario/resposta', {
+export async function submitOwnSurveyAnswer(
+  input: Record<string, unknown> & {
+    name: string;
+    phone: string;
+    answers: { fieldId: string; value: FieldValue }[];
+  },
+): Promise<void> {
+  await api<{ member: unknown }>('/api/questionario/resposta', {
     method: 'POST',
     body: input,
   });

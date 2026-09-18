@@ -78,14 +78,11 @@ export function MembersPanel({
   const { can, user } = useSession();
   const podeCriar = can('member.create');
   /**
-   * O rotulo diz o que o botao FAZ.
-   *
-   * Na pagina do lider ele abre o Formulario 2, e quem responde nao vira
-   * integrante: chamar aquilo de "adicionar integrante" prometeria uma
-   * pessoa na equipe que nao vai aparecer la.
+   * Os dois formularios cadastram INTEGRANTE — o que muda sao as perguntas.
+   * Na pagina do lider e o Formulario 2, e a pessoa entra na equipe dele
+   * igual a quem se cadastra pelo link (migration 044).
    */
-  const rotuloAdicionar =
-    addForm === 'formulario-2' ? 'Adicionar pelo Formulário 2' : 'Adicionar integrante';
+  const rotuloAdicionar = 'Adicionar integrante';
   const podeEditar = can('member.update');
   const podeExcluir = can('member.delete');
   // O integrante da equipe ve apenas nome, foto e telefone: nada de e-mail,
@@ -172,7 +169,7 @@ export function MembersPanel({
           title="Nenhum integrante cadastrado"
           description={
             addForm === 'formulario-2'
-              ? 'Envie o seu link para receber respostas, ou preencha o Formulário 2 com a pessoa na frente de você.'
+              ? 'Compartilhe o seu link para receber cadastros, ou preencha o Formulário 2 com a pessoa na frente de você.'
               : 'Compartilhe o link de convite para receber cadastros ou adicione um integrante manualmente.'
           }
           action={
