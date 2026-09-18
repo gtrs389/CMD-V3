@@ -89,3 +89,28 @@ propósito: ele estouraria a coluna do banco e levaria junto o lote inteiro.
 - **Uma linha torta não derruba a carga.** Ela fica de fora; o resto entra.
 
 Estado por estado funciona: carregue um CSV por UF, na ordem que quiser.
+
+---
+
+# Conserto pontual: respostas do Formulário 2 anteriores à migration 044
+
+Por um período curto, o líder que preenchia o Formulário 2 pelo painel gerava
+apenas a **resposta**: a pessoa aparecia na aba "Formulário 2", mas não na
+equipe dele. Nada se perdeu — faltou o registro de integrante, que a migration
+044 passou a criar junto.
+
+`converter-respostas-antigas.sql`, nesta pasta, conserta isso: para cada
+resposta **sem link**, **sem integrante** e com remetente conhecido, cria o
+integrante (nome, telefone e o remetente como responsável) e liga a resposta a
+ele. Rode **uma vez**, depois da 044.
+
+O que ele **não** toca:
+
+- respostas que chegaram por **link** — ali nunca houve integrante, e continua
+  não havendo;
+- respostas cujo telefone **já pertence a alguém no time** — o número
+  identificaria duas pessoas. Essas ficam de fora e o SQL diz quantas; resolva
+  cadastrando a pessoa à mão pela tela nova.
+
+Não cria acesso nem link próprio, pelo mesmo motivo do cadastro novo. É
+idempotente e não apaga nada.
