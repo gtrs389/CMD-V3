@@ -1,7 +1,19 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { AlertTriangle, Check, Download, FileSpreadsheet, Trash2, Upload, UserPlus } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  FileSpreadsheet,
+  Hash,
+  MapPin,
+  Phone,
+  Trash2,
+  Upload,
+  User,
+  UserPlus,
+} from 'lucide-react';
 import {
   EXEMPLO_CSV,
   lerPlanilha,
@@ -9,9 +21,10 @@ import {
   type LinhaImportada,
 } from '@/lib/domain/csv-import';
 import { maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
-import { formatPhone, normalizePhone } from '@/lib/utils/phone';
+import { maskPhone, normalizePhone } from '@/lib/utils/phone';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
+import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
@@ -110,7 +123,10 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   }
 
   function baixarExemplo() {
-    // Com BOM, para o Excel abrir os acentos certos.
+    // BOM e ponto e virgula: o Excel em portugues precisa dos dois para
+    // abrir o arquivo EM COLUNAS e com os acentos certos. Com virgula, ele
+    // empilha tudo em uma coluna so, e a planilha chega inutil na mao de
+    // quem ia preenche-la.
     const blob = new Blob([`﻿${EXEMPLO_CSV}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -256,10 +272,14 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
               Um arquivo <strong>.csv</strong> com uma pessoa por linha.
             </p>
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
-              Colunas lidas: <strong>Nome completo</strong>, <strong>Telefone</strong>,{' '}
-              <strong>Título de eleitor</strong>, <strong>Zona eleitoral</strong>,{' '}
-              <strong>Seção eleitoral</strong> e <strong>Endereço</strong>. A ordem não importa, e
-              coluna a mais é ignorada. Baixe o modelo se quiser começar dele.
+              Uma coluna para cada informação: <strong>Nome completo</strong>,{' '}
+              <strong>Telefone</strong>, <strong>Título de eleitor</strong>,{' '}
+              <strong>Zona eleitoral</strong>, <strong>Seção eleitoral</strong> e{' '}
+              <strong>Endereço</strong>. A ordem não importa, e coluna a mais é ignorada.
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
+              O modelo abre direto no Excel, já em colunas. Exportado de outro programa, serve
+              separado por ponto e vírgula, vírgula ou tabulação.
             </p>
           </div>
         ) : (
@@ -270,137 +290,158 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
               </p>
             ) : null}
 
-            <div className="max-h-[24rem] overflow-auto rounded-control border border-line">
-              <table className="w-full min-w-[52rem] border-collapse text-sm">
-                <thead className="sticky top-0 z-10 bg-surface">
-                  <tr className="border-b border-line text-left text-[0.6875rem] font-bold tracking-wide text-ink-500 uppercase">
-                    <th className="w-10 px-2 py-2">#</th>
-                    <th className="px-2 py-2">Nome completo</th>
-                    <th className="px-2 py-2">Telefone</th>
-                    <th className="px-2 py-2">Título</th>
-                    <th className="w-20 px-2 py-2">Zona</th>
-                    <th className="w-20 px-2 py-2">Seção</th>
-                    <th className="px-2 py-2">Endereço</th>
-                    <th className="w-10 px-2 py-2" />
-                  </tr>
-                </thead>
+            <ul className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+              {linhas.map((linha) => {
+                const situacao = situacoes[linha.id];
+                const salva = situacao?.estado === 'salva';
+                const problemas = salva ? [] : problemasDaLinha(linha);
+                const bloqueado = salva || salvando;
+                const campo = (nome: string) => `planilha-${linha.id}-${nome}`;
 
-                <tbody>
-                  {linhas.map((linha) => {
-                    const situacao = situacoes[linha.id];
-                    const salva = situacao?.estado === 'salva';
-                    const problemas = salva ? [] : problemasDaLinha(linha);
-
-                    return (
-                      <tr
-                        key={linha.id}
-                        className={cn(
-                          'border-b border-line align-top last:border-b-0',
-                          salva && 'bg-success-50/60',
-                          situacao?.estado === 'falhou' && 'bg-danger-50/60',
+                return (
+                  <li
+                    key={linha.id}
+                    className={cn(
+                      'rounded-card border bg-surface p-3 shadow-card sm:p-4',
+                      salva
+                        ? 'border-success-600/40 bg-success-50/40'
+                        : situacao?.estado === 'falhou'
+                          ? 'border-danger-200 bg-danger-50/40'
+                          : problemas.length > 0
+                            ? 'border-warning-600/40 bg-warning-50/40'
+                            : 'border-line',
+                    )}
+                  >
+                    {/* Cabecalho da pessoa: o numero da linha da planilha, para
+                        quem for conferir no arquivo achar, e a situacao dela. */}
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 text-xs font-semibold text-ink-500">
+                        <span className="flex size-6 items-center justify-center rounded-full bg-ink-50 tabular-nums">
+                          {linha.linha}
+                        </span>
+                        {salva ? (
+                          <span className="flex items-center gap-1 text-success-700">
+                            <Check aria-hidden="true" className="size-3.5" />
+                            Cadastrada
+                          </span>
+                        ) : problemas.length > 0 ? (
+                          <span className="text-warning-600">
+                            Falta {problemas.join(' e ')}
+                          </span>
+                        ) : (
+                          <span>Pronta para cadastrar</span>
                         )}
+                      </span>
+
+                      {!salva ? (
+                        <button
+                          type="button"
+                          onClick={() => remover(linha.id)}
+                          disabled={salvando}
+                          aria-label={`Tirar a linha ${linha.linha} da lista`}
+                          title="Tirar da lista"
+                          className="rounded-control p-1.5 text-ink-400 transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-40"
+                        >
+                          <Trash2 aria-hidden="true" className="size-4" />
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field
+                        id={campo('nome')}
+                        label="Nome completo"
+                        required
+                        error={problemas.includes('nome') ? 'Informe o nome completo.' : undefined}
+                        className="sm:col-span-2"
                       >
-                        <td className="px-2 py-1.5 text-xs text-ink-500 tabular-nums">
-                          {salva ? (
-                            <Check aria-label="Cadastrada" className="size-4 text-success-600" />
-                          ) : (
-                            linha.linha
-                          )}
-                        </td>
+                        <Input
+                          id={campo('nome')}
+                          value={linha.name}
+                          disabled={bloqueado}
+                          invalid={problemas.includes('nome')}
+                          leading={<User className="size-4" />}
+                          onChange={(event) => editar(linha.id, 'name', event.target.value)}
+                        />
+                      </Field>
 
-                        <td className="px-2 py-1.5">
-                          <Input
-                            aria-label={`Nome, linha ${linha.linha}`}
-                            value={linha.name}
-                            disabled={salva || salvando}
-                            invalid={problemas.includes('nome')}
-                            onChange={(event) => editar(linha.id, 'name', event.target.value)}
-                          />
-                        </td>
+                      <Field
+                        id={campo('telefone')}
+                        label="Telefone"
+                        required
+                        error={problemas.includes('telefone') ? 'Telefone inválido.' : undefined}
+                      >
+                        <Input
+                          id={campo('telefone')}
+                          inputMode="numeric"
+                          value={maskPhone(linha.phone)}
+                          disabled={bloqueado}
+                          invalid={problemas.includes('telefone')}
+                          leading={<Phone className="size-4" />}
+                          onChange={(event) =>
+                            editar(linha.id, 'phone', normalizePhone(event.target.value))
+                          }
+                        />
+                      </Field>
 
-                        <td className="px-2 py-1.5">
-                          <Input
-                            aria-label={`Telefone, linha ${linha.linha}`}
-                            inputMode="numeric"
-                            value={formatPhone(linha.phone)}
-                            disabled={salva || salvando}
-                            invalid={problemas.includes('telefone')}
-                            onChange={(event) =>
-                              editar(linha.id, 'phone', normalizePhone(event.target.value))
-                            }
-                          />
-                        </td>
+                      <Field id={campo('titulo')} label="Título de eleitor">
+                        <Input
+                          id={campo('titulo')}
+                          inputMode="numeric"
+                          value={linha.voterId}
+                          disabled={bloqueado}
+                          leading={<Hash className="size-4" />}
+                          onChange={(event) =>
+                            editar(linha.id, 'voterId', normalizeVoterId(event.target.value))
+                          }
+                        />
+                      </Field>
 
-                        <td className="px-2 py-1.5">
-                          <Input
-                            aria-label={`Título, linha ${linha.linha}`}
-                            inputMode="numeric"
-                            value={linha.voterId}
-                            disabled={salva || salvando}
-                            onChange={(event) =>
-                              editar(linha.id, 'voterId', normalizeVoterId(event.target.value))
-                            }
-                          />
-                        </td>
+                      <Field id={campo('zona')} label="Zona eleitoral">
+                        <Input
+                          id={campo('zona')}
+                          inputMode="numeric"
+                          value={linha.zone}
+                          disabled={bloqueado}
+                          leading={<MapPin className="size-4" />}
+                          onChange={(event) => editar(linha.id, 'zone', maskZone(event.target.value))}
+                        />
+                      </Field>
 
-                        <td className="px-2 py-1.5">
-                          <Input
-                            aria-label={`Zona, linha ${linha.linha}`}
-                            inputMode="numeric"
-                            value={linha.zone}
-                            disabled={salva || salvando}
-                            onChange={(event) => editar(linha.id, 'zone', maskZone(event.target.value))}
-                          />
-                        </td>
+                      <Field id={campo('secao')} label="Seção eleitoral">
+                        <Input
+                          id={campo('secao')}
+                          inputMode="numeric"
+                          value={linha.section}
+                          disabled={bloqueado}
+                          leading={<Hash className="size-4" />}
+                          onChange={(event) =>
+                            editar(linha.id, 'section', maskSection(event.target.value))
+                          }
+                        />
+                      </Field>
 
-                        <td className="px-2 py-1.5">
-                          <Input
-                            aria-label={`Seção, linha ${linha.linha}`}
-                            inputMode="numeric"
-                            value={linha.section}
-                            disabled={salva || salvando}
-                            onChange={(event) =>
-                              editar(linha.id, 'section', maskSection(event.target.value))
-                            }
-                          />
-                        </td>
+                      <Field id={campo('endereco')} label="Endereço" className="sm:col-span-2">
+                        <Input
+                          id={campo('endereco')}
+                          value={linha.address}
+                          disabled={bloqueado}
+                          leading={<MapPin className="size-4" />}
+                          onChange={(event) => editar(linha.id, 'address', event.target.value)}
+                        />
+                      </Field>
+                    </div>
 
-                        <td className="px-2 py-1.5">
-                          <Input
-                            aria-label={`Endereço, linha ${linha.linha}`}
-                            value={linha.address}
-                            disabled={salva || salvando}
-                            onChange={(event) => editar(linha.id, 'address', event.target.value)}
-                          />
-
-                          {situacao?.estado === 'falhou' ? (
-                            <span className="mt-1 flex items-start gap-1 text-[0.6875rem] leading-snug text-danger-700">
-                              <AlertTriangle aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
-                              {situacao.motivo}
-                            </span>
-                          ) : null}
-                        </td>
-
-                        <td className="px-2 py-1.5">
-                          {!salva ? (
-                            <button
-                              type="button"
-                              onClick={() => remover(linha.id)}
-                              disabled={salvando}
-                              aria-label={`Tirar a linha ${linha.linha} da lista`}
-                              title="Tirar da lista"
-                              className="rounded-control p-1.5 text-ink-400 transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:opacity-40"
-                            >
-                              <Trash2 aria-hidden="true" className="size-4" />
-                            </button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    {situacao?.estado === 'falhou' ? (
+                      <p className="mt-2 flex items-start gap-1.5 rounded-control bg-danger-50 px-3 py-2 text-[0.8125rem] leading-snug text-danger-700">
+                        <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                        {situacao.motivo}
+                      </p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
 
             <p className="text-[0.8125rem] leading-relaxed text-ink-500">
               Corrija o que precisar aqui mesmo — nada foi gravado ainda. Nome e telefone são
