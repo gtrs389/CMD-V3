@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { EXEMPLO_CSV, lerPlanilha, problemasDaLinha } from '@/lib/domain/csv-import';
+import {
+  EXEMPLO_CSV,
+  MODELO_SEPARADOR,
+  lerPlanilha,
+  problemasDaLinha,
+} from '@/lib/domain/csv-import';
 
 /**
  * Leitura da planilha de integrantes.
@@ -122,6 +127,23 @@ describe('o que impede uma linha de ser cadastrada', () => {
 });
 
 describe('planilha de exemplo', () => {
+  it('sai separada por ponto e vírgula: é assim que o Excel abre em colunas', () => {
+    // Com vírgula, o Excel em português empilha tudo em uma coluna só, e a
+    // planilha chega inútil na mão de quem ia preenchê-la.
+    expect(MODELO_SEPARADOR).toBe(';');
+
+    const [cabecalho] = EXEMPLO_CSV.split(/\r?\n/);
+    expect(cabecalho.split(';')).toHaveLength(6);
+    expect(cabecalho).toBe(
+      'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
+    );
+  });
+
+  it('o endereço com vírgula continua em uma célula só', () => {
+    const { linhas } = lerPlanilha(EXEMPLO_CSV);
+    expect(linhas[0].address).toBe('Rua das Flores, 100 - Centro');
+  });
+
   it('o exemplo que o sistema oferece é lido por ele mesmo', () => {
     const { linhas, ignoradas } = lerPlanilha(EXEMPLO_CSV);
 
@@ -129,5 +151,30 @@ describe('planilha de exemplo', () => {
     expect(linhas).toHaveLength(2);
     expect(linhas.every((item) => problemasDaLinha(item).length === 0)).toBe(true);
     expect(linhas[0].voterId).toBe('100000002720');
+  });
+});
+
+describe('arquivos que o Excel exporta', () => {
+  it('a linha "sep=;" é instrução do Excel, não cabeçalho', () => {
+    const { linhas, ignoradas } = lerPlanilha(
+      ['sep=;', 'Nome completo;Telefone;Zona eleitoral', 'Ana Lima;82999990002;7'].join('\r\n'),
+    );
+
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0].name).toBe('Ana Lima');
+    expect(linhas[0].zone).toBe('7');
+    expect(ignoradas).toEqual([]);
+  });
+
+  it('lê igual com ponto e vírgula, vírgula ou tabulação', () => {
+    const porColuna = (texto: string) => lerPlanilha(texto).linhas[0];
+
+    const comPontoEVirgula = porColuna('Nome completo;Telefone\nAna Lima;82999990002');
+    const comVirgula = porColuna('Nome completo,Telefone\nAna Lima,82999990002');
+    const comTab = porColuna('Nome completo\tTelefone\nAna Lima\t82999990002');
+
+    expect(comPontoEVirgula.name).toBe('Ana Lima');
+    expect(comVirgula).toMatchObject({ name: 'Ana Lima', phone: '82999990002' });
+    expect(comTab).toMatchObject({ name: 'Ana Lima', phone: '82999990002' });
   });
 });

@@ -110,7 +110,10 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   }
 
   function baixarExemplo() {
-    // Com BOM, para o Excel abrir os acentos certos.
+    // BOM e ponto e virgula: o Excel em portugues precisa dos dois para
+    // abrir o arquivo EM COLUNAS e com os acentos certos. Com virgula, ele
+    // empilha tudo em uma coluna so, e a planilha chega inutil na mao de
+    // quem ia preenche-la.
     const blob = new Blob([`﻿${EXEMPLO_CSV}`], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -256,10 +259,14 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
               Um arquivo <strong>.csv</strong> com uma pessoa por linha.
             </p>
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
-              Colunas lidas: <strong>Nome completo</strong>, <strong>Telefone</strong>,{' '}
-              <strong>Título de eleitor</strong>, <strong>Zona eleitoral</strong>,{' '}
-              <strong>Seção eleitoral</strong> e <strong>Endereço</strong>. A ordem não importa, e
-              coluna a mais é ignorada. Baixe o modelo se quiser começar dele.
+              Uma coluna para cada informação: <strong>Nome completo</strong>,{' '}
+              <strong>Telefone</strong>, <strong>Título de eleitor</strong>,{' '}
+              <strong>Zona eleitoral</strong>, <strong>Seção eleitoral</strong> e{' '}
+              <strong>Endereço</strong>. A ordem não importa, e coluna a mais é ignorada.
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
+              O modelo abre direto no Excel, já em colunas. Exportado de outro programa, serve
+              separado por ponto e vírgula, vírgula ou tabulação.
             </p>
           </div>
         ) : (

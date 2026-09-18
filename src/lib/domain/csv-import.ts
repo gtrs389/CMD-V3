@@ -149,6 +149,11 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
   if (texto.charCodeAt(0) === 0xfeff) texto = texto.slice(1);
   if (!texto.trim()) return { linhas: [], ignoradas: [], vazias: 0 };
 
+  // "sep=;" na primeira linha e uma instrucao para o Excel, nao um dado.
+  // Alguns programas a escrevem ao exportar; ler isso como cabecalho
+  // deixaria a planilha inteira sem coluna nenhuma reconhecida.
+  texto = texto.replace(/^sep=.\r?\n/i, '');
+
   const quebra = texto.indexOf('\n');
   const separador = detectarSeparador(quebra === -1 ? texto : texto.slice(0, quebra));
   const grade = parseCsv(texto, separador);
@@ -221,9 +226,22 @@ export function problemasDaLinha(linha: LinhaImportada): string[] {
   return problemas;
 }
 
-/** Cabecalho e uma linha de exemplo, para quem nunca montou a planilha. */
+/**
+ * Modelo para baixar: cabecalho e duas linhas de exemplo.
+ *
+ * Separado por PONTO E VIRGULA, e isso nao e detalhe. O Excel em portugues
+ * usa o ponto e virgula como separador de lista, e um arquivo separado por
+ * VIRGULA abre nele com tudo empilhado em UMA coluna so — a planilha chega
+ * inutil na mao de quem ia preenche-la. Com ponto e virgula ela abre em
+ * colunas, que e como uma planilha tem de chegar.
+ *
+ * Quem usa outro programa nao perde nada: a leitura aqui aceita ponto e
+ * virgula, virgula e tabulacao, decidindo pelo proprio arquivo.
+ */
+export const MODELO_SEPARADOR = ';';
+
 export const EXEMPLO_CSV = [
-  'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral,Endereço',
-  'Maria da Silva Souza,82999990001,100000002720,44,3,"Rua das Flores, 100 - Centro"',
-  'João Pedro Alves,82988887777,,12,45,Travessa do Sol 42',
-].join('\n');
+  'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
+  'Maria da Silva Souza;82999990001;100000002720;44;3;Rua das Flores, 100 - Centro',
+  'João Pedro Alves;82988887777;;12;45;Travessa do Sol 42',
+].join('\r\n');
