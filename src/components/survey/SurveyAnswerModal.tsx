@@ -20,6 +20,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useDynamicForm } from '@/components/form-renderer/use-dynamic-form';
 import { PublicFormBody } from '@/components/public/PublicFormBody';
 import { focusFirstInvalid } from '@/components/public/PublicFormShell';
+import { ChatFillBox } from '@/components/members/ChatFillBox';
 
 interface SurveyAnswerModalProps {
   open: boolean;
@@ -221,8 +222,13 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
           O Formulário 2 ainda não tem perguntas. Quem monta é o administrador do sistema.
         </p>
       ) : (
-        <PublicFormBody
-          config={config}
+        <>
+          <div className="mb-3">
+            <ChatFillBox config={config} setValue={(fieldId, valor) => form.setValue(fieldId, valor)} />
+          </div>
+
+          <PublicFormBody
+            config={config}
           form={form}
           sections={sections}
           formId="questionario-painel"
@@ -232,8 +238,9 @@ export function SurveyAnswerModal({ open, onClose }: SurveyAnswerModalProps) {
           formRef={formRef}
           allowCamera
           sequential={false}
-          onImageError={(message) => toast.error(message)}
-        />
+            onImageError={(message) => toast.error(message)}
+          />
+        </>
       )}
     </Modal>
   );

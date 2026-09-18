@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Eye, Pencil, SearchX, Trash2, UserPlus, Users } from 'lucide-react';
+import { Eye, FileSpreadsheet, Pencil, SearchX, Trash2, UserPlus, Users } from 'lucide-react';
 import type { Client, Member } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
 import {
@@ -27,6 +27,8 @@ import { useSession } from '@/components/layout/SessionProvider';
 import { MemberDetailModal } from './MemberDetailModal';
 import { MemberFormModal } from './MemberFormModal';
 import { SurveyAnswerModal } from '@/components/survey/SurveyAnswerModal';
+import { SpreadsheetImportModal } from './SpreadsheetImportModal';
+import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
 
 interface MembersPanelProps {
@@ -104,6 +106,8 @@ export function MembersPanel({
   const [deepLinkClosed, setDeepLinkClosed] = useState<string | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  /** Cadastro de muita gente de uma vez, por planilha. */
+  const [planilhaAberta, setPlanilhaAberta] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
 
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
@@ -151,10 +155,68 @@ export function MembersPanel({
     }
   }
 
+  /**
+   * Grava UMA pessoa conferida da planilha.
+   *
+   * O destino e o mesmo do botao de adicionar daquela pagina: na do time, a
+   * ficha do integrante; na do lider, o Formulario 2 — que tambem cria o
+   * integrante (migration 044). A planilha nao e um caminho paralelo.
+   */
+  const salvarDaPlanilha = async (linha: {
+    name: string;
+    phone: string;
+    voterId: string;
+    zone: string;
+    section: string;
+    address: string;
+  }) => {
+    const ficha = {
+      name: linha.name.trim(),
+      phone: linha.phone,
+      voterId: linha.voterId || null,
+      zone: linha.zone || null,
+      section: linha.section || null,
+      street: linha.address || null,
+    };
+
+    if (addForm === 'formulario-2') {
+      // Sem `answers`: a planilha traz os seis campos, e nenhuma pergunta
+      // propria do Formulario 2.
+      await submitOwnSurveyAnswer({ ...ficha, answers: [] });
+      return;
+    }
+
+    await memberRepository.create({
+      ...ficha,
+      clientId: client.id,
+      source: 'admin',
+      // A planilha nao traz foto, pergunta do formulario nem aceite: quem
+      // preenche por planilha nao esta diante do aviso de privacidade.
+      photo: null,
+      responses: [],
+      consentAt: null,
+    });
+  };
+
   function openCreate() {
     setEditing(null);
     setFormOpen(true);
   }
+
+  const importar = podeCriar ? (
+    <SpreadsheetImportModal
+      open={planilhaAberta}
+      onClose={() => setPlanilhaAberta(false)}
+      salvar={salvarDaPlanilha}
+    />
+  ) : null;
+
+  const botaoPlanilha = podeCriar ? (
+    <Button variant="secondary" onClick={() => setPlanilhaAberta(true)}>
+      <FileSpreadsheet aria-hidden="true" className="size-4" />
+      Planilha
+    </Button>
+  ) : null;
 
   function openEdit(member: Member) {
     setEditing(member);
@@ -174,13 +236,18 @@ export function MembersPanel({
           }
           action={
             podeCriar ? (
-              <Button onClick={openCreate}>
-                <UserPlus aria-hidden="true" className="size-4" />
-                {rotuloAdicionar}
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {botaoPlanilha}
+                <Button onClick={openCreate}>
+                  <UserPlus aria-hidden="true" className="size-4" />
+                  {rotuloAdicionar}
+                </Button>
+              </div>
             ) : undefined
           }
         />
+        {importar}
+
         {addForm === 'formulario-2' ? (
           <SurveyAnswerModal open={formOpen} onClose={() => setFormOpen(false)} />
         ) : (
@@ -232,10 +299,13 @@ export function MembersPanel({
           {podeCriar ? (
             // O rotulo curto cabe na barra; o completo fica no titulo e na
             // leitura por tecnologia assistiva, dizendo QUAL formulario abre.
-            <Button onClick={openCreate} title={rotuloAdicionar} aria-label={rotuloAdicionar}>
-              <UserPlus aria-hidden="true" className="size-4" />
-              Adicionar
-            </Button>
+            <>
+              {botaoPlanilha}
+              <Button onClick={openCreate} title={rotuloAdicionar} aria-label={rotuloAdicionar}>
+                <UserPlus aria-hidden="true" className="size-4" />
+                Adicionar
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -418,6 +488,8 @@ export function MembersPanel({
         }}
         onEdit={openEdit}
       />
+
+      {importar}
 
       {/* Adicionar abre o formulario que a pagina escolheu; EDITAR e sempre a
           ficha do integrante, porque e uma ficha de integrante que esta
