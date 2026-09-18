@@ -22,11 +22,12 @@ import {
   problemasDaLinha,
   type LinhaImportada,
 } from '@/lib/domain/csv-import';
-import { maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
+import { isValidVoterId, maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
 import { maskPhone, normalizePhone } from '@/lib/utils/phone';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields';
+import { Badge } from '@/components/ui/Badge';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -416,7 +417,18 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                         />
                       </Field>
 
-                      <Field id={campo('titulo')} label="Título de eleitor">
+                      {/* O titulo torto NAO impede o cadastro: ele entra com
+                          a tag de aviso, aqui e na ficha da pessoa. Recusar
+                          deixaria alguem de fora por um numero mal copiado. */}
+                      <Field
+                        id={campo('titulo')}
+                        label="Título de eleitor"
+                        aside={
+                          linha.voterId && !isValidVoterId(linha.voterId) ? (
+                            <Badge tone="warning">Conferir</Badge>
+                          ) : null
+                        }
+                      >
                         <Input
                           id={campo('titulo')}
                           inputMode="numeric"

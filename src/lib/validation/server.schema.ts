@@ -11,9 +11,9 @@ import {
   GENDER_VALUES,
   SECTION_MAX_LENGTH,
   UF_OPTIONS,
+  VOTER_ID_LENGTH,
   ZONE_MAX_LENGTH,
   isValidCpf,
-  isValidVoterId,
 } from '@/lib/utils/documents';
 import { isValidPhone } from '@/lib/utils/phone';
 
@@ -221,12 +221,25 @@ const standardMemberFields = {
       .max(20)
       .refine((value) => isValidCpf(value), 'CPF inválido.'),
   ),
+  /**
+   * Titulo de eleitor: doze digitos, e so.
+   *
+   * O digito verificador NAO recusa mais o cadastro. Ele continua sendo
+   * conferido — quem tem o titulo torto aparece com um aviso na ficha e na
+   * lista —, mas recusar significaria deixar a pessoa de fora do cadastro
+   * por causa de um numero mal copiado de uma planilha. Uma pessoa dentro
+   * com um aviso vale mais do que uma pessoa fora.
+   */
   voterId: opcional(
     z
       .string()
       .trim()
       .max(20)
-      .refine((value) => isValidVoterId(value), 'Título de eleitor inválido.'),
+      .transform((value) => value.replace(/\D/g, ''))
+      .refine(
+        (value) => value.length === VOTER_ID_LENGTH,
+        'Título de eleitor deve ter doze dígitos.',
+      ),
   ),
   zone: opcional(
     z

@@ -287,3 +287,16 @@ describe('telefone com dígito a mais', () => {
     expect(linhas.every((l) => problemasDaLinha(l).length === 0)).toBe(true);
   });
 });
+
+describe('título de eleitor torto', () => {
+  it('a pessoa entra: o dígito verificador não recusa o cadastro', () => {
+    // "018161400850" veio de uma planilha real e não fecha o verificador.
+    // Recusar deixaria a pessoa de fora por causa de um número mal copiado.
+    const { linhas } = lerPlanilha(
+      [CABECALHO, 'Antonio Lucas Bezerra,8299280204,018161400850,10,147,'].join('\n'),
+    );
+
+    expect(linhas[0].voterId).toBe('018161400850');
+    expect(problemasDaLinha(linhas[0])).toEqual([]);
+  });
+});
