@@ -16,21 +16,30 @@ import {
 } from 'lucide-react';
 import {
   EXEMPLO_CSV,
+  MUNICIPIO_PADRAO,
+  UF_PADRAO,
   lerPlanilha,
   problemasDaLinha,
   type LinhaImportada,
 } from '@/lib/domain/csv-import';
-import { maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
+import { isValidVoterId, maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
 import { maskPhone, normalizePhone } from '@/lib/utils/phone';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
+import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields';
+import { Badge } from '@/components/ui/Badge';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 
+/** Uma pessoa conferida: o que veio da planilha mais o endereco escolhido. */
+export type PessoaDaPlanilha = LinhaImportada & EnderecoDaLinha;
+
 /** O que a tela precisa saber fazer com UMA pessoa conferida. */
-export type SalvarLinha = (linha: LinhaImportada) => Promise<void>;
+export type SalvarLinha = (pessoa: PessoaDaPlanilha) => Promise<void>;
+
+const SEM_ENDERECO: EnderecoDaLinha = { state: '', city: '', district: '', street: '' };
 
 interface SpreadsheetImportModalProps {
   open: boolean;
@@ -67,6 +76,13 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   const [linhas, setLinhas] = useState<LinhaImportada[]>([]);
   const [situacoes, setSituacoes] = useState<Record<string, Situacao>>({});
   const [ignoradas, setIgnoradas] = useState<string[]>([]);
+  /**
+   * Endereco de cada pessoa, escolhido AQUI.
+   *
+   * Nao vem da planilha: ele e a cadeia Estado -> Municipio -> Bairro -> Rua,
+   * e um texto solto nao se encaixa nela.
+   */
+  const [enderecos, setEnderecos] = useState<Record<string, EnderecoDaLinha>>({});
   const [arquivo, setArquivo] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [progresso, setProgresso] = useState(0);
@@ -78,6 +94,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   function limpar() {
     setLinhas([]);
     setSituacoes({});
+    setEnderecos({});
     setIgnoradas([]);
     setArquivo(null);
     setProgresso(0);
@@ -94,6 +111,22 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
     setLinhas(leitura.linhas);
     setSituacoes({});
+    // Toda planilha e de Alagoas, de Palmeira dos Indios: os dois entram
+    // prontos, e o bairro e a rua vem separados do texto da coluna
+    // Endereco. Tudo continua editavel aqui.
+    setEnderecos(
+      Object.fromEntries(
+        leitura.linhas.map((linha) => [
+          linha.id,
+          {
+            state: UF_PADRAO,
+            city: MUNICIPIO_PADRAO,
+            district: linha.district,
+            street: linha.street,
+          },
+        ]),
+      ),
+    );
     setIgnoradas(leitura.ignoradas);
     setArquivo(file.name);
     setProgresso(0);
@@ -150,7 +183,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
     // passar duas pessoas com o mesmo numero.
     for (const linha of prontas) {
       try {
-        await salvar(linha);
+        await salvar({ ...linha, ...(enderecos[linha.id] ?? SEM_ENDERECO) });
         gravadas += 1;
         setSituacoes((atual) => ({ ...atual, [linha.id]: { estado: 'salva' } }));
       } catch (falha) {
@@ -384,7 +417,18 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                         />
                       </Field>
 
-                      <Field id={campo('titulo')} label="Título de eleitor">
+                      {/* O titulo torto NAO impede o cadastro: ele entra com
+                          a tag de aviso, aqui e na ficha da pessoa. Recusar
+                          deixaria alguem de fora por um numero mal copiado. */}
+                      <Field
+                        id={campo('titulo')}
+                        label="Título de eleitor"
+                        aside={
+                          linha.voterId && !isValidVoterId(linha.voterId) ? (
+                            <Badge tone="warning">Conferir</Badge>
+                          ) : null
+                        }
+                      >
                         <Input
                           id={campo('titulo')}
                           inputMode="numeric"
@@ -421,15 +465,17 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                         />
                       </Field>
 
-                      <Field id={campo('endereco')} label="Endereço" className="sm:col-span-2">
-                        <Input
-                          id={campo('endereco')}
-                          value={linha.address}
-                          disabled={bloqueado}
-                          leading={<MapPin className="size-4" />}
-                          onChange={(event) => editar(linha.id, 'address', event.target.value)}
-                        />
-                      </Field>
+                      {/* O endereco e a mesma cadeia da ficha — Estado,
+                          Municipio, Bairro, Rua —, e por isso ele nao vem da
+                          planilha: cada passo so existe dentro do anterior. */}
+                      <ImportAddressFields
+                        id={linha.id}
+                        endereco={enderecos[linha.id] ?? SEM_ENDERECO}
+                        disabled={bloqueado}
+                        onChange={(endereco) =>
+                          setEnderecos((atual) => ({ ...atual, [linha.id]: endereco }))
+                        }
+                      />
                     </div>
 
                     {situacao?.estado === 'falhou' ? (
@@ -445,8 +491,10 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
             <p className="text-[0.8125rem] leading-relaxed text-ink-500">
               Corrija o que precisar aqui mesmo — nada foi gravado ainda. Nome e telefone são
-              obrigatórios; título, zona, seção e endereço podem ficar em branco. Quem já foi
-              cadastrado fica em verde e não é cadastrado de novo.
+              obrigatórios; título, zona, seção e endereço podem ficar em branco. O endereço da
+              planilha chega separado em bairro e rua, com <strong>Alagoas</strong> e{' '}
+              <strong>Palmeira dos Índios</strong> já preenchidos. Quem já foi cadastrado fica em
+              verde e não é cadastrado de novo.
             </p>
           </>
         )}

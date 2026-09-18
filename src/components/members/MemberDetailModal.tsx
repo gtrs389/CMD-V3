@@ -9,7 +9,7 @@ import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
-import { formatCpf, formatVoterId, genderLabel } from '@/lib/utils/documents';
+import { formatCpf, formatVoterId, genderLabel, isValidVoterId } from '@/lib/utils/documents';
 import {
   RELATIONSHIP_COLOR_CLASSES,
   relationshipColor,
@@ -95,6 +95,18 @@ function RelationshipRow({ client, member }: { client: Client; member: Member })
   );
 }
 
+/**
+ * Aviso do titulo de eleitor.
+ *
+ * O numero e aceito mesmo com o digito verificador torto — recusar deixaria
+ * a pessoa de fora do cadastro por causa de um numero mal copiado. Mas quem
+ * olha a ficha precisa saber: este titulo nao fecha, e provavelmente foi
+ * digitado errado.
+ */
+function tituloSuspeito(member: Member): boolean {
+  return Boolean(member.voterId) && !isValidVoterId(member.voterId ?? '');
+}
+
 /** Campos padrao com coluna propria, sempre na mesma ordem. */
 function StandardFields({ member }: { member: Member }) {
   const linhas: Array<[string, string | null]> = [
@@ -110,6 +122,7 @@ function StandardFields({ member }: { member: Member }) {
   ];
 
   const preenchidas = linhas.filter(([, valor]) => Boolean(valor));
+  const avisoDoTitulo = tituloSuspeito(member);
 
   return (
     <section>
@@ -121,7 +134,16 @@ function StandardFields({ member }: { member: Member }) {
         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
           {preenchidas.map(([rotulo, valor]) => (
             <div key={rotulo} className="min-w-0">
-              <dt className="text-xs text-ink-500">{rotulo}</dt>
+              <dt className="flex items-center gap-1.5 text-xs text-ink-500">
+                {rotulo}
+                {/* O titulo e aceito mesmo sem fechar o digito verificador:
+                    recusar deixaria a pessoa fora do cadastro por causa de um
+                    numero mal copiado. A tag diz que ele precisa ser
+                    conferido. */}
+                {rotulo === 'Título de eleitor' && avisoDoTitulo ? (
+                  <Badge tone="warning">Conferir</Badge>
+                ) : null}
+              </dt>
               <dd className="font-medium break-words text-ink-900">{valor}</dd>
             </div>
           ))}

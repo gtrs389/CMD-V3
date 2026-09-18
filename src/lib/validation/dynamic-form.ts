@@ -6,7 +6,7 @@ import {
   formatVoterId,
   genderLabel,
   isValidCpf,
-  isValidVoterId,
+  VOTER_ID_LENGTH,
   normalizeCpf,
   normalizePlace,
   normalizeSection,
@@ -79,8 +79,13 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
     case 'cpf':
       return texto((valor) => (isValidCpf(valor) ? null : 'CPF inválido. Confira os números.'));
     case 'voter_id':
+      // Doze digitos bastam para aceitar. O digito verificador continua
+      // sendo conferido, mas como AVISO na ficha — recusar deixaria a pessoa
+      // de fora do cadastro por causa de um numero mal copiado.
       return texto((valor) =>
-        isValidVoterId(valor) ? null : 'Título de eleitor inválido. Confira os números.',
+        valor.replace(/\D/g, '').length === VOTER_ID_LENGTH
+          ? null
+          : 'Título de eleitor deve ter doze dígitos.',
       );
     case 'zone':
       return texto((valor) =>
