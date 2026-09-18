@@ -61,6 +61,25 @@ export async function fetchOwnSurvey(): Promise<OwnSurvey> {
 }
 
 /**
+ * Resposta do Formulario 2 preenchida DENTRO do painel, pelo proprio lider.
+ *
+ * Mesmo formulario do link, preenchido com a pessoa na frente. O time e o
+ * remetente saem da SESSAO, no servidor: nada aqui decide para onde a
+ * resposta vai. Quem responde continua NAO virando integrante.
+ */
+export async function submitOwnSurveyAnswer(input: {
+  name: string;
+  phone: string;
+  answers: { fieldId: string; value: FieldValue }[];
+}): Promise<void> {
+  await api<{ ok: true; id: string }>('/api/questionario/resposta', {
+    method: 'POST',
+    body: input,
+  });
+  notifyDataChanged();
+}
+
+/**
  * Gera o link de uso unico do questionario.
  *
  * Sem `clientId`, o link e o do PROPRIO usuario. Com `clientId`, e o link do
