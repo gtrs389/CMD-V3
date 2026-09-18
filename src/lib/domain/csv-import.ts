@@ -9,9 +9,16 @@ import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
  * planilha entra, vira uma tabela na tela, e SO E GRAVADA quando quem subiu
  * conferir e mandar cadastrar.
  *
- * SEIS colunas sao lidas, e nenhuma outra:
+ * CINCO colunas sao lidas, e nenhuma outra:
  *
- *   Nome completo, Telefone, Titulo de eleitor, Zona, Secao e Endereco.
+ *   Nome completo, Telefone, Titulo de eleitor, Zona e Secao.
+ *
+ * O ENDERECO NAO VEM DA PLANILHA, de proposito. Ele nao e um texto: e uma
+ * escolha encadeada — Estado, depois Municipio, depois Bairro, depois Rua —,
+ * e cada passo so existe dentro do anterior. Um texto solto vindo de
+ * planilha nao se encaixa nessa cadeia, e gravar "Rua Brasil" sem saber de
+ * qual municipio nao localiza ninguem no mapa. Na conferencia, o endereco e
+ * escolhido nas mesmas listas do formulario.
  *
  * As colunas sao achadas PELO NOME, sem depender da ordem, e acento, caixa e
  * pontuacao nao atrapalham. Coluna a mais na planilha e ignorada em silencio:
@@ -32,7 +39,6 @@ export interface LinhaImportada {
   voterId: string;
   zone: string;
   section: string;
-  address: string;
 }
 
 export interface LeituraDaPlanilha {
@@ -60,7 +66,6 @@ const COLUNAS: Record<keyof Omit<LinhaImportada, 'id' | 'linha'>, string[]> = {
   voterId: ['titulo de eleitor', 'titulo', 'inscricao', 'inscricao eleitoral'],
   zone: ['zona eleitoral', 'zona'],
   section: ['secao eleitoral', 'secao', 'sessao eleitoral', 'sessao'],
-  address: ['endereco', 'logradouro', 'rua', 'endereco completo'],
 };
 
 /**
@@ -203,7 +208,6 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
       voterId: normalizeVoterId(valor(bruta, 'voterId')),
       zone: normalizeZone(valor(bruta, 'zone')),
       section: normalizeSection(valor(bruta, 'section')),
-      address: limpo(valor(bruta, 'address'), 120),
     });
   }
 
@@ -241,7 +245,7 @@ export function problemasDaLinha(linha: LinhaImportada): string[] {
 export const MODELO_SEPARADOR = ';';
 
 export const EXEMPLO_CSV = [
-  'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
-  'Maria da Silva Souza;82999990001;100000002720;44;3;Rua das Flores, 100 - Centro',
-  'João Pedro Alves;82988887777;;12;45;Travessa do Sol 42',
+  'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral',
+  'Maria da Silva Souza;82999990001;100000002720;44;3',
+  'João Pedro Alves;82988887777;;12;45',
 ].join('\r\n');

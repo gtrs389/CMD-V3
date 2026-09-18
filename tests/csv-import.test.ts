@@ -14,14 +14,14 @@ import {
  * derruba as outras.
  */
 
-const CABECALHO = 'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral,Endereço';
+const CABECALHO = 'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral';
 
 describe('leitura da planilha', () => {
-  it('lê as seis colunas, na ordem que vierem', () => {
+  it('lê as cinco colunas, na ordem que vierem', () => {
     const { linhas } = lerPlanilha(
       [
-        'Seção eleitoral;Nome completo;Zona eleitoral;Telefone;Endereço;Título de eleitor',
-        '3;Maria da Silva;44;82999990001;Rua das Flores 100;100000002720',
+        'Seção eleitoral;Nome completo;Zona eleitoral;Telefone;Título de eleitor',
+        '3;Maria da Silva;44;82999990001;100000002720',
       ].join('\n'),
     );
 
@@ -32,13 +32,24 @@ describe('leitura da planilha', () => {
       voterId: '100000002720',
       zone: '44',
       section: '3',
-      address: 'Rua das Flores 100',
     });
+  });
+
+  it('o endereço NÃO vem da planilha: ele é escolhido na conferência', () => {
+    // Endereço é a cadeia Estado -> Município -> Bairro -> Rua, e cada passo
+    // só existe dentro do anterior. Um texto solto não se encaixa nela.
+    const { linhas, ignoradas } = lerPlanilha(
+      [`${CABECALHO},Endereço`, 'Ana Lima,82999990002,,1,2,Rua das Flores 100'].join('\n'),
+    );
+
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]).not.toHaveProperty('address');
+    expect(ignoradas).toEqual(['Endereço']);
   });
 
   it('normaliza como a ficha normaliza', () => {
     const { linhas } = lerPlanilha(
-      [CABECALHO, 'Maria da Silva,(82) 99999-0001,1000 0000 2720,044,0003,Rua A'].join('\n'),
+      [CABECALHO, 'Maria da Silva,(82) 99999-0001,1000 0000 2720,044,0003'].join('\n'),
     );
 
     // Telefone sem máscara, título só com dígitos, e o zero à frente fora:
@@ -49,18 +60,16 @@ describe('leitura da planilha', () => {
     expect(linhas[0].section).toBe('3');
   });
 
-  it('aceita ponto e vírgula, aspas e vírgula dentro do campo', () => {
+  it('aceita aspas e vírgula dentro do campo', () => {
     const { linhas } = lerPlanilha(
-      [CABECALHO, 'Ana Lima,82999990002,,1,2,"Rua das Flores, 100 - Centro"'].join('\n'),
+      [CABECALHO, '"Lima, Ana Beatriz",82999990002,,1,2'].join('\n'),
     );
-    expect(linhas[0].address).toBe('Rua das Flores, 100 - Centro');
+    expect(linhas[0].name).toBe('Lima, Ana Beatriz');
   });
 
   it('coluna a mais é ignorada, e a planilha diz quais', () => {
     const { linhas, ignoradas } = lerPlanilha(
-      [`${CABECALHO},CPF,Observações`, 'Ana Lima,82999990002,,1,2,Rua A,12345678901,anotação'].join(
-        '\n',
-      ),
+      [`${CABECALHO},CPF,Observações`, 'Ana Lima,82999990002,,1,2,12345678901,anotação'].join('\n'),
     );
 
     expect(linhas).toHaveLength(1);
@@ -69,9 +78,7 @@ describe('leitura da planilha', () => {
 
   it('linha vazia é pulada sem alarde', () => {
     const { linhas, vazias } = lerPlanilha(
-      [CABECALHO, 'Ana Lima,82999990002,,1,2,Rua A', ',,,,,', '', 'Bruno Sá,82988887777,,3,4,Rua B'].join(
-        '\n',
-      ),
+      [CABECALHO, 'Ana Lima,82999990002,,1,2', ',,,,', '', 'Bruno Sá,82988887777,,3,4'].join('\n'),
     );
 
     expect(linhas).toHaveLength(2);
@@ -81,7 +88,7 @@ describe('leitura da planilha', () => {
 
   it('guarda o número da linha da planilha, para quem for corrigir achar', () => {
     const { linhas } = lerPlanilha(
-      [CABECALHO, 'Ana Lima,82999990002,,1,2,Rua A', 'Bruno Sá,82988887777,,3,4,Rua B'].join('\n'),
+      [CABECALHO, 'Ana Lima,82999990002,,1,2', 'Bruno Sá,82988887777,,3,4'].join('\n'),
     );
     expect(linhas.map((linha) => linha.linha)).toEqual([2, 3]);
   });
@@ -108,7 +115,6 @@ describe('o que impede uma linha de ser cadastrada', () => {
       voterId: '',
       zone: '',
       section: '',
-      address: '',
       ...extra,
     };
   }
@@ -121,8 +127,8 @@ describe('o que impede uma linha de ser cadastrada', () => {
     expect(problemasDaLinha(linha({ name: 'A', phone: '' }))).toEqual(['nome', 'telefone']);
   });
 
-  it('título, zona, seção e endereço podem faltar', () => {
-    expect(problemasDaLinha(linha({ voterId: '', zone: '', section: '', address: '' }))).toEqual([]);
+  it('título, zona e seção podem faltar', () => {
+    expect(problemasDaLinha(linha({ voterId: '', zone: '', section: '' }))).toEqual([]);
   });
 });
 
@@ -133,15 +139,10 @@ describe('planilha de exemplo', () => {
     expect(MODELO_SEPARADOR).toBe(';');
 
     const [cabecalho] = EXEMPLO_CSV.split(/\r?\n/);
-    expect(cabecalho.split(';')).toHaveLength(6);
+    expect(cabecalho.split(';')).toHaveLength(5);
     expect(cabecalho).toBe(
-      'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
+      'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral',
     );
-  });
-
-  it('o endereço com vírgula continua em uma célula só', () => {
-    const { linhas } = lerPlanilha(EXEMPLO_CSV);
-    expect(linhas[0].address).toBe('Rua das Flores, 100 - Centro');
   });
 
   it('o exemplo que o sistema oferece é lido por ele mesmo', () => {

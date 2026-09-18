@@ -24,13 +24,19 @@ import { maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
 import { maskPhone, normalizePhone } from '@/lib/utils/phone';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
+import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 
+/** Uma pessoa conferida: o que veio da planilha mais o endereco escolhido. */
+export type PessoaDaPlanilha = LinhaImportada & EnderecoDaLinha;
+
 /** O que a tela precisa saber fazer com UMA pessoa conferida. */
-export type SalvarLinha = (linha: LinhaImportada) => Promise<void>;
+export type SalvarLinha = (pessoa: PessoaDaPlanilha) => Promise<void>;
+
+const SEM_ENDERECO: EnderecoDaLinha = { state: '', city: '', district: '', street: '' };
 
 interface SpreadsheetImportModalProps {
   open: boolean;
@@ -67,6 +73,13 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   const [linhas, setLinhas] = useState<LinhaImportada[]>([]);
   const [situacoes, setSituacoes] = useState<Record<string, Situacao>>({});
   const [ignoradas, setIgnoradas] = useState<string[]>([]);
+  /**
+   * Endereco de cada pessoa, escolhido AQUI.
+   *
+   * Nao vem da planilha: ele e a cadeia Estado -> Municipio -> Bairro -> Rua,
+   * e um texto solto nao se encaixa nela.
+   */
+  const [enderecos, setEnderecos] = useState<Record<string, EnderecoDaLinha>>({});
   const [arquivo, setArquivo] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [progresso, setProgresso] = useState(0);
@@ -78,6 +91,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   function limpar() {
     setLinhas([]);
     setSituacoes({});
+    setEnderecos({});
     setIgnoradas([]);
     setArquivo(null);
     setProgresso(0);
@@ -94,6 +108,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
     setLinhas(leitura.linhas);
     setSituacoes({});
+    setEnderecos({});
     setIgnoradas(leitura.ignoradas);
     setArquivo(file.name);
     setProgresso(0);
@@ -150,7 +165,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
     // passar duas pessoas com o mesmo numero.
     for (const linha of prontas) {
       try {
-        await salvar(linha);
+        await salvar({ ...linha, ...(enderecos[linha.id] ?? SEM_ENDERECO) });
         gravadas += 1;
         setSituacoes((atual) => ({ ...atual, [linha.id]: { estado: 'salva' } }));
       } catch (falha) {
@@ -274,8 +289,8 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
               Uma coluna para cada informação: <strong>Nome completo</strong>,{' '}
               <strong>Telefone</strong>, <strong>Título de eleitor</strong>,{' '}
-              <strong>Zona eleitoral</strong>, <strong>Seção eleitoral</strong> e{' '}
-              <strong>Endereço</strong>. A ordem não importa, e coluna a mais é ignorada.
+              <strong>Zona eleitoral</strong> e <strong>Seção eleitoral</strong>. A ordem não
+              importa, e coluna a mais é ignorada.
             </p>
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
               O modelo abre direto no Excel, já em colunas. Exportado de outro programa, serve
@@ -421,15 +436,17 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                         />
                       </Field>
 
-                      <Field id={campo('endereco')} label="Endereço" className="sm:col-span-2">
-                        <Input
-                          id={campo('endereco')}
-                          value={linha.address}
-                          disabled={bloqueado}
-                          leading={<MapPin className="size-4" />}
-                          onChange={(event) => editar(linha.id, 'address', event.target.value)}
-                        />
-                      </Field>
+                      {/* O endereco e a mesma cadeia da ficha — Estado,
+                          Municipio, Bairro, Rua —, e por isso ele nao vem da
+                          planilha: cada passo so existe dentro do anterior. */}
+                      <ImportAddressFields
+                        id={linha.id}
+                        endereco={enderecos[linha.id] ?? SEM_ENDERECO}
+                        disabled={bloqueado}
+                        onChange={(endereco) =>
+                          setEnderecos((atual) => ({ ...atual, [linha.id]: endereco }))
+                        }
+                      />
                     </div>
 
                     {situacao?.estado === 'falhou' ? (
@@ -445,7 +462,8 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
             <p className="text-[0.8125rem] leading-relaxed text-ink-500">
               Corrija o que precisar aqui mesmo — nada foi gravado ainda. Nome e telefone são
-              obrigatórios; título, zona, seção e endereço podem ficar em branco. Quem já foi
+              obrigatórios; título, zona, seção e endereço podem ficar em branco. O endereço não
+              vem da planilha: escolha aqui, nas mesmas listas do formulário. Quem já foi
               cadastrado fica em verde e não é cadastrado de novo.
             </p>
           </>

@@ -162,21 +162,28 @@ export function MembersPanel({
    * ficha do integrante; na do lider, o Formulario 2 — que tambem cria o
    * integrante (migration 044). A planilha nao e um caminho paralelo.
    */
-  const salvarDaPlanilha = async (linha: {
+  const salvarDaPlanilha = async (pessoa: {
     name: string;
     phone: string;
     voterId: string;
     zone: string;
     section: string;
-    address: string;
+    state: string;
+    city: string;
+    district: string;
+    street: string;
   }) => {
     const ficha = {
-      name: linha.name.trim(),
-      phone: linha.phone,
-      voterId: linha.voterId || null,
-      zone: linha.zone || null,
-      section: linha.section || null,
-      street: linha.address || null,
+      name: pessoa.name.trim(),
+      phone: pessoa.phone,
+      voterId: pessoa.voterId || null,
+      zone: pessoa.zone || null,
+      section: pessoa.section || null,
+      // O endereco foi escolhido na conferencia, na mesma cadeia da ficha.
+      state: pessoa.state || null,
+      city: pessoa.city || null,
+      district: pessoa.district || null,
+      street: pessoa.street || null,
     };
 
     if (addForm === 'formulario-2') {
