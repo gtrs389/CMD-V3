@@ -24,6 +24,7 @@ import {
 } from '@/lib/domain/csv-import';
 import { isValidVoterId, maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
 import { maskPhone, normalizePhone } from '@/lib/utils/phone';
+import { baixarCsv } from '@/lib/utils/download';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields';
@@ -156,17 +157,9 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   }
 
   function baixarExemplo() {
-    // BOM e ponto e virgula: o Excel em portugues precisa dos dois para
-    // abrir o arquivo EM COLUNAS e com os acentos certos. Com virgula, ele
-    // empilha tudo em uma coluna so, e a planilha chega inutil na mao de
-    // quem ia preenche-la.
-    const blob = new Blob([`﻿${EXEMPLO_CSV}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'modelo-integrantes.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+    // O BOM e o ponto e virgula que o Excel em portugues exige ficam no
+    // utilitario: e a mesma exigencia da planilha exportada pela equipe.
+    baixarCsv('modelo-integrantes.csv', EXEMPLO_CSV);
   }
 
   async function cadastrar() {
