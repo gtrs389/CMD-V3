@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { MemberDeviceSection } from './MemberDeviceSection';
+import { MemberSignupLinkSection } from './MemberSignupLinkSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
 import { RecruitedBy } from './RecruitedBy';
 import { TransferRecruiterModal } from './TransferRecruiterModal';
@@ -362,6 +363,10 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
           member={member}
           verificationEnabled={client.verificationEnabled}
         />
+      ) : null}
+
+      {podeVerAparelho && member.source === 'invite' ? (
+        <MemberSignupLinkSection memberId={member.id} />
       ) : null}
 
       {podeVerAparelho ? <MemberDeviceSection memberId={member.id} /> : null}
