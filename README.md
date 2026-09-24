@@ -692,6 +692,49 @@ Requer as migrations `033_time_demo.sql`, `034_time_demo_alagoas.sql`,
 
 ---
 
+## Exportar a equipe em planilha
+
+O botão **Exportar**, na barra da equipe do time, baixa a lista em `.csv` com
+**três colunas**, e nenhuma outra:
+
+| Coluna | O que traz |
+| --- | --- |
+| `Nome` | O nome completo do cadastro |
+| `Telefone` | Com máscara — `(82) 99999-0001`. Sem telefone, a célula fica **vazia**, para o filtro da planilha achar de uma vez quem está sem número |
+| `Cadastrado por` | O MESMO texto da tela: `José Pereira · Equipe`, `Ana Costa · Administração do time`, `Cadastro anterior ao rastreamento` |
+
+"Cadastrado por" sai de `recruiterText`, a mesma função que a tela usa. O texto
+vem do snapshot gravado no momento do cadastro: continua correto mesmo depois
+que o usuário responsável é excluído — aí com o sufixo `(acesso removido)` — e
+registro sem evidência nenhuma nunca é atribuído a alguém.
+
+**Sai o que está na tela.** Sem pesquisa e sem filtro — que é como a página
+abre —, sai o time inteiro. Com o filtro de "Cadastrado por" ligado, sai o
+recorte que está à vista, e o aviso diz quantas pessoas foram. Exportar uma
+lista diferente da que a pessoa está olhando seria a pior das duas opções.
+
+**É do ADMIN geral.** A permissão `member.export` existe separada de
+`member.view` porque a lista inteira em um arquivo é outra coisa que a mesma
+lista na tela: ela vai para a pasta de downloads, o WhatsApp e o e-mail de quem
+baixou, e não volta. O Administrador do time e o integrante veem a equipe, mas
+não exportam.
+
+**Nenhuma rota nova.** O arquivo é montado no navegador sobre a lista que a
+página já recebeu — com o recorte de hierarquia que o servidor aplicou ao
+enviar. A exportação não alcança uma linha a mais do que a tela, e nada volta
+ao servidor para baixar.
+
+O arquivo sai como `integrantes-<time>-<data>.csv`, com BOM e ponto e vírgula:
+sem os dois, o Excel em português abre tudo em uma coluna só e com os acentos
+trocados. É a mesma exigência do modelo de importação (`csv-import.ts`), agora
+em um único lugar — `src/lib/utils/download.ts`.
+
+Nome que começa por `=`, `+`, `-` ou `@` chega à planilha **como texto**, com um
+apóstrofo na frente. Nome vindo do link público não passa por ninguém, e fórmula
+em planilha alheia é execução de algo que quem abriu não escreveu.
+
+---
+
 ## Estrutura
 
 ```
@@ -747,6 +790,7 @@ src/
 | `src/lib/repositories/index.ts` | Fábrica de repositórios (ponto de troca) |
 | `src/lib/validation/dynamic-form.ts` | Schema tipado gerado a partir dos campos |
 | `src/lib/domain/form-config.ts` | Regras de campos, ordem e duplicação |
+| `src/lib/domain/csv-export.ts` | As três colunas da planilha exportada da equipe |
 | `src/lib/server/auth.service.ts` | Login, sessão e revogação sobre `cmd_users`/`cmd_sessions` |
 | `src/lib/server/guard.ts` | Confere sessão e permissão em toda rota administrativa |
 | `src/lib/supabase/rest.ts` | Único caminho até o banco, sempre no servidor |
@@ -820,4 +864,8 @@ Supabase e o fluxo ponta a ponta conferido no navegador, conforme o passo 6 de
    já é filtrada por permissão e `cmd_users.role` já aceita `EQUIPE`.
 2. **Gestão de usuários pelo painel** — criar e desativar ADMINs pela interface,
    reaproveitando `src/lib/auth/password.ts`.
-3. **Exportação de dados** — CSV da equipe de um cliente, direto do servidor.
+3. ~~**Exportação de dados** — CSV da equipe de um cliente~~ — **feito**, ver
+   [Exportar a equipe em planilha](#exportar-a-equipe-em-planilha). O arquivo é
+   montado no navegador, sobre a lista que a página já recebeu: uma rota de
+   servidor só passa a ser necessária no dia em que a exportação precisar ir
+   além do que a tela carrega.

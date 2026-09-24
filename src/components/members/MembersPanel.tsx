@@ -1,7 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Eye, FileSpreadsheet, Pencil, SearchX, Trash2, UserPlus, Users } from 'lucide-react';
+import {
+  Download,
+  Eye,
+  FileSpreadsheet,
+  Pencil,
+  SearchX,
+  Trash2,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import type { Client, Member } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
 import {
@@ -10,7 +19,9 @@ import {
   recruiterOptions,
   recruiterText,
 } from '@/lib/domain/recruitment';
+import { montarCsvDaEquipe, nomeDoArquivo } from '@/lib/domain/csv-export';
 import { byNewest, formatDate } from '@/lib/utils/date';
+import { baixarCsv } from '@/lib/utils/download';
 import { formatPhone, normalizePhone } from '@/lib/utils/phone';
 import { matchesSearch } from '@/lib/utils/text';
 import { Select } from '@/components/ui/Select';
@@ -87,6 +98,13 @@ export function MembersPanel({
   const rotuloAdicionar = 'Adicionar integrante';
   const podeEditar = can('member.update');
   const podeExcluir = can('member.delete');
+  /**
+   * Exportar a equipe em planilha: so o ADMIN geral.
+   *
+   * A lista exportada e exatamente a que esta na tela, ja recortada pela
+   * hierarquia no servidor — nenhuma linha a mais aparece no arquivo.
+   */
+  const podeExportar = can('member.export');
   // O integrante da equipe ve apenas nome, foto e telefone: nada de e-mail,
   // responsavel pelo cadastro ou origem, que o servidor ja nao envia mais.
   const somenteBasico = user?.role === 'EQUIPE';
@@ -210,6 +228,46 @@ export function MembersPanel({
     setFormOpen(true);
   }
 
+  /**
+   * Baixa a equipe em planilha: Nome, Telefone e Cadastrado por.
+   *
+   * Sai o que esta na tela. Sem pesquisa e sem filtro — que e como a pagina
+   * abre —, sai o time inteiro; com um deles ligado, sai o recorte que quem
+   * pediu esta olhando, e o aviso diz quantas pessoas foram. Exportar uma
+   * lista diferente da que esta a vista seria a pior das duas opcoes.
+   *
+   * O arquivo e montado aqui mesmo, sobre a lista que a pagina ja recebeu:
+   * nenhuma requisicao nova, e nenhum dado alem do que a tela ja mostra.
+   */
+  function exportar() {
+    if (filtered.length === 0) return;
+
+    baixarCsv(nomeDoArquivo(client.name), montarCsvDaEquipe(filtered));
+    toast.success(
+      filtered.length === 1
+        ? 'Planilha baixada com 1 pessoa.'
+        : `Planilha baixada com ${filtered.length} pessoas.`,
+    );
+  }
+
+  const rotuloExportar =
+    filtered.length === ordered.length
+      ? 'Exportar a equipe em planilha'
+      : `Exportar em planilha as ${filtered.length} pessoas desta busca`;
+
+  const botaoExportar = podeExportar ? (
+    <Button
+      variant="secondary"
+      onClick={exportar}
+      disabled={filtered.length === 0}
+      title={rotuloExportar}
+      aria-label={rotuloExportar}
+    >
+      <Download aria-hidden="true" className="size-4" />
+      Exportar
+    </Button>
+  ) : null;
+
   const importar = podeCriar ? (
     <SpreadsheetImportModal
       open={planilhaAberta}
@@ -303,6 +361,7 @@ export function MembersPanel({
           <p className="shrink-0 text-sm whitespace-nowrap text-ink-500">
             {filtered.length} de {ordered.length}
           </p>
+          {botaoExportar}
           {podeCriar ? (
             // O rotulo curto cabe na barra; o completo fica no titulo e na
             // leitura por tecnologia assistiva, dizendo QUAL formulario abre.

@@ -3,6 +3,7 @@ import { can, hasPanelAccess, permissionsOf } from '@/lib/permissions';
 
 const admin = { role: 'ADMIN' } as const;
 const equipe = { role: 'EQUIPE' } as const;
+const time = { role: 'CANDIDATE' } as const;
 
 describe('permissoes', () => {
   it('da acesso total ao ADMIN', () => {
@@ -35,6 +36,16 @@ describe('permissoes', () => {
     expect(can(equipe, 'device.view')).toBe(false);
     expect(can(equipe, 'verification.view')).toBe(false);
     expect(can(equipe, 'map.view')).toBe(false);
+  });
+
+  it('exportar a equipe em planilha é só do ADMIN geral', () => {
+    // A lista inteira em um arquivo sai do sistema e não volta: quem
+    // responde por essa saída é o ADMIN. Ver a equipe na tela continua
+    // valendo para os três perfis.
+    expect(can(admin, 'member.export')).toBe(true);
+    expect(can(time, 'member.export')).toBe(false);
+    expect(can(equipe, 'member.export')).toBe(false);
+    expect(can(null, 'member.export')).toBe(false);
   });
 
   it('permite o envio público para EQUIPE e visitantes', () => {

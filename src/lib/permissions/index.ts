@@ -31,6 +31,16 @@ export const PERMISSIONS = [
   'member.create',
   'member.update',
   'member.delete',
+  /**
+   * Exportar a equipe do time em planilha: exclusivo do ADMIN geral.
+   *
+   * A lista inteira de um time em um arquivo que sai do sistema e outra
+   * coisa que a mesma lista na tela: ela vai para a pasta de downloads, o
+   * WhatsApp e o e-mail de quem baixou, e nao volta. Quem responde por
+   * essa saida e o ADMIN geral — por isso a permissao existe separada de
+   * `member.view`, em vez de acompanhar quem apenas enxerga a equipe.
+   */
+  'member.export',
   /** Pagina "Minha mobilizacao": exclusiva do perfil EQUIPE. */
   'team.access',
   /** Resultado da verificacao cadastral: exclusivo do ADMIN. */
