@@ -319,29 +319,56 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
 }
 
 /**
- * O que impede ESTA linha de ser cadastrada.
+ * O que IMPEDE esta linha de ser cadastrada.
  *
- * Vazio quer dizer pronta. As duas unicas exigencias sao as mesmas da ficha:
- * nome e telefone — o telefone porque e ele que identifica a pessoa no time,
- * e sem ele o servidor recusaria de qualquer jeito. O resto pode faltar.
+ * Vazio quer dizer que ela entra — com buraco ou sem. Dado faltando nao
+ * impede mais nada: a pessoa entra e a ficha dela fica marcada como
+ * incompleta (`member-completeness.ts`). Uma lista de mutirao sempre chega
+ * com telefone faltando, e recusar a linha e perder a pessoa.
+ *
+ * Sobraram dois impedimentos, e nenhum dos dois e "falta":
+ *
+ *   NOME       o banco exige, e sem nome ninguem sabe quem e a pessoa. Uma
+ *              ficha anonima nao e um cadastro incompleto: e um cadastro
+ *              que nao serve para nada;
+ *   TELEFONE LONGO DEMAIS  nao e falta, e numero ERRADO. A normalizacao
+ *              corta o que passa de onze digitos, entao "829999493112"
+ *              viraria um numero que parece certo e liga para outra pessoa.
+ *              Comparar com a forma normalizada denuncia o corte.
  */
 export function problemasDaLinha(linha: LinhaImportada): string[] {
   const problemas: string[] = [];
 
   if (linha.name.trim().length < 2) problemas.push('nome');
 
-  // Numero incompleto passa, como no formulario: a planilha vem do mundo
-  // real e um digito faltando nao pode custar a pessoa inteira.
-  //
-  // O que continua sendo recusado e o numero LONGO DEMAIS: a normalizacao
-  // corta o que passa de onze digitos, entao "829999493112" viraria um
-  // numero que parece certo e liga para outra pessoa. Comparar com a forma
-  // normalizada denuncia o corte.
-  if (!isUsablePhone(linha.phone) || normalizePhone(linha.phone) !== linha.phone) {
-    problemas.push('telefone');
+  if (linha.phone && normalizePhone(linha.phone) !== linha.phone) {
+    problemas.push('telefone com dígitos demais');
   }
 
   return problemas;
+}
+
+/**
+ * O que FALTA nesta linha — sem impedir nada.
+ *
+ * Mesma pergunta que a ficha responde depois de gravada, feita antes: quem
+ * confere a planilha ve, linha a linha, o que vai entrar pela metade, e
+ * decide se completa ali ou se deixa para depois.
+ *
+ * O telefone entra na conta quando esta vazio E quando esta curto demais
+ * para ser um telefone: nos dois casos ele nao identifica ninguem, e a
+ * pessoa vai ficar sem acesso ate alguem corrigir.
+ */
+export function faltasDaLinha(linha: LinhaImportada): string[] {
+  const faltas: string[] = [];
+
+  if (!isUsablePhone(linha.phone)) faltas.push('telefone');
+  if (!linha.voterId.trim()) faltas.push('título de eleitor');
+  if (!linha.zone.trim()) faltas.push('zona');
+  if (!linha.section.trim()) faltas.push('seção');
+  if (!linha.district.trim() && !linha.street.trim()) faltas.push('endereço');
+
+  return faltas;
 }
 
 /**

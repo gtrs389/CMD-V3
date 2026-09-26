@@ -23,6 +23,7 @@ import { montarCsvDaEquipe, nomeDoArquivo } from '@/lib/domain/csv-export';
 import { byNewest, formatDate } from '@/lib/utils/date';
 import { baixarCsv } from '@/lib/utils/download';
 import { formatPhone, normalizePhone } from '@/lib/utils/phone';
+import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
 import { matchesSearch } from '@/lib/utils/text';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
@@ -419,6 +420,14 @@ export function MembersPanel({
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
                             {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
+                            {/* Cadastro que entrou pela metade — quase sempre
+                                de planilha. A etiqueta e calculada da propria
+                                ficha: completou, ela some. */}
+                            {cadastroIncompleto(member) ? (
+                              <Badge tone="warning" title={avisoDeFaltas(member)}>
+                                Dados incompletos
+                              </Badge>
+                            ) : null}
                           </div>
                         </>
                       ) : null}
@@ -487,8 +496,15 @@ export function MembersPanel({
                       <div className="flex items-center gap-3">
                         <Avatar name={member.name} src={member.photo} size="sm" />
                         <span className="min-w-0">
-                          <span className="block truncate font-medium text-ink-900">
-                            {member.name}
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate font-medium text-ink-900">
+                              {member.name}
+                            </span>
+                            {!somenteBasico && cadastroIncompleto(member) ? (
+                              <Badge tone="warning" title={avisoDeFaltas(member)}>
+                                Incompleto
+                              </Badge>
+                            ) : null}
                           </span>
                           {/* E-mail historico: sem endereco a linha some, e
                               nenhum cadastro novo tem um. */}

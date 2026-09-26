@@ -18,10 +18,12 @@ import {
   EXEMPLO_CSV,
   MUNICIPIO_PADRAO,
   UF_PADRAO,
+  faltasDaLinha,
   lerPlanilha,
   problemasDaLinha,
   type LinhaImportada,
 } from '@/lib/domain/csv-import';
+import { resumoDasFaltas } from '@/lib/domain/member-completeness';
 import { isValidVoterId, maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
 import { maskPhone, normalizePhone } from '@/lib/utils/phone';
 import { baixarCsv } from '@/lib/utils/download';
@@ -89,7 +91,10 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
   const [progresso, setProgresso] = useState(0);
 
   const pendentes = linhas.filter((linha) => situacoes[linha.id]?.estado !== 'salva');
+  // "Pronta" quer dizer que ENTRA, e nao que esta completa: dado faltando
+  // nao segura mais ninguem — a pessoa entra marcada como incompleta.
   const prontas = pendentes.filter((linha) => problemasDaLinha(linha).length === 0);
+  const incompletas = prontas.filter((linha) => faltasDaLinha(linha).length > 0).length;
   const salvas = linhas.filter((linha) => situacoes[linha.id]?.estado === 'salva').length;
 
   function limpar() {
@@ -236,6 +241,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
               : linhas.length === 0
                 ? 'Nenhuma planilha carregada.'
                 : `${prontas.length} ${prontas.length === 1 ? 'pronta' : 'prontas'} para cadastrar` +
+                  (incompletas > 0 ? ` (${incompletas} incompleta${incompletas === 1 ? '' : 's'})` : '') +
                   (pendentes.length - prontas.length > 0
                     ? `, ${pendentes.length - prontas.length} por corrigir`
                     : '') +
@@ -321,6 +327,8 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                 const situacao = situacoes[linha.id];
                 const salva = situacao?.estado === 'salva';
                 const problemas = salva ? [] : problemasDaLinha(linha);
+                // Falta nao impede: a linha entra e a ficha nasce marcada.
+                const faltas = salva || problemas.length > 0 ? [] : faltasDaLinha(linha);
                 const bloqueado = salva || salvando;
                 const campo = (nome: string) => `planilha-${linha.id}-${nome}`;
 
@@ -333,7 +341,7 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                         ? 'border-success-600/40 bg-success-50/40'
                         : situacao?.estado === 'falhou'
                           ? 'border-danger-200 bg-danger-50/40'
-                          : problemas.length > 0
+                          : problemas.length > 0 || faltas.length > 0
                             ? 'border-warning-600/40 bg-warning-50/40'
                             : 'border-line',
                     )}
@@ -351,8 +359,15 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
                             Cadastrada
                           </span>
                         ) : problemas.length > 0 ? (
+                          <span className="text-danger-700">
+                            Corrija {problemas.join(' e ')}
+                          </span>
+                        ) : faltas.length > 0 ? (
+                          // Entra assim mesmo, e a ficha dela ja nasce com a
+                          // etiqueta: quem sobe a planilha decide se completa
+                          // agora ou depois.
                           <span className="text-warning-600">
-                            Falta {problemas.join(' e ')}
+                            Entra incompleta: falta {resumoDasFaltas(faltas, faltas.length)}
                           </span>
                         ) : (
                           <span>Pronta para cadastrar</span>

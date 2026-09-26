@@ -279,6 +279,24 @@ const memberPhone = trimmed(30)
   .min(1, 'Informe o telefone.')
   .refine((value) => isUsablePhone(value), 'Telefone muito curto. Use DDD + número.');
 
+/**
+ * O mesmo telefone, podendo faltar por inteiro.
+ *
+ * Vale nos caminhos do PAINEL — cadastro a mao, Formulario 2 e planilha —,
+ * onde a lista chega pronta de fora e vem com buracos. A pessoa entra sem
+ * telefone, a ficha dela fica marcada como incompleta e o acesso so nasce
+ * quando o numero for preenchido.
+ *
+ * No FORMULARIO PUBLICO continua obrigatorio: ali quem preenche e a propria
+ * pessoa, com o telefone na mao, e e por ele que ela entra depois.
+ *
+ * SEM `default` aqui: em `memberUpdateSchema`, que e `.partial()`, um valor
+ * de fabrica faria a chave aparecer mesmo quando ninguem a enviou — e
+ * editar so o nome APAGARIA o telefone da pessoa. Quem cria e que aplica o
+ * `default('')`, onde a ausencia realmente significa "sem telefone".
+ */
+const memberPhoneOpcional = z.union([memberPhone, z.literal('')]);
+
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */
 const memberBase = {
   ...standardMemberFields,
@@ -292,13 +310,17 @@ const memberBase = {
 export const memberCreateSchema = z.object({
   clientId: z.uuid('Time inválido.'),
   ...memberBase,
+  // Cadastro pelo painel: o telefone pode faltar (ver `memberPhoneOpcional`).
+  phone: memberPhoneOpcional.default(''),
 });
 
 export const memberUpdateSchema = z
   .object({
     ...standardMemberFields,
     name: trimmed(120).min(2, 'Informe o nome completo.'),
-    phone: memberPhone,
+    // Corrigir a ficha inclui APAGAR um numero errado: quem edita esta
+    // olhando para o cadastro e sabe o que esta fazendo.
+    phone: memberPhoneOpcional,
     photo: photoValue,
     responses: responsesSchema,
     consentAt: z.iso.datetime().nullable(),
@@ -510,7 +532,8 @@ export const surveyAnswerSchema = z.object({
 export const surveyMemberSchema = z.object({
   ...standardMemberFields,
   name: trimmed(120).min(2, 'Informe o nome completo.'),
-  phone: memberPhone,
+  // Tambem e caminho de painel, e a planilha passa por ele.
+  phone: memberPhoneOpcional.default(''),
   photo: photoValue.default(null),
   consentAt: z.iso.datetime().nullable().default(null),
   answers: z

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ArrowRightLeft, Pencil } from 'lucide-react';
 import type { Client, FieldOption, Member } from '@/lib/types';
 import { ACCESS_STATUS_LABELS } from '@/lib/types';
+import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
 import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
@@ -270,7 +271,14 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                   {ACCESS_STATUS_LABELS[member.access]}
                 </Badge>
                 {member.consentAt ? <Badge tone="success">Consentimento registrado</Badge> : null}
+                {/* O que falta aparece por extenso logo abaixo: aqui a
+                    etiqueta so avisa que falta alguma coisa. */}
+                {cadastroIncompleto(member) ? <Badge tone="warning">Dados incompletos</Badge> : null}
               </div>
+
+              {cadastroIncompleto(member) ? (
+                <p className="mt-2 text-sm text-warning-600">{avisoDeFaltas(member)}</p>
+              ) : null}
 
               {/* Entrar no painel desta pessoa: exclusivo do ADMIN geral, e
                   a rota confere de novo. O botao some sozinho para quem nao
