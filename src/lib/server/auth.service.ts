@@ -264,12 +264,21 @@ export async function resolveSession(
  * volta a valer no instante em que a chave for religada.
  */
 /**
- * Primeiro formato de consulta a tentar (indice em `selects`, abaixo).
+ * A recusa foi do FORMATO da consulta, e nao da sessao?
  *
- * Comeca no mais completo e so anda quando o banco recusa uma coluna que
- * ainda nao existe. Vive no processo, nunca entre processos.
+ * Duas familias entram: coluna, tabela ou funcao que o banco ainda nao tem
+ * (migration pendente) e vinculo que o PostgREST nao soube embutir —
+ * PGRST200 quando a dica nao existe e PGRST201 quando ha mais de um caminho
+ * possivel. Nos dois casos ha outro formato a tentar; em qualquer outro
+ * erro, insistir apenas esconderia o defeito.
  */
-let selectAtual = 0;
+function outroFormatoPodeSalvar(error: unknown): boolean {
+  if (!(error instanceof SupabaseRequestError)) return false;
+  if (error.isMissingSchema) return true;
+
+  if (error.code === 'PGRST200' || error.code === 'PGRST201') return true;
+  return error.message.toLowerCase().includes('relationship');
+}
 
 export async function resolveSessionState(
   token: string | undefined,
@@ -281,47 +290,61 @@ export async function resolveSessionState(
   const filtro = { token_hash: `eq.${hashToken(token)}` };
 
   /**
-   * A consulta, com e sem o que ainda pode nao existir no banco.
+   * Os formatos aceitaveis da consulta, do mais completo ao mais antigo.
    *
    * Esta consulta e a porta de TODO o sistema: se ela falhar, ninguem entra
-   * em lugar nenhum. Uma funcionalidade que ainda nao foi ao banco nao pode
-   * derrubar o login de todo mundo, entao cada coluna nova e tentada e, se
-   * o banco disser que ela nao existe, a sessao resolve sem ela — que e
-   * exatamente como era antes de a funcionalidade existir.
+   * em lugar nenhum — o login aceita a senha e a tela seguinte devolve a
+   * pessoa para o login, sem dizer por que. Duas coisas ja causaram isso, e
+   * as duas viram variacao aqui.
+   *
+   * COLUNA QUE O BANCO AINDA NAO TEM. Publicar codigo antes de rodar a
+   * migration nao pode derrubar o login de todo mundo:
    *
    *   `demo_access_enabled`  migration 036 (chave do Time DEMO);
    *   `impersonated_by`      migration 045 (painel aberto pelo ADMIN).
+   *
+   * CAMINHO AMBIGUO ATE `cmd_users`. Desde a migration 045 ha DOIS
+   * caminhos de `cmd_sessions` ate `cmd_users`: o dono da sessao
+   * (`user_id`) e, quando o ADMIN geral abre o painel de alguem, quem a
+   * abriu (`impersonated_by`). Sem dizer por qual deles o usuario e
+   * embutido, o PostgREST recusa a consulta inteira — e a mesma armadilha
+   * ja descrita em `memberPhoto`. A dica `!user_id` resolve; a variacao sem
+   * dica fica como ultimo recurso, para o caso de uma versao do PostgREST
+   * nao aceitar essa forma. Em banco de um caminho so, as duas funcionam.
    */
-  const selects = [true, false].flatMap((comInspecao) =>
-    [true, false].map((comDemo) => {
-      const base =
-        `id,expires_at,revoked_at,admin_device_id` +
-        `${comInspecao ? ',impersonated_by' : ''},` +
-        `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
-        `team_person:${TABLES.teamPeople}(photo_path)`;
-      return comDemo
-        ? `${base},client:${TABLES.clients}(is_demo,demo_access_enabled))`
-        : `${base})`;
-    }),
+  const selects = [true, false].flatMap((comDica) =>
+    [true, false].flatMap((comInspecao) =>
+      [true, false].map((comDemo) => {
+        const base =
+          `id,expires_at,revoked_at,admin_device_id` +
+          `${comInspecao ? ',impersonated_by' : ''},` +
+          `user:${TABLES.users}${comDica ? '!user_id' : ''}(${SESSION_COLUMNS},is_active,` +
+          `team_person:${TABLES.teamPeople}(photo_path)`;
+        return comDemo
+          ? `${base},client:${TABLES.clients}(is_demo,demo_access_enabled))`
+          : `${base})`;
+      }),
+    ),
   );
 
+  // Sempre do comeco, sem lembrar do que funcionou da ultima vez.
+  //
+  // Guardar o formato aceito economizaria uma ida ao banco enquanto ele
+  // estivesse atrasado — e, em troca, deixaria o processo preso em um
+  // formato degradado depois de uma unica falha, ou lendo a sessao sem a
+  // coluna que o banco ja tem. Em um banco em dia, que e o caso normal, o
+  // primeiro formato responde e nao ha ida nenhuma a economizar.
   let row: SessionJoinRow | null = null;
-  for (let indice = selectAtual; indice < selects.length; indice += 1) {
+  for (let indice = 0; indice < selects.length; indice += 1) {
     try {
       row = await selectOne<SessionJoinRow>(TABLES.sessions, {
         select: selects[indice],
         filters: filtro,
       });
-      // Esta consulta acontece em TODA requisicao: descoberto o formato que
-      // o banco aceita, as tentativas recusadas nao se repetem enquanto o
-      // processo viver. Rodada a migration, o proximo processo recomeca do
-      // formato completo.
-      selectAtual = indice;
       break;
     } catch (error) {
-      const faltando = error instanceof SupabaseRequestError && error.isMissingSchema;
-      // A ultima tentativa nao tem nada a mais para tirar: o erro e real.
-      if (!faltando || indice === selects.length - 1) throw error;
+      // A ultima tentativa nao tem mais nada a simplificar: o erro e real.
+      if (!outroFormatoPodeSalvar(error) || indice === selects.length - 1) throw error;
     }
   }
 

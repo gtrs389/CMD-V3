@@ -75,6 +75,22 @@ comment on column public.cmd_sessions.impersonated_by is
   'ADMIN geral que abriu esta sessao no painel de outra pessoa (migration '
   '045). Nulo em toda sessao normal.';
 
+-- ATENCAO A QUEM FOR CONSULTAR cmd_sessions DAQUI PARA A FRENTE
+--
+-- Com esta chave estrangeira passam a existir DOIS caminhos de
+-- cmd_sessions ate cmd_users: `user_id` (dono da sessao) e
+-- `impersonated_by` (quem a abriu). Embutir cmd_users sem dizer por qual
+-- deles — `user:cmd_users!user_id(...)` — faz o PostgREST recusar a
+-- consulta inteira com PGRST201, e a consulta da sessao e a porta de TODO o
+-- sistema: sem ela, ninguem entra em lugar nenhum.
+--
+-- O mesmo vale para cmd_impersonations, que aponta para cmd_users duas
+-- vezes (`admin_user_id` e `target_user_id`).
+--
+-- Nada disso e teoria: foi o que aconteceu no primeiro deploy desta
+-- migration. A consulta em src/lib/server/auth.service.ts ja leva a dica, e
+-- tests/sessao-porta-do-sistema.test.ts impede a volta.
+
 -- ---------------------------------------------------------------------------
 -- 2. cmd_impersonations: a autorizacao de uso unico e o registro do que
 --    aconteceu, na mesma linha
