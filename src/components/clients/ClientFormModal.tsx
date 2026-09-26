@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Controller,
   useFieldArray,
@@ -90,8 +90,26 @@ export function ClientFormModal({ open, onClose, client, onSaved }: ClientFormMo
     onClose();
   }
 
+  /**
+   * Qual time ja foi carregado nesta abertura.
+   *
+   * Sem esta marca, o efeito abaixo dispara de novo a cada objeto NOVO de
+   * `client` — e ele chega assim sempre que o painel releva os dados, o que
+   * acontece sozinho ao voltar para a aba. O `reset` entao apagava o que o
+   * ADMIN estava digitando. Carrega-se UMA vez por abertura.
+   */
+  const timeCarregado = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      timeCarregado.current = null;
+      return;
+    }
+
+    const alvo = client?.id ?? 'novo';
+    if (timeCarregado.current === alvo) return;
+    timeCarregado.current = alvo;
+
     reset(
       client
         ? {
