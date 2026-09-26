@@ -11,7 +11,7 @@ import type {
 import { PHONE_IN_USE } from '@/lib/types';
 import { hashPassword } from '@/lib/auth/password';
 import { generateTempPassword } from '@/lib/auth/temp-password';
-import { normalizePhone } from '@/lib/utils/phone';
+import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
   type ClientRow,
@@ -407,7 +407,13 @@ export async function assertTeamPhoneAvailable(
   owner?: { personId?: string | null; memberId?: string | null },
 ): Promise<void> {
   const normalized = normalizePhone(phone);
-  if (normalized.length < 10) throw badRequest('Telefone inválido. Use DDD + número.');
+
+  // Numero incompleto nao vira acesso nenhum (ver `createMemberAccess`),
+  // entao nao ha o que reservar aqui — e recusa-lo derrubaria o cadastro
+  // inteiro, que e justamente o que nao pode acontecer. Quem exige numero
+  // inteiro sao os administradores do time, e isso e conferido na validacao
+  // do proprio cadastro deles, antes de chegar aqui.
+  if (!isValidPhone(normalized)) return;
 
   const conflicts = await selectRows<Pick<UserColumns, 'id' | 'team_person_id' | 'member_id'>>(
     TABLES.users,
@@ -556,6 +562,12 @@ export async function createMemberAccess(seed: MemberAccessSeed): Promise<string
   if (existing) return existing.id;
 
   if (await isDemoClient(seed.clientId)) return null;
+
+  // Telefone incompleto nao abre porta: o acesso e o par link do time +
+  // telefone, e o banco so guarda numero inteiro. O integrante fica com
+  // "Telefone necessário" na ficha e ganha o acesso assim que o ADMIN
+  // corrigir o numero — e `syncMemberAccess` quem cria, naquele momento.
+  if (!isValidPhone(seed.phone)) return null;
 
   const row = await insertOne<Pick<UserRow, 'id'>>(
     TABLES.users,

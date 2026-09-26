@@ -15,7 +15,7 @@ import {
   ZONE_MAX_LENGTH,
   isValidCpf,
 } from '@/lib/utils/documents';
-import { isValidPhone } from '@/lib/utils/phone';
+import { isUsablePhone, isValidPhone } from '@/lib/utils/phone';
 
 /**
  * Validacao de tudo que chega ao servidor.
@@ -266,16 +266,18 @@ const standardMemberFields = {
 /**
  * Telefone do integrante: campo padrao obrigatorio.
  *
- * E ele que identifica a pessoa no acesso pelo link do time, entao precisa
- * existir e ser valido. A normalizacao (somente digitos) acontece no
- * servico, antes de gravar e antes de qualquer comparacao.
+ * E ele que identifica a pessoa no acesso pelo link do time, mas o cadastro
+ * nao para por causa de um digito faltando: o numero incompleto entra, e
+ * quem fica sem acesso e so ele, ate o ADMIN corrigir o numero na ficha.
+ * A normalizacao (somente digitos) acontece no servico, antes de gravar e
+ * antes de qualquer comparacao.
  *
  * O e-mail saiu do cadastro: o integrante nao tem endereco nem senha. Os
  * enderecos ja gravados sao preservados, mas nao autenticam ninguem.
  */
 const memberPhone = trimmed(30)
   .min(1, 'Informe o telefone.')
-  .refine((value) => isValidPhone(value), 'Telefone inválido.');
+  .refine((value) => isUsablePhone(value), 'Telefone muito curto. Use DDD + número.');
 
 /** Campos comuns ao cadastro pelo painel e pelo link publico. */
 const memberBase = {
@@ -485,7 +487,9 @@ export const surveyAnswerSchema = z.object({
   phone: z
     .string()
     .trim()
-    .refine((value) => isValidPhone(value), 'Telefone inválido.'),
+    // Mesma regra do cadastro: numero incompleto entra, e nao derruba quem
+    // esta respondendo.
+    .refine((value) => isUsablePhone(value), 'Telefone muito curto. Use DDD + número.'),
   answers: z
     .array(z.object({ fieldId: z.string().min(1).max(64), value: surveyValueSchema }))
     .max(appConfig.limits.maxFieldsPerForm),

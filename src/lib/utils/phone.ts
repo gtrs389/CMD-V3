@@ -21,6 +21,32 @@ export function maskPhone(input: string): string {
   return `(${area}) ${rest.slice(0, 5)}-${rest.slice(5, 9)}`;
 }
 
+/**
+ * Menos digitos do que isto nao e um telefone incompleto: e outra coisa.
+ *
+ * Oito digitos sao um numero local sem DDD — a forma mais curta que ainda
+ * da para corrigir depois olhando para ela.
+ */
+export const MIN_PHONE_DIGITS = 8;
+
+/**
+ * Telefone bom o bastante para um CADASTRO.
+ *
+ * Quem preenche o formulario no celular, na rua, erra um digito. Recusar
+ * significa perder a pessoa: ela fecha a pagina e nao volta. Entao o
+ * cadastro aceita o numero incompleto, e quem olha a ficha ve o aviso de
+ * que ele precisa ser conferido.
+ *
+ * `isValidPhone` continua existindo e continua exigente: e ele que responde
+ * pelo telefone que serve de CREDENCIAL — o do administrador do time e o do
+ * integrante que entra pelo link do time. Numero pela metade nao abre
+ * porta, e o banco tambem nao aceita.
+ */
+export function isUsablePhone(input: string): boolean {
+  const digits = normalizePhone(input);
+  return digits.length >= MIN_PHONE_DIGITS && digits.length <= 11;
+}
+
 /** Valida telefone fixo (10 digitos) ou celular (11 digitos, com 9 inicial). */
 export function isValidPhone(input: string): boolean {
   const digits = normalizePhone(input);

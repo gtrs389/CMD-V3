@@ -219,7 +219,10 @@ export async function POST(request: NextRequest) {
 
       // As consultas acontecem depois da resposta, no servidor. A tela de
       // sucesso nao espera pelo fornecedor e nunca recebe nada delas.
-      // A moradia aproximada nao espera pela consulta eleitoral.
+      // A moradia aproximada nao espera pela consulta eleitoral — e, em time
+      // com a confirmacao desligada, ela nem acontece: o servico recusa a
+      // unica consulta paga que sobrou quando o time optou por nao consultar
+      // fornecedor nenhum.
       await createPendingLocation(client.id, member.id, 'RESIDENCE').catch(() => undefined);
 
       // Local de votacao: nasce sempre que a pessoa informou zona e secao,

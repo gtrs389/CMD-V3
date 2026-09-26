@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ClientFormConfig, CustomField, FieldResponse, FieldValue, Member } from '@/lib/types';
-import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/phone';
+import { formatPhone, isUsablePhone, normalizePhone } from '@/lib/utils/phone';
 import {
   formatCpf,
   formatVoterId,
@@ -159,8 +159,10 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           if (required) ctx.addIssue({ code: 'custom', message: requiredMessage(field) });
           return;
         }
-        if (!isValidPhone(trimmed)) {
-          ctx.addIssue({ code: 'custom', message: 'Telefone inválido. Use DDD + número.' });
+        // Numero incompleto passa: quem preenche na rua erra um digito, e
+        // recusar perde a pessoa. A ficha mostra o aviso de conferir.
+        if (!isUsablePhone(trimmed)) {
+          ctx.addIssue({ code: 'custom', message: 'Telefone muito curto. Use DDD + número.' });
         }
       }) as z.ZodType<DynamicValue>;
 
