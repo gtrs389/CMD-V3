@@ -5,6 +5,7 @@ import {
   MUNICIPIO_PADRAO,
   UF_PADRAO,
   lerPlanilha,
+  faltasDaLinha,
   problemasDaLinha,
   separarEndereco,
 } from '@/lib/domain/csv-import';
@@ -129,16 +130,56 @@ describe('o que impede uma linha de ser cadastrada', () => {
     };
   }
 
-  it('nome e telefone são as duas exigências, como na ficha', () => {
+  it('só o nome impede: sem ele não há cadastro nenhum', () => {
     expect(problemasDaLinha(linha({}))).toEqual([]);
     expect(problemasDaLinha(linha({ name: '' }))).toEqual(['nome']);
-    expect(problemasDaLinha(linha({ phone: '' }))).toEqual(['telefone']);
-    expect(problemasDaLinha(linha({ phone: '123' }))).toEqual(['telefone']);
-    expect(problemasDaLinha(linha({ name: 'A', phone: '' }))).toEqual(['nome', 'telefone']);
+    expect(problemasDaLinha(linha({ name: 'A' }))).toEqual(['nome']);
   });
 
-  it('título, zona e seção podem faltar', () => {
+  it('dado faltando não impede mais: a pessoa entra e a ficha fica marcada', () => {
+    // Uma lista de mutirão sempre chega com buraco. Recusar a linha é
+    // perder a pessoa; o que entra é ela, com a etiqueta.
+    expect(problemasDaLinha(linha({ phone: '' }))).toEqual([]);
+    expect(problemasDaLinha(linha({ phone: '123' }))).toEqual([]);
     expect(problemasDaLinha(linha({ voterId: '', zone: '', section: '' }))).toEqual([]);
+    expect(
+      problemasDaLinha(linha({ phone: '', voterId: '', zone: '', section: '', district: '' })),
+    ).toEqual([]);
+  });
+
+  it('telefone com dígitos demais continua barrado: não é falta, é número errado', () => {
+    // A normalização corta o que passa de onze dígitos, e o número cortado
+    // parece certo e liga para outra pessoa.
+    expect(problemasDaLinha(linha({ phone: '829999493112' }))).toEqual([
+      'telefone com dígitos demais',
+    ]);
+  });
+
+  /** Linha sem buraco nenhum, para comparar. */
+  const completa = {
+    voterId: '100000002720',
+    zone: '10',
+    section: '147',
+    district: 'Centro',
+    street: 'Rua A',
+  };
+
+  it('as faltas são listadas sem impedir nada', () => {
+    expect(faltasDaLinha(linha(completa))).toEqual([]);
+    expect(faltasDaLinha(linha({ ...completa, phone: '' }))).toEqual(['telefone']);
+    // Curto demais conta como falta: não identifica ninguém e não abre acesso.
+    expect(faltasDaLinha(linha({ ...completa, phone: '1234' }))).toEqual(['telefone']);
+    expect(faltasDaLinha(linha({ voterId: '', zone: '', section: '', district: '' }))).toEqual([
+      'título de eleitor',
+      'zona',
+      'seção',
+      'endereço',
+    ]);
+  });
+
+  it('endereço conta como presente com bairro OU rua', () => {
+    expect(faltasDaLinha(linha({ ...completa, street: '' }))).not.toContain('endereço');
+    expect(faltasDaLinha(linha({ ...completa, district: '' }))).not.toContain('endereço');
   });
 });
 
@@ -265,7 +306,7 @@ describe('telefone com dígito a mais', () => {
     );
 
     expect(linhas[0].phone).toBe('829999493112');
-    expect(problemasDaLinha(linhas[0])).toContain('telefone');
+    expect(problemasDaLinha(linhas[0])).toContain('telefone com dígitos demais');
   });
 
   it('código do país não é dígito a mais', () => {
