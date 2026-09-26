@@ -77,6 +77,37 @@ async function findLink(
   });
 }
 
+/**
+ * A moradia aproximada esta ligada neste time?
+ *
+ * Ela e a UNICA consulta paga que sobrou (o local de votacao sai da nossa
+ * tabela desde a migration 042), e quem manda nela e a mesma chave que
+ * manda nas outras consultas externas: "Conferir CPF e título de eleitor".
+ * Time com a conferencia desligada e time que optou por nao consultar
+ * fornecedor nenhum — e o mapa de moradia nao pode ser a excecao que
+ * continua gastando.
+ *
+ * A pergunta e feita aqui, no unico caminho por onde toda consulta passa,
+ * em vez de em cada rota: esquecer uma rota seria gastar pela porta
+ * esquecida.
+ */
+async function residenceLookupEnabled(clientId: string): Promise<boolean> {
+  const row = await selectOne<Pick<ClientRow, 'verification_enabled'>>(TABLES.clients, {
+    select: 'verification_enabled',
+    filters: { id: `eq.${clientId}` },
+  });
+  return row?.verification_enabled !== false;
+}
+
+/** O mesmo, a partir do integrante: o vinculo guarda o time dele. */
+async function residenceEnabledForMember(memberId: string): Promise<boolean> {
+  const row = await selectOne<Pick<MemberRow, 'client_id'>>(TABLES.members, {
+    select: 'client_id',
+    filters: { id: `eq.${memberId}` },
+  });
+  return row ? residenceLookupEnabled(row.client_id) : false;
+}
+
 /** Cria o vinculo PENDING. Idempotente: um registro por integrante e tipo. */
 export async function createPendingLocation(
   clientId: string,
@@ -85,6 +116,11 @@ export async function createPendingLocation(
 ): Promise<void> {
   const existing = await findLink(memberId, kind);
   if (existing) return;
+
+  // Sem moradia em time com a conferencia desligada: o vinculo nem nasce,
+  // entao nao fica pendencia acumulada esperando uma consulta que nao vai
+  // acontecer.
+  if (kind === 'RESIDENCE' && !(await residenceLookupEnabled(clientId))) return;
 
   await insertOne(
     TABLES.memberLocations,
@@ -355,6 +391,12 @@ export async function resolveLocation(memberId: string, kind: LocationKind): Pro
   const current = await findLink(memberId, kind);
   if (!current || current.status === 'SUCCESS' || current.status === 'PROCESSING') return;
 
+  // Ultima porta antes do provedor: nenhuma moradia e consultada em time com
+  // a conferencia desligada, venha o pedido de onde vier — envio do
+  // formulario, fila de pendentes ou o botao de tentar de novo. Vinculos
+  // criados antes de desligar param aqui.
+  if (kind === 'RESIDENCE' && !(await residenceEnabledForMember(memberId))) return;
+
   const locked = await acquireLock(memberId, kind);
   if (!locked) return;
 
@@ -438,7 +480,7 @@ export async function resolveLocation(memberId: string, kind: LocationKind): Pro
  * Idempotente e sem consultar nada.
  */
 export async function ensureResidenceLinks(limit = 200): Promise<void> {
-  const [members, links] = await Promise.all([
+  const [members, links, clients] = await Promise.all([
     selectRows<MemberRow>(TABLES.members, {
       select: 'id,client_id,city,state',
       order: 'created_at.desc',
@@ -449,12 +491,21 @@ export async function ensureResidenceLinks(limit = 200): Promise<void> {
       filters: { location_kind: 'eq.RESIDENCE' },
       limit: 2000,
     }),
+    // Times com a conferencia desligada nao entram: sem isto, cada abertura
+    // do mapa percorreria as mesmas pessoas para nao criar vinculo nenhum.
+    selectRows<Pick<ClientRow, 'id' | 'verification_enabled'>>(TABLES.clients, {
+      select: 'id,verification_enabled',
+    }),
   ]);
 
   const existing = new Set(links.map((link) => link.member_id));
+  const desligados = new Set(
+    clients.filter((row) => row.verification_enabled === false).map((row) => row.id),
+  );
 
   for (const member of members) {
     if (existing.has(member.id)) continue;
+    if (desligados.has(member.client_id)) continue;
     if (!member.city?.trim() || !member.state?.trim()) continue;
     await createPendingLocation(member.client_id, member.id, 'RESIDENCE');
   }

@@ -1,5 +1,5 @@
 import { normalizeSection, normalizeVoterId, normalizeZone } from '@/lib/utils/documents';
-import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
+import { isUsablePhone, normalizePhone } from '@/lib/utils/phone';
 
 /**
  * Cadastro de muita gente de uma vez, por planilha.
@@ -330,11 +330,14 @@ export function problemasDaLinha(linha: LinhaImportada): string[] {
 
   if (linha.name.trim().length < 2) problemas.push('nome');
 
-  // Alem de valido, o telefone tem de estar INTEIRO: `isValidPhone` sozinho
-  // aceitaria "829999493112", porque a normalizacao corta o que passa de
-  // onze digitos antes de conferir — e o numero cortado parece certo e liga
-  // para outra pessoa. Comparar com a forma normalizada denuncia o corte.
-  if (!isValidPhone(linha.phone) || normalizePhone(linha.phone) !== linha.phone) {
+  // Numero incompleto passa, como no formulario: a planilha vem do mundo
+  // real e um digito faltando nao pode custar a pessoa inteira.
+  //
+  // O que continua sendo recusado e o numero LONGO DEMAIS: a normalizacao
+  // corta o que passa de onze digitos, entao "829999493112" viraria um
+  // numero que parece certo e liga para outra pessoa. Comparar com a forma
+  // normalizada denuncia o corte.
+  if (!isUsablePhone(linha.phone) || normalizePhone(linha.phone) !== linha.phone) {
     problemas.push('telefone');
   }
 

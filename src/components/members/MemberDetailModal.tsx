@@ -8,7 +8,7 @@ import { ACCESS_STATUS_LABELS } from '@/lib/types';
 import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
-import { formatPhone } from '@/lib/utils/phone';
+import { formatPhone, isValidPhone } from '@/lib/utils/phone';
 import { formatCpf, formatVoterId, genderLabel, isValidVoterId } from '@/lib/utils/documents';
 import {
   RELATIONSHIP_COLOR_CLASSES,
@@ -245,8 +245,14 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
 
         <div className="min-w-0">
           <h3 className="text-lg font-semibold break-words text-ink-900">{member.name}</h3>
-          <p className="text-sm text-ink-500">
+          <p className="flex flex-wrap items-center gap-1.5 text-sm text-ink-500">
             {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
+            {/* Numero incompleto entra no cadastro, mas nao abre o acesso
+                pelo link do time: quem olha a ficha precisa saber que ele
+                esta pela metade para poder corrigir. */}
+            {member.phone && !isValidPhone(member.phone) ? (
+              <Badge tone="warning">Conferir</Badge>
+            ) : null}
           </p>
           {!somenteBasico ? (
             <>

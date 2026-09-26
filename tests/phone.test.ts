@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatPhone, isValidPhone, maskPhone, normalizePhone } from '@/lib/utils/phone';
+import {
+  formatPhone,
+  isUsablePhone,
+  isValidPhone,
+  maskPhone,
+  normalizePhone,
+} from '@/lib/utils/phone';
 
 describe('normalizePhone', () => {
   it('mantem apenas digitos', () => {
@@ -40,6 +46,25 @@ describe('isValidPhone', () => {
     expect(isValidPhone('(01) 98765-4321')).toBe(false);
     expect(isValidPhone('1198765')).toBe(false);
     expect(isValidPhone('11887654321')).toBe(false);
+  });
+});
+
+describe('isUsablePhone', () => {
+  it('aceita o número incompleto: o cadastro não perde a pessoa por um dígito', () => {
+    expect(isUsablePhone('119876543')).toBe(true);
+    expect(isUsablePhone('98765432')).toBe(true);
+    // DDD que `isValidPhone` recusa: aqui entra, e a ficha avisa.
+    expect(isUsablePhone('(01) 98765-4321')).toBe(true);
+  });
+
+  it('recusa o que já não é telefone', () => {
+    expect(isUsablePhone('1198765')).toBe(false);
+    expect(isUsablePhone('')).toBe(false);
+  });
+
+  it('não afrouxa a credencial: `isValidPhone` continua exigente', () => {
+    expect(isValidPhone('119876543')).toBe(false);
+    expect(isValidPhone('(01) 98765-4321')).toBe(false);
   });
 });
 

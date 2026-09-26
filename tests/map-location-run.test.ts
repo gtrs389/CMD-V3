@@ -30,6 +30,15 @@ interface DB {
 
 const db: DB = { members: {}, verifications: {}, links: [], places: [], pollingPlaces: [] };
 
+/**
+ * "Conferir CPF e título de eleitor" deste time.
+ *
+ * Desligada, ela tambem desliga a moradia aproximada: e a unica consulta
+ * paga que sobrou, e um time que optou por nao consultar fornecedor nenhum
+ * nao pode continuar gastando por outra porta.
+ */
+const conferencia = { ligada: true };
+
 /** Uma linha da planilha do TSE, do jeito que ela chega ao banco. */
 const LOCAL_DO_TSE: PollingPlaceRow = {
   id: 'pp-1',
@@ -114,7 +123,9 @@ vi.mock('@/lib/supabase/rest', () => ({
     }
     // O time deste cenario informa o estado (migration 038): e ele que
     // recorta a busca do local, porque numero de zona se repete entre UFs.
-    if (table === 'cmd_clients') return { id: 'cli-1', state_uf: 'SP' };
+    if (table === 'cmd_clients') {
+      return { id: 'cli-1', state_uf: 'SP', verification_enabled: conferencia.ligada };
+    }
     return null;
   },
   selectRows: async (table: string, options: { filters?: Record<string, string> }) => {
@@ -131,7 +142,14 @@ vi.mock('@/lib/supabase/rest', () => ({
       // fora. O time deste cenario e real: a pergunta volta vazia, e a
       // consulta segue sem nenhum recorte.
       if (filters.is_demo === 'is.true') return [];
-      return [{ id: 'cli-1', name: 'Comitê Exemplo', is_demo: false }];
+      return [
+        {
+          id: 'cli-1',
+          name: 'Comitê Exemplo',
+          is_demo: false,
+          verification_enabled: conferencia.ligada,
+        },
+      ];
     }
     if (table === 'cmd_member_verifications') {
       return Object.values(db.verifications);
@@ -238,6 +256,62 @@ beforeEach(() => {
   db.links = [];
   db.places = [];
   db.pollingPlaces = [LOCAL_DO_TSE];
+  conferencia.ligada = true;
+});
+
+describe('time com a confirmação de dados desligada', () => {
+  beforeEach(() => {
+    conferencia.ligada = false;
+  });
+
+  it('não cria o vínculo de moradia: não há consulta esperando acontecer', async () => {
+    member('m1');
+    await createPendingLocation('cli-1', 'm1', 'RESIDENCE');
+
+    expect(db.links).toHaveLength(0);
+    expect(lookupPlace).not.toHaveBeenCalled();
+  });
+
+  it('não consulta o provedor por um vínculo criado antes de desligar', async () => {
+    member('m1');
+    conferencia.ligada = true;
+    await createPendingLocation('cli-1', 'm1', 'RESIDENCE');
+    conferencia.ligada = false;
+
+    await resolveLocation('m1', 'RESIDENCE');
+
+    expect(lookupPlace).not.toHaveBeenCalled();
+    expect(db.links[0].status).toBe('PENDING');
+  });
+
+  it('a fila de pendentes também não gasta', async () => {
+    member('m1');
+    conferencia.ligada = true;
+    await createPendingLocation('cli-1', 'm1', 'RESIDENCE');
+    conferencia.ligada = false;
+
+    await resolvePending();
+
+    expect(lookupPlace).not.toHaveBeenCalled();
+  });
+
+  it('o local de votação continua: ele sai da nossa tabela, sem cobrança', async () => {
+    member('m1', { zone: '5', section: '123' });
+    await createPendingLocation('cli-1', 'm1', 'POLLING_PLACE');
+    await resolveLocation('m1', 'POLLING_PLACE');
+
+    expect(lookupPlace).not.toHaveBeenCalled();
+    expect(db.links[0].status).toBe('SUCCESS');
+  });
+
+  it('a varredura de vínculos que faltam pula o time inteiro', async () => {
+    member('m1');
+    member('m2');
+
+    await ensureResidenceLinks();
+
+    expect(db.links).toHaveLength(0);
+  });
 });
 
 describe('resolução das coordenadas', () => {

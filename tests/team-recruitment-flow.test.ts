@@ -412,6 +412,21 @@ describe('acesso criado com o cadastro', () => {
     expect(invite?.token_hash).not.toBe(invite?.token);
   });
 
+  it('telefone incompleto não derruba o cadastro: a pessoa entra, sem acesso', async () => {
+    // Um digito faltando nao pode custar a pessoa inteira. O que ela nao
+    // ganha e o acesso ao painel — o banco so guarda numero inteiro, e o
+    // par link do time + telefone precisa apontar para uma pessoa so.
+    const { member, userId } = await cadastrarPeloLink('token-marina', {
+      name: 'João Silva',
+      phone: '119111100',
+    });
+
+    expect(db.cmd_members.find((row) => row.id === member.id)).toBeDefined();
+    expect(member.phone).toBe('119111100');
+    expect(userId).toBeNull();
+    expect(db.cmd_users.find((row) => row.member_id === member.id)).toBeUndefined();
+  });
+
   it('telefone já usado no time interrompe antes de gravar: nenhum registro órfão', async () => {
     await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
 
