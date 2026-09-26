@@ -23,8 +23,12 @@ export async function POST(request: NextRequest) {
       throw forbidden('Este perfil não tem link pessoal.');
     }
 
-    // Dono e gerador coincidem: o usuario renova o proprio link.
-    const issued = await issuePersonalInvite(user.id, user.id);
+    // Dono e gerador coincidem — menos quando quem esta no painel e o ADMIN
+    // geral, em uma sessao de inspecao (migration 045): ali o dono continua
+    // sendo a pessoa, e quem aparece como GERADOR e o ADMIN. O historico de
+    // convites ja separa as duas coisas desde a migration 020, e e
+    // exatamente para isto que a separacao existe.
+    const issued = await issuePersonalInvite(user.id, user.impersonatedBy ?? user.id);
 
     // O token vai uma unica vez, para a propria pessoa copiar e compartilhar.
     // O endereco completo e montado AQUI, com o dominio publico: quem gera o

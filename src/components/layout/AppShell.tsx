@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { InspectionBanner } from './InspectionBanner';
 import { Logo } from './Logo';
 import { MobileNav } from './MobileNav';
 import { Sidebar } from './Sidebar';
@@ -32,6 +33,9 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
         </header>
 
         <main className="safe-x mx-auto w-full max-w-[76rem] px-4 py-5 sm:px-6">{children}</main>
+
+        {/* Painel aberto pelo ADMIN geral: a faixa avisa de quem ele e. */}
+        <InspectionBanner />
       </div>
     );
   }
@@ -52,6 +56,8 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
           <main>{children}</main>
         </div>
       </div>
+
+      <InspectionBanner />
     </div>
   );
 }

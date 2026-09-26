@@ -57,7 +57,11 @@ type SessionColumns = Pick<
 const SESSION_COLUMNS =
   'id,name,email,role,client_id,member_id,team_person_id,must_change_password';
 
-function toSessionUser(row: SessionColumns, photo: string | null = null): SessionUser {
+function toSessionUser(
+  row: SessionColumns,
+  photo: string | null = null,
+  impersonatedBy: string | null = null,
+): SessionUser {
   return {
     id: row.id,
     name: row.name,
@@ -69,6 +73,10 @@ function toSessionUser(row: SessionColumns, photo: string | null = null): Sessio
     candidateId: row.role === 'ADMIN' ? null : row.client_id,
     memberId: row.role === 'EQUIPE' ? row.member_id : null,
     mustChangePassword: row.must_change_password === true,
+    // Sessao aberta pelo painel do ADMIN geral (migration 045). Nao amplia
+    // nada: quem esta na tela continua sendo esta pessoa, com o alcance
+    // dela.
+    impersonatedBy,
   };
 }
 
@@ -165,7 +173,9 @@ function usesTrustedDevice(user: SessionColumns): boolean {
   return user.role === 'EQUIPE' && user.member_id !== null;
 }
 
-interface SessionJoinRow extends SessionRow {
+interface SessionJoinRow extends Omit<SessionRow, 'impersonated_by'> {
+  /** Ausente enquanto a migration 045 nao tiver sido executada. */
+  impersonated_by?: string | null;
   user:
     | (SessionColumns &
         Pick<UserRow, 'is_active'> & {
@@ -253,6 +263,14 @@ export async function resolveSession(
  * O acesso desligado nao apaga nada: a sessao continua no banco, valida, e
  * volta a valer no instante em que a chave for religada.
  */
+/**
+ * Primeiro formato de consulta a tentar (indice em `selects`, abaixo).
+ *
+ * Comeca no mais completo e so anda quando o banco recusa uma coluna que
+ * ainda nao existe. Vive no processo, nunca entre processos.
+ */
+let selectAtual = 0;
+
 export async function resolveSessionState(
   token: string | undefined,
   deviceToken?: string | undefined,
@@ -261,28 +279,50 @@ export async function resolveSessionState(
   if (!token) return vazia;
 
   const filtro = { token_hash: `eq.${hashToken(token)}` };
-  const base =
-    `id,expires_at,revoked_at,admin_device_id,` +
-    `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
-    `team_person:${TABLES.teamPeople}(photo_path)`;
 
-  let row: SessionJoinRow | null;
-  try {
-    row = await selectOne<SessionJoinRow>(TABLES.sessions, {
-      select: `${base},client:${TABLES.clients}(is_demo,demo_access_enabled))`,
-      filters: filtro,
-    });
-  } catch (error) {
-    // Banco ainda sem a migration 036: `demo_access_enabled` nao existe. Esta
-    // consulta e a porta de TODO o sistema — se ela falhar, ninguem entra em
-    // lugar nenhum. Uma funcionalidade que ainda nao foi ao banco nao pode
-    // derrubar o login de todo mundo, entao a sessao resolve sem a chave, que
-    // e exatamente como era antes de ela existir.
-    if (!(error instanceof SupabaseRequestError) || !error.isMissingSchema) throw error;
-    row = await selectOne<SessionJoinRow>(TABLES.sessions, {
-      select: `${base})`,
-      filters: filtro,
-    });
+  /**
+   * A consulta, com e sem o que ainda pode nao existir no banco.
+   *
+   * Esta consulta e a porta de TODO o sistema: se ela falhar, ninguem entra
+   * em lugar nenhum. Uma funcionalidade que ainda nao foi ao banco nao pode
+   * derrubar o login de todo mundo, entao cada coluna nova e tentada e, se
+   * o banco disser que ela nao existe, a sessao resolve sem ela — que e
+   * exatamente como era antes de a funcionalidade existir.
+   *
+   *   `demo_access_enabled`  migration 036 (chave do Time DEMO);
+   *   `impersonated_by`      migration 045 (painel aberto pelo ADMIN).
+   */
+  const selects = [true, false].flatMap((comInspecao) =>
+    [true, false].map((comDemo) => {
+      const base =
+        `id,expires_at,revoked_at,admin_device_id` +
+        `${comInspecao ? ',impersonated_by' : ''},` +
+        `user:${TABLES.users}(${SESSION_COLUMNS},is_active,` +
+        `team_person:${TABLES.teamPeople}(photo_path)`;
+      return comDemo
+        ? `${base},client:${TABLES.clients}(is_demo,demo_access_enabled))`
+        : `${base})`;
+    }),
+  );
+
+  let row: SessionJoinRow | null = null;
+  for (let indice = selectAtual; indice < selects.length; indice += 1) {
+    try {
+      row = await selectOne<SessionJoinRow>(TABLES.sessions, {
+        select: selects[indice],
+        filters: filtro,
+      });
+      // Esta consulta acontece em TODA requisicao: descoberto o formato que
+      // o banco aceita, as tentativas recusadas nao se repetem enquanto o
+      // processo viver. Rodada a migration, o proximo processo recomeca do
+      // formato completo.
+      selectAtual = indice;
+      break;
+    } catch (error) {
+      const faltando = error instanceof SupabaseRequestError && error.isMissingSchema;
+      // A ultima tentativa nao tem nada a mais para tirar: o erro e real.
+      if (!faltando || indice === selects.length - 1) throw error;
+    }
   }
 
   if (!row || !row.user || !row.user.is_active) return vazia;
@@ -296,7 +336,12 @@ export async function resolveSessionState(
     return { user: null, blocked: 'DEMO_DESLIGADO' };
   }
 
-  if (usesTrustedDevice(row.user)) {
+  // Sessao aberta pelo painel do ADMIN geral (migration 045): o aparelho
+  // autorizado nao e conferido, e nao ha o que conferir — quem abriu foi o
+  // ADMIN, autenticado, a partir do painel dele. O vinculo de aparelho da
+  // PESSOA nao e tocado, criado nem derrubado: ela continua entrando do
+  // celular dela como antes, durante e depois da visita.
+  if (!row.impersonated_by && usesTrustedDevice(row.user)) {
     const autorizado = await checkAdminDevice(row.user.id, row.admin_device_id, deviceToken);
     if (!autorizado) {
       await revokeSession(token);
@@ -311,7 +356,7 @@ export async function resolveSessionState(
     ? await signedUrl(row.user.team_person.photo_path)
     : await memberPhoto(row.user);
 
-  return { user: toSessionUser(row.user, photo), blocked: null };
+  return { user: toSessionUser(row.user, photo, row.impersonated_by ?? null), blocked: null };
 }
 
 /** Encerra a sessao correspondente ao token. */

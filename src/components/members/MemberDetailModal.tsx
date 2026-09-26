@@ -21,6 +21,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { InspectMemberButton } from './InspectMemberButton';
 import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberSignupLinkSection } from './MemberSignupLinkSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
@@ -269,6 +270,13 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                   {ACCESS_STATUS_LABELS[member.access]}
                 </Badge>
                 {member.consentAt ? <Badge tone="success">Consentimento registrado</Badge> : null}
+              </div>
+
+              {/* Entrar no painel desta pessoa: exclusivo do ADMIN geral, e
+                  a rota confere de novo. O botao some sozinho para quem nao
+                  pode e para quem ainda nao tem acesso. */}
+              <div className="mt-3">
+                <InspectMemberButton member={member} />
               </div>
             </>
           ) : null}

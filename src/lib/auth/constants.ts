@@ -1,6 +1,18 @@
 /** Nome do cookie de sessao. Compartilhado entre proxy, rotas e servicos. */
 export const SESSION_COOKIE = 'cmd_session';
 
+/**
+ * Sessao do ADMIN geral guardada durante uma inspecao (migration 045).
+ *
+ * Onde os enderecos sao separados — a producao — este cookie nem chega a
+ * existir: a sessao do ADMIN mora no endereco exclusivo dele e a inspecao
+ * acontece em `painel.`, cada uma com o seu cookie. Ele serve para
+ * desenvolvimento e previa, onde UM endereco serve tudo: sem ele, entrar no
+ * painel de alguem sobrescreveria a sessao do proprio ADMIN e o deixaria
+ * fora do sistema ao sair.
+ */
+export const INSPECTION_RETURN_COOKIE = 'cmd_inspecao_volta';
+
 /** Duracao da sessao em segundos (8 horas). */
 export const SESSION_MAX_AGE = 60 * 60 * 8;
 

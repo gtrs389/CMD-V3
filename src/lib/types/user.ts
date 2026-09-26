@@ -180,4 +180,16 @@ export interface SessionUser {
   memberId: string | null;
   /** Senha temporaria em uso: apenas o primeiro acesso fica liberado. */
   mustChangePassword: boolean;
+  /**
+   * ADMIN geral que abriu esta sessao no painel desta pessoa (migration
+   * 045). Nulo em toda sessao normal — que e o caso de todas, menos as
+   * poucas abertas de proposito pelo painel do ADMIN.
+   *
+   * Quem esta na tela e a PESSOA: nome, perfil, alcance e permissoes sao os
+   * dela. Este campo existe para dois fins, e nenhum deles e ampliar
+   * acesso: a faixa fixa que avisa de quem e o painel, e a verdade do
+   * historico — o link gerado durante a visita fica registrado como gerado
+   * pelo ADMIN, em nome dela.
+   */
+  impersonatedBy?: string | null;
 }
