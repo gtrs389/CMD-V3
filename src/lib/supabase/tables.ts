@@ -40,6 +40,8 @@ export const TABLES = {
   apiKeys: 'cmd_api_keys',
   apiKeyEvents: 'cmd_api_key_events',
   demoSeeds: 'cmd_demo_seeds',
+  /** Visitas do ADMIN geral ao painel de uma pessoa do time (migration 045). */
+  impersonations: 'cmd_impersonations',
 } as const;
 
 export interface UserRow {
@@ -78,6 +80,35 @@ export interface SessionRow {
   created_at: string;
   /** Aparelho que abriu a sessao do Administrador do time (migration 017). */
   admin_device_id: string | null;
+  /**
+   * ADMIN geral que abriu esta sessao no painel de outra pessoa
+   * (migration 045). Nulo em toda sessao normal.
+   */
+  impersonated_by: string | null;
+}
+
+/**
+ * Uma visita do ADMIN geral ao painel de uma pessoa do time (migration 045).
+ *
+ * A mesma linha nasce como autorizacao de uso unico e termina como
+ * auditoria. Do token so existe o hash SHA-256.
+ */
+export interface ImpersonationRow {
+  id: string;
+  token_hash: string;
+  admin_user_id: string | null;
+  admin_name: string;
+  target_user_id: string | null;
+  target_name: string;
+  target_role: 'CANDIDATE' | 'EQUIPE';
+  client_id: string | null;
+  created_at: string;
+  expires_at: string;
+  /** Instante em que a autorizacao virou sessao. Nulo: ninguem usou. */
+  started_at: string | null;
+  session_id: string | null;
+  ended_at: string | null;
+  ended_reason: 'SAIU' | 'EXPIROU' | null;
 }
 
 /**

@@ -43,6 +43,15 @@ export const PERMISSIONS = [
   'member.export',
   /** Pagina "Minha mobilizacao": exclusiva do perfil EQUIPE. */
   'team.access',
+  /**
+   * Entrar no painel de uma pessoa do time: exclusivo do ADMIN geral.
+   *
+   * Nao e "ver como": a sessao aberta e de verdade, e o que for feito nela
+   * fica no nome da pessoa. Por isso ela nao acompanha `member.view` nem
+   * `admin.access` — e uma permissao propria, que so o ADMIN geral tem, e
+   * cada visita fica registrada em `cmd_impersonations`.
+   */
+  'session.impersonate',
   /** Resultado da verificacao cadastral: exclusivo do ADMIN. */
   'verification.view',
   'verification.retry',

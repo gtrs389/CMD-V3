@@ -206,6 +206,12 @@ const ADMIN_BLOCKED_PREFIXES = [
   '/convite/',
   '/questionario/',
   '/acesso/',
+  // A entrada da inspecao (migration 045) abre a sessao de uma pessoa do
+  // time, e sessao de outro perfil nao vale no endereco do ADMIN: aberta
+  // aqui, ela nasceria morta e a autorizacao — de uso unico — iria junto.
+  // O endereco emitido ja aponta para `painel.`; esta linha cobre o clique
+  // no endereco errado.
+  '/inspecionar/',
   '/api/public/',
   '/api/acesso-time',
 ] as const;

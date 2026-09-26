@@ -44,6 +44,7 @@ variáveis na Vercel.
 | `cmd_api_keys` | Chaves da API de links de cadastro. Guarda apenas o hash SHA-256 do segredo |
 | `cmd_api_key_events` | O que cada chave fez: operação, em nome de quem, resultado e motivo da recusa |
 | `cmd_demo_seeds` | Chaves de idempotência da criação de Time DEMO |
+| `cmd_impersonations` | Cada vez que o ADMIN entrou no painel de alguém: quem, em nome de quem, quando começou e quando terminou |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -200,11 +201,51 @@ administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
 | `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
 | `/api/v1/links/[id]` | Chave da API | Consulta e revoga um link daquele administrador |
 | `/api/v1/vinculo` | Chave da API | Time e administrador vinculados à chave |
+| `/api/usuarios/[id]/inspecionar` | ADMIN geral | Autoriza entrar no painel daquela pessoa |
+| `/inspecionar/[token]` | Autorização | Troca a autorização pela sessão, no painel |
+| `/api/inspecionar/sair` | Sessão de inspeção | Encerra a visita e fecha o registro |
 
 O token do convite é opaco e aleatório: **nenhum dado pessoal vai para a URL**.
 O banco guarda apenas o hash SHA-256 dele, por isso o endereço completo aparece
 uma única vez, no momento em que é gerado. Para obter um link visível de novo,
 use **Gerar novo token** — o anterior deixa de funcionar na hora.
+
+---
+
+## Entrar no painel de uma pessoa
+
+O ADMIN geral abre a ficha de um integrante e clica em **Entrar no painel**. A
+partir dali ele usa o sistema **como aquela pessoa**: a mesma tela, a mesma
+equipe, o mesmo link, as mesmas permissões — nada é simulado.
+
+Como a sessão é de verdade, três coisas foram escritas junto com o botão.
+
+**A visita fica registrada.** Cada entrada grava uma linha em
+`cmd_impersonations`: quem abriu, em nome de quem, de que time, quando começou
+e quando terminou. O registro não se reescreve e não se apaga enquanto o time
+existir — só o consumo e o encerramento mudam, uma vez cada.
+
+**A tela avisa, o tempo todo.** Uma faixa fixa no rodapé diz de quem é o painel
+e lembra que o que for feito ali fica no nome dela. Ela não rola para fora: um
+aviso que some é um aviso que aparece quando já não importa.
+
+**O link gerado durante a visita diz a verdade.** O dono continua sendo a
+pessoa — é ela que recebe os cadastros —, mas quem consta como **gerador** é o
+ADMIN. O histórico de convites já separava as duas coisas desde a migration
+020, e é para isso que a separação existe. Um cadastro feito durante a visita,
+porém, fica em "Cadastrado por" com o nome dela: é o que significa agir como
+alguém.
+
+O que a inspeção **não** faz: não entra no painel de outro ADMIN geral (a
+recusa está na rota e na função do banco), não toca no aparelho autorizado da
+pessoa, não derruba as sessões dela e não muda nada no cadastro. Sair da
+inspeção encerra apenas a sessão que o ADMIN abriu.
+
+Em produção os endereços são separados: o ADMIN trabalha no endereço exclusivo
+dele e o painel da equipe é `painel.`. Um cookie não atravessa essa fronteira,
+então o botão não abre a sessão direto — ele emite uma **autorização de uso
+único**, válida por três minutos, que o outro endereço troca por sessão. É o
+mesmo desenho do link de acesso do time. Do token só existe o hash.
 
 ---
 

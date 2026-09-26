@@ -38,6 +38,15 @@ describe('permissoes', () => {
     expect(can(equipe, 'map.view')).toBe(false);
   });
 
+  it('entrar no painel de alguém é só do ADMIN geral', () => {
+    // A sessão aberta é de verdade e escreve no nome da pessoa: ela não
+    // acompanha `member.view` nem o acesso ao painel — é permissão própria.
+    expect(can(admin, 'session.impersonate')).toBe(true);
+    expect(can(time, 'session.impersonate')).toBe(false);
+    expect(can(equipe, 'session.impersonate')).toBe(false);
+    expect(can(null, 'session.impersonate')).toBe(false);
+  });
+
   it('exportar a equipe em planilha é só do ADMIN geral', () => {
     // A lista inteira em um arquivo sai do sistema e não volta: quem
     // responde por essa saída é o ADMIN. Ver a equipe na tela continua
