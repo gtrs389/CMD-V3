@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Building2,
   ShieldCheck,
-  Sparkles,
   RefreshCw,
   FileText,
   Image as ImageIcon,
@@ -389,7 +388,7 @@ export function ClientDetailView({
                 onClick={() => setRelatorio(true)}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-navy-900 px-4 text-sm font-medium whitespace-nowrap text-white shadow-card transition-colors hover:bg-navy-800"
               >
-                <Sparkles aria-hidden="true" className="size-4" />
+                <FileText aria-hidden="true" className="size-4" />
                 Relatório do NEO
               </button>
             ) : null}

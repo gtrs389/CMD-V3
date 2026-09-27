@@ -12,6 +12,7 @@ import {
   SurveyUnavailable,
 } from '@/components/public/PublicSurveyView';
 import { TeamAccessScreen } from '@/components/public/TeamAccessScreen';
+import { MolduraDoPainel } from '@/components/layout/MolduraDoPainel';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -75,8 +76,10 @@ export default async function HomePage() {
   // a saida que o ADMIN configurou.
   if (!isPanelHost(host)) redirect(PUBLIC_EXIT_PATH);
 
+  // Com sessao: o painel, na moldura. A barra fica so com o dominio — o
+  // caminho de cada tela nunca aparece (ver `endereco-limpo.ts`).
   const user = await getCurrentUser();
-  if (user) redirect(homePathFor(user));
+  if (user) return <MolduraDoPainel inicio={homePathFor(user)} />;
 
   // Sem sessao e sem contexto, o endereco decide o que acontece:
   //
@@ -89,5 +92,6 @@ export default async function HomePage() {
   //     telefone aparece normalmente.
   if (!servesAdminLogin(host)) redirect(PUBLIC_EXIT_PATH);
 
-  redirect(LOGIN_PATH);
+  // A tela de e-mail e senha tambem abre na moldura: `/login` nao aparece.
+  return <MolduraDoPainel inicio={LOGIN_PATH} />;
 }
