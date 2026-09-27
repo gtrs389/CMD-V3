@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import {
+  ENDERECO_FIXO,
   EXEMPLO_CSV,
   faltasDaLinha,
   lerPlanilha,
@@ -40,21 +41,12 @@ export type PessoaDaPlanilha = LinhaImportada & EnderecoDaLinha;
 /** O que a tela precisa saber fazer com UMA pessoa conferida. */
 export type SalvarLinha = (pessoa: PessoaDaPlanilha) => Promise<void>;
 
-const SEM_ENDERECO: EnderecoDaLinha = { state: '', city: '', district: '', street: '' };
+const SEM_ENDERECO: EnderecoDaLinha = { ...ENDERECO_FIXO, district: '', street: '' };
 
 interface SpreadsheetImportModalProps {
   open: boolean;
   onClose: () => void;
   salvar: SalvarLinha;
-  /**
-   * Estado e municipio do TIME, ja preenchidos em cada linha.
-   *
-   * A planilha traz o endereco em uma coluna so e nao traz municipio: quem
-   * cadastra uma lista esta cadastrando gente do proprio time, no municipio
-   * dele. Vazio quando o time ainda nao tem estado no cadastro — ai a
-   * escolha e de quem confere.
-   */
-  enderecoPadrao: { state: string; city: string };
 }
 
 /** Resultado de cada linha depois de mandar cadastrar. */
@@ -83,7 +75,6 @@ export function SpreadsheetImportModal({
   open,
   onClose,
   salvar,
-  enderecoPadrao,
 }: SpreadsheetImportModalProps) {
   const toast = useToast();
   const entrada = useRef<HTMLInputElement | null>(null);
@@ -129,15 +120,14 @@ export function SpreadsheetImportModal({
 
     setLinhas(leitura.linhas);
     setSituacoes({});
-    // Estado e municipio saem do proprio time; o bairro e a rua vem
-    // separados do texto da coluna Endereco. Tudo continua editavel aqui.
+    // Estado e municipio sao fixos, e ficam travados; bairro e rua vem das
+    // colunas da planilha e continuam editaveis aqui.
     setEnderecos(
       Object.fromEntries(
         leitura.linhas.map((linha) => [
           linha.id,
           {
-            state: enderecoPadrao.state,
-            city: enderecoPadrao.city,
+            ...ENDERECO_FIXO,
             district: linha.district,
             street: linha.street,
           },
@@ -315,10 +305,11 @@ export function SpreadsheetImportModal({
               Um arquivo <strong>.csv</strong> com uma pessoa por linha.
             </p>
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
-              Uma coluna para cada informação: <strong>Nome completo</strong>,{' '}
-              <strong>Telefone</strong>, <strong>Título de eleitor</strong>,{' '}
-              <strong>Zona eleitoral</strong>, <strong>Seção eleitoral</strong> e{' '}
-              <strong>Endereço</strong>. A ordem não importa, e coluna a mais é ignorada.
+              Uma coluna para cada informação: <strong>Nome</strong>, <strong>Telefone</strong>,{' '}
+              <strong>Título</strong>, <strong>Zona</strong>, <strong>Seção</strong>,{' '}
+              <strong>Bairro</strong> e <strong>Rua</strong>. A ordem não importa, e coluna a
+              mais é ignorada. Estado e município já são <strong>Alagoas</strong> e{' '}
+              <strong>Palmeira dos Índios</strong>.
             </p>
             <p className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-ink-500">
               O modelo abre direto no Excel, já em colunas. Exportado de outro programa, serve
@@ -503,12 +494,13 @@ export function SpreadsheetImportModal({
                       </Field>
 
                       {/* O endereco e a mesma cadeia da ficha — Estado,
-                          Municipio, Bairro, Rua —, e por isso ele nao vem da
-                          planilha: cada passo so existe dentro do anterior. */}
+                          Municipio, Bairro, Rua. Estado e municipio chegam
+                          fixos e travados; bairro e rua, da planilha. */}
                       <ImportAddressFields
                         id={linha.id}
                         endereco={enderecos[linha.id] ?? SEM_ENDERECO}
                         disabled={bloqueado}
+                        localFixo
                         onChange={(endereco) =>
                           setEnderecos((atual) => ({ ...atual, [linha.id]: endereco }))
                         }
@@ -527,11 +519,11 @@ export function SpreadsheetImportModal({
             </ul>
 
             <p className="text-[0.8125rem] leading-relaxed text-ink-500">
-              Corrija o que precisar aqui mesmo — nada foi gravado ainda. Nome e telefone são
-              obrigatórios; título, zona, seção e endereço podem ficar em branco. O endereço da
-              planilha chega separado em bairro e rua, com <strong>Alagoas</strong> e{' '}
-              <strong>Palmeira dos Índios</strong> já preenchidos. Quem já foi cadastrado fica em
-              verde e não é cadastrado de novo.
+              Corrija o que precisar aqui mesmo — nada foi gravado ainda. Só o nome é
+              obrigatório: telefone, título, zona, seção, bairro e rua podem ficar em branco, e a
+              pessoa entra marcada como <strong>incompleta</strong>. Estado e município são
+              sempre <strong>Alagoas</strong> e <strong>Palmeira dos Índios</strong>. Quem já foi
+              cadastrado fica em verde e não é cadastrado de novo.
             </p>
           </>
         )}

@@ -9,20 +9,20 @@ import { isUsablePhone, normalizePhone } from '@/lib/utils/phone';
  * planilha entra, vira uma tabela na tela, e SO E GRAVADA quando quem subiu
  * conferir e mandar cadastrar.
  *
- * SEIS colunas sao lidas, e nenhuma outra:
+ * SETE colunas sao lidas, e nenhuma outra:
  *
- *   Nome completo, Telefone, Titulo de eleitor, Zona, Secao e Endereco.
+ *   Nome, Telefone, Titulo, Zona, Secao, Bairro e Rua.
  *
- * O ENDERECO VEM EM UMA COLUNA SO, escrito como as pessoas escrevem:
+ * O ESTADO e o MUNICIPIO nao vem da planilha: sao fixos, Alagoas e Palmeira
+ * dos Indios (`ENDERECO_FIXO`). Entram prontos na conferencia, travados.
  *
- *   "Rua Brasil Novo, Nº 269 – Jardim Brasil"
- *   "Aldeia, Fazenda Canto"
- *   "Conjunto Brivaldo Medeiros, QJ Nº 11"
+ * A planilha ANTIGA, com o endereco inteiro em uma coluna "Endereco", ainda
+ * e aceita: sem as colunas Bairro e Rua, o texto e separado nos dois por
+ * `separarEndereco`, como antes.
  *
- * A ficha, porem, guarda bairro e rua separados. `separarEndereco` faz essa
- * separacao, e o ESTADO e o MUNICIPIO nao vem da planilha: toda planilha e
- * de Alagoas, do municipio de Palmeira dos Indios. Os dois entram prontos na
- * conferencia, onde podem ser trocados como qualquer outro campo.
+ * NADA DISSO IMPEDE A PESSOA DE ENTRAR. Coluna vazia — ou coluna que nem
+ * existe na planilha — vira falta: a pessoa entra e a ficha nasce com a
+ * etiqueta de incompleta (`member-completeness.ts`).
  *
  * As colunas sao achadas PELO NOME, sem depender da ordem, e acento, caixa e
  * pontuacao nao atrapalham. Coluna a mais na planilha e ignorada em silencio:
@@ -43,10 +43,10 @@ export interface LinhaImportada {
   voterId: string;
   zone: string;
   section: string;
-  /** Bairro e rua, ja separados do texto da coluna Endereco. */
+  /** Bairro e rua: das colunas proprias, ou separados da coluna Endereco. */
   district: string;
   street: string;
-  /** O texto da planilha, como veio. Guardado para quem for conferir. */
+  /** A coluna Endereco da planilha antiga, como veio. Vazio na nova. */
   address: string;
 }
 
@@ -68,14 +68,25 @@ function chave(texto: string): string {
     .trim();
 }
 
-/** Nomes aceitos para cada coluna, do mais explicito ao mais curto. */
-const COLUNAS: Record<'name' | 'phone' | 'voterId' | 'zone' | 'section' | 'address', string[]> = {
+/**
+ * Nomes aceitos para cada coluna, do mais explicito ao mais curto.
+ *
+ * `address` e a coluna unica da planilha antiga. So e procurada quando a
+ * planilha nao tem nem Bairro nem Rua: com as colunas proprias, um
+ * "Endereco" a mais e so mais uma coluna ignorada.
+ */
+const COLUNAS: Record<
+  'name' | 'phone' | 'voterId' | 'zone' | 'section' | 'district' | 'street' | 'address',
+  string[]
+> = {
   name: ['nome completo', 'nome', 'nome do integrante', 'integrante'],
   phone: ['telefone', 'celular', 'whatsapp', 'whats', 'fone', 'contato'],
   voterId: ['titulo de eleitor', 'titulo', 'inscricao', 'inscricao eleitoral'],
   zone: ['zona eleitoral', 'zona'],
   section: ['secao eleitoral', 'secao', 'sessao eleitoral', 'sessao'],
-  address: ['endereco', 'endereco completo', 'logradouro', 'rua'],
+  district: ['bairro', 'localidade', 'comunidade'],
+  street: ['rua', 'logradouro', 'avenida'],
+  address: ['endereco', 'endereco completo'],
 };
 
 /**
@@ -167,28 +178,14 @@ function limpo(valor: string | undefined, limite: number): string {
 }
 
 /**
- * Estado e municipio que a conferencia ja traz preenchidos.
+ * Estado e municipio de toda pessoa que entra por planilha.
  *
- * Eles saem do PROPRIO TIME — `stateUf` e a primeira cidade dele (migration
- * 038) —, e nao de um valor fixo. Era fixo em Alagoas, Palmeira dos Indios,
- * de quando havia um time so: em qualquer outro municipio a planilha entrava
- * com o endereco errado, e a lista de bairros, que e buscada por UF +
- * municipio, nao achava nada.
- *
- * Sem estado no cadastro do time, os dois ficam VAZIOS e quem confere
- * escolhe: melhor um campo em branco do que um municipio inventado.
+ * Fixos: a operacao e de Alagoas, do municipio de Palmeira dos Indios. A
+ * planilha nem tem essas colunas, e a conferencia os mostra travados. O
+ * municipio vai escrito como na lista oficial, com acento: e por ele, junto
+ * da UF, que a lista de bairros e buscada.
  */
-export function enderecoPadraoDoTime(time: {
-  stateUf?: string | null;
-  cities?: readonly string[] | null;
-}): { state: string; city: string } {
-  const state = (time.stateUf ?? '').trim().toUpperCase();
-  const city = (time.cities ?? []).map((nome) => nome.trim()).find(Boolean) ?? '';
-
-  // Municipio sem estado nao se encaixa na cadeia: a lista de bairros e
-  // buscada por UF + municipio.
-  return state ? { state, city } : { state: '', city: '' };
-}
+export const ENDERECO_FIXO = { state: 'AL', city: 'Palmeira dos Índios' } as const;
 
 /**
  * Comecos que indicam LOGRADOURO: o texto todo e a rua.
@@ -292,6 +289,11 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
   const usadas = new Set<number>();
 
   for (const [campo, aceitos] of Object.entries(COLUNAS) as [keyof typeof COLUNAS, string[]][]) {
+    // A coluna unica de endereco e da planilha antiga: com Bairro ou Rua
+    // proprios, ela nao entra.
+    if (campo === 'address' && (indices.district !== undefined || indices.street !== undefined)) {
+      continue;
+    }
     for (const aceito of aceitos) {
       const posicao = cabecalho.indexOf(aceito);
       if (posicao !== -1) {
@@ -331,7 +333,13 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
       voterId: normalizeVoterId(valor(bruta, 'voterId')),
       zone: normalizeZone(valor(bruta, 'zone')),
       section: normalizeSection(valor(bruta, 'section')),
-      ...separarEndereco(valor(bruta, 'address')),
+      ...(indices.address !== undefined
+        ? separarEndereco(valor(bruta, 'address'))
+        : {
+            district: limpo(valor(bruta, 'district'), 120),
+            street: limpo(valor(bruta, 'street'), 120),
+            address: '',
+          }),
     });
   }
 
@@ -386,7 +394,9 @@ export function faltasDaLinha(linha: LinhaImportada): string[] {
   if (!linha.voterId.trim()) faltas.push('título de eleitor');
   if (!linha.zone.trim()) faltas.push('zona');
   if (!linha.section.trim()) faltas.push('seção');
-  if (!linha.district.trim() && !linha.street.trim()) faltas.push('endereço');
+  // Um por um, como a etiqueta da ficha conta depois de gravada.
+  if (!linha.district.trim()) faltas.push('bairro');
+  if (!linha.street.trim()) faltas.push('rua');
 
   return faltas;
 }
@@ -406,8 +416,8 @@ export function faltasDaLinha(linha: LinhaImportada): string[] {
 export const MODELO_SEPARADOR = ';';
 
 export const EXEMPLO_CSV = [
-  'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
-  'Maria da Silva Souza;82999990001;100000002720;10;147;Rua Brasil Novo, Nº 269 – Jardim Brasil',
-  'João Pedro Alves;82988887777;;10;146;Conjunto Brivaldo Medeiros, QJ Nº 11',
-  'Ana Beatriz Lima;82996013641;;10;326;Aldeia, Fazenda Canto',
+  'Nome;Telefone;Título;Zona;Seção;Bairro;Rua',
+  'Maria da Silva Souza;82999990001;100000002720;10;147;Jardim Brasil;Rua Brasil Novo, Nº 269',
+  'João Pedro Alves;82988887777;;10;146;Conjunto Brivaldo Medeiros;QJ Nº 11',
+  'Ana Beatriz Lima;82996013641;;10;326;Aldeia;Fazenda Canto',
 ].join('\r\n');

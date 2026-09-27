@@ -19,6 +19,11 @@ interface ImportAddressFieldsProps {
   endereco: EnderecoDaLinha;
   onChange: (endereco: EnderecoDaLinha) => void;
   disabled?: boolean;
+  /**
+   * Estado e municipio chegam prontos e nao se trocam: sao fixos na
+   * planilha. Bairro e rua continuam editaveis.
+   */
+  localFixo?: boolean;
 }
 
 /**
@@ -35,7 +40,13 @@ interface ImportAddressFieldsProps {
  * cadastro, entao o que aparece na conferencia e, literalmente, o que
  * aparece na ficha.
  */
-export function ImportAddressFields({ id, endereco, onChange, disabled }: ImportAddressFieldsProps) {
+export function ImportAddressFields({
+  id,
+  endereco,
+  onChange,
+  disabled,
+  localFixo = false,
+}: ImportAddressFieldsProps) {
   /**
    * Os quatro campos, na ordem da cadeia.
    *
@@ -129,7 +140,9 @@ export function ImportAddressFields({ id, endereco, onChange, disabled }: Import
       <div className="sm:col-span-2">
         <p className="text-sm font-semibold text-ink-900">Endereço</p>
         <p className="mt-0.5 mb-2 text-[0.8125rem] text-ink-500">
-          Escolha na lista ou digite, se a sua localidade não aparecer.
+          {localFixo
+            ? 'Estado e município são fixos. Escolha o bairro e a rua na lista, ou digite.'
+            : 'Escolha na lista ou digite, se a sua localidade não aparecer.'}
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -139,7 +152,10 @@ export function ImportAddressFields({ id, endereco, onChange, disabled }: Import
               field={field}
               value={values[field.id] ?? ''}
               onChange={(valor) => setValue(field.id, valor)}
-              disabled={disabled}
+              disabled={
+                disabled ||
+                (localFixo && (field.systemKey === 'state' || field.systemKey === 'city'))
+              }
               idPrefix={`planilha-${id}`}
             />
           ))}

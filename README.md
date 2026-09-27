@@ -826,6 +826,33 @@ em planilha alheia é execução de algo que quem abriu não escreveu.
 
 ---
 
+## Cadastrar a equipe por planilha
+
+O botão **Planilha**, na barra da equipe, lê um `.csv` com **sete colunas**:
+
+| Coluna | Observação |
+| --- | --- |
+| `Nome` | Única obrigatória: o banco não aceita cadastro sem nome |
+| `Telefone` | Sem máscara ou com; dígito a mais é marcado para correção, nunca cortado |
+| `Título` | Título de eleitor |
+| `Zona` / `Seção` | O zero à frente sai, como na ficha |
+| `Bairro` / `Rua` | Cada um na sua coluna |
+
+**Estado e município são fixos:** Alagoas e Palmeira dos Índios
+(`ENDERECO_FIXO`, em `src/lib/domain/csv-import.ts`). A planilha nem tem essas
+colunas, e a conferência os mostra travados.
+
+**Faltar não impede.** Célula vazia, ou coluna que nem existe no arquivo, vira
+falta: a pessoa entra e a ficha nasce com a etiqueta **Incompleto**, que some
+sozinha quando o dado é preenchido (`member-completeness.ts`).
+
+As colunas são achadas pelo nome — ordem, acento e caixa não importam — e
+coluna a mais é ignorada. A planilha antiga, com o endereço inteiro numa coluna
+`Endereço`, continua aceita: sem `Bairro` e `Rua`, o texto é separado nos dois.
+O botão **Baixar modelo** entrega o arquivo já no formato novo.
+
+---
+
 ## Estrutura
 
 ```

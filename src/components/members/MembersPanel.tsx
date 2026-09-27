@@ -24,7 +24,6 @@ import { byNewest, formatDate } from '@/lib/utils/date';
 import { baixarCsv } from '@/lib/utils/download';
 import { formatPhone, normalizePhone } from '@/lib/utils/phone';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
-import { enderecoPadraoDoTime } from '@/lib/domain/csv-import';
 import { matchesSearch } from '@/lib/utils/text';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
@@ -281,11 +280,9 @@ export function MembersPanel({
     <SpreadsheetImportModal
       open={planilhaAberta}
       onClose={() => setPlanilhaAberta(false)}
+      // Estado e municipio sao fixos (Alagoas, Palmeira dos Indios): a
+      // propria conferencia os preenche e trava — ver `ENDERECO_FIXO`.
       salvar={salvarDaPlanilha}
-      // O municipio e o do TIME: quem sobe uma lista esta cadastrando gente
-      // do proprio time. Antes era um municipio fixo, e em qualquer outro a
-      // lista de bairros — buscada por UF + municipio — nao achava nada.
-      enderecoPadrao={enderecoPadraoDoTime(client)}
     />
   ) : null;
 
