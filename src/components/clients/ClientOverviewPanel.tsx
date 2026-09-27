@@ -27,7 +27,7 @@ import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
-import { LiderPanel } from '@/components/members/LiderPanel';
+import { useNavegador } from '@/components/members/NavegadorDePessoas';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
@@ -57,8 +57,6 @@ interface ClientOverviewPanelProps {
   showInviteCard?: boolean;
   /** Abre o link de cadastro. Sem ele o cartao nao oferece a acao. */
   onManageInvite?: () => void;
-  /** Abre a ficha de uma pessoa (a partir do painel do Lider). */
-  onOpenMember?: (memberId: string) => void;
 }
 
 function startOfDay(date: Date): number {
@@ -79,7 +77,6 @@ export function ClientOverviewPanel({
   onOpenForm,
   showInviteCard = true,
   onManageInvite,
-  onOpenMember,
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
@@ -97,8 +94,8 @@ export function ClientOverviewPanel({
   // do proprio Lider a lista e a Equipe dele, que nao cadastra ninguem: o
   // quadro so mostraria zeros.
   const mostrarRanking = user?.role !== 'EQUIPE';
-  /** O Lider clicado no ranking: abre o painel dele. */
-  const [liderAberto, setLiderAberto] = useState<Member | null>(null);
+  /** O Lider clicado no ranking: o painel dele abre por cima, pela pilha. */
+  const navegador = useNavegador();
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -261,7 +258,7 @@ export function ClientOverviewPanel({
               <RankingCard
                 rows={ranking}
                 currentUserId={user?.id ?? null}
-                onOpen={(id) => setLiderAberto(members.find((m) => m.id === id) ?? null)}
+                onOpen={navegador ? (id) => navegador.abrirLider(id) : undefined}
               />
             ) : null}
 
@@ -277,18 +274,6 @@ export function ClientOverviewPanel({
           </div>
         ) : null}
       </div>
-
-      {liderAberto ? (
-        <LiderPanel
-          lider={liderAberto}
-          members={members}
-          onClose={() => setLiderAberto(null)}
-          onOpenMember={(member) => {
-            setLiderAberto(null);
-            onOpenMember?.(member.id);
-          }}
-        />
-      ) : null}
 
       {podeVerMapa ? (
         <MobilizationMap

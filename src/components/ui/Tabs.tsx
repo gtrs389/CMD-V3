@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
 
 export interface TabItem {
@@ -100,15 +100,28 @@ interface TabPanelProps {
   id: string;
   active: string;
   children: ReactNode;
+  /**
+   * Depois de aberta uma vez, a aba continua montada quando se sai dela —
+   * so escondida. Voltar encontra a busca, os filtros e o que estava
+   * aberto exatamente como ficaram.
+   */
+  keepMounted?: boolean;
 }
 
-export function TabPanel({ id, active, children }: TabPanelProps) {
-  if (id !== active) return null;
+export function TabPanel({ id, active, children, keepMounted = false }: TabPanelProps) {
+  const ativa = id === active;
+  // Aberta alguma vez? Anotado na renderizacao: a primeira pintura da aba
+  // ja e a definitiva.
+  const [visitada, setVisitada] = useState(ativa);
+  if (ativa && !visitada) setVisitada(true);
+
+  if (!ativa && !(keepMounted && visitada)) return null;
   return (
     <div
       role="tabpanel"
       id={`painel-${id}`}
       aria-labelledby={`tab-${id}`}
+      hidden={!ativa}
       tabIndex={0}
       /* Sem animacao de entrada: a troca de aba precisa ser instantanea e o
          conteudo nunca pode ficar invisivel se a aba estiver em segundo plano

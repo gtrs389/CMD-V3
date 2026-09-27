@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { IconButton } from './IconButton';
 
@@ -31,6 +31,19 @@ interface ModalProps {
    * ajudam.
    */
   chrome?: 'default' | 'plain';
+  /**
+   * Volta para a janela anterior de uma pilha (Lider -> pessoa -> editar).
+   * Diferente do X, que fecha tudo: o "Voltar" devolve exatamente o que
+   * estava aberto antes.
+   */
+  onBack?: () => void;
+  /** Para onde o "Voltar" leva: "João Silva". */
+  backLabel?: string;
+  /**
+   * Janela de baixo de uma pilha: continua montada (com a busca, a aba e a
+   * rolagem dela), mas invisivel e fora do teclado ate a de cima sair.
+   */
+  inactive?: boolean;
 }
 
 const FOCUSABLE =
@@ -58,6 +71,9 @@ export function Modal({
   footer,
   busy = false,
   chrome = 'default',
+  onBack,
+  backLabel,
+  inactive = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -66,8 +82,16 @@ export function Modal({
     if (!busy) onClose();
   }, [busy, onClose]);
 
+  // Numa pilha, o Escape volta um passo (como o "voltar" do celular); o X e
+  // o clique fora fecham tudo.
+  const requestEscape = useCallback(() => {
+    if (!busy) (onBack ?? onClose)();
+  }, [busy, onBack, onClose]);
+
+  const active = open && !inactive;
+
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
 
     const id = Symbol('modal');
     stack.push(id);
@@ -86,7 +110,7 @@ export function Modal({
         // Apenas o dialogo do topo responde ao Escape.
         if (stack[stack.length - 1] !== id) return;
         event.stopPropagation();
-        requestClose();
+        requestEscape();
         return;
       }
 
@@ -121,12 +145,20 @@ export function Modal({
       if (stack.length === 0) document.body.style.overflow = overflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [open, requestClose]);
+  }, [active, requestEscape]);
 
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4',
+        // `invisible`, e nao `hidden`: guarda a rolagem de dentro.
+        inactive && 'pointer-events-none invisible',
+      )}
+      aria-hidden={inactive || undefined}
+      inert={inactive || undefined}
+    >
       <div
         className="absolute inset-0 animate-fade-in bg-ink-900/45"
         onClick={requestClose}
@@ -158,7 +190,18 @@ export function Modal({
             chrome === 'plain' ? 'pb-1' : 'border-b border-line pb-4',
           )}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
+            {onBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={busy}
+                className="-ml-1 mb-1 inline-flex min-h-8 max-w-full items-center gap-1 rounded-control px-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
+              >
+                <ArrowLeft aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="truncate">Voltar{backLabel ? ` para ${backLabel}` : ''}</span>
+              </button>
+            ) : null}
             <h2 className="text-base font-semibold text-ink-900">{title}</h2>
             {description ? <p className="mt-1 text-sm text-ink-500">{description}</p> : null}
           </div>

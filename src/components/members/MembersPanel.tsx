@@ -39,14 +39,13 @@ import { IconButton } from '@/components/ui/IconButton';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/components/layout/SessionProvider';
-import { MemberDetailModal } from './MemberDetailModal';
 import { MemberFormModal } from './MemberFormModal';
 import { SurveyAnswerModal } from '@/components/survey/SurveyAnswerModal';
 import { SpreadsheetImportModal } from './SpreadsheetImportModal';
 import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
-import { LiderPanel } from './LiderPanel';
+import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
 
 interface MembersPanelProps {
   client: Client;
@@ -69,28 +68,56 @@ interface MembersPanelProps {
    */
   openMemberId?: string | null;
   /**
-   * Avisa que a ficha aberta pelo endereco foi fechada.
-   *
-   * Serve para quem chamou limpar o `?integrante=` da barra de endereco.
-   * Sem isso, pedir a MESMA ficha de novo — clicar outra vez no mesmo pino
-   * do mapa — nao muda o endereco, o Next nao renderiza nada e o clique
-   * parece nao funcionar.
+   * "Ver a Equipe na lista", pedido de fora (o painel de um Lider aberto em
+   * outra aba): filtra a lista por aquele responsavel. `vez` muda a cada
+   * pedido, para o mesmo Lider poder ser pedido de novo.
    */
-  onDeepLinkClose?: () => void;
+  filtroDeResponsavel?: PedidoDeFiltro | null;
+}
+
+export interface PedidoDeFiltro {
+  responsavel: string;
+  vez: number;
 }
 
 /**
  * Gestao da equipe do time.
- * Tabela no desktop e cartoes no celular, sem rolagem horizontal.
+ *
+ * Fichas, paineis de Lider e edicao abrem pelo `NavegadorDePessoas` da
+ * pagina — em pilha, por cima da lista, sem perder a busca nem os filtros.
+ * Numa pagina que nao tem navegador (a do Lider), a lista monta o dela.
  */
-export function MembersPanel({
+export function MembersPanel(props: MembersPanelProps) {
+  const navegador = useNavegador();
+  const [pedido, setPedido] = useState<PedidoDeFiltro | null>(null);
+
+  if (navegador) return <ListaDoTime {...props} />;
+
+  return (
+    <NavegadorDePessoas
+      client={props.client}
+      members={props.members}
+      carregando={props.loading}
+      inicial={props.openMemberId ?? null}
+      onFiltrarEquipe={(lider) => {
+        const responsavel = lider.userId;
+        if (responsavel) setPedido((atual) => ({ responsavel, vez: (atual?.vez ?? 0) + 1 }));
+      }}
+    >
+      <ListaDoTime {...props} filtroDeResponsavel={props.filtroDeResponsavel ?? pedido} />
+    </NavegadorDePessoas>
+  );
+}
+
+/** A lista: tabela no desktop e cartoes no celular, sem rolagem horizontal. */
+function ListaDoTime({
   client,
   members,
   loading,
-  openMemberId = null,
-  onDeepLinkClose,
   addForm = 'integrante',
+  filtroDeResponsavel = null,
 }: MembersPanelProps) {
+  const navegador = useNavegador();
   const toast = useToast();
   // Perfil somente leitura nao recebe as acoes. O servidor recusa do mesmo
   // jeito: esconder o botao nunca e a protecao.
@@ -117,42 +144,33 @@ export function MembersPanel({
   const [term, setTerm] = useState('');
   // Filtro por responsavel pelo cadastro. Recorte de leitura apenas: o que
   // chega da API ja vem limitado pela hierarquia, no servidor.
-  const [recruiter, setRecruiter] = useState('todos');
+  const [recruiter, setRecruiter] = useState(filtroDeResponsavel?.responsavel ?? 'todos');
   // Filtro por nivel: Lideres, Equipe ou todos. Tambem so leitura.
   const [nivel, setNivel] = useState<'todos' | TeamTier>('todos');
   // Filtro pela etiqueta: quem esta para conferir, incompleto ou em ordem.
   const [situacao, setSituacao] = useState<'todas' | 'conferir' | 'incompleto' | 'em-ordem'>(
     'todas',
   );
-  const [viewing, setViewing] = useState<Member | null>(null);
-  /** Painel do Lider clicado: quanto trouxe, ritmo, Equipe e inconsistencias. */
-  const [liderAberto, setLiderAberto] = useState<Member | null>(null);
-  /**
-   * Ficha do endereco que a pessoa ja fechou.
-   *
-   * Guarda QUAL ficha foi fechada, e nao apenas que alguma foi: pedir a
-   * ficha de outra pessoa em seguida — outro pino do mapa, outro clique no
-   * rastreamento — precisa abrir de novo. Com um sim/nao, a segunda ficha
-   * nunca mais aparecia.
-   */
-  const [deepLinkClosed, setDeepLinkClosed] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Member | null>(null);
+  // "Ver a Equipe na lista" pedido depois da lista montada: aplicado na
+  // renderizacao, comparando com o ultimo pedido visto — o filtro certo ja
+  // sai na primeira pintura.
+  const [pedidoVisto, setPedidoVisto] = useState(filtroDeResponsavel);
+  if (filtroDeResponsavel !== pedidoVisto) {
+    setPedidoVisto(filtroDeResponsavel);
+    if (filtroDeResponsavel) {
+      setRecruiter(filtroDeResponsavel.responsavel);
+      setNivel('todos');
+      setSituacao('todas');
+      setTerm('');
+    }
+  }
+  /** Adicionar: o formulario de cadastro. Editar abre pelo navegador. */
   const [formOpen, setFormOpen] = useState(false);
   /** Cadastro de muita gente de uma vez, por planilha. */
   const [planilhaAberta, setPlanilhaAberta] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
 
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
-
-  // A ficha indicada pelo endereco e derivada da lista, sem efeito: ela
-  // aparece assim que o integrante chega e some de vez quando o dialogo e
-  // fechado.
-  const deepLinkMember = useMemo(() => {
-    if (!openMemberId || deepLinkClosed === openMemberId) return null;
-    return members.find((member) => member.id === openMemberId) ?? null;
-  }, [deepLinkClosed, members, openMemberId]);
-
-  const shownMember = viewing ?? deepLinkMember;
 
   const responsaveis = useMemo(() => recruiterOptions(ordered), [ordered]);
 
@@ -229,9 +247,13 @@ export function MembersPanel({
 
   /** Clicar no nome: Lider abre o painel dele; os outros, a ficha. */
   function abrir(member: Member) {
-    if (member.tier === 'LIDER' && !somenteBasico) setLiderAberto(member);
-    else setViewing(member);
+    if (member.tier === 'LIDER' && !somenteBasico) navegador?.abrirLider(member.id);
+    else navegador?.abrirPessoa(member.id);
   }
+  const verFicha = (member: Member) => navegador?.abrirPessoa(member.id);
+  const verPainel = (member: Member) => navegador?.abrirLider(member.id);
+  /** Editar abre por cima da lista; salvar volta para ela, como estava. */
+  const openEdit = (member: Member) => navegador?.editar(member.id);
 
   async function handleRemove() {
     if (!removing) return;
@@ -299,7 +321,6 @@ export function MembersPanel({
   };
 
   function openCreate() {
-    setEditing(null);
     setFormOpen(true);
   }
 
@@ -359,11 +380,6 @@ export function MembersPanel({
       Planilha
     </Button>
   ) : null;
-
-  function openEdit(member: Member) {
-    setEditing(member);
-    setFormOpen(true);
-  }
 
   if (!loading && members.length === 0) {
     return (
@@ -585,12 +601,12 @@ export function MembersPanel({
 
                       <div className="mt-3 flex flex-wrap gap-2">
                         {member.tier === 'LIDER' && !somenteBasico ? (
-                          <Button size="sm" onClick={() => setLiderAberto(member)}>
+                          <Button size="sm" onClick={() => verPainel(member)}>
                             <BarChart3 aria-hidden="true" className="size-4" />
                             Painel do Líder
                           </Button>
                         ) : null}
-                        <Button variant="secondary" size="sm" onClick={() => setViewing(member)}>
+                        <Button variant="secondary" size="sm" onClick={() => verFicha(member)}>
                           <Eye aria-hidden="true" className="size-4" />
                           Ficha
                         </Button>
@@ -706,13 +722,13 @@ export function MembersPanel({
                           <IconButton
                             label={`Painel do Líder ${member.name}`}
                             icon={<BarChart3 className="size-4" />}
-                            onClick={() => setLiderAberto(member)}
+                            onClick={() => verPainel(member)}
                           />
                         ) : null}
                         <IconButton
                           label={`Ver ficha de ${member.name}`}
                           icon={<Eye className="size-4" />}
-                          onClick={() => setViewing(member)}
+                          onClick={() => verFicha(member)}
                         />
                         {podeEditar ? (
                           <IconButton
@@ -739,59 +755,15 @@ export function MembersPanel({
         </>
       )}
 
-      {liderAberto ? (
-        <LiderPanel
-          lider={liderAberto}
-          members={members}
-          onClose={() => setLiderAberto(null)}
-          // Um dialogo por vez: a ficha abre no lugar do painel.
-          onOpenMember={(member) => {
-            setLiderAberto(null);
-            setViewing(member);
-          }}
-          onFiltrarEquipe={
-            liderAberto.userId
-              ? () => {
-                  setRecruiter(liderAberto.userId as string);
-                  setNivel('todos');
-                  setSituacao('todas');
-                  setTerm('');
-                  setLiderAberto(null);
-                }
-              : undefined
-          }
-        />
-      ) : null}
-
-      <MemberDetailModal
-        open={shownMember !== null}
-        client={client}
-        member={shownMember}
-        onClose={() => {
-          setViewing(null);
-          setDeepLinkClosed(openMemberId);
-          if (openMemberId) onDeepLinkClose?.();
-        }}
-        onEdit={openEdit}
-      />
-
       {importar}
 
-      {/* Adicionar abre o formulario que a pagina escolheu; EDITAR e sempre a
-          ficha do integrante, porque e uma ficha de integrante que esta
-          sendo corrigida. */}
-      {addForm === 'formulario-2' && !editing ? (
+      {/* Adicionar abre o formulario que a pagina escolheu. EDITAR abre
+          pelo navegador, e e sempre a ficha do integrante, porque e uma
+          ficha de integrante que esta sendo corrigida. */}
+      {addForm === 'formulario-2' ? (
         <SurveyAnswerModal open={formOpen} onClose={() => setFormOpen(false)} />
       ) : (
-        <MemberFormModal
-          open={formOpen}
-          client={client}
-          member={editing}
-          onClose={() => {
-            setFormOpen(false);
-            setEditing(null);
-          }}
-        />
+        <MemberFormModal open={formOpen} client={client} member={null} onClose={() => setFormOpen(false)} />
       )}
 
       <ConfirmDialog

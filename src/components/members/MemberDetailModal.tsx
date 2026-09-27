@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState } from 'react';
-import { ArrowRightLeft, Pencil } from 'lucide-react';
+import { ArrowRightLeft, BarChart3, Pencil } from 'lucide-react';
 import type { Client, FieldOption, Member } from '@/lib/types';
 import { ACCESS_STATUS_LABELS } from '@/lib/types';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
@@ -27,6 +27,7 @@ import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberSignupLinkSection } from './MemberSignupLinkSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
 import { RecruitedBy } from './RecruitedBy';
+import { useNavegador } from './navegador-contexto';
 import {
   avisoDeConferencia,
   precisaConferir,
@@ -47,6 +48,13 @@ interface MemberDetailModalProps {
    * editar continua sendo da pagina do time.
    */
   onEdit?: (member: Member) => void;
+  /** Volta para a janela anterior (ver `NavegadorDePessoas`). */
+  onBack?: () => void;
+  backLabel?: string;
+  /** Janela de baixo da pilha: montada, mas invisivel. */
+  inactive?: boolean;
+  /** A pessoa e Lider: abre o painel dele por cima da ficha. */
+  onOpenLider?: (member: Member) => void;
 }
 
 /** Circulo colorido com o icone da opcao. */
@@ -172,6 +180,10 @@ export function MemberDetailModal({
   member,
   onClose,
   onEdit,
+  onBack,
+  backLabel,
+  inactive,
+  onOpenLider,
 }: MemberDetailModalProps) {
   const { can } = useSession();
   const podeEditar = can('member.update');
@@ -182,19 +194,25 @@ export function MemberDetailModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Ficha do integrante"
+      title={member.tier === 'LIDER' ? 'Ficha do Líder' : 'Ficha do integrante'}
+      onBack={onBack}
+      backLabel={backLabel}
+      inactive={inactive}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Fechar
           </Button>
+          {member.tier === 'LIDER' && onOpenLider ? (
+            <Button variant="secondary" onClick={() => onOpenLider(member)}>
+              <BarChart3 aria-hidden="true" className="size-4" />
+              Painel do Líder
+            </Button>
+          ) : null}
           {podeEditar && onEdit ? (
-            <Button
-              onClick={() => {
-                onClose();
-                onEdit(member);
-              }}
-            >
+            // A edicao abre POR CIMA da ficha: salvar ou cancelar volta para
+            // ela, e nao para a lista.
+            <Button onClick={() => onEdit(member)}>
               <Pencil aria-hidden="true" className="size-4" />
               Editar
             </Button>
@@ -219,6 +237,28 @@ export function MemberDetailModal({
  * ve apenas nome, foto e telefone; CPF, endereco, respostas, origem,
  * verificacao e aparelho sao do ADMIN.
  */
+/**
+ * "Cadastrado por": quando quem cadastrou e um Lider do time, o nome vira
+ * um atalho para o painel dele, por cima da ficha (e o "Voltar" traz de
+ * volta para ela).
+ */
+function ResponsavelDaFicha({ member }: { member: Member }) {
+  const navegador = useNavegador();
+  const lider = navegador?.liderDoUsuario(member.recruitedBy?.userId) ?? null;
+  if (!navegador || !lider || lider.id === member.id) return <RecruitedBy recruiter={member.recruitedBy} />;
+  return (
+    <button
+      type="button"
+      onClick={() => navegador.abrirLider(lider.id)}
+      title={`Abrir o painel de ${lider.name}`}
+      className="group inline-flex min-h-9 min-w-0 items-center gap-1 rounded-control text-left"
+    >
+      <RecruitedBy recruiter={member.recruitedBy} className="[&_span]:group-hover:text-brand-700" />
+      <BarChart3 aria-hidden="true" className="size-3.5 shrink-0 text-brand-600" />
+    </button>
+  );
+}
+
 export function MemberSheetBody({ client, member }: { client: Client; member: Member }) {
   // Dados enriquecidos e sinais do aparelho sao exclusivos do ADMIN.
   const { can, user } = useSession();
@@ -309,7 +349,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
             <div className="min-w-0 sm:col-span-2">
               <dt className="text-xs text-ink-500">{RECRUITED_BY_LABEL}</dt>
               <dd className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <RecruitedBy recruiter={member.recruitedBy} />
+                <ResponsavelDaFicha member={member} />
 
                 {/* Passar o cadastro para outro responsavel: decisao do
                     ADMIN geral, e a rota confere de novo. */}
