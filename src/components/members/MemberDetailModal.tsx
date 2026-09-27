@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState } from 'react';
-import { ArrowRightLeft, BarChart3, Pencil } from 'lucide-react';
+import { ArrowRightLeft, BarChart3, Pencil, Tag } from 'lucide-react';
 import type { Client, FieldOption, Member } from '@/lib/types';
 import { ACCESS_STATUS_LABELS } from '@/lib/types';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
@@ -36,6 +36,7 @@ import {
 } from '@/lib/domain/conferencia';
 import { TierBadge } from './TierBadge';
 import { TransferRecruiterModal } from './TransferRecruiterModal';
+import { EditarTagModal, TagDoLider } from './TagDoLider';
 
 interface MemberDetailModalProps {
   open: boolean;
@@ -263,6 +264,8 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
   const { can, user } = useSession();
   const podeEditar = can('member.update');
   const [transferindo, setTransferindo] = useState(false);
+  const [editandoTag, setEditandoTag] = useState(false);
+  const navegador = useNavegador();
   const podeVerAparelho = can('device.view');
   // O integrante da equipe ve apenas nome, foto e telefone: o resto da
   // ficha (CPF, endereco, e-mail, respostas, origem) fica so com o ADMIN.
@@ -286,7 +289,21 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
         )}
 
         <div className="min-w-0">
-          <h3 className="text-lg font-semibold break-words text-ink-900">{member.name}</h3>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="text-lg font-semibold break-words text-ink-900">{member.name}</h3>
+            <TagDoLider member={member} className="text-xs" />
+            {/* A tag e do Lider: e nele que se coloca, e a Equipe acompanha. */}
+            {podeEditar && member.tier === 'LIDER' && !somenteBasico ? (
+              <button
+                type="button"
+                onClick={() => setEditandoTag(true)}
+                className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
+              >
+                <Tag aria-hidden="true" className="size-3.5" />
+                {member.tag ? 'Trocar tag' : 'Colocar tag'}
+              </button>
+            ) : null}
+          </div>
           <p className="flex flex-wrap items-center gap-1.5 text-sm text-ink-500">
             {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
             {/* Numero incompleto entra no cadastro, mas nao abre o acesso
@@ -442,6 +459,14 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
         member={member}
         onClose={() => setTransferindo(false)}
       />
+      {member.tier === 'LIDER' && podeEditar ? (
+        <EditarTagModal
+          open={editandoTag}
+          lider={member}
+          tamanhoDaEquipe={navegador?.tamanhoDaEquipe(member)}
+          onClose={() => setEditandoTag(false)}
+        />
+      ) : null}
     </>
   );
 }

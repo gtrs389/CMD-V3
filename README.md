@@ -214,6 +214,24 @@ time virou **Ranking dos Líderes**, porque só eles cadastram.
 por alguém que hoje é Equipe continua onde está; em "Cadastrado por" ele
 aparece como `Fulano · Equipe`.
 
+### Tag do Líder
+
+O ADMIN geral coloca uma tag curta no Líder — "ZONA NORTE", "IGREJA" — pelo
+painel do Líder ou pela ficha dele ("Colocar tag"). A tag aparece ao lado do
+nome do Líder e de **cada pessoa da Equipe dele**: na lista do time, no painel
+do Líder, na ficha e no Ranking dos Líderes. A busca da lista também acha pela
+tag.
+
+**Só o Líder guarda a tag** (coluna `tag` em `cmd_members`, migration
+`048_tag_do_lider.sql`). A Equipe não tem cópia: o servidor lê a tag do Líder
+na mesma consulta que já traz a foto e o nível dele, e ela chega em
+`recruitedBy.tag`. Por isso trocar a tag do Líder muda a Equipe inteira na
+hora, e passar alguém para outro Líder faz a pessoa assumir a tag do novo
+Líder. A tag é gravada limpa e em maiúsculas, com até 24 caracteres; vazia
+tira a tag. A rota é `PATCH /api/members/[id]/tag` (`member.update`, só ADMIN
+geral), e ela recusa tag em quem é da Equipe. A regra vive em
+`src/lib/domain/tag-do-lider.ts`.
+
 ---
 
 ## Rotas

@@ -365,6 +365,11 @@ export interface MemberRow {
   recruiter_changed_at: string | null;
   recruiter_changed_by: string | null;
   recruiter_previous_name: string | null;
+  /**
+   * Tag do Lider (migration 048). So o Lider tem: a Equipe mostra a tag do
+   * Lider dela, lida na hora, e fica com a coluna nula.
+   */
+  tag: string | null;
   created_at: string;
   updated_at: string;
 }

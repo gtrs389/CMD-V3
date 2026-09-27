@@ -94,6 +94,7 @@ describe('contagem de respostas', () => {
     email: null,
     recruitedBy: null,
     tier: 'LIDER' as const,
+    tag: null,
     recruiterChange: null,
     access: 'NO_PHONE' as const,
     userId: null,

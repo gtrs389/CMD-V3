@@ -13,6 +13,7 @@ import {
 } from '@/lib/utils/documents';
 import { OTHER_OPTION } from '@/lib/domain/location';
 import { EQUIPE_NAO_CADASTRA, tierOf } from '@/lib/domain/team-tier';
+import { normalizarTag } from '@/lib/domain/tag-do-lider';
 import {
   TABLES,
   type ClientRow,
@@ -71,6 +72,8 @@ interface MemberContext {
   recruiterPhoto: Map<string, string | null>;
   /** Nivel de cada responsavel do perfil EQUIPE: Lider ou Equipe. */
   recruiterTier: Map<string, TeamTier>;
+  /** Tag de cada responsavel que e Lider e tem tag (migration 048). */
+  recruiterTag: Map<string, string>;
   access: Map<string, AccessStatus>;
   /** Usuario de cada integrante: e ele que aparece no snapshot de origem. */
   userId: Map<string, string>;
@@ -115,6 +118,7 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
   const context: MemberContext = {
     recruiterPhoto: new Map(),
     recruiterTier: new Map(),
+    recruiterTag: new Map(),
     access: new Map(),
     userId: new Map(),
   };
@@ -194,8 +198,8 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
 
   const [recruiterMembers, recruiterClients] = await Promise.all([
     memberIds.length
-      ? selectRows<Pick<MemberRow, 'id' | 'photo_path' | 'recruited_by_role'>>(TABLES.members, {
-          select: 'id,photo_path,recruited_by_role',
+      ? selectRows<Pick<MemberRow, 'id' | 'photo_path' | 'recruited_by_role' | 'tag'>>(TABLES.members, {
+          select: 'id,photo_path,recruited_by_role,tag',
           filters: { id: inFilter(memberIds) },
         })
       : Promise.resolve([]),
@@ -210,12 +214,16 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
   const paths = new Map<string, string | null>();
   for (const row of recruiterMembers) paths.set(`m:${row.id}`, row.photo_path);
 
-  // O nivel do responsavel vem do cadastro DELE, lido na mesma consulta da
-  // foto: nenhuma ida a mais ao banco.
-  const tierByMember = new Map(recruiterMembers.map((row) => [row.id, tierOf(row.recruited_by_role)]));
+  // O nivel e a tag do responsavel vem do cadastro DELE, lidos na mesma
+  // consulta da foto: nenhuma ida a mais ao banco. E daqui que a Equipe tira
+  // a tag do Lider — ela nao tem copia propria.
+  const byRecruiterMember = new Map(recruiterMembers.map((row) => [row.id, row]));
   for (const row of recruiters) {
-    const tier = row.member_id ? tierByMember.get(row.member_id) : undefined;
-    if (tier) context.recruiterTier.set(row.id, tier);
+    const origem = row.member_id ? byRecruiterMember.get(row.member_id) : undefined;
+    if (!origem) continue;
+    const tier = tierOf(origem.recruited_by_role);
+    context.recruiterTier.set(row.id, tier);
+    if (tier === 'LIDER' && origem.tag) context.recruiterTag.set(row.id, origem.tag);
   }
   for (const row of recruiterClients) paths.set(`c:${row.id}`, row.photo_path);
 
@@ -235,7 +243,10 @@ function recruiterOf(row: MemberRow, context: MemberContext): Recruiter | null {
   const tier = row.recruited_by_user_id
     ? (context.recruiterTier.get(row.recruited_by_user_id) ?? null)
     : null;
-  return toRecruiter(row, photo, tier);
+  const tag = row.recruited_by_user_id
+    ? (context.recruiterTag.get(row.recruited_by_user_id) ?? null)
+    : null;
+  return toRecruiter(row, photo, tier, tag);
 }
 
 async function assembleMany(rows: MemberRow[]): Promise<Member[]> {
@@ -729,6 +740,28 @@ export async function updateMember(
     await invalidateLocation(current.client_id, id, 'RESIDENCE').catch(() => undefined);
   }
 
+  return assembleOne(row ?? current);
+}
+
+/**
+ * Coloca, troca ou tira (`null`) a tag de um Lider.
+ *
+ * So o Lider tem tag: a Equipe mostra a do Lider dela, lida na hora — por
+ * isso gravar aqui ja muda a Equipe inteira, sem tocar em mais nenhuma
+ * linha. Pedir tag para quem e da Equipe e recusado, em vez de gravar um
+ * valor que nenhuma tela mostraria.
+ */
+export async function setLeaderTag(id: string, tag: string | null): Promise<Member> {
+  const current = await requireMemberRow(id);
+  if (tierOf(current.recruited_by_role) !== 'LIDER') {
+    throw badRequest('Só o Líder tem tag: a Equipe usa a tag do Líder dela.');
+  }
+
+  const [row] = await updateRows<MemberRow>(
+    TABLES.members,
+    { id: `eq.${id}` },
+    { tag: normalizarTag(tag) },
+  );
   return assembleOne(row ?? current);
 }
 

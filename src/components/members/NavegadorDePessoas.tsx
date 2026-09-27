@@ -184,8 +184,10 @@ export function NavegadorDePessoas({
         const m = porUsuario.get(userId);
         return m && m.tier === 'LIDER' ? m : null;
       },
+      tamanhoDaEquipe: (lider) =>
+        lider.userId ? members.filter((m) => m.recruitedBy?.userId === lider.userId).length : 0,
     }),
-    [empilhar, porUsuario],
+    [empilhar, porUsuario, members],
   );
 
   // Pessoa que sumiu da lista (excluida agora mesmo) nao e desenhada.

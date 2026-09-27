@@ -117,6 +117,11 @@ export interface Recruiter {
    * niveis, so o Lider cadastra.
    */
   tier?: TeamTier | null;
+  /**
+   * Tag do responsavel, quando ele e um Lider que tem tag (migration 048).
+   * E ela que aparece ao lado do nome de quem e da Equipe dele.
+   */
+  tag?: string | null;
   photo: string | null;
 }
 

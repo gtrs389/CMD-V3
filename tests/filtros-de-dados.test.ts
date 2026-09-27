@@ -23,7 +23,7 @@ function pessoa(partes: Partial<Member>): Member {
     city: 'Palmeira dos Índios', district: 'Centro', street: 'Rua A', relationshipOptionId: null,
     relationshipLabel: null, responses: [], consentAt: null, source: 'invite',
     recruitedBy: { userId: 'u1', name: 'João Silva', role: 'EQUIPE', tier: 'LIDER', photo: null },
-    tier: 'EQUIPE', recruiterChange: null, access: 'NO_PHONE', userId: null,
+    tier: 'EQUIPE', tag: null, recruiterChange: null, access: 'NO_PHONE', userId: null,
     createdAt: '2026-09-10T12:00:00Z', updatedAt: '2026-09-10T12:00:00Z', ...partes,
   };
 }

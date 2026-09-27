@@ -196,6 +196,8 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
     // Lider ou Equipe, pelo responsavel: nao ha coluna de nivel para ficar
     // em desacordo com quem cadastrou.
     tier: tierOf(row.recruited_by_role),
+    // So o Lider tem tag propria; a da Equipe vem do Lider, em `recruitedBy`.
+    tag: tierOf(row.recruited_by_role) === 'LIDER' ? (row.tag ?? null) : null,
     // Troca de responsavel (migration 027). Sem instante gravado, o cadastro
     // continua com quem o recebeu.
     recruiterChange: row.recruiter_changed_at
@@ -222,6 +224,7 @@ export function toRecruiter(
   row: MemberRow,
   photoUrl: string | null,
   tier: TeamTier | null = null,
+  tag: string | null = null,
 ): Recruiter | null {
   if (!row.recruited_by_name || !row.recruited_by_role) return null;
   return {
@@ -231,6 +234,8 @@ export function toRecruiter(
     // Nivel so existe no perfil EQUIPE, e so quando o responsavel ainda
     // existe para ser conferido.
     ...(row.recruited_by_role === 'EQUIPE' && tier ? { tier } : {}),
+    // A tag do Lider e o que a Equipe dele mostra ao lado do nome.
+    ...(row.recruited_by_role === 'EQUIPE' && tier === 'LIDER' && tag ? { tag } : {}),
     photo: photoUrl,
   };
 }

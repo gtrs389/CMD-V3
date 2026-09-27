@@ -52,6 +52,7 @@ function pessoa(partes: Partial<Member> = {}): Member {
     source: 'invite',
     recruitedBy: JOAO,
     tier: 'EQUIPE',
+    tag: null,
     recruiterChange: null,
     access: 'NO_PHONE',
     userId: null,

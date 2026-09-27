@@ -45,6 +45,7 @@ import { SpreadsheetImportModal } from './SpreadsheetImportModal';
 import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
+import { TagDoLider } from './TagDoLider';
 import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
 
 interface MembersPanelProps {
@@ -550,13 +551,18 @@ function ListaDoTime({
                   <CardBody className="flex items-start gap-3">
                     <Avatar name={member.name} src={member.photo} size="md" />
                     <div className="min-w-0 flex-1">
-                      <button
-                        type="button"
-                        onClick={() => abrir(member)}
-                        className="block max-w-full truncate text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
-                      >
-                        {member.name}
-                      </button>
+                      {/* A tag do Lider fica ao lado do nome: no proprio
+                          Lider e em cada pessoa da Equipe dele. */}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => abrir(member)}
+                          className="block min-w-0 truncate text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
+                        >
+                          {member.name}
+                        </button>
+                        <TagDoLider member={member} />
+                      </span>
                       <AchadoEm campos={achadoEm.get(member.id)} />
                       <p className="truncate text-sm text-ink-500">
                         {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
@@ -671,14 +677,17 @@ function ListaDoTime({
                         <span className="min-w-0">
                           {/* O nome em uma linha so, inteiro; as etiquetas
                               embaixo — lado a lado elas cortavam o nome. */}
-                          <button
-                            type="button"
-                            onClick={() => abrir(member)}
-                            className="block max-w-full truncate text-left font-medium text-ink-900 hover:text-brand-700 hover:underline"
-                            title={member.tier === 'LIDER' && !somenteBasico ? 'Abrir o painel do Líder' : 'Abrir a ficha'}
-                          >
-                            {member.name}
-                          </button>
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => abrir(member)}
+                              className="block min-w-0 truncate text-left font-medium text-ink-900 hover:text-brand-700 hover:underline"
+                              title={member.tier === 'LIDER' && !somenteBasico ? 'Abrir o painel do Líder' : 'Abrir a ficha'}
+                            >
+                              {member.name}
+                            </button>
+                            <TagDoLider member={member} />
+                          </span>
                           {!somenteBasico ? (
                             <span className="mt-1 flex flex-wrap items-center gap-1">
                               <TierBadge tier={member.tier} className="px-2 py-0.5 text-[0.6875rem]" />
