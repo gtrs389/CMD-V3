@@ -826,6 +826,54 @@ em planilha alheia é execução de algo que quem abriu não escreveu.
 
 ---
 
+## Relatório do NEO
+
+Na página do time, o botão **Relatório do NEO** gera um PDF com tudo o que o
+sistema sabe daquele time, e com a análise escrita pelo **NEO**, o analista do
+sistema (API da OpenAI, modelo `gpt-5.4-mini`).
+
+O relatório tem esta estrutura:
+
+| Parte | O que traz |
+| --- | --- |
+| Capa | O time, a manchete do NEO e os quatro números que importam: pessoas, Líderes, Equipe e saúde do cadastro |
+| 1. Resumo executivo | O **índice NEO** (0 a 100), o resumo, o que está indo bem e o que preocupa |
+| 2. O time em números | Hoje, 7 e 30 dias, ritmo diário, a estrutura Administradores → Líderes → Equipe, crescimento de 12 semanas, origem e gênero |
+| 3. Líderes e Administração | A leitura do NEO sobre cada Líder que merece comentário (Motor, Constante, Parado…), o ranking completo e os Administradores |
+| 4. Território | Bairros, zonas e seções com mais gente, e onde há vazio |
+| 5. Qualidade e inconsistências | Saúde do cadastro, cada repetido com quem cadastrou e quando, o que falta, o que conferir e cada problema com nome e responsável |
+| 6. Plano de ação | O que fazer, por quem e até quando, e as perguntas para a próxima reunião |
+| Anexo | Quem é cada pessoa, agrupada sob o Líder que a trouxe, com telefone, bairro, zona/seção e situação |
+
+**O NEO não conta.** Os números saem do cadastro (`src/lib/domain/dossie.ts`).
+O NEO recebe esses números prontos e só os interpreta. As instruções proíbem
+inventar quantidade, e o PDF desenha cada contagem a partir do dossiê, nunca do
+texto dele. A resposta chega em formato fixo (Structured Outputs, modo strict) e
+é conferida de novo no servidor: qualquer coisa fora do formato vira "sem
+análise", e nunca um relatório torto.
+
+**O NEO não vê dado sensível.** Para a OpenAI vão só números agregados e os nomes
+de Administradores e Líderes (`resumoParaONeo`). Telefone, CPF, título, endereço
+e a lista da Equipe não saem do sistema. A conversa é enviada com
+`store: false`. O PDF, que tem o anexo com as pessoas, é montado **no navegador**
+de quem pediu: nenhum servidor de PDF, nenhuma cópia guardada.
+
+**Sem o NEO, o relatório sai do mesmo jeito.** Sem `OPENAI_API_KEY`, ou com a
+OpenAI fora do ar, o PDF traz todos os números, as inconsistências e o anexo; os
+trechos do NEO dizem que a análise não foi escrita.
+
+**É do ADMIN geral** (`member.export`), pela mesma razão da planilha: o relatório
+leva a lista inteira do time para fora do sistema.
+
+Configuração (ver `.env.example`):
+
+| Variável | Obrigatória | Para que serve |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | para a análise | Chave da OpenAI, somente no servidor |
+| `OPENAI_MODEL` | não | Troca o modelo; o padrão é `gpt-5.4-mini` |
+
+---
+
 ## Dado torto entra marcado
 
 **Nenhum dado errado impede um cadastro.** CPF que não fecha, título com dígito
