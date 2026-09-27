@@ -37,6 +37,7 @@ const COMPLETO: Member = {
   consentAt: null,
   source: 'admin',
   recruitedBy: null,
+  tier: 'LIDER',
   recruiterChange: null,
   access: 'ACTIVE',
   userId: null,

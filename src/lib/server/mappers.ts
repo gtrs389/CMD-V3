@@ -8,8 +8,10 @@ import type {
   Member,
   Recruiter,
   TeamPerson,
+  TeamTier,
 } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
+import { tierOf } from '@/lib/domain/team-tier';
 import type {
   ClientRow,
   FormFieldRow,
@@ -191,6 +193,9 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
     consentAt: row.consent_at,
     source: row.source,
     recruitedBy: options.recruitedBy,
+    // Lider ou Equipe, pelo responsavel: nao ha coluna de nivel para ficar
+    // em desacordo com quem cadastrou.
+    tier: tierOf(row.recruited_by_role),
     // Troca de responsavel (migration 027). Sem instante gravado, o cadastro
     // continua com quem o recebeu.
     recruiterChange: row.recruiter_changed_at
@@ -213,12 +218,19 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
  * usuario responsavel e excluido, quando `recruited_by_user_id` fica nulo.
  * Sem snapshot nao ha atribuicao nenhuma.
  */
-export function toRecruiter(row: MemberRow, photoUrl: string | null): Recruiter | null {
+export function toRecruiter(
+  row: MemberRow,
+  photoUrl: string | null,
+  tier: TeamTier | null = null,
+): Recruiter | null {
   if (!row.recruited_by_name || !row.recruited_by_role) return null;
   return {
     userId: row.recruited_by_user_id,
     name: row.recruited_by_name,
     role: row.recruited_by_role,
+    // Nivel so existe no perfil EQUIPE, e so quando o responsavel ainda
+    // existe para ser conferido.
+    ...(row.recruited_by_role === 'EQUIPE' && tier ? { tier } : {}),
     photo: photoUrl,
   };
 }

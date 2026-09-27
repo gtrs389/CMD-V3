@@ -160,8 +160,9 @@ describe('hierarquia de recrutamento', () => {
 });
 
 describe('perfil EQUIPE', () => {
-  it('é exibido como Equipe e entra no painel', () => {
-    expect(ROLE_LABELS.EQUIPE).toBe('Equipe');
+  it('é exibido como Líder e entra no painel', () => {
+    // Quem tem acesso e cadastra e o Lider: o perfil EQUIPE aparece assim.
+    expect(ROLE_LABELS.EQUIPE).toBe('Líder');
     expect(hasPanelAccess(JOAO)).toBe(true);
     expect(can(JOAO, 'team.access')).toBe(true);
   });
@@ -236,13 +237,13 @@ describe('rótulo "Cadastrado por"', () => {
 
   it('mostra nome e perfil do responsável', () => {
     expect(recruiterText(marinaRecruiter)).toBe('Marina Alves · Administração do time');
-    expect(recruiterText(joaoRecruiter)).toBe('João Silva · Equipe');
+    expect(recruiterText(joaoRecruiter)).toBe('João Silva · Líder');
   });
 
   it('preserva o histórico quando o recrutador é excluído', () => {
     // O identificador some, o snapshot permanece.
     expect(recruiterText({ ...joaoRecruiter, userId: null })).toBe(
-      'João Silva · Equipe (acesso removido)',
+      'João Silva · Líder (acesso removido)',
     );
   });
 
@@ -262,7 +263,7 @@ describe('rótulo "Cadastrado por"', () => {
 
     const opcoes = recruiterOptions(membros);
     expect(opcoes).toHaveLength(3);
-    expect(opcoes[0]).toMatchObject({ label: 'João Silva · Equipe', count: 2 });
+    expect(opcoes[0]).toMatchObject({ label: 'João Silva · Líder', count: 2 });
     expect(opcoes.map((opcao) => opcao.key)).toContain(NO_RECRUITER_KEY);
 
     // Recrutador excluido continua agrupado pelo snapshot, nao some da lista.

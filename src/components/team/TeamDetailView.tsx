@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ClipboardList, LayoutList, Users } from 'lucide-react';
-import { ROLE_LABELS } from '@/lib/permissions';
+import { TEAM_TIER_LABELS } from '@/lib/types';
 import { formatLongDate } from '@/lib/utils/date';
 import { initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +13,7 @@ import { GenerateSurveyLinkButton } from '@/components/survey/GenerateSurveyLink
 import { MembersPanel } from '@/components/members/MembersPanel';
 import { SurveyPanel } from '@/components/survey/SurveyPanel';
 import { useTeamOverview } from '@/hooks/use-team';
+import { useSession } from '@/components/layout/SessionProvider';
 
 /**
  * As abas do integrante: o formulario e area interna do ADMIN.
@@ -25,7 +26,8 @@ import { useTeamOverview } from '@/hooks/use-team';
 type TabId = 'visao-geral' | 'equipe' | 'formulario-2';
 
 /**
- * Pagina do integrante da equipe.
+ * Pagina do Lider — e, quando o cadastro e anterior a separacao dos niveis,
+ * de quem e da Equipe e tem acesso.
  *
  * Mesma estrutura e mesmos quadros da pagina do time: cabecalho, abas e
  * os paineis de visao geral e equipe sao exatamente os mesmos componentes. O
@@ -43,7 +45,13 @@ type TabId = 'visao-geral' | 'equipe' | 'formulario-2';
  */
 export function TeamDetailView() {
   const { data: overview, loading, error, reload } = useTeamOverview();
+  const { can, user } = useSession();
   const [tab, setTab] = useState<TabId>('visao-geral');
+
+  // Lider ou Equipe. A Equipe nao cadastra ninguem: sem `survey.send` nao ha
+  // link do Formulario 2 para gerar, e o servidor recusa do mesmo jeito.
+  const tier = user?.tier ?? 'LIDER';
+  const podeEnviar = can('survey.send');
 
   if (loading) return <DetailSkeleton />;
 
@@ -69,7 +77,8 @@ export function TeamDetailView() {
     { id: 'visao-geral', label: 'Visão geral', icon: <LayoutList className="size-4" /> },
     {
       id: 'equipe',
-      label: 'Equipe',
+      // O Lider cadastra a propria Equipe: a aba e dela.
+      label: tier === 'EQUIPE' ? 'Cadastros' : 'Minha Equipe',
       icon: <Users className="size-4" />,
       badge: (
         <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">
@@ -110,7 +119,7 @@ export function TeamDetailView() {
                 {profile.name}
               </h1>
               <span className="inline-flex shrink-0 items-center rounded-pill bg-accent-50 px-2 py-1 text-[0.6875rem] font-medium whitespace-nowrap text-accent-700">
-                {ROLE_LABELS.EQUIPE}
+                {TEAM_TIER_LABELS[tier]}
               </span>
             </div>
 
@@ -118,7 +127,8 @@ export function TeamDetailView() {
               <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{profile.email}</p>
             ) : null}
             <p className="mt-0.5 text-xs text-ink-400">
-              Equipe de {profile.candidateName} desde {formatLongDate(profile.joinedAt)}
+              {tier === 'EQUIPE' ? 'Equipe' : 'Líder'} em {profile.candidateName} desde{' '}
+              {formatLongDate(profile.joinedAt)}
             </p>
           </div>
 
@@ -126,9 +136,11 @@ export function TeamDetailView() {
               administrador do time: e por ele que o proprio lider entrou aqui,
               e quem responde o 2 nao recebe acesso ao painel nem link
               proprio. Por isso nao existe botao do Formulario 1 nesta tela. */}
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <GenerateSurveyLinkButton />
-          </div>
+          {podeEnviar ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <GenerateSurveyLinkButton />
+            </div>
+          ) : null}
         </div>
       </header>
 

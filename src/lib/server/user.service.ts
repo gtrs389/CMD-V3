@@ -9,6 +9,7 @@ import type {
   SystemUser,
 } from '@/lib/types';
 import { PHONE_IN_USE } from '@/lib/types';
+import { tierCanRecruit, tierOf } from '@/lib/domain/team-tier';
 import { hashPassword } from '@/lib/auth/password';
 import { generateTempPassword } from '@/lib/auth/temp-password';
 import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
@@ -31,6 +32,7 @@ import { signedUrls } from '@/lib/supabase/storage';
 import { activeAdminDevices, releaseAdminDevice } from './admin-device';
 import { isDemoClient, withoutDemoClients } from './demo-scope';
 import { ensurePersonalInvite } from './invite.service';
+import { tierOfUser } from './team-tier.service';
 import { ApiError, badRequest, notFound } from './http';
 
 /**
@@ -224,6 +226,8 @@ export async function listSystemUsers(currentUserId: string): Promise<SystemUser
           ? (memberPhotoById.get(row.member_id) ?? null)
           : null,
       role: row.role as Role,
+      // Lider ou Equipe, pelo cadastro de quem e do perfil EQUIPE.
+      tier: row.role === 'EQUIPE' ? tierOf(member?.recruited_by_role) : null,
       status: accessStatus(row),
       candidate: row.client_id ? (byId.get(row.client_id) ?? null) : null,
       memberId: row.member_id,
@@ -369,6 +373,7 @@ export async function listMembersWithoutAccess(): Promise<MemberWithoutAccess[]>
         : duplicado
           ? 'DUPLICATE_PHONE'
           : 'PENDING') as AccessStatus,
+      tier: tierOf(member.recruited_by_role),
       recruitedBy: recruiterOf(member),
     };
   });
@@ -610,9 +615,12 @@ export async function createMemberAccess(seed: MemberAccessSeed): Promise<string
     'id',
   );
 
-  // O link pessoal de recrutamento nasce junto: e por ele que a pessoa
-  // cadastra a propria equipe.
-  await ensurePersonalInvite(row.id, seed.clientId);
+  // O link pessoal de recrutamento nasce junto: e por ele que o Lider
+  // cadastra a propria Equipe. Quem e da Equipe nao cadastra ninguem, entao
+  // entra no painel sem link.
+  if (tierCanRecruit(await tierOfUser({ role: 'EQUIPE', member_id: seed.memberId }))) {
+    await ensurePersonalInvite(row.id, seed.clientId);
+  }
   return row.id;
 }
 

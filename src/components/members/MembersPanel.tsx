@@ -11,7 +11,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import type { Client, Member } from '@/lib/types';
+import type { Client, Member, TeamTier } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
 import {
   RECRUITED_BY_LABEL,
@@ -43,6 +43,7 @@ import { SurveyAnswerModal } from '@/components/survey/SurveyAnswerModal';
 import { SpreadsheetImportModal } from './SpreadsheetImportModal';
 import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
+import { TierBadge } from './TierBadge';
 
 interface MembersPanelProps {
   client: Client;
@@ -114,6 +115,8 @@ export function MembersPanel({
   // Filtro por responsavel pelo cadastro. Recorte de leitura apenas: o que
   // chega da API ja vem limitado pela hierarquia, no servidor.
   const [recruiter, setRecruiter] = useState('todos');
+  // Filtro por nivel: Lideres, Equipe ou todos. Tambem so leitura.
+  const [nivel, setNivel] = useState<'todos' | TeamTier>('todos');
   const [viewing, setViewing] = useState<Member | null>(null);
   /**
    * Ficha do endereco que a pessoa ja fechou.
@@ -148,6 +151,7 @@ export function MembersPanel({
     const digits = normalizePhone(term);
     return ordered.filter((member) => {
       if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
+      if (nivel !== 'todos' && member.tier !== nivel) return false;
 
       if (
         matchesSearch(
@@ -161,7 +165,7 @@ export function MembersPanel({
       }
       return digits.length >= 2 && member.phone.includes(digits);
     });
-  }, [ordered, term, recruiter]);
+  }, [ordered, term, recruiter, nivel]);
 
   async function handleRemove() {
     if (!removing) return;
@@ -349,6 +353,22 @@ export function MembersPanel({
             className="sm:max-w-sm"
           />
 
+          {/* Na pagina do Lider a lista inteira e a Equipe dele: o filtro
+              so aparece para quem ve o time todo. */}
+          {!somenteBasico ? (
+            <Select
+              id="filtro-nivel"
+              aria-label="Filtrar por nível"
+              value={nivel}
+              onChange={(event) => setNivel(event.target.value as 'todos' | TeamTier)}
+              className="sm:max-w-40"
+            >
+              <option value="todos">Nível: todos</option>
+              <option value="LIDER">Líderes ({ordered.filter((m) => m.tier === 'LIDER').length})</option>
+              <option value="EQUIPE">Equipe ({ordered.filter((m) => m.tier === 'EQUIPE').length})</option>
+            </Select>
+          ) : null}
+
           {responsaveis.length > 1 ? (
             <Select
               id="filtro-responsavel"
@@ -426,6 +446,7 @@ export function MembersPanel({
                           />
 
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <TierBadge tier={member.tier} />
                             <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
                             {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
                             {/* Cadastro que entrou pela metade — quase sempre
@@ -508,6 +529,7 @@ export function MembersPanel({
                             <span className="truncate font-medium text-ink-900">
                               {member.name}
                             </span>
+                            {!somenteBasico ? <TierBadge tier={member.tier} /> : null}
                             {!somenteBasico && cadastroIncompleto(member) ? (
                               <Badge tone="warning" title={avisoDeFaltas(member)}>
                                 Incompleto

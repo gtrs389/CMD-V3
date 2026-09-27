@@ -1,5 +1,5 @@
 import type { IsoDate, StoredImage, Timestamped } from './common';
-import type { AccessStatus, Recruiter } from './user';
+import type { AccessStatus, Recruiter, TeamTier } from './user';
 
 /** Valor bruto de uma resposta, conforme o tipo do campo. */
 export type FieldValue = string | number | boolean | string[] | null;
@@ -60,6 +60,11 @@ export interface Member extends Timestamped {
    * Nulo somente nos registros anteriores ao rastreamento.
    */
   recruitedBy: Recruiter | null;
+  /**
+   * Lider (cadastrado pelo Administrador do time) ou Equipe (cadastrada por
+   * um Lider). Derivado de quem cadastrou — ver `domain/team-tier.ts`.
+   */
+  tier: TeamTier;
   /**
    * Ultima troca de responsavel, quando houve (migration 027).
    *

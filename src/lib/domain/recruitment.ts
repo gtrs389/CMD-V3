@@ -1,5 +1,5 @@
 import type { Member, Recruiter } from '@/lib/types';
-import { ROLE_SHORT_LABELS } from '@/lib/permissions';
+import { roleShortLabel } from '@/lib/permissions';
 
 /**
  * Origem do cadastro, exibida com o rotulo "Cadastrado por".
@@ -18,13 +18,17 @@ export const UNKNOWN_RECRUITER = 'Cadastro anterior ao rastreamento';
 export const REVOKED_SUFFIX = '(acesso removido)';
 
 /**
- * Texto de uma linha: `João Silva · Equipe` ou, se o usuario foi excluido,
- * `João Silva · Equipe (acesso removido)`.
+ * Texto de uma linha: `João Silva · Líder` ou, se o usuario foi excluido,
+ * `João Silva · Líder (acesso removido)`.
+ *
+ * O perfil EQUIPE aparece como Lider, que e quem cadastra. So quando o
+ * nivel do responsavel e conhecido e e Equipe — cadastro anterior a
+ * separacao dos niveis — o texto diz "Equipe".
  */
 export function recruiterText(recruiter: Recruiter | null | undefined): string {
   if (!recruiter) return UNKNOWN_RECRUITER;
 
-  const base = `${recruiter.name} · ${ROLE_SHORT_LABELS[recruiter.role]}`;
+  const base = `${recruiter.name} · ${roleShortLabel(recruiter.role, recruiter.tier)}`;
   return recruiter.userId ? base : `${base} ${REVOKED_SUFFIX}`;
 }
 

@@ -93,6 +93,7 @@ describe('contagem de respostas', () => {
     source: 'invite' as const,
     email: null,
     recruitedBy: null,
+    tier: 'LIDER' as const,
     recruiterChange: null,
     access: 'NO_PHONE' as const,
     userId: null,

@@ -1,4 +1,6 @@
-import type { Role, SessionUser } from '@/lib/types';
+import type { Role, SessionUser, TeamTier } from '@/lib/types';
+import { TEAM_TIER_LABELS } from '@/lib/types';
+import { tierCanRecruit } from '@/lib/domain/team-tier';
 
 /**
  * Camada central de permissoes.
@@ -145,6 +147,25 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'survey.send',
 ];
 
+/**
+ * O que a EQUIPE (cadastrada por um Lider) perde em relacao ao Lider.
+ *
+ * Os dois sao o perfil EQUIPE no banco; o que os separa e o nivel. So o
+ * Lider cadastra, entao a Equipe fica sem tudo que traz gente nova: o
+ * cadastro pelo painel (`member.create`, que tambem e o do Formulario 2
+ * preenchido ali), o link pessoal (`invite.view`, `invite.renew`) e o link
+ * do Formulario 2 (`survey.send`).
+ *
+ * O resto continua: entrar no painel, ver quem ja cadastrou antes da
+ * separacao dos niveis e as respostas que ja recebeu.
+ */
+const EQUIPE_TIER_REMOVED: readonly Permission[] = [
+  'member.create',
+  'invite.view',
+  'invite.renew',
+  'survey.send',
+];
+
 const MATRIX: Record<Role, readonly Permission[]> = {
   ADMIN: ADMIN_PERMISSIONS,
   EQUIPE: EQUIPE_PERMISSIONS,
@@ -154,20 +175,29 @@ const MATRIX: Record<Role, readonly Permission[]> = {
 /** Permissoes disponiveis para quem nao esta autenticado (visitante do convite). */
 const ANONYMOUS_PERMISSIONS: readonly Permission[] = ['invite.submit'];
 
-export function permissionsOf(role: Role | null | undefined): readonly Permission[] {
+export function permissionsOf(
+  role: Role | null | undefined,
+  tier?: TeamTier | null,
+): readonly Permission[] {
   if (!role) return ANONYMOUS_PERMISSIONS;
-  return MATRIX[role] ?? ANONYMOUS_PERMISSIONS;
+  const base = MATRIX[role] ?? ANONYMOUS_PERMISSIONS;
+  if (role === 'EQUIPE' && !tierCanRecruit(tier)) {
+    return base.filter((permission) => !EQUIPE_TIER_REMOVED.includes(permission));
+  }
+  return base;
 }
 
 export function can(
-  user: Pick<SessionUser, 'role'> | null | undefined,
+  user: (Pick<SessionUser, 'role'> & { tier?: TeamTier | null }) | null | undefined,
   permission: Permission,
 ): boolean {
-  return permissionsOf(user?.role).includes(permission);
+  return permissionsOf(user?.role, user?.tier).includes(permission);
 }
 
 /** Perfis que podem abrir o painel. Cada rota ainda confere o proprio escopo. */
-export function hasPanelAccess(user: Pick<SessionUser, 'role'> | null | undefined): boolean {
+export function hasPanelAccess(
+  user: (Pick<SessionUser, 'role'> & { tier?: TeamTier | null }) | null | undefined,
+): boolean {
   return can(user, 'panel.access');
 }
 
@@ -218,15 +248,34 @@ export function canReachMember(
   return false;
 }
 
+/**
+ * Nome de cada perfil na tela.
+ *
+ * O perfil EQUIPE aparece como "Líder": e quem o Administrador do time
+ * cadastra, e e so o Lider que tem acesso e cadastra gente. Quando o nivel
+ * e conhecido e e Equipe, use `roleLabel`, que devolve "Equipe".
+ */
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: 'Administrador',
-  EQUIPE: 'Equipe',
+  EQUIPE: TEAM_TIER_LABELS.LIDER,
   CANDIDATE: 'Administrador do time',
 };
 
 /** Rotulo curto usado ao lado do nome em "Cadastrado por". */
 export const ROLE_SHORT_LABELS: Record<Role, string> = {
   ADMIN: 'Administração',
-  EQUIPE: 'Equipe',
+  EQUIPE: TEAM_TIER_LABELS.LIDER,
   CANDIDATE: 'Administração do time',
 };
+
+/** Nome do perfil considerando o nivel: Lider ou Equipe no perfil EQUIPE. */
+export function roleLabel(role: Role, tier?: TeamTier | null): string {
+  if (role === 'EQUIPE' && tier) return TEAM_TIER_LABELS[tier];
+  return ROLE_LABELS[role];
+}
+
+/** O mesmo, na forma curta de "Cadastrado por". */
+export function roleShortLabel(role: Role, tier?: TeamTier | null): string {
+  if (role === 'EQUIPE' && tier) return TEAM_TIER_LABELS[tier];
+  return ROLE_SHORT_LABELS[role];
+}

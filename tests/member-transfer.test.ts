@@ -35,7 +35,15 @@ const CADASTRO = {
 };
 
 const patches: Record<string, unknown>[] = [];
-const estado = { destino: JOAO as Record<string, unknown> };
+const estado = {
+  destino: JOAO as Record<string, unknown>,
+  /** Quem cadastrou o destino, quando ele e do perfil EQUIPE. */
+  origemDoDestino: 'CANDIDATE' as string | null,
+  /** Usuario da pessoa que esta sendo passada, se ela tiver acesso. */
+  usuarioDoCadastro: null as Record<string, unknown> | null,
+  /** Quem essa pessoa ja cadastrou. */
+  equipeDoCadastro: [] as Record<string, unknown>[],
+};
 
 vi.mock('@/lib/supabase/storage', () => ({
   signedUrls: async (paths: unknown[]) => paths.map(() => null),
@@ -44,15 +52,27 @@ vi.mock('@/lib/supabase/storage', () => ({
 }));
 
 vi.mock('@/lib/supabase/rest', () => ({
-  selectOne: async (table: string, options: { filters?: Record<string, string> }) => {
-    if (table === 'cmd_members') return { ...CADASTRO };
+  selectOne: async (table: string, options: { select?: string; filters?: Record<string, string> }) => {
+    if (table === 'cmd_members') {
+      // A leitura do nivel do destino pede so a origem do cadastro dele.
+      if (options.select === 'recruited_by_role') {
+        return { recruited_by_role: estado.origemDoDestino };
+      }
+      return { ...CADASTRO };
+    }
     if (table === 'cmd_users') {
+      if (options.filters?.member_id) return estado.usuarioDoCadastro;
       const id = (options.filters?.id ?? '').replace('eq.', '');
       return id === estado.destino.id ? { ...estado.destino } : null;
     }
     return null;
   },
-  selectRows: async () => [],
+  selectRows: async (table: string, options: { filters?: Record<string, string> }) => {
+    if (table === 'cmd_members' && options.filters?.recruited_by_user_id) {
+      return estado.equipeDoCadastro;
+    }
+    return [];
+  },
   updateRows: async (_table: string, _filters: unknown, patch: Record<string, unknown>) => {
     patches.push(patch);
     return [{ ...CADASTRO, ...patch }];
@@ -69,6 +89,9 @@ const { transferMember } = await import('@/lib/server/member.service');
 beforeEach(() => {
   patches.length = 0;
   estado.destino = JOAO;
+  estado.origemDoDestino = 'CANDIDATE';
+  estado.usuarioDoCadastro = null;
+  estado.equipeDoCadastro = [];
 });
 
 describe('passar o cadastro para outro responsável', () => {
@@ -126,5 +149,56 @@ describe('passar o cadastro para outro responsável', () => {
       status: 400,
     });
     expect(patches).toHaveLength(0);
+  });
+});
+
+describe('Líder e Equipe na troca de responsável', () => {
+  /** Lider: do perfil EQUIPE, cadastrado pela administracao do time. */
+  const BRUNA = {
+    id: 'user-bruna',
+    name: 'Bruna Costa',
+    role: 'EQUIPE',
+    client_id: 'time-1',
+    is_active: true,
+    member_id: 'mem-bruna',
+  };
+
+  it('passa o cadastro para um Líder', async () => {
+    estado.destino = BRUNA;
+    estado.origemDoDestino = 'CANDIDATE';
+
+    await transferMember(CADASTRO.id, BRUNA.id, 'user-admin');
+    expect(patches.at(-1)).toMatchObject({ recruited_by_user_id: BRUNA.id });
+  });
+
+  it('recusa passar para quem é da Equipe: a Equipe não cadastra', async () => {
+    estado.destino = BRUNA;
+    // Bruna foi cadastrada por um Lider: e Equipe.
+    estado.origemDoDestino = 'EQUIPE';
+
+    await expect(transferMember(CADASTRO.id, BRUNA.id, 'user-admin')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(patches).toHaveLength(0);
+  });
+
+  it('recusa pôr um Líder que já tem Equipe abaixo de outro Líder', async () => {
+    estado.destino = BRUNA;
+    estado.usuarioDoCadastro = { id: 'user-do-cadastro' };
+    estado.equipeDoCadastro = [{ id: 'mem-da-equipe' }];
+
+    await expect(transferMember(CADASTRO.id, BRUNA.id, 'user-admin')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect(patches).toHaveLength(0);
+  });
+
+  it('Líder com Equipe pode passar para a administração do time', async () => {
+    estado.destino = JOAO;
+    estado.usuarioDoCadastro = { id: 'user-do-cadastro' };
+    estado.equipeDoCadastro = [{ id: 'mem-da-equipe' }];
+
+    await transferMember(CADASTRO.id, JOAO.id, 'user-admin');
+    expect(patches.at(-1)).toMatchObject({ recruited_by_user_id: JOAO.id });
   });
 });

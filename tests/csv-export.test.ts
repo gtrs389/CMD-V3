@@ -40,6 +40,7 @@ function integrante(partes: Partial<Member> = {}): Member {
     consentAt: null,
     source: 'invite',
     recruitedBy: null,
+    tier: 'LIDER',
     recruiterChange: null,
     access: 'ACTIVE',
     userId: null,
@@ -87,7 +88,7 @@ describe('planilha exportada da equipe', () => {
 
   it('"Cadastrado por" repete o texto da tela: nome e perfil', () => {
     expect(linhaDoIntegrante(integrante({ recruitedBy: recrutador() }))[2]).toBe(
-      'José Pereira · Equipe',
+      'José Pereira · Líder',
     );
 
     expect(
@@ -99,7 +100,7 @@ describe('planilha exportada da equipe', () => {
 
   it('usuário excluído continua nomeado, com o aviso do acesso removido', () => {
     expect(linhaDoIntegrante(integrante({ recruitedBy: recrutador({ userId: null }) }))[2]).toBe(
-      'José Pereira · Equipe (acesso removido)',
+      'José Pereira · Líder (acesso removido)',
     );
   });
 

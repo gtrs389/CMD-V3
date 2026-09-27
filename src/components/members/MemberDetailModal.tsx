@@ -27,6 +27,7 @@ import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberSignupLinkSection } from './MemberSignupLinkSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
 import { RecruitedBy } from './RecruitedBy';
+import { TierBadge } from './TierBadge';
 import { TransferRecruiterModal } from './TransferRecruiterModal';
 
 interface MemberDetailModalProps {
@@ -264,6 +265,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                 <p className="truncate text-sm text-ink-500">{member.email}</p>
               ) : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
+                <TierBadge tier={member.tier} />
                 <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
                   {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
                 </Badge>
