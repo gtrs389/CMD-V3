@@ -22,9 +22,10 @@ import type {
   Recruiter,
   Role,
   SystemUser,
+  TeamTier,
 } from '@/lib/types';
 import { ACCESS_STATUS_LABELS } from '@/lib/types';
-import { ROLE_LABELS } from '@/lib/permissions';
+import { roleLabel } from '@/lib/permissions';
 import { RECRUITED_BY_LABEL, recruiterText } from '@/lib/domain/recruitment';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
@@ -70,6 +71,8 @@ interface Row {
   /** Aparelho autorizado. Nulo enquanto nenhum navegador foi vinculado. */
   device: AdminDeviceInfo | null;
   role: Role;
+  /** Lider ou Equipe, no perfil EQUIPE. */
+  tier: TeamTier | null;
   status: AccessStatus;
   candidate: { id: string; name: string; photo: string | null } | null;
   /** Acesso de um Time DEMO: a linha ganha o selo. */
@@ -130,6 +133,7 @@ export function SettingsView() {
       phoneAccess: item.role !== 'ADMIN',
       device: item.device,
       role: item.role,
+      tier: item.tier,
       status: item.status,
       candidate: item.candidate,
       isDemo: item.candidate?.isDemo === true,
@@ -150,6 +154,7 @@ export function SettingsView() {
       phoneAccess: true,
       device: null,
       role: 'CANDIDATE' as Role,
+      tier: null,
       status: 'PENDING' as AccessStatus,
       candidate: { id: item.clientId, name: item.name, photo: item.photo },
       // Time DEMO nasce com administrador: ele nunca aparece nesta lista.
@@ -173,6 +178,7 @@ export function SettingsView() {
       phoneAccess: true,
       device: null,
       role: 'EQUIPE' as Role,
+      tier: item.tier,
       status: item.status,
       candidate: { id: item.clientId, name: item.candidateName, photo: null },
       // As pessoas do Time DEMO nascem com acesso: nao caem aqui.
@@ -194,7 +200,7 @@ export function SettingsView() {
           row.name,
           row.contact,
           row.candidate?.name ?? '',
-          ROLE_LABELS[row.role],
+          roleLabel(row.role, row.tier),
           recruiterText(row.recruitedBy),
         ),
       ),
@@ -407,7 +413,7 @@ export function SettingsView() {
                   <p className="truncate text-xs text-ink-500">{row.contact}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-1.5 truncate text-xs text-ink-500">
                     <span>
-                      {ROLE_LABELS[row.role]}
+                      {roleLabel(row.role, row.tier)}
                       {row.candidate ? ` · ${row.candidate.name}` : ''}
                     </span>
                     {/* Acesso de um Time DEMO: o selo evita confundi-lo com

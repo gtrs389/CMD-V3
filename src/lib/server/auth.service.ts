@@ -1,6 +1,7 @@
 import 'server-only';
 import { cookies, headers } from 'next/headers';
-import type { Role, SessionUser } from '@/lib/types';
+import type { Role, SessionUser, TeamTier } from '@/lib/types';
+import { tierOf } from '@/lib/domain/team-tier';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createToken, hashToken } from '@/lib/auth/tokens';
 import {
@@ -61,6 +62,7 @@ function toSessionUser(
   row: SessionColumns,
   photo: string | null = null,
   impersonatedBy: string | null = null,
+  tier: TeamTier | null = null,
 ): SessionUser {
   return {
     id: row.id,
@@ -68,6 +70,8 @@ function toSessionUser(
     email: row.email,
     photo,
     role: row.role as Role,
+    // Lider ou Equipe: so existe no perfil EQUIPE.
+    tier: row.role === 'EQUIPE' ? tier : null,
     // O vinculo vem sempre do banco: o navegador nunca escolhe a operacao
     // nem o integrante. ADMIN nao pertence a nenhuma operacao.
     candidateId: row.role === 'ADMIN' ? null : row.client_id,
@@ -216,23 +220,35 @@ export interface SessionState {
 }
 
 /**
- * Foto do integrante, quando a sessao e do perfil EQUIPE.
+ * Foto e nivel do integrante, quando a sessao e do perfil EQUIPE.
  *
- * Lida em uma consulta propria, e nao embutida na consulta da sessao: entre
+ * Lidos em uma consulta propria, e nao embutidos na consulta da sessao: entre
  * `cmd_users` e `cmd_members` existem DOIS caminhos — o usuario aponta o
  * integrante e o integrante aponta quem o cadastrou. Um vinculo embutido
  * ficaria ambiguo, a consulta inteira falharia e NENHUMA sessao resolveria,
  * em nenhum perfil. O Administrador do time nao tem esse problema: ate
  * `cmd_team_people` existe um caminho so.
+ *
+ * O nivel — Lider ou Equipe — vem de quem cadastrou a pessoa, na MESMA
+ * leitura da foto. E lido a cada requisicao: a troca de responsavel muda o
+ * que a pessoa pode fazer na hora, sem precisar sair e entrar de novo.
  */
-async function memberPhoto(user: SessionColumns): Promise<string | null> {
-  if (user.role !== 'EQUIPE' || !user.member_id) return null;
+async function memberInfo(
+  user: SessionColumns,
+): Promise<{ photo: string | null; tier: TeamTier | null }> {
+  if (user.role !== 'EQUIPE' || !user.member_id) return { photo: null, tier: null };
 
-  const member = await selectOne<{ photo_path: string | null }>(TABLES.members, {
-    select: 'photo_path',
-    filters: { id: `eq.${user.member_id}` },
-  });
-  return signedUrl(member?.photo_path ?? null);
+  const member = await selectOne<{ photo_path: string | null; recruited_by_role: string | null }>(
+    TABLES.members,
+    {
+      select: 'photo_path,recruited_by_role',
+      filters: { id: `eq.${user.member_id}` },
+    },
+  );
+  return {
+    photo: await signedUrl(member?.photo_path ?? null),
+    tier: tierOf(member?.recruited_by_role),
+  };
 }
 
 /**
@@ -308,7 +324,7 @@ export async function resolveSessionState(
    * (`user_id`) e, quando o ADMIN geral abre o painel de alguem, quem a
    * abriu (`impersonated_by`). Sem dizer por qual deles o usuario e
    * embutido, o PostgREST recusa a consulta inteira — e a mesma armadilha
-   * ja descrita em `memberPhoto`. A dica `!user_id` resolve; a variacao sem
+   * ja descrita em `memberInfo`. A dica `!user_id` resolve; a variacao sem
    * dica fica como ultimo recurso, para o caso de uma versao do PostgREST
    * nao aceitar essa forma. Em banco de um caminho so, as duas funcionam.
    */
@@ -375,11 +391,14 @@ export async function resolveSessionState(
   // Foto do cadastro correspondente: do Administrador do time, que ja veio
   // junto, ou do proprio integrante, lido a parte. No ADMIN geral nada e
   // consultado e nenhuma assinatura e pedida ao Storage.
-  const photo = row.user.team_person
-    ? await signedUrl(row.user.team_person.photo_path)
-    : await memberPhoto(row.user);
+  const { photo, tier } = row.user.team_person
+    ? { photo: await signedUrl(row.user.team_person.photo_path), tier: null }
+    : await memberInfo(row.user);
 
-  return { user: toSessionUser(row.user, photo, row.impersonated_by ?? null), blocked: null };
+  return {
+    user: toSessionUser(row.user, photo, row.impersonated_by ?? null, tier),
+    blocked: null,
+  };
 }
 
 /** Encerra a sessao correspondente ao token. */

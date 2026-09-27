@@ -20,6 +20,7 @@ import { insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/res
 import { signedUrl } from '@/lib/supabase/storage';
 import type { DeviceSignalsInput } from '@/lib/validation/server.schema';
 import { bindAdminDevice } from './admin-device';
+import { tierOfUser } from './team-tier.service';
 
 /**
  * Acesso ao sistema pelo link do time: link proprio + telefone.
@@ -353,9 +354,9 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
   // foi digitado: um membro da equipe jamais recebe o escopo de
   // Administrador do time.
   const equipe = user.role === 'EQUIPE';
-  const photo = equipe
-    ? await memberPhoto(user.member_id)
-    : await teamPersonPhoto(user.team_person_id);
+  const [photo, tier] = equipe
+    ? await Promise.all([memberPhoto(user.member_id), tierOfUser(user)])
+    : [await teamPersonPhoto(user.team_person_id), null];
 
   return {
     user: {
@@ -364,6 +365,9 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
       email: user.email,
       photo,
       role: equipe ? 'EQUIPE' : 'CANDIDATE',
+      // Lider ou Equipe, lido do cadastro: e ele que decide se a pessoa
+      // cadastra alguem.
+      tier,
       candidateId: user.client_id,
       memberId: equipe ? user.member_id : null,
       // Nenhum dos dois perfis tem senha: nao existe primeiro acesso a

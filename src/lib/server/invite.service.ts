@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Role } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
+import { EQUIPE_NAO_CADASTRA, tierCanRecruit } from '@/lib/domain/team-tier';
 import { createInviteToken, hashToken } from '@/lib/auth/tokens';
 import {
   TABLES,
@@ -16,6 +17,8 @@ import {
   selectRows,
   updateRows,
 } from '@/lib/supabase/rest';
+import { forbidden } from './http';
+import { tierOfUser, tierOfUserId } from './team-tier.service';
 
 /**
  * Links pessoais de recrutamento.
@@ -99,11 +102,17 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
 
     // O dono precisa continuar ativo e pertencer a MESMA operacao do convite.
     // Vinculo entre times diferentes nao passa daqui, nem do banco.
+    //
+    // E precisa ser quem cadastra: um link pessoal de quem e da Equipe —
+    // gerado antes da separacao entre Lider e Equipe, ou de alguem que
+    // passou para baixo de um Lider — para de aceitar cadastro na hora,
+    // como o link de um dono inativo.
     if (
       user &&
       user.is_active &&
       user.client_id === invite.client_id &&
-      (user.role === 'CANDIDATE' || user.role === 'EQUIPE')
+      (user.role === 'CANDIDATE' || user.role === 'EQUIPE') &&
+      tierCanRecruit(await tierOfUser(user))
     ) {
       owner = {
         userId: user.id,
@@ -178,6 +187,17 @@ export interface IssuedBatchInvite {
 }
 
 /**
+ * Link pessoal so para quem cadastra.
+ *
+ * A Equipe nao cadastra ninguem, entao nao tem link: a rota do painel ja
+ * recusa pela permissao, e esta conferencia cobre qualquer outro caminho
+ * que chegue na geracao.
+ */
+async function assertOwnerRecruits(userId: string): Promise<void> {
+  if (!tierCanRecruit(await tierOfUserId(userId))) throw forbidden(EQUIPE_NAO_CADASTRA);
+}
+
+/**
  * Gera VARIOS links do mesmo dono de uma vez, sem revogar os que ja existem.
  *
  * Cada link continua de uso unico: um por pessoa. E isso que permite mandar
@@ -193,6 +213,7 @@ export async function issueInviteBatch(
   quantidade: number,
   generatedByUserId?: string | null,
 ): Promise<IssuedBatchInvite[]> {
+  await assertOwnerRecruits(userId);
   const tokens = Array.from({ length: quantidade }, () => createInviteToken());
 
   const rows = await callFunction<
@@ -250,6 +271,7 @@ export async function issuePersonalInvite(
   userId: string,
   generatedByUserId?: string | null,
 ): Promise<IssuedInvite> {
+  await assertOwnerRecruits(userId);
   const token = createInviteToken();
 
   const rows = await callFunction<IssueRow[]>('cmd_invite_issue', {
@@ -341,6 +363,10 @@ export async function ensurePersonalInvite(
 ): Promise<InviteRow> {
   const current = await findInviteByUser(userId);
   if (current) return current;
+
+  // Sem link algum, e da Equipe: nao ganha um agora — nem o convite legado
+  // do time, que viraria o link dela.
+  await assertOwnerRecruits(userId);
 
   // Convite legado da operacao (sem dono): passa a ser o link do time,
   // preservando o token ja distribuido.

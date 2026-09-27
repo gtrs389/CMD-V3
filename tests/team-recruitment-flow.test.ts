@@ -72,6 +72,14 @@ vi.mock('@/lib/supabase/rest', () => ({
     return created.map((row) => ({ ...row }));
   },
   insertOne: async (table: string, value: Row) => {
+    // Chave estrangeira de `cmd_users.member_id`, como no banco.
+    if (
+      table === 'cmd_users' &&
+      value.member_id &&
+      !db.cmd_members.some((row) => row.id === value.member_id)
+    ) {
+      throw new Error('insert or update on table "cmd_users" violates foreign key constraint');
+    }
     const created = { id: nextId(table), ...value };
     db[table].push(created);
     return { ...created };
@@ -141,6 +149,41 @@ vi.mock('@/lib/supabase/rest', () => ({
         generation: 1,
       });
       return userId;
+    }
+
+    // Reproduz `cmd_invite_issue`: a geracao anterior do dono cai e o link
+    // novo nasce com prazo, ja no estado ACTIVE.
+    if (name === 'cmd_invite_issue') {
+      const owner = db.cmd_users.find((row) => row.id === args.p_user_id);
+      if (!owner || owner.is_active !== true) throw new Error('dono do link inativo');
+
+      for (const row of db.cmd_invites) {
+        if (row.user_id === args.p_user_id && row.status === 'ACTIVE') {
+          Object.assign(row, { active: false, status: 'REVOKED' });
+        }
+      }
+
+      const agora = new Date();
+      const id = nextId('inv');
+      db.cmd_invites.push({
+        id,
+        client_id: owner.client_id,
+        user_id: owner.id,
+        token: args.p_token,
+        token_hash: args.p_token_hash,
+        active: true,
+        created_at: agora.toISOString(),
+        rotated_at: null,
+        issued_at: agora.toISOString(),
+        expires_at: new Date(agora.getTime() + 86_400_000).toISOString(),
+        status: 'ACTIVE',
+        claim_hash: null,
+        claimed_at: null,
+        consumed_at: null,
+        revoked_at: null,
+        generation: 1,
+      });
+      return [{ invite_id: id, issued_at: agora.toISOString(), expires_at: agora.toISOString() }];
     }
 
     if (name === 'cmd_set_temp_password') {
@@ -338,6 +381,10 @@ describe('atribuição pelo link', () => {
 
     expect(member.recruitedBy?.name).toBe('João Silva');
     expect(member.recruitedBy?.role).toBe('EQUIPE');
+    // Joao foi cadastrado pela administradora do time: e Lider. Ana, que ele
+    // cadastrou, e da Equipe.
+    expect(member.recruitedBy?.tier).toBe('LIDER');
+    expect(member.tier).toBe('EQUIPE');
   });
 
   it('ignora responsável e candidato forjados: tudo vem do token', async () => {
@@ -497,7 +544,10 @@ describe('acesso criado com o cadastro', () => {
 });
 
 describe('escopo das consultas', () => {
-  /** Monta a árvore: Marina -> João e Bruna; João -> Ana; Ana -> Carlos. */
+  /**
+   * Monta a árvore: Marina (administradora do time) -> João e Bruna, que são
+   * Líderes; João -> Ana e Carlos, que são a Equipe dele.
+   */
   async function montarArvore() {
     const joao = await cadastrarPeloLink('token-marina', {
       name: 'João Silva',
@@ -513,9 +563,10 @@ describe('escopo das consultas', () => {
       phone: '11911110002',
     });
     const anaUser = db.cmd_users.find((row) => row.member_id === ana.member.id);
-    const anaToken = String(db.cmd_invites.find((row) => row.user_id === anaUser?.id)?.token);
 
-    await cadastrarPeloLink(anaToken, { name: 'Carlos Dias', phone: '11911110004' });
+    // O link de cadastro e de uso unico na vida real; aqui o mesmo token
+    // serve de novo porque o banco em memoria nao consome convite.
+    await cadastrarPeloLink(joaoToken, { name: 'Carlos Dias', phone: '11911110004' });
 
     return {
       joaoUserId: String(joaoUser?.id),
@@ -527,27 +578,82 @@ describe('escopo das consultas', () => {
     await montarArvore();
 
     const marina = { id: 'u-marina', role: 'CANDIDATE' as const, candidateId: OPERACAO_A };
-    const nomes = (await listMembersForUser(marina, OPERACAO_A)).map((m) => m.name);
+    const membros = await listMembersForUser(marina, OPERACAO_A);
+    const nivel = new Map(membros.map((m) => [m.name, m.tier]));
 
-    expect(nomes).toHaveLength(4);
-    expect(nomes).toEqual(
-      expect.arrayContaining(['João Silva', 'Bruna Costa', 'Ana Ribeiro', 'Carlos Dias']),
-    );
+    expect(membros).toHaveLength(4);
+    expect(nivel.get('João Silva')).toBe('LIDER');
+    expect(nivel.get('Bruna Costa')).toBe('LIDER');
+    expect(nivel.get('Ana Ribeiro')).toBe('EQUIPE');
+    expect(nivel.get('Carlos Dias')).toBe('EQUIPE');
   });
 
-  it('EQUIPE vê apenas os próprios recrutados', async () => {
+  it('o Líder vê apenas a própria Equipe', async () => {
     const { joaoUserId, anaUserId } = await montarArvore();
 
     const joao = { id: joaoUserId, role: 'EQUIPE' as const, candidateId: OPERACAO_A };
     const vistos = (await listMembersForUser(joao, OPERACAO_A)).map((m) => m.name);
 
-    expect(vistos).toEqual(['Ana Ribeiro']);
-    // Nem irmaos, nem descendentes dos proprios recrutados.
+    expect(vistos).toEqual(expect.arrayContaining(['Ana Ribeiro', 'Carlos Dias']));
+    expect(vistos).toHaveLength(2);
+    // Nem outro Lider.
     expect(vistos).not.toContain('Bruna Costa');
-    expect(vistos).not.toContain('Carlos Dias');
 
+    // Ana e da Equipe: nao cadastrou ninguem, e nao ve ninguem.
     const ana = { id: anaUserId, role: 'EQUIPE' as const, candidateId: OPERACAO_A };
-    expect((await listMembersForUser(ana, OPERACAO_A)).map((m) => m.name)).toEqual(['Carlos Dias']);
+    expect(await listMembersForUser(ana, OPERACAO_A)).toEqual([]);
+  });
+
+  it('quem é da Equipe não ganha link, e link antigo dela não cadastra', async () => {
+    const { anaUserId } = await montarArvore();
+
+    // A Ana entrou no painel, mas sem link pessoal: so o Lider cadastra.
+    expect(db.cmd_users.find((row) => row.id === anaUserId)).toBeDefined();
+    expect(db.cmd_invites.filter((row) => row.user_id === anaUserId)).toHaveLength(0);
+
+    // Link gerado antes da separacao dos niveis: para de aceitar na hora.
+    db.cmd_invites.push({
+      id: 'inv-ana-antigo',
+      client_id: OPERACAO_A,
+      user_id: anaUserId,
+      token: 'token-ana-antigo',
+      token_hash: hashToken('token-ana-antigo'),
+      active: true,
+      created_at: new Date().toISOString(),
+      rotated_at: null,
+      issued_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      status: 'ACTIVE',
+      claim_hash: null,
+      claimed_at: null,
+      consumed_at: null,
+      revoked_at: null,
+      generation: 1,
+    });
+
+    expect(inviteAccepts(await resolveInvite('token-ana-antigo'))).toBe(false);
+    await expect(
+      cadastrarPeloLink('token-ana-antigo', { name: 'Terceiro Nível', phone: '11911110005' }),
+    ).rejects.toThrow('link inativo');
+
+    // E mesmo que alguem chegasse direto no servico, o cadastro e recusado
+    // antes de gravar qualquer coisa.
+    const antes = db.cmd_members.length;
+    await expect(
+      createMember(
+        {
+          clientId: OPERACAO_A,
+          name: 'Terceiro Nível',
+          phone: '11911110005',
+          photo: null,
+          responses: [],
+          consentAt: null,
+          source: 'admin',
+        },
+        { userId: anaUserId, name: 'Ana Ribeiro', role: 'EQUIPE' },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(db.cmd_members).toHaveLength(antes);
   });
 
   it('EQUIPE não alcança a lista de outra operação nem trocando o clientId', async () => {

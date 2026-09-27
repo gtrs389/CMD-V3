@@ -11,6 +11,24 @@ import type { IsoDate } from './common';
 export const ROLES = ['ADMIN', 'EQUIPE', 'CANDIDATE'] as const;
 export type Role = (typeof ROLES)[number];
 
+/**
+ * Nivel de quem esta abaixo do Administrador do time.
+ *
+ * LIDER  foi cadastrado pelo Administrador do time e cadastra a Equipe;
+ * EQUIPE foi cadastrado por um Lider e nao cadastra ninguem.
+ *
+ * Nao e um perfil novo no banco: os dois continuam sendo `EQUIPE` em
+ * `cmd_users.role`. O nivel e derivado de quem cadastrou a pessoa — ver
+ * `src/lib/domain/team-tier.ts`.
+ */
+export const TEAM_TIERS = ['LIDER', 'EQUIPE'] as const;
+export type TeamTier = (typeof TEAM_TIERS)[number];
+
+export const TEAM_TIER_LABELS: Record<TeamTier, string> = {
+  LIDER: 'Líder',
+  EQUIPE: 'Equipe',
+};
+
 export interface User {
   id: string;
   name: string;
@@ -93,6 +111,12 @@ export interface Recruiter {
   userId: string | null;
   name: string;
   role: Role;
+  /**
+   * Nivel do responsavel, quando ele e do perfil EQUIPE e ainda existe.
+   * Ausente, o perfil EQUIPE e lido como Lider: desde a separacao dos
+   * niveis, so o Lider cadastra.
+   */
+  tier?: TeamTier | null;
   photo: string | null;
 }
 
@@ -107,6 +131,8 @@ export interface SystemUser {
   /** Foto do administrador do time ou do integrante. */
   photo: string | null;
   role: Role;
+  /** Lider ou Equipe. Preenchido somente no perfil EQUIPE. */
+  tier: TeamTier | null;
   status: AccessStatus;
   /**
    * Time (operacao) do usuario. Nulo apenas no ADMIN.
@@ -149,6 +175,8 @@ export interface MemberWithoutAccess {
   phone: string | null;
   photo: string | null;
   status: AccessStatus;
+  /** Lider ou Equipe, por quem cadastrou a pessoa. */
+  tier: TeamTier;
   recruitedBy: Recruiter | null;
 }
 
@@ -174,6 +202,11 @@ export interface SessionUser {
   /** Foto do Administrador do time, quando houver. */
   photo?: string | null;
   role: Role;
+  /**
+   * Lider ou Equipe. Preenchido somente no perfil EQUIPE, e resolvido pelo
+   * banco a cada requisicao: a troca de responsavel muda o nivel na hora.
+   */
+  tier?: TeamTier | null;
   /** Operacao do usuario. Preenchido em CANDIDATE e em EQUIPE. */
   candidateId: string | null;
   /** Integrante correspondente. Preenchido somente no perfil EQUIPE. */

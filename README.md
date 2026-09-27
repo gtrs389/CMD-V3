@@ -159,10 +159,60 @@ navegador.
 | Perfil | Nesta etapa |
 | --- | --- |
 | `ADMIN` | Login, painel, CRUD de clientes, construtor de formulário, gestão de equipes e convites |
-| `EQUIPE` | Existe nos tipos e na matriz de permissões, **sem login e sem painel**. Acessa apenas o formulário público |
+| `CANDIDATE` | Na tela, **Administrador do time**. Entra pelo link do time + telefone e cadastra os Líderes |
+| `EQUIPE` | Na tela, **Líder** ou **Equipe** — ver [Líderes e Equipe](#líderes-e-equipe) |
 
 Quem abre o link público não vê clientes, integrantes nem qualquer área
 administrativa. Toda verificação passa por `src/lib/permissions/index.ts`.
+
+---
+
+## Líderes e Equipe
+
+Abaixo do Administrador do time existem dois níveis:
+
+| Nível | Quem é | O que faz |
+| --- | --- | --- |
+| **Líder** | Quem o Administrador do time cadastra | Entra no painel ("Minha mobilização"), cadastra a própria Equipe e envia o Formulário 2 |
+| **Equipe** | Quem um Líder cadastra | **Não cadastra ninguém** — a hierarquia termina aqui |
+
+O Líder vê somente quem ele mesmo cadastrou. O Administrador do time vê todos,
+dos dois níveis.
+
+**O nível não é gravado.** Ele sai de quem cadastrou a pessoa
+(`recruited_by_role`, que existe em todo cadastro desde a migration 012):
+cadastrado por alguém do perfil `EQUIPE` — que é o Líder — é Equipe; qualquer
+outra origem é Líder. Isso inclui o ADMIN geral cadastrando pela página do
+time e o cadastro antigo, anterior ao rastreamento: ninguém é rebaixado a
+Equipe sem evidência. Por isso quem já estava cadastrado foi reclassificado
+sozinho, sem uma linha reescrita, e a troca de responsável muda o nível junto.
+A regra vive em `src/lib/domain/team-tier.ts`.
+
+No banco os dois continuam sendo o perfil `EQUIPE`. O que muda com o nível:
+
+- **permissões** — a Equipe perde `member.create`, `invite.view`,
+  `invite.renew` e `survey.send` (`permissionsOf(role, tier)`). Ela continua
+  entrando no painel e vendo o que já tinha;
+- **cadastro** — `createMember`, por onde passa todo cadastro (painel,
+  Formulário 2, link público), recusa responsável que é da Equipe;
+- **links** — quem é da Equipe não ganha link pessoal, e um link antigo dela
+  para de aceitar cadastro na hora (`resolveInvite`);
+- **troca de responsável** — a Equipe não recebe cadastro, e um Líder que já
+  tem Equipe não passa para baixo de outro Líder (a Equipe dele ficaria num
+  terceiro nível que não existe);
+- **banco** — a migration `046_lideres_e_equipe.sql` repete as duas últimas
+  regras num gatilho em `cmd_members`. Ela é opcional para o sistema
+  funcionar (o servidor já confere tudo antes de gravar), mas fecha a porta
+  para qualquer escrita que não passe pelo servidor.
+
+**Na tela.** O perfil `EQUIPE` aparece como "Líder" (`ROLE_LABELS`) e, quando o
+nível é conhecido e é Equipe, como "Equipe" (`roleLabel`). A lista do time
+mostra a etiqueta de cada pessoa e filtra por nível; o quadro de ranking do
+time virou **Ranking dos Líderes**, porque só eles cadastram.
+
+**O que já estava gravado não muda.** Um cadastro feito antes da separação
+por alguém que hoje é Equipe continua onde está; em "Cadastrado por" ele
+aparece como `Fulano · Equipe`.
 
 ---
 
@@ -742,7 +792,7 @@ O botão **Exportar**, na barra da equipe do time, baixa a lista em `.csv` com
 | --- | --- |
 | `Nome` | O nome completo do cadastro |
 | `Telefone` | Com máscara — `(82) 99999-0001`. Sem telefone, a célula fica **vazia**, para o filtro da planilha achar de uma vez quem está sem número |
-| `Cadastrado por` | O MESMO texto da tela: `José Pereira · Equipe`, `Ana Costa · Administração do time`, `Cadastro anterior ao rastreamento` |
+| `Cadastrado por` | O MESMO texto da tela: `José Pereira · Líder`, `Ana Costa · Administração do time`, `Cadastro anterior ao rastreamento` |
 
 "Cadastrado por" sai de `recruiterText`, a mesma função que a tela usa. O texto
 vem do snapshot gravado no momento do cadastro: continua correto mesmo depois

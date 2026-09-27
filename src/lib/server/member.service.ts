@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AccessStatus, Member, MemberInput, Recruiter, SessionUser } from '@/lib/types';
+import type { AccessStatus, Member, MemberInput, Recruiter, SessionUser, TeamTier } from '@/lib/types';
 import { canReachMember } from '@/lib/permissions';
 import { normalizePhone } from '@/lib/utils/phone';
 import {
@@ -12,6 +12,7 @@ import {
   normalizeZone,
 } from '@/lib/utils/documents';
 import { OTHER_OPTION } from '@/lib/domain/location';
+import { EQUIPE_NAO_CADASTRA, tierOf } from '@/lib/domain/team-tier';
 import {
   TABLES,
   type ClientRow,
@@ -35,6 +36,7 @@ import { createPendingLocation, invalidateLocation } from './map-location.servic
 import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
 import { EMPTY_CONSENT, buildConsentEvidence } from './consent';
+import { assertCanRecruit, tierOfUser } from './team-tier.service';
 
 /**
  * Regras de integrante no servidor: respostas, fotos, consentimento e
@@ -67,6 +69,8 @@ async function loadResponses(memberIds: string[]): Promise<Map<string, MemberRes
  */
 interface MemberContext {
   recruiterPhoto: Map<string, string | null>;
+  /** Nivel de cada responsavel do perfil EQUIPE: Lider ou Equipe. */
+  recruiterTier: Map<string, TeamTier>;
   access: Map<string, AccessStatus>;
   /** Usuario de cada integrante: e ele que aparece no snapshot de origem. */
   userId: Map<string, string>;
@@ -106,6 +110,7 @@ function statusOf(
 async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
   const context: MemberContext = {
     recruiterPhoto: new Map(),
+    recruiterTier: new Map(),
     access: new Map(),
     userId: new Map(),
   };
@@ -157,8 +162,8 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
 
   const [recruiterMembers, recruiterClients] = await Promise.all([
     memberIds.length
-      ? selectRows<Pick<MemberRow, 'id' | 'photo_path'>>(TABLES.members, {
-          select: 'id,photo_path',
+      ? selectRows<Pick<MemberRow, 'id' | 'photo_path' | 'recruited_by_role'>>(TABLES.members, {
+          select: 'id,photo_path,recruited_by_role',
           filters: { id: inFilter(memberIds) },
         })
       : Promise.resolve([]),
@@ -172,6 +177,14 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
 
   const paths = new Map<string, string | null>();
   for (const row of recruiterMembers) paths.set(`m:${row.id}`, row.photo_path);
+
+  // O nivel do responsavel vem do cadastro DELE, lido na mesma consulta da
+  // foto: nenhuma ida a mais ao banco.
+  const tierByMember = new Map(recruiterMembers.map((row) => [row.id, tierOf(row.recruited_by_role)]));
+  for (const row of recruiters) {
+    const tier = row.member_id ? tierByMember.get(row.member_id) : undefined;
+    if (tier) context.recruiterTier.set(row.id, tier);
+  }
   for (const row of recruiterClients) paths.set(`c:${row.id}`, row.photo_path);
 
   const wanted = recruiters.map((row) =>
@@ -187,7 +200,10 @@ function recruiterOf(row: MemberRow, context: MemberContext): Recruiter | null {
   const photo = row.recruited_by_user_id
     ? (context.recruiterPhoto.get(row.recruited_by_user_id) ?? null)
     : null;
-  return toRecruiter(row, photo);
+  const tier = row.recruited_by_user_id
+    ? (context.recruiterTier.get(row.recruited_by_user_id) ?? null)
+    : null;
+  return toRecruiter(row, photo, tier);
 }
 
 async function assembleMany(rows: MemberRow[]): Promise<Member[]> {
@@ -468,14 +484,28 @@ export interface RecruiterOption {
  * dele em "Cadastrado por" tiraria a pessoa da contagem de todo mundo.
  */
 export async function listRecruiters(clientId: string): Promise<RecruiterOption[]> {
-  const rows = await selectRows<Pick<UserRow, 'id' | 'name' | 'role'>>(TABLES.users, {
-    select: 'id,name,role',
+  const rows = await selectRows<Pick<UserRow, 'id' | 'name' | 'role' | 'member_id'>>(TABLES.users, {
+    select: 'id,name,role,member_id',
     filters: { client_id: `eq.${clientId}`, is_active: 'is.true' },
     order: 'name.asc',
   });
 
+  // A Equipe nao recebe cadastro: so o Lider cadastra. O nivel sai do
+  // cadastro de cada um, lido de uma vez.
+  const memberIds = rows
+    .filter((row) => row.role === 'EQUIPE' && row.member_id)
+    .map((row) => row.member_id as string);
+  const origens = memberIds.length
+    ? await selectRows<Pick<MemberRow, 'id' | 'recruited_by_role'>>(TABLES.members, {
+        select: 'id,recruited_by_role',
+        filters: { id: inFilter(memberIds) },
+      })
+    : [];
+  const nivel = new Map(origens.map((row) => [row.id, tierOf(row.recruited_by_role)]));
+
   return rows
     .filter((row) => row.role === 'CANDIDATE' || row.role === 'EQUIPE')
+    .filter((row) => row.role !== 'EQUIPE' || nivel.get(row.member_id ?? '') !== 'EQUIPE')
     .map((row) => ({ userId: row.id, name: row.name, role: row.role as 'CANDIDATE' | 'EQUIPE' }));
 }
 
@@ -509,10 +539,12 @@ export async function transferMember(
   });
   if (!atual) throw notFound('Integrante não encontrado.');
 
-  const destino = await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(
-    TABLES.users,
-    { select: 'id,name,role,client_id,is_active', filters: { id: `eq.${toUserId}` } },
-  );
+  const destino = await selectOne<
+    Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active' | 'member_id'>
+  >(TABLES.users, {
+    select: 'id,name,role,client_id,is_active,member_id',
+    filters: { id: `eq.${toUserId}` },
+  });
 
   if (!destino || !destino.is_active) throw notFound('Responsável não encontrado.');
   if (destino.client_id !== atual.client_id) {
@@ -523,6 +555,32 @@ export async function transferMember(
   }
   if (atual.recruited_by_user_id === destino.id) {
     throw badRequest('O cadastro já está com este responsável.');
+  }
+
+  // Lider e Equipe. A Equipe nao recebe cadastro, e quem passa para baixo
+  // de um Lider vira Equipe — o que so pode acontecer com quem ainda nao
+  // cadastrou ninguem. Um Lider que ja tem Equipe, movido para baixo de
+  // outro Lider, deixaria a Equipe dele num terceiro nivel que nao existe.
+  if (destino.role === 'EQUIPE') {
+    if ((await tierOfUser(destino)) === 'EQUIPE') throw badRequest(EQUIPE_NAO_CADASTRA);
+
+    const usuario = await selectOne<Pick<UserRow, 'id'>>(TABLES.users, {
+      select: 'id',
+      filters: { member_id: `eq.${memberId}` },
+    });
+    const equipe = usuario
+      ? await selectRows<Pick<MemberRow, 'id'>>(TABLES.members, {
+          select: 'id',
+          filters: { recruited_by_user_id: `eq.${usuario.id}` },
+          limit: 1,
+        })
+      : [];
+    if (equipe.length > 0) {
+      throw badRequest(
+        `${atual.name} é Líder e já tem Equipe: não pode ficar abaixo de outro Líder. ` +
+          'Passe antes a Equipe dele para outro responsável.',
+      );
+    }
   }
 
   await updateRows<MemberRow>(
@@ -550,6 +608,11 @@ export async function createMember(
   input: MemberInput,
   recruitedBy?: RecruitedBy | null,
 ): Promise<Member> {
+  // So o Lider cadastra: quem e da Equipe nao e responsavel por cadastro
+  // nenhum, venha ele do painel, do Formulario 2 ou de um link antigo. A
+  // recusa vem antes da foto subir, para nada ficar orfao no Storage.
+  if (recruitedBy) await assertCanRecruit(recruitedBy);
+
   // O navegador apenas sinaliza que aceitou. A data, o texto e o hash sao do
   // servidor, a partir do aviso vigente em cmd_clients.
   const consent = input.consentAt

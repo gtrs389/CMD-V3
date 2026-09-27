@@ -89,6 +89,10 @@ export function ClientOverviewPanel({
   // calculada, porque a configuracao nem vem na resposta.
   const podeVerFormulario = can('form.view') && onOpenForm !== undefined;
   const podeEditarFormulario = can('form.manage');
+  // O ranking e dos Lideres, e quem o le e quem administra o time. Na pagina
+  // do proprio Lider a lista e a Equipe dele, que nao cadastra ninguem: o
+  // quadro so mostraria zeros.
+  const mostrarRanking = user?.role !== 'EQUIPE';
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -130,13 +134,15 @@ export function ClientOverviewPanel({
   const restantes = total - stats.recentes.length;
 
   /**
-   * Ranking de cadastros da equipe.
+   * Ranking dos Lideres.
    *
-   * As linhas sao os INTEGRANTES deste time — todos eles, inclusive quem
-   * ainda nao trouxe ninguem, que aparece com zero. O que cada um soma e a
-   * quantidade de gente cadastrada pelo link dele, lida do snapshot de
-   * origem: cadastro trazido por quem administra o time nao entra aqui,
-   * porque este quadro e da equipe.
+   * As linhas sao os LIDERES deste time — todos eles, inclusive quem ainda
+   * nao trouxe ninguem, que aparece com zero. O que cada um soma e a
+   * quantidade de gente cadastrada por ele (a Equipe dele), lida do
+   * snapshot de origem. Quem e da Equipe fica de fora: nao cadastra
+   * ninguem, e apareceria sempre em zero, como se estivesse devendo. O
+   * cadastro trazido por quem administra o time tambem nao entra, porque
+   * este quadro e dos Lideres.
    */
   const ranking = useMemo<RankingRow[]>(() => {
     const porResponsavel = new Map<string, number>();
@@ -146,6 +152,7 @@ export function ClientOverviewPanel({
     }
 
     return members
+      .filter((member) => member.tier === 'LIDER')
       .map((member) => ({
         key: member.id,
         userId: member.userId,
@@ -227,28 +234,38 @@ export function ClientOverviewPanel({
       {/* Coluna da direita: ranking da equipe e, para o ADMIN, o cartao do
           formulario. Os links do time saem daqui — eles vivem no cabecalho,
           nomeados um a um. */}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div
+        className={
+          mostrarRanking || form
+            ? 'grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
+            : 'grid gap-3'
+        }
+      >
         <RecentMembersCard
           members={stats.recentes}
           options={relationshipOptions}
           onOpenTeam={() => onOpenTab('equipe')}
         />
 
-        <div className="flex flex-col gap-3">
-          {/* Quem mais cadastrou: a leitura que o responsavel pela operacao
-              abre primeiro. */}
-          <RankingCard rows={ranking} currentUserId={user?.id ?? null} />
+        {mostrarRanking || form ? (
+          <div className="flex flex-col gap-3">
+            {/* Quem mais cadastrou: a leitura que o responsavel pela operacao
+                abre primeiro. */}
+            {mostrarRanking ? (
+              <RankingCard rows={ranking} currentUserId={user?.id ?? null} />
+            ) : null}
 
-          {form && onOpenForm ? (
-            <FormCard
-              ativos={form.ativos}
-              obrigatorios={form.obrigatorios}
-              percentual={form.percentual}
-              canEdit={podeEditarFormulario}
-              onEdit={onOpenForm}
-            />
-          ) : null}
-        </div>
+            {form && onOpenForm ? (
+              <FormCard
+                ativos={form.ativos}
+                obrigatorios={form.obrigatorios}
+                percentual={form.percentual}
+                canEdit={podeEditarFormulario}
+                onEdit={onOpenForm}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {podeVerMapa ? (
@@ -693,7 +710,7 @@ function RecentMembersCard({
    Ranking de cadastros
    ------------------------------------------------------------------------- */
 
-/** Uma linha do ranking: um integrante da equipe e o que ele ja trouxe. */
+/** Uma linha do ranking: um Lider e o que ele ja trouxe. */
 interface RankingRow {
   key: string;
   /** Usuario do integrante. Nulo enquanto ele nao tem acesso proprio. */
@@ -711,10 +728,10 @@ const MEDAL_CLASSES = [
 ];
 
 /**
- * Ranking de cadastros da equipe.
+ * Ranking dos Lideres.
  *
  * Responde a pergunta que o responsavel pela operacao faz primeiro: quem
- * esta trazendo gente. A equipe inteira aparece, inclusive quem ainda esta
+ * esta trazendo gente. Todos os Lideres aparecem, inclusive quem ainda esta
  * em zero — e justamente isso que mostra onde falta empurrar. A contagem sai
  * do snapshot gravado em cada cadastro, entao ninguem perde o que ja fez se
  * o acesso for removido depois.
@@ -743,7 +760,7 @@ function RankingCard({
           className="flex items-center gap-2 text-[0.8125rem] font-semibold text-ink-900"
         >
           <Trophy aria-hidden="true" className="size-4 text-accent-600" />
-          Ranking de cadastros equipe
+          Ranking dos Líderes
         </h2>
         {rows.length > 0 ? (
           <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">
@@ -754,7 +771,7 @@ function RankingCard({
 
       {rows.length === 0 ? (
         <p className="flex flex-1 items-center justify-center px-4 pb-5 text-center text-sm text-ink-500">
-          Nenhum integrante cadastrado ainda. Compartilhe o link de cadastro para começar.
+          Nenhum Líder cadastrado ainda. Compartilhe o link de cadastro para começar.
         </p>
       ) : (
         <ul className="scrollbar-slim max-h-80 flex-1 divide-y divide-line overflow-y-auto px-4">
@@ -828,11 +845,11 @@ function RankingCard({
       {rows.length > 0 ? (
         <p className="px-4 py-2.5 text-[0.6875rem] text-ink-500">
           {comCadastro === 0
-            ? 'Ninguém da equipe trouxe alguém ainda.'
+            ? 'Nenhum Líder trouxe alguém ainda.'
             : `${formatNumber(comCadastro)} de ${formatNumber(rows.length)} ${pluralize(
                 rows.length,
-                'integrante já trouxe alguém',
-                'integrantes já trouxeram alguém',
+                'Líder já trouxe alguém',
+                'Líderes já trouxeram alguém',
               )}`}
         </p>
       ) : null}

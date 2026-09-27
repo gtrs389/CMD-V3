@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, KeyRound, LogOut, Settings } from 'lucide-react';
-import { can, ROLE_LABELS } from '@/lib/permissions';
+import { can, roleLabel } from '@/lib/permissions';
 import { initials } from '@/lib/utils/text';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ChangePasswordModal } from './ChangePasswordModal';
@@ -87,7 +87,7 @@ export function UserMenu() {
             {user.email ? (
               <p className="truncate text-xs text-ink-500">{user.email}</p>
             ) : null}
-            <p className="mt-1 text-xs font-medium text-ink-700">{ROLE_LABELS[user.role]}</p>
+            <p className="mt-1 text-xs font-medium text-ink-700">{roleLabel(user.role, user.tier)}</p>
           </div>
 
           {can(user, 'settings.view') ? (
