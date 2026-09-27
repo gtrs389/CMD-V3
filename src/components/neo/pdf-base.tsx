@@ -532,3 +532,19 @@ export function FaixaDoResponsavel({
 export function BlocoDoGrupo({ linhas, children }: { linhas: number; children: ReactNode }) {
   return <View wrap={linhas > 22}>{children}</View>;
 }
+
+/** Faixa de abertura de um grupo qualquer: rotulo pequeno, titulo e um resumo a direita. */
+export function FaixaDeGrupo({ rotulo, titulo, direita }: { rotulo: string; titulo: string; direita: ReactNode }) {
+  return (
+    <View
+      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navySoft, paddingVertical: 5, paddingRight: 6, marginTop: 10, marginBottom: 2 }}
+    >
+      <View style={{ width: 2.5, height: 14, backgroundColor: C.gold, marginRight: 7 }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 6.4, color: C.faint, letterSpacing: 1 }}>{s(rotulo.toUpperCase())}</Text>
+        <Text style={{ fontSize: 9.4, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(titulo)}</Text>
+      </View>
+      <Text style={{ fontSize: 8, color: C.ink2, maxWidth: 280, textAlign: 'right' }}>{direita}</Text>
+    </View>
+  );
+}

@@ -1,12 +1,13 @@
 import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
 import { appConfig } from '@/config/app.config';
-import { agruparPorResponsavel, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
+import { agruparPorResponsavel, agruparPorTelefone, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
 import {
   C,
   CORES_DE_CATEGORIA,
   Cabecalho,
   Chip,
   BlocoDoGrupo,
+  FaixaDeGrupo,
   FaixaDoResponsavel,
   GraficoPorLideranca,
   Kpi,
@@ -62,6 +63,53 @@ export interface ListaFiltradaProps {
   geradaEm: string;
   /** Tamanho da base de cada responsavel (pelo texto de "cadastrado por"). */
   basePorResponsavel?: Record<string, number>;
+  /**
+   * Qual dos `filtros` e o "Telefone compartilhado", se estiver marcado:
+   * esse filtro se le por NUMERO, e ganha a lista organizada por telefone.
+   */
+  indiceDoTelefoneCompartilhado?: number | null;
+}
+
+/**
+ * Os numeros compartilhados: cada telefone, quantas fichas o usam, e quem
+ * sao — com quem cadastrou cada uma. E o que a coordenacao precisa para
+ * decidir de quem e o numero.
+ */
+function PorNumero({ pessoas }: { pessoas: PessoaDaLista[] }) {
+  return (
+    <>
+      {agruparPorTelefone(pessoas).map((grupo) => {
+        const responsaveis = [...new Set(grupo.itens.map((p) => p.cadastradoPor))];
+        return (
+          <BlocoDoGrupo key={grupo.telefone} linhas={grupo.itens.length}>
+            <FaixaDeGrupo
+              rotulo="Telefone"
+              titulo={telefone(grupo.telefone)}
+              direita={
+                <>
+                  <Text style={{ fontFamily: 'Helvetica-Bold' }}>{`${num(grupo.itens.length)} fichas`}</Text>
+                  <Text style={{ color: C.faint }}>
+                    {s(responsaveis.length > 1 ? ` · ${num(responsaveis.length)} responsáveis diferentes` : ` · ${responsaveis[0]}`)}
+                  </Text>
+                </>
+              }
+            />
+            <Tabela<PessoaDaLista>
+              linhas={grupo.itens}
+              chave={(p, i) => `${grupo.telefone}-${i}`}
+              colunas={[
+                { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
+                { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
+                { titulo: 'Cadastrado por', largura: '37%', celula: (p) => p.cadastradoPor },
+                { titulo: 'Bairro', largura: '15%', celula: (p) => p.bairro || '—' },
+                { titulo: 'Cadastro', largura: '12%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
+              ]}
+            />
+          </BlocoDoGrupo>
+        );
+      })}
+    </>
+  );
 }
 
 function Titulo({ titulo, sub, chips }: { titulo: string; sub: string; chips: { texto: string; cor: string; fundo: string }[] }) {
@@ -89,7 +137,78 @@ function Titulo({ titulo, sub, chips }: { titulo: string; sub: string; chips: { 
  * sua parte: primeiro QUEM concentra (o grafico), depois a lista separada
  * por quem cadastrou, de quem tem mais para quem tem menos.
  */
-export function ListaFiltrada({ time, filtros, responsavel, pessoas, geradaEm, basePorResponsavel = {} }: ListaFiltradaProps) {
+export function ListaFiltrada(props: ListaFiltradaProps) {
+  const indice = props.indiceDoTelefoneCompartilhado ?? null;
+  if (indice !== null && props.filtros.length === 1) return <ListaDeNumeros {...props} />;
+  return <ListaPorResponsavel {...props} />;
+}
+
+/** So o filtro "Telefone compartilhado": o documento inteiro por numero. */
+function ListaDeNumeros({ time, filtros, responsavel, pessoas, geradaEm }: ListaFiltradaProps) {
+  const grupos = agruparPorTelefone(pessoas);
+  const responsaveis = new Set(pessoas.map((p) => p.cadastradoPor)).size;
+  const maior = grupos[0]?.itens.length ?? 0;
+  const barras = grupos.map((g) => ({
+    responsavel: telefone(g.telefone),
+    quantidades: [g.itens.length],
+    total: g.itens.length,
+    base: null,
+  }));
+
+  return (
+    <Document title={s(`Telefones compartilhados — ${time}`)} author={s(appConfig.name)} language="pt-BR">
+      <Page size="A4" style={st.page}>
+        <Cabecalho esquerda={`Telefones compartilhados · ${time}`} direita={appConfig.shortName} />
+        <Rodape texto={AVISO} />
+        <Titulo
+          titulo={`${num(grupos.length)} ${grupos.length === 1 ? 'número compartilhado' : 'números compartilhados'}`}
+          sub={`${time} · ${dataLonga(geradaEm)} · ${num(pessoas.length)} fichas usam um número que aparece em outra ficha do time`}
+          chips={[
+            ...filtros.map((f) => ({ texto: f, cor: C.white, fundo: CORES_DE_CATEGORIA[0] })),
+            ...(responsavel ? [{ texto: `Cadastrados por ${responsavel}`, cor: C.navy, fundo: C.bg }] : []),
+          ]}
+        />
+
+        {grupos.length === 0 ? (
+          <Text style={{ fontSize: 9, color: C.faint }}>Nenhum número compartilhado.</Text>
+        ) : (
+          <>
+            <LinhaDeKpis>
+              <Kpi valor={num(grupos.length)} rotulo="números compartilhados" tom={C.danger} />
+              <Kpi valor={num(pessoas.length)} rotulo="fichas envolvidas" />
+              <Kpi valor={num(maior)} rotulo="fichas no número mais usado" nota={telefone(grupos[0].telefone)} tom={C.gold} />
+              <Kpi valor={num(responsaveis)} rotulo={responsaveis === 1 ? 'responsável envolvido' : 'responsáveis envolvidos'} />
+            </LinhaDeKpis>
+
+            <Text style={st.h3}>Números com mais fichas</Text>
+            <GraficoPorLideranca
+              barras={barras}
+              categorias={[{ rotulo: 'fichas', cor: CORES_DE_CATEGORIA[0] }]}
+              totalDaLista={pessoas.length}
+              limite={15}
+            />
+
+            <Text style={[st.h3, { marginTop: 18 }]}>Por número</Text>
+            <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 2 }}>
+              Cada número e as fichas que o usam. Pode ser família — ou o número de uma liderança digitado no lugar do da pessoa.
+            </Text>
+            <PorNumero pessoas={pessoas} />
+          </>
+        )}
+      </Page>
+    </Document>
+  );
+}
+
+function ListaPorResponsavel({
+  time,
+  filtros,
+  responsavel,
+  pessoas,
+  geradaEm,
+  basePorResponsavel = {},
+  indiceDoTelefoneCompartilhado = null,
+}: ListaFiltradaProps) {
   const categorias: CategoriaDoGrafico[] = filtros.map((rotulo, i) => ({ rotulo, cor: CORES_DE_CATEGORIA[i % CORES_DE_CATEGORIA.length] }));
   const barras = barrasPorResponsavel(pessoas, filtros.length, (p) => p.filtros, basePorResponsavel);
   const grupos = agruparPorResponsavel(pessoas);
@@ -164,6 +283,16 @@ export function ListaFiltrada({ time, filtros, responsavel, pessoas, geradaEm, b
                 />
               </BlocoDoGrupo>
             ))}
+
+            {indiceDoTelefoneCompartilhado !== null ? (
+              <View break>
+                <Text style={[st.h3, { marginTop: 0 }]}>Números compartilhados</Text>
+                <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 2 }}>
+                  As fichas do filtro “{s(filtros[indiceDoTelefoneCompartilhado])}”, agora organizadas por número.
+                </Text>
+                <PorNumero pessoas={pessoas.filter((p) => p.filtros.includes(indiceDoTelefoneCompartilhado))} />
+              </View>
+            ) : null}
           </>
         )}
       </Page>
