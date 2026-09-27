@@ -35,6 +35,7 @@ import {
 import { resumoDasFaltas } from '@/lib/domain/member-completeness';
 import { recruiterOptions, recruiterText } from '@/lib/domain/recruitment';
 import { contextoDosFiltros } from '@/lib/domain/filtros-de-dados';
+import { basePorResponsavel } from '@/lib/domain/por-responsavel';
 import { baixarArquivo } from '@/lib/utils/download';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
@@ -215,6 +216,7 @@ export function InconsistenciasPanel({
         total: doRecorte.length,
         pessoasComProblema: diagnostico.pessoasComProblema,
         saude: diagnostico.saude,
+        basePorResponsavel: basePorResponsavel(members),
         repetidos: visto.repetidos.map((grupo) => ({
           nome: grupo.nome,
           certeza: CERTEZA_ROTULO[grupo.certeza],

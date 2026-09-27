@@ -174,6 +174,8 @@ export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
 export interface PessoaFiltrada {
   member: Member;
   motivos: string[];
+  /** Os filtros marcados em que a pessoa caiu, na ordem da tela. */
+  filtros: string[];
 }
 
 /** Quem cai em QUALQUER um dos filtros marcados, com todos os motivos. */
@@ -187,10 +189,12 @@ export function aplicarFiltros(
 
   const resultado: PessoaFiltrada[] = [];
   for (const member of members) {
-    const motivos = filtros
-      .map((f) => f.motivo(member, contexto))
-      .filter((m): m is string => Boolean(m));
-    if (motivos.length) resultado.push({ member, motivos });
+    const achados = filtros
+      .map((f) => ({ id: f.id, motivo: f.motivo(member, contexto) }))
+      .filter((x): x is { id: string; motivo: string } => Boolean(x.motivo));
+    if (achados.length) {
+      resultado.push({ member, motivos: achados.map((x) => x.motivo), filtros: achados.map((x) => x.id) });
+    }
   }
   return resultado.sort((a, b) => a.member.name.localeCompare(b.member.name, 'pt-BR'));
 }

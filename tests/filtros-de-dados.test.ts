@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { pdf } from '@react-pdf/renderer';
 import type { Member } from '@/lib/types';
 import { FILTROS_DE_DADOS, aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone } from '@/lib/domain/filtros-de-dados';
+import { agruparPorResponsavel, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
 import { ListaFiltrada, RelatorioDeInconsistencias } from '@/components/neo/ListasPdf';
 
 /**
@@ -72,18 +73,75 @@ describe('filtro por dado', () => {
     expect(contagem['sem-titulo']).toBe(0);
   });
 
-  it('o PDF sai só com os filtrados, com quem cadastrou', async () => {
-    const pessoas = aplicarFiltros(todos, ['cpf-errado'], contexto).map(({ member, motivos }) => ({
-      nome: member.name, telefone: member.phone, motivos, cadastradoPor: 'João Silva · Líder', cadastradoEm: member.createdAt,
+  it('diz em quais filtros cada pessoa caiu', () => {
+    const [bia] = aplicarFiltros(todos, ['cpf-errado', 'cpf-incompleto'], contexto);
+    expect(bia).toMatchObject({ member: { name: 'Bia CPF Curto' }, filtros: ['cpf-incompleto'] });
+  });
+
+  it('agrupa por quem cadastrou: quem tem mais primeiro, e cada grupo em ordem alfabética', () => {
+    const itens = [
+      { nome: 'Zeca', cadastradoPor: 'Bruna Costa · Líder' },
+      { nome: 'Ana', cadastradoPor: 'João Silva · Líder' },
+      { nome: 'Caio', cadastradoPor: 'João Silva · Líder' },
+      { nome: 'Beto', cadastradoPor: 'João Silva · Líder' },
+    ];
+    const grupos = agruparPorResponsavel(itens);
+    expect(grupos.map((g) => g.responsavel)).toEqual(['João Silva · Líder', 'Bruna Costa · Líder']);
+    expect(grupos[0].itens.map((i) => i.nome)).toEqual(['Ana', 'Beto', 'Caio']);
+
+    const barras = barrasPorResponsavel(
+      [{ cadastradoPor: 'João', c: [0, 1] }, { cadastradoPor: 'João', c: [1] }, { cadastradoPor: 'Bruna', c: [0] }],
+      2,
+      (x) => x.c,
+      { João: 40 },
+    );
+    expect(barras[0]).toEqual({ responsavel: 'João', quantidades: [1, 2], total: 2, base: 40 });
+    expect(barras[1]).toMatchObject({ responsavel: 'Bruna', total: 1, base: null });
+  });
+
+  it('o PDF sai agrupado por quem cadastrou, com o gráfico por liderança', async () => {
+    const lideres = ['João Silva · Líder', 'Bruna Costa · Líder', 'Carla Nunes · Líder', 'Marina Alves · Administração do time'];
+    const bairros = ['Centro', 'Xucurus', 'Jardim Brasil', 'São Cristóvão'];
+    const nomes = ['Ana Paula Lima', 'Bruno Ferreira', 'Cícero Gomes', 'Daniela Rocha', 'Edson Batista', 'Fátima Nunes', 'Gilberto Santos', 'Helena Prado', 'Ivone Barros', 'José Carlos Melo', 'Kátia Moura', 'Luiz Henrique', 'Marta Campos', 'Nivaldo Reis', 'Otília Souza', 'Paulo Roberto', 'Quitéria Lins', 'Raimundo Alves', 'Sandra Vieira', 'Tereza Cristina', 'Ubiratan Dias', 'Valdete Silva'];
+    const pessoas = nomes.map((nome, i) => ({
+      nome,
+      telefone: `8299${String(1000000 + i * 7919).slice(0, 7)}`,
+      bairro: bairros[i % 4],
+      cadastradoPor: lideres[i % 7 < 3 ? 0 : i % 7 < 5 ? 1 : i % 7 < 6 ? 2 : 3],
+      cadastradoEm: new Date(Date.UTC(2026, 7, 1 + i)).toISOString(),
+      filtros: i % 3 === 0 ? [0, 1] : [i % 2],
     }));
     const doc = createElement(ListaFiltrada, {
-      time: 'Time Palmeira', filtros: ['CPF que não confere'], responsavel: null, pessoas, geradaEm: '2026-09-27T12:00:00Z',
+      time: 'Time Palmeira',
+      filtros: ['Título incompleto', 'Sem zona ou seção'],
+      responsavel: null,
+      pessoas,
+      geradaEm: '2026-09-27T12:00:00Z',
+      basePorResponsavel: { [lideres[0]]: 120, [lideres[1]]: 64, [lideres[2]]: 18, [lideres[3]]: 9 },
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
     if (process.env.PREVIA_LISTA) (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA, bytes);
   }, 30_000);
+
+  it('lista grande: grupos que atravessam páginas saem inteiros', async () => {
+    const pessoas = Array.from({ length: 400 }, (_, i) => ({
+      nome: `Pessoa ${String(i).padStart(3, '0')} Lima`,
+      telefone: `82999${String(i).padStart(6, '0')}`,
+      bairro: `Bairro ${i % 9}`,
+      cadastradoPor: `Liderança ${(i * 7) % 12} · Líder`,
+      cadastradoEm: new Date(Date.UTC(2026, 6, 1 + (i % 60))).toISOString(),
+      filtros: [i % 3],
+    }));
+    const doc = createElement(ListaFiltrada, {
+      time: 'Time Palmeira', filtros: ['Sem título', 'Sem rua', 'Sem bairro'], responsavel: null, pessoas, geradaEm: '2026-09-27T12:00:00Z',
+    });
+    const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
+    const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    if (process.env.PREVIA_LISTA) (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA.replace('.pdf', '-grande.pdf'), bytes);
+  }, 60_000);
 
   it('o relatório do quadro de inconsistências sai em PDF, e não em planilha', async () => {
     const doc = createElement(RelatorioDeInconsistencias, {
@@ -103,8 +161,24 @@ describe('filtro por dado', () => {
           ],
         },
       ],
+      basePorResponsavel: { 'João Silva · Líder': 120, 'Bruna Costa · Líder': 64, 'Carla Nunes · Líder': 18 },
       secoes: [
-        { titulo: 'Cadastros com dado faltando', explicacao: 'Entraram com buraco.', gravidade: 'media', pessoas: [{ nome: 'Caio', telefone: '82999990001', detalhe: 'falta título', cadastradoPor: 'João Silva · Líder' }] },
+        {
+          titulo: 'Cadastros com dado faltando', explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.', gravidade: 'media',
+          pessoas: [
+            { nome: 'Caio Mendes', telefone: '82999990001', detalhe: 'falta título de eleitor', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Alice Freitas', telefone: '82999990002', detalhe: 'falta rua', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Rui Barbosa', telefone: '82999990003', detalhe: 'falta zona e seção', cadastradoPor: 'Bruna Costa · Líder' },
+            { nome: 'Nina Costa', telefone: '82999990004', detalhe: 'falta bairro', cadastradoPor: 'João Silva · Líder' },
+          ],
+        },
+        {
+          titulo: 'Dados para conferir', explicacao: 'Preenchidos, mas não podem existir assim.', gravidade: 'alta',
+          pessoas: [
+            { nome: 'Caio Mendes', telefone: '82999990001', detalhe: 'CPF não confere', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Lia Souza', telefone: '82999990005', detalhe: 'título com 10 dígitos', cadastradoPor: 'Carla Nunes · Líder' },
+          ],
+        },
       ],
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
