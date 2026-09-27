@@ -5,6 +5,9 @@ import type { Member } from '@/lib/types';
 import { FILTROS_DE_DADOS, aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone } from '@/lib/domain/filtros-de-dados';
 import { agruparPorResponsavel, agruparPorTelefone, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
 import { ListaFiltrada, RelatorioDeInconsistencias } from '@/components/neo/ListasPdf';
+import type { GrupoRepetidoPdf } from '@/components/neo/pdf-base';
+import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
+import { cadastrosRepetidos } from '@/lib/domain/inconsistencias';
 
 /**
  * Filtro por dado do quadro de inconsistencias: quem cai em cada filtro, o
@@ -31,6 +34,20 @@ const cpfErrado = pessoa({ name: 'Caio CPF Errado', cpf: '52998224700', phone: '
 const emOrdem = pessoa({ name: 'Davi Em Ordem', phone: '82999990013' });
 const todos = [semCpf, cpfCurto, cpfErrado, emOrdem];
 const contexto = contextoDosFiltros(todos, []);
+
+/** O caso do print: mesma pessoa, dois Lideres, telefone e bairro diferentes. */
+const HELEN: GrupoRepetidoPdf = {
+  nome: 'Helen Karollynne Luciana da Silva',
+  certeza: 'Repetido com certeza',
+  nivel: 'certa',
+  evidencias: ['Mesmo título de eleitor'],
+  divergencias: 'telefone e bairro',
+  responsaveis: ['João Pedro de Jesus · Líder', 'Josefa Maria Araujo dos Santos · Líder'],
+  registros: [
+    { nome: 'Helen Karollynne Luciana da Silva', nivel: 'Equipe', cadastradoEm: '2026-09-27T13:47:00Z', como: 'Pelo painel', ondeMora: 'Conjunto Edval Gaia', cadastradoPor: 'João Pedro de Jesus · Líder', telefone: '82999570721', votaEm: 'Zona 10 · Seção 66', primeiro: true },
+    { nome: 'Helen Karolaynne Luciana da Silva', nivel: 'Equipe', cadastradoEm: '2026-09-27T16:34:00Z', como: 'Pelo painel', ondeMora: 'Vila Nova · Rua Maria Tenório Cavalcante, nº 132', cadastradoPor: 'Josefa Maria Araujo dos Santos · Líder', telefone: '82996082322', votaEm: 'Zona 10 · Seção 66', primeiro: false },
+  ],
+};
 
 describe('filtro por dado', () => {
   it('cada filtro pega só o seu caso', () => {
@@ -158,6 +175,27 @@ describe('filtro por dado', () => {
     if (process.env.PREVIA_LISTA) (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA.replace('.pdf', '-numeros.pdf'), bytes);
   }, 30_000);
 
+  it('o grupo de repetidos vai para o PDF com os dados do cartão da tela', () => {
+    const a = pessoa({ name: 'Helen Karollynne Luciana da Silva', cpf: null, voterId: '100000002720', district: 'Conjunto Edval Gaia', street: '', zone: '10', section: '66', source: 'admin' });
+    const b = pessoa({ name: 'Helen Karolaynne Luciana da Silva', cpf: null, voterId: '100000002720', district: 'Vila Nova', street: 'Rua Maria Tenório Cavalcante, nº 132', zone: '10', section: '66', phone: '82996082322', createdAt: '2026-09-27T16:34:00Z', recruitedBy: { userId: 'u2', name: 'Josefa Maria Araujo dos Santos', role: 'EQUIPE', tier: 'LIDER', photo: null } });
+    const [grupo] = cadastrosRepetidos([a, b]);
+    const pdfGrupo = grupoRepetidoParaPdf(grupo);
+    expect(pdfGrupo).toMatchObject({ certeza: 'Repetido com certeza', evidencias: ['Mesmo título de eleitor'], divergencias: 'telefone e bairro' });
+    expect(pdfGrupo.registros[0]).toMatchObject({ primeiro: true, nivel: 'Equipe', como: 'Pelo painel', ondeMora: 'Conjunto Edval Gaia', votaEm: 'Zona 10 · Seção 66' });
+    expect(pdfGrupo.registros[1]).toMatchObject({ primeiro: false, como: 'Pelo link', ondeMora: 'Vila Nova · Rua Maria Tenório Cavalcante, nº 132' });
+  });
+
+  it('só "Cadastrado mais de uma vez": o PDF mostra os cartões, como na tela', async () => {
+    const doc = createElement(ListaFiltrada, {
+      time: 'Time Palmeira', filtros: ['Cadastrado mais de uma vez'], responsavel: null, pessoas: [],
+      geradaEm: '2026-09-27T12:00:00Z', indiceDoRepetido: 0, repetidos: [HELEN, { ...HELEN, nome: 'Maria das Dores Lima', divergencias: '', responsaveis: ['João Pedro de Jesus · Líder'], evidencias: ['Mesmo nome e telefone'], registros: HELEN.registros.map((r) => ({ ...r, nome: 'Maria das Dores Lima', cadastradoPor: 'João Pedro de Jesus · Líder' })) }],
+    });
+    const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
+    const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    if (process.env.PREVIA_LISTA) (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA.replace('.pdf', '-repetidos.pdf'), bytes);
+  }, 30_000);
+
   it('lista grande: grupos que atravessam páginas saem inteiros', async () => {
     const pessoas = Array.from({ length: 400 }, (_, i) => ({
       nome: `Pessoa ${String(i).padStart(3, '0')} Lima`,
@@ -184,16 +222,7 @@ describe('filtro por dado', () => {
       total: 40,
       pessoasComProblema: 6,
       saude: 85,
-      repetidos: [
-        {
-          nome: 'Ana Lima', certeza: 'Repetido com certeza', nivel: 'certa', evidencias: ['Mesmo nome e telefone'], divergencias: [],
-          responsaveis: ['João Silva · Líder', 'Bruna Costa · Líder'],
-          registros: [
-            { nome: 'Ana Lima', telefone: '82911110000', cadastradoPor: 'João Silva · Líder', cadastradoEm: '2026-08-12T00:00:00Z', primeiro: true },
-            { nome: 'Ana Lima', telefone: '82911110000', cadastradoPor: 'Bruna Costa · Líder', cadastradoEm: '2026-08-13T00:00:00Z', primeiro: false },
-          ],
-        },
-      ],
+      repetidos: [HELEN],
       basePorResponsavel: { 'João Silva · Líder': 120, 'Bruna Costa · Líder': 64, 'Carla Nunes · Líder': 18 },
       secoes: [
         {

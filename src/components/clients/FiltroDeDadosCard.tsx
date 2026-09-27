@@ -11,6 +11,8 @@ import {
 } from '@/lib/domain/filtros-de-dados';
 import { recruiterText } from '@/lib/domain/recruitment';
 import { basePorResponsavel } from '@/lib/domain/por-responsavel';
+import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
+import type { GrupoRepetido } from '@/lib/domain/inconsistencias';
 import { baixarArquivo } from '@/lib/utils/download';
 import { slug } from '@/components/neo/pdf-base';
 import { formatDate } from '@/lib/utils/date';
@@ -35,6 +37,7 @@ export function FiltroDeDadosCard({
   members,
   responsavel,
   contexto,
+  gruposRepetidos = [],
   onOpenMember,
   canExport,
 }: {
@@ -43,6 +46,8 @@ export function FiltroDeDadosCard({
   members: Member[];
   responsavel: string | null;
   contexto: ContextoDosFiltros;
+  /** Os grupos de "cadastrado mais de uma vez" do recorte: o PDF os mostra como na tela. */
+  gruposRepetidos?: GrupoRepetido[];
   onOpenMember: (id: string) => void;
   canExport: boolean;
 }) {
@@ -67,16 +72,19 @@ export function FiltroDeDadosCard({
     try {
       const { gerarPdfDaLista } = await import('@/components/neo/ListasPdf');
       const filtros = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id));
+      const indiceDe = (id: string) => {
+        const i = filtros.findIndex((f) => f.id === id);
+        return i >= 0 ? i : null;
+      };
       const blob = await gerarPdfDaLista({
         time: clientName,
         filtros: filtros.map((f) => f.rotulo),
         responsavel,
         geradaEm: new Date().toISOString(),
         basePorResponsavel: basePorResponsavel(members),
-        indiceDoTelefoneCompartilhado: (() => {
-          const i = filtros.findIndex((f) => f.id === 'telefone-repetido');
-          return i >= 0 ? i : null;
-        })(),
+        indiceDoTelefoneCompartilhado: indiceDe('telefone-repetido'),
+        indiceDoRepetido: indiceDe('repetido'),
+        repetidos: indiceDe('repetido') !== null ? gruposRepetidos.map(grupoRepetidoParaPdf) : [],
         pessoas: pessoas.map(({ member, filtros: seus }) => ({
           nome: member.name,
           telefone: member.phone ?? '',

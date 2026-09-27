@@ -7,6 +7,7 @@ import {
   Barras,
   C,
   Cabecalho,
+  CartaoRepetido,
   Chip,
   Kpi,
   LinhaDeKpis,
@@ -807,24 +808,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
       {q.repetidos.length === 0 ? (
         <Text style={{ fontSize: 8.4, color: C.faint }}>Nenhum cadastro repetido.</Text>
       ) : (
-        q.repetidos.map((g, gi) => (
-          <View key={`${g.nome}-${gi}`} style={{ marginBottom: 6, borderWidth: 0.6, borderColor: C.line }} wrap={false}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 6, backgroundColor: C.bg }}>
-              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.8 }}>{s(g.nome)}</Text>
-              <Text style={{ fontSize: 7.2, color: C.danger }}>{s(`${g.certeza} · ${g.evidencias.join(', ')}`)}</Text>
-            </View>
-            {g.registros.map((r, ri) => (
-              <View key={ri} style={{ flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 2.5, fontSize: 7.8 }}>
-                <Text style={{ width: '15%', color: r.primeiro ? C.success : C.danger, fontFamily: 'Helvetica-Bold' }}>
-                  {r.primeiro ? 'manter' : 'remover'}
-                </Text>
-                <Text style={{ width: '31%' }}>{s(r.nome)}</Text>
-                <Text style={{ width: '40%', color: C.muted }}>{s(`por ${r.cadastradoPor}`)}</Text>
-                <Text style={{ width: '14%', textAlign: 'right', color: C.muted }}>{data(r.cadastradoEm)}</Text>
-              </View>
-            ))}
-          </View>
-        ))
+        q.repetidos.map((g, gi) => <CartaoRepetido key={`${g.nome}-${gi}`} grupo={g} />)
       )}
 
       <Text style={st.h3}>{s(`Dados inconsistentes (${num(inconsistentes.length)})`)}</Text>

@@ -7,6 +7,7 @@ import {
   Cabecalho,
   Chip,
   BlocoDoGrupo,
+  CartaoRepetido,
   FaixaDeGrupo,
   FaixaDoResponsavel,
   GraficoPorLideranca,
@@ -24,6 +25,7 @@ import {
   st,
   telefone,
   type CategoriaDoGrafico,
+  type GrupoRepetidoPdf,
 } from './pdf-base';
 
 /**
@@ -68,6 +70,27 @@ export interface ListaFiltradaProps {
    * esse filtro se le por NUMERO, e ganha a lista organizada por telefone.
    */
   indiceDoTelefoneCompartilhado?: number | null;
+  /** Qual dos `filtros` e o "Cadastrado mais de uma vez", se marcado. */
+  indiceDoRepetido?: number | null;
+  /** Os grupos desse filtro, no formato do cartao da tela. */
+  repetidos?: GrupoRepetidoPdf[];
+}
+
+/** A secao dos cadastrados mais de uma vez: um cartao por pessoa. */
+function CartoesRepetidos({ grupos }: { grupos: GrupoRepetidoPdf[] }) {
+  const sobrando = grupos.reduce((soma, g) => soma + g.registros.length - 1, 0);
+  return (
+    <>
+      <Text style={{ fontSize: 7.8, color: C.muted, marginBottom: 8 }}>
+        {s(
+          `${num(sobrando)} ${sobrando === 1 ? 'cadastro sobrando' : 'cadastros sobrando'}. O primeiro registro costuma ser o original — os outros são as cópias.`,
+        )}
+      </Text>
+      {grupos.map((g, i) => (
+        <CartaoRepetido key={`${g.nome}-${i}`} grupo={g} />
+      ))}
+    </>
+  );
 }
 
 /**
@@ -138,9 +161,62 @@ function Titulo({ titulo, sub, chips }: { titulo: string; sub: string; chips: { 
  * por quem cadastrou, de quem tem mais para quem tem menos.
  */
 export function ListaFiltrada(props: ListaFiltradaProps) {
-  const indice = props.indiceDoTelefoneCompartilhado ?? null;
-  if (indice !== null && props.filtros.length === 1) return <ListaDeNumeros {...props} />;
+  const so = props.filtros.length === 1;
+  if (so && (props.indiceDoTelefoneCompartilhado ?? null) !== null) return <ListaDeNumeros {...props} />;
+  if (so && (props.indiceDoRepetido ?? null) !== null) return <ListaDeRepetidos {...props} />;
   return <ListaPorResponsavel {...props} />;
+}
+
+/**
+ * So o filtro "Cadastrado mais de uma vez": o documento e dos GRUPOS — cada
+ * pessoa repetida no mesmo cartao da tela, com a linha do tempo dos
+ * cadastros. Antes, as copias saiam soltas numa lista, sem o par.
+ */
+function ListaDeRepetidos({ time, filtros, responsavel, geradaEm, repetidos = [] }: ListaFiltradaProps) {
+  const sobrando = repetidos.reduce((soma, g) => soma + g.registros.length - 1, 0);
+  const emDois = repetidos.filter((g) => g.responsaveis.length > 1).length;
+  // As copias (nao o primeiro) por quem cadastrou: quem mais repete.
+  const copias = repetidos.flatMap((g) => g.registros.filter((r) => !r.primeiro));
+  const barras = barrasPorResponsavel(copias, 1, () => [0]);
+
+  return (
+    <Document title={s(`Cadastrados mais de uma vez — ${time}`)} author={s(appConfig.name)} language="pt-BR">
+      <Page size="A4" style={st.page}>
+        <Cabecalho esquerda={`Cadastrados mais de uma vez · ${time}`} direita={appConfig.shortName} />
+        <Rodape texto={AVISO} />
+        <Titulo
+          titulo={`${num(repetidos.length)} ${repetidos.length === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} mais de uma vez`}
+          sub={`${time} · ${dataLonga(geradaEm)}`}
+          chips={[
+            ...filtros.map((f) => ({ texto: f, cor: C.white, fundo: CORES_DE_CATEGORIA[0] })),
+            ...(responsavel ? [{ texto: `Cadastrados por ${responsavel}`, cor: C.navy, fundo: C.bg }] : []),
+          ]}
+        />
+
+        {repetidos.length === 0 ? (
+          <Text style={{ fontSize: 9, color: C.faint }}>Ninguém cadastrado mais de uma vez.</Text>
+        ) : (
+          <>
+            <LinhaDeKpis>
+              <Kpi valor={num(repetidos.length)} rotulo="pessoas cadastradas mais de uma vez" tom={C.danger} />
+              <Kpi valor={num(sobrando)} rotulo="cadastros sobrando" nota="as cópias, a excluir" tom={C.warning} />
+              <Kpi valor={num(emDois)} rotulo="contam para mais de um responsável" nota="inflam o ranking" tom={C.gold} />
+            </LinhaDeKpis>
+
+            <Text style={st.h3}>Cópias por quem cadastrou</Text>
+            <GraficoPorLideranca
+              barras={barras}
+              categorias={[{ rotulo: 'cópias', cor: CORES_DE_CATEGORIA[0] }]}
+              totalDaLista={copias.length}
+            />
+
+            <Text style={[st.h3, { marginTop: 18 }]}>Cadastrados mais de uma vez</Text>
+            <CartoesRepetidos grupos={repetidos} />
+          </>
+        )}
+      </Page>
+    </Document>
+  );
 }
 
 /** So o filtro "Telefone compartilhado": o documento inteiro por numero. */
@@ -208,6 +284,8 @@ function ListaPorResponsavel({
   geradaEm,
   basePorResponsavel = {},
   indiceDoTelefoneCompartilhado = null,
+  indiceDoRepetido = null,
+  repetidos = [],
 }: ListaFiltradaProps) {
   const categorias: CategoriaDoGrafico[] = filtros.map((rotulo, i) => ({ rotulo, cor: CORES_DE_CATEGORIA[i % CORES_DE_CATEGORIA.length] }));
   const barras = barrasPorResponsavel(pessoas, filtros.length, (p) => p.filtros, basePorResponsavel);
@@ -284,6 +362,13 @@ function ListaPorResponsavel({
               </BlocoDoGrupo>
             ))}
 
+            {indiceDoRepetido !== null && repetidos.length ? (
+              <View break>
+                <Text style={[st.h3, { marginTop: 0 }]}>Cadastrados mais de uma vez</Text>
+                <CartoesRepetidos grupos={repetidos} />
+              </View>
+            ) : null}
+
             {indiceDoTelefoneCompartilhado !== null ? (
               <View break>
                 <Text style={[st.h3, { marginTop: 0 }]}>Números compartilhados</Text>
@@ -308,24 +393,8 @@ export async function gerarPdfDaLista(props: ListaFiltradaProps): Promise<Blob> 
    Relatorio do quadro inteiro
    ------------------------------------------------------------------------- */
 
-export interface RegistroParaPdf {
-  nome: string;
-  telefone: string;
-  cadastradoPor: string;
-  cadastradoEm: string;
-  primeiro: boolean;
-}
-
-export interface GrupoParaPdf {
-  nome: string;
-  certeza: string;
-  /** "certa", "provavel" ou "possivel": pinta o grupo. */
-  nivel: 'certa' | 'provavel' | 'possivel';
-  evidencias: string[];
-  divergencias: string[];
-  responsaveis: string[];
-  registros: RegistroParaPdf[];
-}
+/** O grupo de repetidos no formato do cartao (ver `CartaoRepetido`). */
+export type GrupoParaPdf = GrupoRepetidoPdf;
 
 export interface SecaoParaPdf {
   titulo: string;
@@ -346,11 +415,6 @@ export interface RelatorioDeInconsistenciasProps {
   basePorResponsavel?: Record<string, number>;
 }
 
-const TOM_CERTEZA = {
-  certa: { cor: C.danger, fundo: C.dangerSoft },
-  provavel: { cor: C.warning, fundo: C.warningSoft },
-  possivel: { cor: C.muted, fundo: C.bg },
-};
 
 export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProps) {
   const { time, responsavel, geradoEm, total, pessoasComProblema, saude, repetidos, secoes, basePorResponsavel = {} } = props;
@@ -431,36 +495,9 @@ export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProp
         {repetidos.length ? (
           <View>
             <Text style={st.h3}>{s(`Cadastrados mais de uma vez (${num(repetidos.length)})`)}</Text>
-            {repetidos.map((g, gi) => {
-              const tom = TOM_CERTEZA[g.nivel];
-              return (
-                <View key={`${g.nome}-${gi}`} style={{ marginBottom: 6, borderWidth: 0.6, borderColor: C.line }} wrap={false}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 6, backgroundColor: C.bg }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, flex: 1 }}>{s(g.nome)}</Text>
-                    <Chip texto={g.certeza} cor={tom.cor} fundo={tom.fundo} />
-                  </View>
-                  <Text style={{ fontSize: 7.4, color: C.muted, paddingHorizontal: 6, paddingTop: 3 }}>
-                    {s(`Por quê: ${g.evidencias.join(', ')}${g.divergencias.length ? ` · discordam em ${g.divergencias.join(', ')}` : ''}`)}
-                  </Text>
-                  {g.registros.map((r, ri) => (
-                    <View key={ri} style={{ flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 2.5, fontSize: 7.8 }}>
-                      <Text style={{ width: '14%', color: r.primeiro ? C.success : C.danger, fontFamily: 'Helvetica-Bold' }}>
-                        {r.primeiro ? '1º cadastro' : `${ri + 1}º cadastro`}
-                      </Text>
-                      <Text style={{ width: '27%' }}>{s(r.nome)}</Text>
-                      <Text style={{ width: '17%', color: C.muted }}>{s(telefone(r.telefone))}</Text>
-                      <Text style={{ width: '30%', color: C.muted }}>{s(`por ${r.cadastradoPor}`)}</Text>
-                      <Text style={{ width: '12%', textAlign: 'right', color: C.muted }}>{data(r.cadastradoEm)}</Text>
-                    </View>
-                  ))}
-                  {g.responsaveis.length > 1 ? (
-                    <Text style={{ fontSize: 7.4, color: C.warning, paddingHorizontal: 6, paddingBottom: 4 }}>
-                      {s(`Conta para ${g.responsaveis.length} responsáveis no ranking: ${g.responsaveis.join(' e ')}.`)}
-                    </Text>
-                  ) : null}
-                </View>
-              );
-            })}
+            {repetidos.map((g, gi) => (
+              <CartaoRepetido key={`${g.nome}-${gi}`} grupo={g} />
+            ))}
           </View>
         ) : null}
 
