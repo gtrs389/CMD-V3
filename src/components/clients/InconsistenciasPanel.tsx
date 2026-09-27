@@ -1,0 +1,884 @@
+'use client';
+
+import { useMemo, useState, type ReactNode } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  Download,
+  FileWarning,
+  GitBranch,
+  KeyRound,
+  Link2,
+  MapPinOff,
+  PencilLine,
+  Phone,
+  ShieldAlert,
+  UserX,
+} from 'lucide-react';
+import type { Member } from '@/lib/types';
+import {
+  CERTEZA_ROTULO,
+  EVIDENCIA_INFO,
+  TIPO_INFO,
+  TIPOS,
+  doResponsavel,
+  type Certeza,
+  type Diagnostico,
+  type Gravidade,
+  type GrupoRepetido,
+  type ProblemaDaFicha,
+  type TipoDaFicha,
+} from '@/lib/domain/inconsistencias';
+import { resumoDasFaltas } from '@/lib/domain/member-completeness';
+import { recruiterOptions, recruiterText } from '@/lib/domain/recruitment';
+import { celula, nomeDoArquivo } from '@/lib/domain/csv-export';
+import { baixarCsv } from '@/lib/utils/download';
+import { formatDateTime } from '@/lib/utils/date';
+import { formatPhone } from '@/lib/utils/phone';
+import { formatNumber, initials, pluralize } from '@/lib/utils/text';
+import { cn } from '@/lib/utils/cn';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
+import { TierBadge } from '@/components/members/TierBadge';
+
+interface InconsistenciasPanelProps {
+  /** Nome do time, para o arquivo do relatorio. */
+  clientName: string;
+  members: Member[];
+  diagnostico: Diagnostico;
+  /** Abre a ficha da pessoa, onde ela e corrigida. */
+  onOpenMember: (memberId: string) => void;
+  /** Baixar o relatorio: a mesma regra da planilha da equipe. */
+  canExport: boolean;
+}
+
+/* -------------------------------------------------------------------------
+   Cores por gravidade e por certeza — o mesmo vocabulario na tela toda
+   ------------------------------------------------------------------------- */
+
+const TOM_DA_CERTEZA: Record<Certeza, 'danger' | 'warning' | 'neutral'> = {
+  certa: 'danger',
+  provavel: 'warning',
+  possivel: 'neutral',
+};
+
+const TOM_DA_GRAVIDADE: Record<Gravidade, 'danger' | 'warning' | 'neutral'> = {
+  alta: 'danger',
+  media: 'warning',
+  baixa: 'neutral',
+};
+
+const ICONE_DO_TIPO: Record<TipoDaFicha, ReactNode> = {
+  invalido: <FileWarning className="size-4" />,
+  'lider-sem-acesso': <KeyRound className="size-4" />,
+  'fora-do-municipio': <MapPinOff className="size-4" />,
+  'terceiro-nivel': <GitBranch className="size-4" />,
+  'responsavel-removido': <UserX className="size-4" />,
+  'sem-origem': <Link2 className="size-4" />,
+};
+
+const CAIXA_DO_TOM = {
+  danger: 'bg-danger-50 text-danger-700',
+  warning: 'bg-warning-50 text-warning-600',
+  neutral: 'bg-ink-100 text-ink-700',
+  success: 'bg-success-50 text-success-700',
+} as const;
+
+/**
+ * Quadro de inconsistencias do time.
+ *
+ * Quatro perguntas, na ordem em que custam caro:
+ *
+ *   1. quem esta cadastrado MAIS DE UMA VEZ — infla o total, conta duas
+ *      vezes no ranking e poe dois Lideres disputando a mesma pessoa;
+ *   2. o que FALTA — e de quem e o habito de deixar faltar;
+ *   3. o que esta ERRADO — numero que nao fecha, endereco em outra cidade,
+ *      Lider que nao consegue entrar;
+ *   4. o que e so AVISO — telefone de familia, origem perdida.
+ *
+ * Cada pessoa e um botao que abre a ficha dela, onde a correcao acontece.
+ * Nada aqui grava coisa alguma: o quadro e um espelho da equipe, e corrigir
+ * a ficha tira a pessoa daqui sozinho.
+ */
+export function InconsistenciasPanel({
+  clientName,
+  members,
+  diagnostico,
+  onOpenMember,
+  canExport,
+}: InconsistenciasPanelProps) {
+  const [responsavel, setResponsavel] = useState<string | null>(null);
+
+  const responsaveis = useMemo(() => recruiterOptions(members), [members]);
+
+  // O recorte vale sobre o DIAGNOSTICO: um grupo de repetidos aparece se
+  // qualquer registro dele e do responsavel — e assim que se ve a mesma
+  // pessoa cadastrada por dois Lideres.
+  const visto = useMemo(() => {
+    const filtra = (member: Member) => doResponsavel(member, responsavel);
+    const repetidos = diagnostico.repetidos.filter((grupo) =>
+      grupo.registros.some((registro) => filtra(registro.member)),
+    );
+    return {
+      repetidos,
+      certos: repetidos.filter((grupo) => grupo.certeza !== 'possivel'),
+      possiveis: repetidos.filter((grupo) => grupo.certeza === 'possivel'),
+      telefones: diagnostico.telefones.filter((t) => t.membros.some(filtra)),
+      incompletos: diagnostico.incompletos.membros.filter((item) => filtra(item.member)),
+      problemas: diagnostico.problemas.filter((p) => filtra(p.member)),
+    };
+  }, [diagnostico, responsavel]);
+
+  const porTipo = useMemo(() => {
+    const mapa = new Map<TipoDaFicha, ProblemaDaFicha[]>();
+    for (const problema of visto.problemas) {
+      mapa.set(problema.tipo, [...(mapa.get(problema.tipo) ?? []), problema]);
+    }
+    return mapa;
+  }, [visto.problemas]);
+
+  const graves = TIPOS.filter((tipo) => TIPO_INFO[tipo].gravidade !== 'baixa' && porTipo.has(tipo));
+  const avisos = TIPOS.filter((tipo) => TIPO_INFO[tipo].gravidade === 'baixa' && porTipo.has(tipo));
+
+  const nada =
+    visto.repetidos.length === 0 &&
+    visto.incompletos.length === 0 &&
+    visto.problemas.length === 0 &&
+    visto.telefones.length === 0;
+
+  function baixarRelatorio() {
+    const linhas: string[][] = [['Tipo', 'Pessoa', 'Telefone', 'Cadastrado por', 'Detalhe']];
+    const linha = (tipo: string, member: Member, detalhe: string) =>
+      linhas.push([tipo, member.name, formatPhone(member.phone ?? ''), recruiterText(member.recruitedBy), detalhe]);
+
+    for (const grupo of visto.repetidos) {
+      for (const registro of grupo.registros) {
+        linha(
+          CERTEZA_ROTULO[grupo.certeza],
+          registro.member,
+          `${grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo).join(', ')}` +
+            ` · ${registro.primeiro ? '1º cadastro' : 'cadastro repetido'} em ${formatDateTime(registro.member.createdAt)}`,
+        );
+      }
+    }
+    for (const { member, faltas } of visto.incompletos) {
+      linha('Cadastro incompleto', member, `falta ${resumoDasFaltas(faltas, faltas.length)}`);
+    }
+    for (const problema of visto.problemas) {
+      linha(TIPO_INFO[problema.tipo].titulo, problema.member, problema.detalhe);
+    }
+    for (const compartilhado of visto.telefones) {
+      for (const member of compartilhado.membros) {
+        linha('Telefone compartilhado', member, `${compartilhado.membros.length} pessoas com este número`);
+      }
+    }
+
+    const csv = linhas.map((colunas) => colunas.map(celula).join(';')).join('\r\n');
+    baixarCsv(nomeDoArquivo(clientName).replace(/^integrantes-/, 'inconsistencias-'), csv);
+  }
+
+  return (
+    <div className="space-y-3">
+      <Painel
+        diagnostico={diagnostico}
+        certos={visto.certos.length}
+        possiveis={visto.possiveis.length}
+        incompletos={visto.incompletos.length}
+        graves={graves.reduce((soma, tipo) => soma + (porTipo.get(tipo)?.length ?? 0), 0)}
+        avisos={
+          visto.telefones.length +
+          avisos.reduce((soma, tipo) => soma + (porTipo.get(tipo)?.length ?? 0), 0)
+        }
+        filtro={
+          responsaveis.length > 1 ? (
+            <Select
+              id="inconsistencias-responsavel"
+              aria-label="Ver as inconsistências de um responsável"
+              value={responsavel ?? ''}
+              onChange={(event) => setResponsavel(event.target.value || null)}
+              className="sm:max-w-64"
+            >
+              <option value="">Todos os responsáveis</option>
+              {responsaveis.map((opcao) => (
+                <option key={opcao.key} value={opcao.key}>
+                  {opcao.label} ({opcao.count})
+                </option>
+              ))}
+            </Select>
+          ) : null
+        }
+        exportar={
+          canExport && !nada ? (
+            <Button variant="secondary" onClick={baixarRelatorio} className="shrink-0 whitespace-nowrap">
+              <Download aria-hidden="true" className="size-4" />
+              Baixar relatório
+            </Button>
+          ) : null
+        }
+      />
+
+      {nada ? (
+        <div className="flex flex-col items-center rounded-card border border-success-600/30 bg-success-50/60 px-5 py-12 text-center">
+          <span className="mb-3 flex size-12 items-center justify-center rounded-full bg-success-50 text-success-700">
+            <CheckCircle2 aria-hidden="true" className="size-6" />
+          </span>
+          <p className="text-base font-semibold text-ink-900">
+            {responsavel ? 'Nada fora do lugar nos cadastros deste responsável.' : 'Cadastro limpo.'}
+          </p>
+          <p className="mt-1 max-w-sm text-sm text-ink-500">
+            Ninguém repetido, nada faltando, nenhum número que não fecha. Quando aparecer
+            alguma coisa, ela aparece aqui primeiro.
+          </p>
+        </div>
+      ) : null}
+
+      {visto.certos.length > 0 ? (
+        <Secao
+          id="repetidos"
+          icone={<Copy className="size-4" />}
+          tom="danger"
+          titulo="Cadastrados mais de uma vez"
+          quantidade={visto.certos.length}
+          descricao={`${formatNumber(diagnostico.excedentes)} ${pluralize(
+            diagnostico.excedentes,
+            'cadastro sobrando',
+            'cadastros sobrando',
+          )} no total do time. O primeiro registro costuma ser o original — os outros são as cópias.`}
+        >
+          <ListaQueCresce
+            itens={visto.certos}
+            inicial={6}
+            chave={(grupo) => grupo.id}
+            render={(grupo) => <CartaoRepetido grupo={grupo} onOpenMember={onOpenMember} />}
+            rotulo="grupos"
+          />
+        </Secao>
+      ) : null}
+
+      {visto.incompletos.length > 0 ? (
+        <Secao
+          id="incompletos"
+          icone={<PencilLine className="size-4" />}
+          tom="warning"
+          titulo="Cadastros incompletos"
+          quantidade={visto.incompletos.length}
+          descricao="Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas. A etiqueta some da ficha assim que o dado é preenchido."
+        >
+          <Incompletos
+            diagnostico={diagnostico}
+            itens={visto.incompletos}
+            filtrado={responsavel !== null}
+            onOpenMember={onOpenMember}
+          />
+        </Secao>
+      ) : null}
+
+      {graves.map((tipo) => (
+        <SecaoDoTipo key={tipo} tipo={tipo} itens={porTipo.get(tipo) ?? []} onOpenMember={onOpenMember} />
+      ))}
+
+      {visto.possiveis.length > 0 ? (
+        <Secao
+          id="possiveis"
+          icone={<ShieldAlert className="size-4" />}
+          tom="neutral"
+          titulo="Pode ser a mesma pessoa"
+          quantidade={visto.possiveis.length}
+          descricao="Mesmo nome, e nada mais em comum. Pode ser homônimo — ou a mesma pessoa cadastrada sem título e com outro telefone. Vale uma olhada."
+          recolhida
+        >
+          <ListaQueCresce
+            itens={visto.possiveis}
+            inicial={6}
+            chave={(grupo) => grupo.id}
+            render={(grupo) => <CartaoRepetido grupo={grupo} onOpenMember={onOpenMember} />}
+            rotulo="grupos"
+          />
+        </Secao>
+      ) : null}
+
+      {visto.telefones.length > 0 ? (
+        <Secao
+          id="telefones"
+          icone={<Phone className="size-4" />}
+          tom="neutral"
+          titulo="Telefone compartilhado"
+          quantidade={visto.telefones.length}
+          descricao="Pessoas diferentes com o mesmo número. Às vezes é família; às vezes é o telefone do Líder digitado no lugar do da pessoa. Quem divide o número não consegue entrar no painel."
+          recolhida
+        >
+          <ListaQueCresce
+            itens={visto.telefones}
+            inicial={8}
+            chave={(item) => item.telefone}
+            rotulo="números"
+            render={(item) => (
+              <div className="rounded-control border border-line p-3">
+                <p className="flex items-center gap-2 text-sm font-semibold text-ink-900 tabular-nums">
+                  <Phone aria-hidden="true" className="size-3.5 text-ink-400" />
+                  {formatPhone(item.telefone)}
+                  <span className="text-xs font-normal text-ink-500">
+                    · {item.membros.length} pessoas
+                  </span>
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {item.membros.map((member) => (
+                    <PessoaChip key={member.id} member={member} onOpenMember={onOpenMember} />
+                  ))}
+                </div>
+              </div>
+            )}
+          />
+        </Secao>
+      ) : null}
+
+      {avisos.map((tipo) => (
+        <SecaoDoTipo
+          key={tipo}
+          tipo={tipo}
+          itens={porTipo.get(tipo) ?? []}
+          onOpenMember={onOpenMember}
+          recolhida
+        />
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Painel de cima: a nota e o resumo
+   ------------------------------------------------------------------------- */
+
+function Painel({
+  diagnostico,
+  certos,
+  possiveis,
+  incompletos,
+  graves,
+  avisos,
+  filtro,
+  exportar,
+}: {
+  diagnostico: Diagnostico;
+  certos: number;
+  possiveis: number;
+  incompletos: number;
+  graves: number;
+  avisos: number;
+  filtro: ReactNode;
+  exportar: ReactNode;
+}) {
+  const { saude, total, pessoasComProblema } = diagnostico;
+  const tom = saude >= 90 ? 'success' : saude >= 70 ? 'warning' : 'danger';
+
+  const frase =
+    total === 0
+      ? 'Ninguém cadastrado ainda.'
+      : pessoasComProblema === 0
+        ? 'Todo mundo com o cadastro em ordem.'
+        : `${formatNumber(pessoasComProblema)} de ${formatNumber(total)} ${
+            pessoasComProblema === 1 ? 'pessoa precisa' : 'pessoas precisam'
+          } de atenção.`;
+
+  const indicadores: { id: string; rotulo: string; valor: number; tom: keyof typeof CAIXA_DO_TOM }[] = [
+    { id: 'repetidos', rotulo: 'repetidos', valor: certos, tom: 'danger' },
+    { id: 'incompletos', rotulo: 'incompletos', valor: incompletos, tom: 'warning' },
+    { id: 'graves', rotulo: 'com dado errado', valor: graves, tom: 'warning' },
+    { id: 'possiveis', rotulo: 'possíveis repetidos', valor: possiveis, tom: 'neutral' },
+    { id: 'avisos', rotulo: 'avisos', valor: avisos, tom: 'neutral' },
+  ];
+
+  return (
+    <section
+      aria-labelledby="saude-do-cadastro"
+      className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5"
+    >
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <Anel percentual={saude} tom={tom} />
+
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold tracking-wide text-ink-500 uppercase">
+            Saúde do cadastro
+          </p>
+          <h2 id="saude-do-cadastro" className="mt-1 text-lg font-bold text-ink-900 sm:text-xl">
+            {frase}
+          </h2>
+
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {indicadores.map((item) => (
+              <li key={item.id}>
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-medium',
+                    item.valor > 0 ? CAIXA_DO_TOM[item.tom] : 'bg-ink-50 text-ink-400',
+                  )}
+                >
+                  <strong className="tabular-nums">{formatNumber(item.valor)}</strong>
+                  {item.rotulo}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {filtro || exportar ? (
+        <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+          {filtro ?? <span />}
+          {exportar}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/** Anel da nota: cheio de verde quando o cadastro esta limpo. */
+function Anel({ percentual, tom }: { percentual: number; tom: 'success' | 'warning' | 'danger' }) {
+  const raio = 40;
+  const circunferencia = 2 * Math.PI * raio;
+  const cor = { success: 'text-success-600', warning: 'text-warning-600', danger: 'text-danger-600' }[tom];
+
+  return (
+    <div className="relative size-28 shrink-0 self-center sm:self-auto">
+      <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden="true">
+        <circle cx="50" cy="50" r={raio} fill="none" strokeWidth="10" className="stroke-ink-100" />
+        <circle
+          cx="50"
+          cy="50"
+          r={raio}
+          fill="none"
+          strokeWidth="10"
+          strokeLinecap="round"
+          stroke="currentColor"
+          className={cn(cor, 'transition-[stroke-dashoffset] duration-700')}
+          strokeDasharray={circunferencia}
+          strokeDashoffset={circunferencia * (1 - percentual / 100)}
+        />
+      </svg>
+      <span className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={cn('text-2xl font-bold tabular-nums', cor)}>{percentual}%</span>
+        <span className="text-[0.625rem] font-medium text-ink-500">em ordem</span>
+      </span>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Secao recolhivel
+   ------------------------------------------------------------------------- */
+
+function Secao({
+  id,
+  icone,
+  tom,
+  titulo,
+  quantidade,
+  descricao,
+  recolhida = false,
+  children,
+}: {
+  id: string;
+  icone: ReactNode;
+  tom: 'danger' | 'warning' | 'neutral';
+  titulo: string;
+  quantidade: number;
+  descricao: string;
+  recolhida?: boolean;
+  children: ReactNode;
+}) {
+  const [aberta, setAberta] = useState(!recolhida);
+
+  return (
+    <section
+      id={`inconsistencia-${id}`}
+      aria-labelledby={`inconsistencia-${id}-titulo`}
+      className="rounded-card border border-line bg-surface shadow-card"
+    >
+      <button
+        type="button"
+        onClick={() => setAberta((valor) => !valor)}
+        aria-expanded={aberta}
+        className="flex w-full items-start gap-3 px-4 py-4 text-left sm:px-5"
+      >
+        <span
+          aria-hidden="true"
+          className={cn('flex size-9 shrink-0 items-center justify-center rounded-control', CAIXA_DO_TOM[tom])}
+        >
+          {icone}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span id={`inconsistencia-${id}-titulo`} className="text-base font-semibold text-ink-900">
+              {titulo}
+            </span>
+            <span className={cn('rounded-pill px-2 py-0.5 text-xs font-semibold tabular-nums', CAIXA_DO_TOM[tom])}>
+              {formatNumber(quantidade)}
+            </span>
+          </span>
+          <span className="mt-1 block text-[0.8125rem] leading-relaxed text-ink-500">{descricao}</span>
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('mt-2 size-4 shrink-0 text-ink-400 transition-transform', aberta && 'rotate-180')}
+        />
+      </button>
+
+      {aberta ? <div className="border-t border-line px-4 py-4 sm:px-5">{children}</div> : null}
+    </section>
+  );
+}
+
+function SecaoDoTipo({
+  tipo,
+  itens,
+  onOpenMember,
+  recolhida = false,
+}: {
+  tipo: TipoDaFicha;
+  itens: ProblemaDaFicha[];
+  onOpenMember: (id: string) => void;
+  recolhida?: boolean;
+}) {
+  const info = TIPO_INFO[tipo];
+  return (
+    <Secao
+      id={tipo}
+      icone={ICONE_DO_TIPO[tipo]}
+      tom={TOM_DA_GRAVIDADE[info.gravidade]}
+      titulo={info.titulo}
+      quantidade={itens.length}
+      descricao={info.explicacao}
+      recolhida={recolhida}
+    >
+      <ListaQueCresce
+        itens={itens}
+        inicial={10}
+        chave={(item) => `${item.tipo}-${item.member.id}`}
+        rotulo="pessoas"
+        compacta
+        render={(item) => (
+          <LinhaDaPessoa member={item.member} onOpenMember={onOpenMember}>
+            <span className="text-danger-700">{item.detalhe}</span>
+          </LinhaDaPessoa>
+        )}
+      />
+    </Secao>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Um grupo de cadastros repetidos
+   ------------------------------------------------------------------------- */
+
+function CartaoRepetido({
+  grupo,
+  onOpenMember,
+}: {
+  grupo: GrupoRepetido;
+  onOpenMember: (id: string) => void;
+}) {
+  const tom = TOM_DA_CERTEZA[grupo.certeza];
+
+  return (
+    <article className="rounded-control border border-line">
+      <header className="flex items-start gap-2 border-b border-line bg-ink-50/60 px-3 py-2.5">
+        <span
+          aria-hidden="true"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface text-[0.6875rem] font-semibold text-ink-500 ring-1 ring-line"
+        >
+          {initials(grupo.nome)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold break-words text-ink-900">{grupo.nome}</p>
+          <p className="text-xs text-ink-500">
+            {grupo.registros.length} registros ·{' '}
+            {grupo.evidencias.map((evidencia) => EVIDENCIA_INFO[evidencia].rotulo).join(' · ')}
+          </p>
+        </div>
+        <Badge tone={tom} className="shrink-0">
+          {CERTEZA_ROTULO[grupo.certeza]}
+        </Badge>
+      </header>
+
+      {grupo.responsaveis.length > 1 || grupo.divergencias.length > 0 ? (
+        <div className="space-y-1 border-b border-line px-3 py-2 text-xs">
+          {grupo.responsaveis.length > 1 ? (
+            <p className="flex items-start gap-1.5 text-warning-600">
+              <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                Conta para {grupo.responsaveis.length} responsáveis no ranking:{' '}
+                <strong className="font-semibold">{grupo.responsaveis.join(' e ')}</strong>.
+              </span>
+            </p>
+          ) : null}
+          {grupo.divergencias.length > 0 ? (
+            <p className="text-ink-500">
+              Os registros discordam em{' '}
+              <strong className="font-semibold text-ink-700">
+                {resumoDasFaltas(grupo.divergencias, grupo.divergencias.length)}
+              </strong>
+              : confira qual está certo antes de excluir a cópia.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Linha do tempo: do primeiro cadastro para o ultimo. */}
+      <ol className="relative px-3 py-2">
+        {grupo.registros.map(({ member, primeiro }, indice) => (
+          <li key={member.id} className="relative flex gap-3 py-2">
+            <span aria-hidden="true" className="relative flex w-4 shrink-0 justify-center">
+              {indice < grupo.registros.length - 1 ? (
+                <span className="absolute top-4 bottom-[-1rem] w-px bg-line" />
+              ) : null}
+              <span
+                className={cn(
+                  'relative mt-1 size-2.5 rounded-full ring-4 ring-surface',
+                  primeiro ? 'bg-success-600' : 'bg-danger-600',
+                )}
+              />
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenMember(member.id)}
+                  className="truncate text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                >
+                  {member.name}
+                </button>
+                {primeiro ? (
+                  <Badge tone="success">1º cadastro</Badge>
+                ) : (
+                  <Badge tone="danger">{indice + 1}º cadastro</Badge>
+                )}
+                <TierBadge tier={member.tier} />
+              </div>
+
+              <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-ink-500 sm:grid-cols-2">
+                <Dado rotulo="Quando">{formatDateTime(member.createdAt)}</Dado>
+                <Dado rotulo="Por">{recruiterText(member.recruitedBy)}</Dado>
+                <Dado rotulo="Como">{member.source === 'invite' ? 'Pelo link' : 'Pelo painel'}</Dado>
+                <Dado rotulo="Telefone">{member.phone ? formatPhone(member.phone) : '—'}</Dado>
+                <Dado rotulo="Onde mora">
+                  {[member.district, member.street].filter(Boolean).join(' · ') || '—'}
+                </Dado>
+                <Dado rotulo="Vota em">
+                  {member.zone || member.section
+                    ? `Zona ${member.zone || '?'} · Seção ${member.section || '?'}`
+                    : '—'}
+                </Dado>
+              </dl>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </article>
+  );
+}
+
+function Dado({ rotulo, children }: { rotulo: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 gap-1">
+      <dt className="shrink-0 text-ink-400">{rotulo}:</dt>
+      <dd className="truncate text-ink-700">{children}</dd>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Cadastros incompletos
+   ------------------------------------------------------------------------- */
+
+function Incompletos({
+  diagnostico,
+  itens,
+  filtrado,
+  onOpenMember,
+}: {
+  diagnostico: Diagnostico;
+  itens: { member: Member; faltas: string[] }[];
+  filtrado: boolean;
+  onOpenMember: (id: string) => void;
+}) {
+  // As contagens seguem o recorte: com um responsavel escolhido, o "o que
+  // mais falta" e o DELE.
+  const porCampo = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const item of itens) for (const campo of item.faltas) mapa.set(campo, (mapa.get(campo) ?? 0) + 1);
+    return [...mapa.entries()].sort((a, b) => b[1] - a[1]);
+  }, [itens]);
+  const maior = porCampo[0]?.[1] ?? 0;
+
+  return (
+    <div className="space-y-5">
+      <div className={cn('grid gap-5', !filtrado && 'lg:grid-cols-2')}>
+        <div>
+          <p className="mb-2 text-xs font-semibold tracking-wide text-ink-500 uppercase">
+            O que mais falta
+          </p>
+          <ul className="space-y-2">
+            {porCampo.map(([campo, quantidade]) => (
+              <li key={campo} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2 text-sm">
+                <span className="truncate text-ink-700 first-letter:uppercase">{campo}</span>
+                <span className="h-2 overflow-hidden rounded-pill bg-ink-100">
+                  <span
+                    className="block h-full rounded-pill bg-warning-600"
+                    style={{ width: `${maior ? Math.max(4, (quantidade / maior) * 100) : 0}%` }}
+                  />
+                </span>
+                <span className="text-right font-semibold text-ink-900 tabular-nums">
+                  {formatNumber(quantidade)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {!filtrado && diagnostico.incompletos.porResponsavel.length > 0 ? (
+          <div>
+            <p className="mb-2 text-xs font-semibold tracking-wide text-ink-500 uppercase">
+              De quem são
+            </p>
+            <ul className="divide-y divide-line">
+              {diagnostico.incompletos.porResponsavel.slice(0, 6).map((linha) => (
+                <li key={linha.chave} className="flex items-center gap-3 py-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate text-ink-700">{linha.responsavel}</span>
+                  <span className="shrink-0 text-xs text-ink-500 tabular-nums">
+                    {formatNumber(linha.incompletos)} de {formatNumber(linha.total)}
+                  </span>
+                  <span
+                    className={cn(
+                      'w-12 shrink-0 rounded-pill px-2 py-0.5 text-center text-xs font-semibold tabular-nums',
+                      linha.percentual >= 50 ? CAIXA_DO_TOM.danger : CAIXA_DO_TOM.warning,
+                    )}
+                  >
+                    {linha.percentual}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-semibold tracking-wide text-ink-500 uppercase">Quem completar</p>
+        <ListaQueCresce
+          itens={itens}
+          inicial={10}
+          chave={(item) => item.member.id}
+          rotulo="pessoas"
+          compacta
+          render={(item) => (
+            <LinhaDaPessoa member={item.member} onOpenMember={onOpenMember}>
+              <span className="text-warning-600">falta {resumoDasFaltas(item.faltas, 3)}</span>
+            </LinhaDaPessoa>
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Pecas pequenas
+   ------------------------------------------------------------------------- */
+
+function LinhaDaPessoa({
+  member,
+  onOpenMember,
+  children,
+}: {
+  member: Member;
+  onOpenMember: (id: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenMember(member.id)}
+      className="group flex w-full items-center gap-3 py-2.5 text-left"
+    >
+      <span
+        aria-hidden="true"
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink-100 text-[0.625rem] font-semibold text-ink-500"
+      >
+        {initials(member.name)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-ink-900 group-hover:text-brand-700">
+            {member.name}
+          </span>
+          <TierBadge tier={member.tier} className="px-1.5 py-0 text-[0.625rem]" />
+        </span>
+        <span className="block truncate text-xs">
+          {children}
+          <span className="text-ink-400"> · {recruiterText(member.recruitedBy)}</span>
+        </span>
+      </span>
+      <ArrowRight
+        aria-hidden="true"
+        className="size-4 shrink-0 text-ink-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-700"
+      />
+    </button>
+  );
+}
+
+function PessoaChip({ member, onOpenMember }: { member: Member; onOpenMember: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenMember(member.id)}
+      className="inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-700 hover:text-brand-700"
+    >
+      {member.name}
+      <span className="text-ink-400">· {recruiterText(member.recruitedBy).split(' · ')[0]}</span>
+    </button>
+  );
+}
+
+/** Lista longa aparece aos poucos: o quadro abre leve mesmo com mil linhas. */
+function ListaQueCresce<T>({
+  itens,
+  inicial,
+  chave,
+  render,
+  rotulo,
+  compacta = false,
+}: {
+  itens: T[];
+  inicial: number;
+  chave: (item: T) => string;
+  render: (item: T) => ReactNode;
+  rotulo: string;
+  compacta?: boolean;
+}) {
+  const [limite, setLimite] = useState(inicial);
+  const visiveis = itens.slice(0, limite);
+  const restam = itens.length - visiveis.length;
+
+  return (
+    <div>
+      <ul className={compacta ? 'divide-y divide-line' : 'space-y-3'}>
+        {visiveis.map((item) => (
+          <li key={chave(item)}>{render(item)}</li>
+        ))}
+      </ul>
+      {restam > 0 ? (
+        <div className="mt-3 flex justify-center">
+          <Button variant="ghost" size="sm" onClick={() => setLimite((valor) => valor + inicial * 3)}>
+            <ChevronDown aria-hidden="true" className="size-4" />
+            Mostrar mais {formatNumber(Math.min(restam, inicial * 3))} de {formatNumber(restam)} {rotulo}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}

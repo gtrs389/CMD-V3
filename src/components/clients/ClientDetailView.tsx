@@ -1,11 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Building2,
+  ShieldCheck,
   RefreshCw,
   FileText,
   Image as ImageIcon,
@@ -28,6 +31,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormsPanel } from '@/components/fields/FormsPanel';
 import { MembersPanel } from '@/components/members/MembersPanel';
+import { diagnosticar, municipioDaOperacao } from '@/lib/domain/inconsistencias';
+import { formatNumber, pluralize } from '@/lib/utils/text';
+import { InconsistenciasPanel } from './InconsistenciasPanel';
 import { BannerTagModal } from './BannerTagModal';
 import { DemoBadge } from './DemoBadge';
 import { ClientFormModal } from './ClientFormModal';
@@ -98,7 +104,27 @@ export function ClientDetailView({
     if (initialTab) setTab(initialTab);
   }
 
-  const memberList = members ?? [];
+  const memberList = useMemo(() => members ?? [], [members]);
+
+  /**
+   * O diagnostico do time, calculado uma vez para a aba, o contador dela e o
+   * aviso da visao geral. Sai da mesma lista que a pagina ja recebeu: nenhuma
+   * consulta a mais, e corrigir uma ficha atualiza tudo junto.
+   */
+  const diagnostico = useMemo(
+    () =>
+      diagnosticar(
+        memberList,
+        municipioDaOperacao({ stateUf: client?.stateUf, cities: client?.cities }),
+      ),
+    [memberList, client?.stateUf, client?.cities],
+  );
+
+  /** Abre a ficha da pessoa na aba da equipe, pelo endereco de sempre. */
+  function abrirFicha(memberId: string) {
+    setTab('equipe');
+    router.push(`/candidatos/${clientId}?integrante=${memberId}`, { scroll: false });
+  }
 
   // O time enxerga apenas o proprio cadastro, em leitura. As rotas de
   // gravacao recusam o perfil no servidor: aqui so evitamos oferecer a acao.
@@ -180,6 +206,22 @@ export function ClientDetailView({
           {memberList.length}
         </span>
       ),
+    },
+    {
+      id: 'inconsistencias',
+      label: 'Inconsistências',
+      icon:
+        diagnostico.pessoasComProblema > 0 ? (
+          <AlertTriangle className="size-4" />
+        ) : (
+          <ShieldCheck className="size-4" />
+        ),
+      badge:
+        diagnostico.pessoasComProblema > 0 ? (
+          <span className="rounded-pill bg-danger-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-danger-700 tabular-nums">
+            {formatNumber(diagnostico.pessoasComProblema)}
+          </span>
+        ) : undefined,
     },
     ...(mostrarFormulario
       ? [{ id: 'formulario', label: 'Formulários', icon: <FileText className="size-4" /> }]
@@ -412,6 +454,47 @@ export function ClientDetailView({
       />
 
       <TabPanel id="visao-geral" active={abaAtiva}>
+        {/* O que esta errado aparece na entrada, e nao so na aba: cadastro
+            repetido infla o total e o ranking que esta logo abaixo. */}
+        {!loadingMembers && diagnostico.pessoasComProblema > 0 ? (
+          <button
+            type="button"
+            onClick={() => setTab('inconsistencias')}
+            className="group mb-3 flex w-full items-center gap-3 rounded-card border border-warning-600/30 bg-warning-50/70 px-4 py-3 text-left transition-colors hover:bg-warning-50"
+          >
+            <span
+              aria-hidden="true"
+              className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-warning-600"
+            >
+              <AlertTriangle className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1 text-sm text-ink-700">
+              <strong className="font-semibold text-ink-900">
+                {formatNumber(diagnostico.pessoasComProblema)}{' '}
+                {pluralize(diagnostico.pessoasComProblema, 'cadastro precisa', 'cadastros precisam')} de
+                atenção
+              </strong>
+              <span className="block text-xs text-ink-500 sm:inline sm:before:content-['_·_']">
+                {[
+                  diagnostico.excedentes > 0
+                    ? `${formatNumber(diagnostico.excedentes)} ${pluralize(diagnostico.excedentes, 'repetido', 'repetidos')}`
+                    : null,
+                  diagnostico.incompletos.membros.length > 0
+                    ? `${formatNumber(diagnostico.incompletos.membros.length)} ${pluralize(diagnostico.incompletos.membros.length, 'incompleto', 'incompletos')}`
+                    : null,
+                  `saúde do cadastro em ${diagnostico.saude}%`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </span>
+            <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold text-warning-600 sm:inline-flex">
+              Ver quadro
+              <ArrowRight aria-hidden="true" className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </button>
+        ) : null}
+
         <ClientOverviewPanel
           client={client}
           members={memberList}
@@ -436,6 +519,16 @@ export function ClientDetailView({
           // Fechou a ficha: o endereco volta a ser o do time. Assim, pedir a
           // mesma ficha de novo muda a URL outra vez e ela reabre.
           onDeepLinkClose={() => router.replace(`/candidatos/${clientId}`, { scroll: false })}
+        />
+      </TabPanel>
+
+      <TabPanel id="inconsistencias" active={abaAtiva}>
+        <InconsistenciasPanel
+          clientName={client.name}
+          members={memberList}
+          diagnostico={diagnostico}
+          onOpenMember={abrirFicha}
+          canExport={can('member.export')}
         />
       </TabPanel>
 

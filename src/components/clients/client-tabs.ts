@@ -13,7 +13,7 @@
  * com a troca entre um e outro la dentro.
  */
 
-export const TAB_IDS = ['visao-geral', 'equipe', 'formulario'] as const;
+export const TAB_IDS = ['visao-geral', 'equipe', 'inconsistencias', 'formulario'] as const;
 
 export type TabId = (typeof TAB_IDS)[number];
 
