@@ -10,6 +10,9 @@ import {
   type ContextoDosFiltros,
 } from '@/lib/domain/filtros-de-dados';
 import { recruiterText } from '@/lib/domain/recruitment';
+import { basePorResponsavel } from '@/lib/domain/por-responsavel';
+import { baixarArquivo } from '@/lib/utils/download';
+import { slug } from '@/components/neo/pdf-base';
 import { formatDate } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber } from '@/lib/utils/text';
@@ -63,33 +66,23 @@ export function FiltroDeDadosCard({
     setBaixando(true);
     try {
       const { gerarPdfDaLista } = await import('@/components/neo/ListasPdf');
+      const filtros = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id));
       const blob = await gerarPdfDaLista({
         time: clientName,
-        filtros: FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id)).map((f) => f.rotulo),
+        filtros: filtros.map((f) => f.rotulo),
         responsavel,
         geradaEm: new Date().toISOString(),
-        pessoas: pessoas.map(({ member, motivos }) => ({
+        basePorResponsavel: basePorResponsavel(members),
+        pessoas: pessoas.map(({ member, filtros: seus }) => ({
           nome: member.name,
           telefone: member.phone ?? '',
-          motivos,
+          bairro: member.district ?? '',
           cadastradoPor: recruiterText(member.recruitedBy),
           cadastradoEm: member.createdAt,
+          filtros: seus.map((id) => filtros.findIndex((f) => f.id === id)).filter((i) => i >= 0),
         })),
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const nome = clientName
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      link.download = `dados-para-corrigir-${nome || 'time'}-${new Date().toISOString().slice(0, 10)}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+      baixarArquivo(`dados-para-corrigir-${slug(clientName)}-${new Date().toISOString().slice(0, 10)}.pdf`, blob);
     } catch {
       toast.error('Não foi possível montar o PDF. Tente de novo.');
     } finally {

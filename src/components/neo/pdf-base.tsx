@@ -389,3 +389,146 @@ export const TOM_SELO: Record<string, { cor: string; fundo: string }> = {
   Parado: { cor: C.danger, fundo: C.dangerSoft },
   'Sem Equipe': { cor: C.muted, fundo: C.bg },
 };
+
+/* -------------------------------------------------------------------------
+   Por lideranca: o grafico e a lista agrupada
+   ------------------------------------------------------------------------- */
+
+/** Cores das categorias empilhadas: distintas entre si, legiveis impressas. */
+export const CORES_DE_CATEGORIA = [C.danger, C.warning, C.blue, C.gold, C.navy2, C.success, '#7a4db0', '#0f7d86'];
+
+export interface CategoriaDoGrafico {
+  rotulo: string;
+  cor: string;
+}
+
+export interface BarraDoGrafico {
+  responsavel: string;
+  quantidades: number[];
+  total: number;
+  base: number | null;
+}
+
+/** Quadradinhos coloridos: em quais categorias a pessoa caiu. */
+export function Marcadores({ indices, categorias }: { indices: number[]; categorias: CategoriaDoGrafico[] }) {
+  return (
+    <View style={{ flexDirection: 'row', marginLeft: 4 }}>
+      {indices.map((i) => (
+        <View key={i} style={{ width: 5.5, height: 5.5, borderRadius: 1.2, backgroundColor: categorias[i]?.cor ?? C.faint, marginLeft: 1.5 }} />
+      ))}
+    </View>
+  );
+}
+
+export function Legenda({ categorias }: { categorias: CategoriaDoGrafico[] }) {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
+      {categorias.map((c) => (
+        <View key={c.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12, marginBottom: 3 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 1.5, backgroundColor: c.cor, marginRight: 4 }} />
+          <Text style={{ fontSize: 7.2, color: C.ink2 }}>{s(c.rotulo)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Uma barra por lideranca, empilhada por categoria. Ao lado, a quantidade e
+ * — quando a base da lideranca e conhecida — quanto isso e DA BASE DELA: 12
+ * pendencias numa base de 300 e diferente de 12 numa base de 15.
+ */
+export function GraficoPorLideranca({
+  barras,
+  categorias,
+  totalDaLista,
+  limite = 30,
+}: {
+  barras: BarraDoGrafico[];
+  categorias: CategoriaDoGrafico[];
+  totalDaLista: number;
+  limite?: number;
+}) {
+  if (barras.length === 0) return null;
+  const maior = Math.max(1, ...barras.map((b) => b.total));
+  const mostradas = barras.slice(0, limite);
+  const resto = barras.slice(limite);
+  return (
+    <View>
+      {categorias.length > 1 ? <Legenda categorias={categorias} /> : null}
+      {mostradas.map((b, i) => (
+        <View key={b.responsavel} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }} wrap={false}>
+          <Text style={{ width: 16, fontSize: 7, color: C.faint }}>{String(i + 1)}</Text>
+          <Text style={{ width: 150, fontSize: 7.8, color: C.ink, fontFamily: i < 3 ? 'Helvetica-Bold' : 'Helvetica', paddingRight: 6 }}>
+            {s(b.responsavel)}
+          </Text>
+          <View style={{ flex: 1, height: 8, backgroundColor: '#edf1f5', borderRadius: 2, flexDirection: 'row' }}>
+            {b.quantidades.map((q, ci) =>
+              q ? (
+                <View
+                  key={ci}
+                  style={{ width: `${(q / maior) * 100}%`, height: 8, backgroundColor: categorias[ci]?.cor ?? C.blue }}
+                />
+              ) : null,
+            )}
+          </View>
+          <Text style={{ width: 96, textAlign: 'right', fontSize: 7.8 }}>
+            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{num(b.total)}</Text>
+            <Text style={{ color: C.faint }}>
+              {b.base ? ` · ${pct(b.total, b.base)}% da base` : ` · ${pct(b.total, totalDaLista)}% da lista`}
+            </Text>
+          </Text>
+        </View>
+      ))}
+      {resto.length ? (
+        <Text style={{ fontSize: 7.4, color: C.faint, marginTop: 2 }}>
+          {s(`E mais ${num(resto.length)} ${resto.length === 1 ? 'responsável' : 'responsáveis'}, com ${num(resto.reduce((soma, b) => soma + b.total, 0))} no total — todos na lista abaixo.`)}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Faixa de abertura de cada grupo "cadastrado por". */
+export function FaixaDoResponsavel({
+  responsavel,
+  quantidade,
+  totalDaLista,
+  base,
+  rotulo = 'pessoas',
+}: {
+  responsavel: string;
+  quantidade: number;
+  totalDaLista: number;
+  base: number | null;
+  rotulo?: string;
+}) {
+  return (
+      <View
+        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navySoft, paddingVertical: 5, paddingRight: 6, marginTop: 10, marginBottom: 2 }}
+      >
+        <View style={{ width: 2.5, height: 14, backgroundColor: C.gold, marginRight: 7 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 6.4, color: C.faint, letterSpacing: 1 }}>CADASTRADO POR</Text>
+          <Text style={{ fontSize: 9.4, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(responsavel)}</Text>
+        </View>
+        <Text style={{ fontSize: 8, color: C.ink2 }}>
+          <Text style={{ fontFamily: 'Helvetica-Bold' }}>{`${num(quantidade)} ${quantidade === 1 ? rotulo.replace(/s$/, '') : rotulo}`}</Text>
+          <Text style={{ color: C.faint }}>
+            {` · ${pct(quantidade, totalDaLista)}% da lista${base ? ` · ${pct(quantidade, base)}% da base` : ''}`}
+          </Text>
+        </Text>
+      </View>
+  );
+}
+
+/**
+ * Um grupo inteiro (faixa + tabela, e o titulo da secao quando e o
+ * primeiro) numa pagina so, quando cabe: a biblioteca desenha por cima
+ * quando uma faixa e empurrada sozinha para a pagina seguinte. Grupo grande
+ * quebra normalmente — a faixa na abertura e o cabecalho da tabela
+ * repetido em cada pagina.
+ */
+export function BlocoDoGrupo({ linhas, children }: { linhas: number; children: ReactNode }) {
+  return <View wrap={linhas > 22}>{children}</View>;
+}
