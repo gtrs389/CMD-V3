@@ -1,5 +1,5 @@
 import type { Member } from '@/lib/types';
-import { normalizePhone } from '@/lib/utils/phone';
+import { digitosDoTelefone, normalizePhone } from '@/lib/utils/phone';
 import { problemaDoCpf, problemaDoTelefone, problemaDoTitulo } from './conferencia';
 import type { GrupoRepetido } from './inconsistencias';
 
@@ -118,10 +118,28 @@ export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
     motivo: (m) => (vazio(m.phone) ? 'sem telefone' : null),
   },
   {
+    // Faltando digito: o numero que nao pode faltar. Separado do "nao
+    // confere", como no CPF e no titulo — sao correcoes diferentes.
+    id: 'telefone-incompleto',
+    grupo: 'Telefone',
+    rotulo: 'Telefone incompleto',
+    motivo: (m) => {
+      const n = digitosDoTelefone(m.phone ?? '').length;
+      if (n === 0 || n >= 10) return null;
+      return `telefone com ${n === 1 ? '1 dígito' : `${n} dígitos`}`;
+    },
+  },
+  {
+    // Tem digitos de sobra, DDD que nao existe, celular sem o 9...
     id: 'telefone-errado',
     grupo: 'Telefone',
-    rotulo: 'Telefone incompleto ou errado',
-    motivo: (m) => problemaDoTelefone(m.phone),
+    rotulo: 'Telefone que não confere',
+    motivo: (m) => {
+      const n = digitosDoTelefone(m.phone ?? '').length;
+      if (n < 10) return null;
+      const problema = problemaDoTelefone(m.phone);
+      return problema ? (n > 11 ? `telefone com ${n} dígitos` : 'telefone não confere') : null;
+    },
   },
   {
     id: 'telefone-repetido',

@@ -36,6 +36,7 @@ import { resumoDasFaltas } from '@/lib/domain/member-completeness';
 import { recruiterOptions, recruiterText } from '@/lib/domain/recruitment';
 import { contextoDosFiltros } from '@/lib/domain/filtros-de-dados';
 import { basePorResponsavel } from '@/lib/domain/por-responsavel';
+import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
 import { baixarArquivo } from '@/lib/utils/download';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
@@ -217,21 +218,7 @@ export function InconsistenciasPanel({
         pessoasComProblema: diagnostico.pessoasComProblema,
         saude: diagnostico.saude,
         basePorResponsavel: basePorResponsavel(members),
-        repetidos: visto.repetidos.map((grupo) => ({
-          nome: grupo.nome,
-          certeza: CERTEZA_ROTULO[grupo.certeza],
-          nivel: grupo.certeza,
-          evidencias: grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo),
-          divergencias: grupo.divergencias,
-          responsaveis: grupo.responsaveis,
-          registros: grupo.registros.map((r) => ({
-            nome: r.member.name,
-            telefone: r.member.phone ?? '',
-            cadastradoPor: recruiterText(r.member.recruitedBy),
-            cadastradoEm: r.member.createdAt,
-            primeiro: r.primeiro,
-          })),
-        })),
+        repetidos: visto.repetidos.map(grupoRepetidoParaPdf),
         secoes,
       });
       baixarArquivo(`inconsistencias-${slug(clientName)}-${new Date().toISOString().slice(0, 10)}.pdf`, blob);
@@ -288,6 +275,7 @@ export function InconsistenciasPanel({
         members={doRecorte}
         responsavel={rotuloDoResponsavel}
         contexto={contexto}
+        gruposRepetidos={visto.certos}
         onOpenMember={onOpenMember}
         canExport={canExport}
       />

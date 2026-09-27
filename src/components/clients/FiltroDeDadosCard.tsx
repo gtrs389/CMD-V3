@@ -11,8 +11,11 @@ import {
 } from '@/lib/domain/filtros-de-dados';
 import { recruiterText } from '@/lib/domain/recruitment';
 import { basePorResponsavel } from '@/lib/domain/por-responsavel';
+import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
+import type { GrupoRepetido } from '@/lib/domain/inconsistencias';
 import { baixarArquivo } from '@/lib/utils/download';
 import { slug } from '@/components/neo/pdf-base';
+import type { SecaoDoFiltro } from '@/components/neo/ListasPdf';
 import { formatDate } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber } from '@/lib/utils/text';
@@ -35,6 +38,7 @@ export function FiltroDeDadosCard({
   members,
   responsavel,
   contexto,
+  gruposRepetidos = [],
   onOpenMember,
   canExport,
 }: {
@@ -43,6 +47,8 @@ export function FiltroDeDadosCard({
   members: Member[];
   responsavel: string | null;
   contexto: ContextoDosFiltros;
+  /** Os grupos de "cadastrado mais de uma vez" do recorte: o PDF os mostra como na tela. */
+  gruposRepetidos?: GrupoRepetido[];
   onOpenMember: (id: string) => void;
   canExport: boolean;
 }) {
@@ -66,25 +72,32 @@ export function FiltroDeDadosCard({
     setBaixando(true);
     try {
       const { gerarPdfDaLista } = await import('@/components/neo/ListasPdf');
-      const filtros = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id));
-      const blob = await gerarPdfDaLista({
-        time: clientName,
-        filtros: filtros.map((f) => f.rotulo),
-        responsavel,
-        geradaEm: new Date().toISOString(),
-        basePorResponsavel: basePorResponsavel(members),
-        indiceDoTelefoneCompartilhado: (() => {
-          const i = filtros.findIndex((f) => f.id === 'telefone-repetido');
-          return i >= 0 ? i : null;
-        })(),
-        pessoas: pessoas.map(({ member, filtros: seus }) => ({
+      // Uma secao por filtro marcado, na ordem da tela — cada uma com a
+      // estrutura que faz sentido para ela.
+      const secoes: SecaoDoFiltro[] = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id)).map((filtro) => {
+        if (filtro.id === 'repetido') {
+          return { tipo: 'repetidos', rotulo: filtro.rotulo, grupos: gruposRepetidos.map(grupoRepetidoParaPdf) };
+        }
+        const pessoasDoFiltro = aplicarFiltros(members, [filtro.id], contexto).map(({ member }) => ({
+          id: member.id,
           nome: member.name,
           telefone: member.phone ?? '',
           bairro: member.district ?? '',
           cadastradoPor: recruiterText(member.recruitedBy),
           cadastradoEm: member.createdAt,
-          filtros: seus.map((id) => filtros.findIndex((f) => f.id === id)).filter((i) => i >= 0),
-        })),
+        }));
+        return {
+          tipo: filtro.id === 'telefone-repetido' ? 'telefones' : 'pessoas',
+          rotulo: filtro.rotulo,
+          pessoas: pessoasDoFiltro,
+        };
+      });
+      const blob = await gerarPdfDaLista({
+        time: clientName,
+        responsavel,
+        geradaEm: new Date().toISOString(),
+        basePorResponsavel: basePorResponsavel(members),
+        secoes,
       });
       baixarArquivo(`dados-para-corrigir-${slug(clientName)}-${new Date().toISOString().slice(0, 10)}.pdf`, blob);
     } catch {

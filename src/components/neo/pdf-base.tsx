@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer';
+import { initials } from '@/lib/utils/text';
 
 /**
  * Pecas comuns dos PDFs do sistema: o relatorio estrategico do NEO, o
@@ -409,17 +410,6 @@ export interface BarraDoGrafico {
   base: number | null;
 }
 
-/** Quadradinhos coloridos: em quais categorias a pessoa caiu. */
-export function Marcadores({ indices, categorias }: { indices: number[]; categorias: CategoriaDoGrafico[] }) {
-  return (
-    <View style={{ flexDirection: 'row', marginLeft: 4 }}>
-      {indices.map((i) => (
-        <View key={i} style={{ width: 5.5, height: 5.5, borderRadius: 1.2, backgroundColor: categorias[i]?.cor ?? C.faint, marginLeft: 1.5 }} />
-      ))}
-    </View>
-  );
-}
-
 export function Legenda({ categorias }: { categorias: CategoriaDoGrafico[] }) {
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
@@ -545,6 +535,139 @@ export function FaixaDeGrupo({ rotulo, titulo, direita }: { rotulo: string; titu
         <Text style={{ fontSize: 9.4, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(titulo)}</Text>
       </View>
       <Text style={{ fontSize: 8, color: C.ink2, maxWidth: 280, textAlign: 'right' }}>{direita}</Text>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   Cadastrado mais de uma vez: o mesmo cartao da tela
+   ------------------------------------------------------------------------- */
+
+export interface RegistroRepetidoPdf {
+  id: string;
+  nome: string;
+  /** "Líder" ou "Equipe". */
+  nivel: string;
+  cadastradoEm: string;
+  /** "Pelo link" ou "Pelo painel". */
+  como: string;
+  ondeMora: string;
+  cadastradoPor: string;
+  telefone: string;
+  votaEm: string;
+  primeiro: boolean;
+}
+
+export interface GrupoRepetidoPdf {
+  nome: string;
+  /** "Repetido com certeza", "Muito provável", "Possível repetição". */
+  certeza: string;
+  nivel: 'certa' | 'provavel' | 'possivel';
+  evidencias: string[];
+  /** "telefone e bairro" — ja no jeito que se fala. */
+  divergencias: string;
+  responsaveis: string[];
+  registros: RegistroRepetidoPdf[];
+}
+
+const TOM_DA_CERTEZA = {
+  certa: { cor: C.danger, fundo: C.dangerSoft },
+  provavel: { cor: C.warning, fundo: C.warningSoft },
+  possivel: { cor: C.muted, fundo: C.bg },
+};
+
+
+const dataEHora = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <Text style={{ fontSize: 7.8, color: C.muted, marginBottom: 1.5 }}>
+      {s(`${rotulo}: `)}
+      <Text style={{ color: C.ink2 }}>{s(valor || '—')}</Text>
+    </Text>
+  );
+}
+
+/**
+ * A pessoa cadastrada mais de uma vez, como na tela: cabecalho, os avisos
+ * (conta para mais de um responsavel, registros que discordam) e a linha do
+ * tempo dos cadastros — o primeiro em verde, as copias em vermelho.
+ */
+export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
+  const tom = TOM_DA_CERTEZA[grupo.nivel];
+  const avisos = grupo.responsaveis.length > 1 || grupo.divergencias;
+  return (
+    <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, marginBottom: 8 }} wrap={false}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f6f8fa', paddingHorizontal: 9, paddingVertical: 7, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.white, borderWidth: 0.6, borderColor: C.line, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.muted }}>{s(initials(grupo.nome))}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.ink }}>{s(grupo.nome)}</Text>
+          <Text style={{ fontSize: 7.6, color: C.muted, marginTop: 1 }}>
+            {s(`${grupo.registros.length} registros · ${grupo.evidencias.join(' · ')}`)}
+          </Text>
+        </View>
+        <Chip texto={grupo.certeza} cor={tom.cor} fundo={tom.fundo} />
+      </View>
+
+      {avisos ? (
+        <View style={{ paddingHorizontal: 9, paddingVertical: 6, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
+          {grupo.responsaveis.length > 1 ? (
+            <Text style={{ fontSize: 7.8, color: C.warning, marginBottom: grupo.divergencias ? 2 : 0 }}>
+              {s(`! Conta para ${grupo.responsaveis.length} responsáveis no ranking: `)}
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(grupo.responsaveis.join(' e '))}</Text>.
+            </Text>
+          ) : null}
+          {grupo.divergencias ? (
+            <Text style={{ fontSize: 7.8, color: C.muted }}>
+              {s('Os registros discordam em ')}
+              <Text style={{ fontFamily: 'Helvetica-Bold', color: C.ink2 }}>{s(grupo.divergencias)}</Text>
+              {s(': confira qual está certo antes de excluir a cópia.')}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={{ paddingHorizontal: 9, paddingTop: 7, paddingBottom: 3 }}>
+        {grupo.registros.map((r, i) => {
+          const ultimo = i === grupo.registros.length - 1;
+          return (
+            <View key={i} style={{ flexDirection: 'row', marginBottom: ultimo ? 4 : 8 }}>
+              {/* Linha do tempo: o ponto e o traco ate o proximo cadastro. */}
+              <View style={{ width: 14, alignItems: 'center' }}>
+                <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: r.primeiro ? C.success : C.danger, marginTop: 2 }} />
+                {!ultimo ? <View style={{ width: 0.8, flexGrow: 1, backgroundColor: C.line, marginTop: 2, marginBottom: -8 }} /> : null}
+              </View>
+              <View style={{ flex: 1, paddingLeft: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3 }}>
+                  <Text style={{ fontSize: 9.2, fontFamily: 'Helvetica-Bold', color: C.blue, marginRight: 5 }}>{s(r.nome)}</Text>
+                  <Chip
+                    texto={`${i + 1}º cadastro`}
+                    cor={r.primeiro ? C.success : C.danger}
+                    fundo={r.primeiro ? C.successSoft : C.dangerSoft}
+                  />
+                  <View style={{ width: 4 }} />
+                  <Chip texto={r.nivel} cor={C.ink2} fundo={C.navySoft} />
+                </View>
+                <View style={{ flexDirection: 'row' }}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Dado rotulo="Quando" valor={dataEHora(r.cadastradoEm)} />
+                    <Dado rotulo="Como" valor={r.como} />
+                    <Dado rotulo="Onde mora" valor={r.ondeMora} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Dado rotulo="Por" valor={r.cadastradoPor} />
+                    <Dado rotulo="Telefone" valor={telefone(r.telefone)} />
+                    <Dado rotulo="Vota em" valor={r.votaEm} />
+                  </View>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 }

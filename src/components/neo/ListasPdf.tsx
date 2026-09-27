@@ -7,31 +7,31 @@ import {
   Cabecalho,
   Chip,
   BlocoDoGrupo,
+  CartaoRepetido,
   FaixaDeGrupo,
   FaixaDoResponsavel,
   GraficoPorLideranca,
   Kpi,
   LinhaDeKpis,
-  Marcadores,
   Rodape,
   TOM_GRAVIDADE,
   Tabela,
   data,
   dataLonga,
   num,
-  pct,
   s,
   st,
   telefone,
   type CategoriaDoGrafico,
+  type GrupoRepetidoPdf,
 } from './pdf-base';
 
 /**
  * Os PDFs do quadro de inconsistencias.
  *
- *   `ListaFiltrada`             so quem caiu nos filtros marcados, com o
- *                               grafico por lideranca e a lista agrupada
- *                               por quem cadastrou;
+ *   `ListaFiltrada`             os filtros marcados, cada um na sua
+ *                               estrutura (por quem cadastrou, por numero,
+ *                               ou o cartao dos repetidos), num PDF so;
  *   `RelatorioDeInconsistencias` o quadro inteiro (ou o recorte de um
  *                               responsavel): repetidos, dados faltando,
  *                               dados para conferir e as demais pendencias.
@@ -46,39 +46,132 @@ const AVISO = 'Documento reservado · contém dados pessoais (LGPD). Não compar
    ------------------------------------------------------------------------- */
 
 export interface PessoaDaLista {
+  /** Identifica a pessoa entre as secoes (a mesma pode cair em varios filtros). */
+  id: string;
   nome: string;
   telefone: string;
   bairro: string;
   cadastradoPor: string;
   cadastradoEm: string;
-  /** Em quais dos `filtros` a pessoa caiu (indices). */
-  filtros: number[];
-}
-
-export interface ListaFiltradaProps {
-  time: string;
-  filtros: string[];
-  responsavel: string | null;
-  pessoas: PessoaDaLista[];
-  geradaEm: string;
-  /** Tamanho da base de cada responsavel (pelo texto de "cadastrado por"). */
-  basePorResponsavel?: Record<string, number>;
-  /**
-   * Qual dos `filtros` e o "Telefone compartilhado", se estiver marcado:
-   * esse filtro se le por NUMERO, e ganha a lista organizada por telefone.
-   */
-  indiceDoTelefoneCompartilhado?: number | null;
 }
 
 /**
- * Os numeros compartilhados: cada telefone, quantas fichas o usam, e quem
- * sao — com quem cadastrou cada uma. E o que a coordenacao precisa para
- * decidir de quem e o numero.
+ * Uma secao por filtro marcado, cada uma na estrutura que faz sentido para
+ * ele:
+ *
+ *   `pessoas`   quem caiu no filtro, agrupado por quem cadastrou;
+ *   `telefones` "Telefone compartilhado": organizado por NUMERO;
+ *   `repetidos` "Cadastrado mais de uma vez": o cartao de cada pessoa,
+ *               como na tela.
  */
-function PorNumero({ pessoas }: { pessoas: PessoaDaLista[] }) {
+export type SecaoDoFiltro =
+  | { tipo: 'pessoas'; rotulo: string; pessoas: PessoaDaLista[] }
+  | { tipo: 'telefones'; rotulo: string; pessoas: PessoaDaLista[] }
+  | { tipo: 'repetidos'; rotulo: string; grupos: GrupoRepetidoPdf[] };
+
+export interface ListaFiltradaProps {
+  time: string;
+  responsavel: string | null;
+  geradaEm: string;
+  secoes: SecaoDoFiltro[];
+  /** Tamanho da base de cada responsavel (pelo texto de "cadastrado por"). */
+  basePorResponsavel?: Record<string, number>;
+}
+
+type Chip3 = { texto: string; cor: string; fundo: string };
+
+function Titulo({ kicker = 'PENDÊNCIAS DE INTEGRIDADE', titulo, sub, chips }: { kicker?: string; titulo: string; sub: string; chips: Chip3[] }) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={st.kicker}>{s(kicker)}</Text>
+      <Text style={{ fontSize: 19, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.2, marginTop: 3 }}>{s(titulo)}</Text>
+      <Text style={{ fontSize: 9, color: C.muted, marginTop: 3 }}>{s(sub)}</Text>
+      <View style={{ width: 42, height: 2, backgroundColor: C.gold, marginTop: 8 }} />
+      {chips.length ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+          {chips.map((c) => (
+            <View key={c.texto} style={{ marginRight: 4, marginBottom: 4 }}>
+              <Chip {...c} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const corDaSecao = (i: number) => CORES_DE_CATEGORIA[i % CORES_DE_CATEGORIA.length];
+
+/** Quem a secao aponta, contado por quem cadastrou (nos repetidos, as copias). */
+function itensDaSecao(secao: SecaoDoFiltro): { id: string; cadastradoPor: string }[] {
+  if (secao.tipo === 'repetidos') {
+    return secao.grupos.flatMap((g) => g.registros.filter((r) => !r.primeiro).map((r) => ({ id: r.id, cadastradoPor: r.cadastradoPor })));
+  }
+  return secao.pessoas;
+}
+
+function quantosNaSecao(secao: SecaoDoFiltro): number {
+  return secao.tipo === 'repetidos' ? secao.grupos.length : secao.pessoas.length;
+}
+
+/* --- as tres estruturas ------------------------------------------------ */
+
+/** Quem caiu no filtro, agrupado por quem cadastrou. */
+function SecaoDePessoas({ pessoas, cor, base }: { pessoas: PessoaDaLista[]; cor: string; base: Record<string, number> }) {
+  const barras = barrasPorResponsavel(pessoas, 1, () => [0], base);
   return (
     <>
-      {agruparPorTelefone(pessoas).map((grupo) => {
+      <Text style={st.h3}>Por liderança</Text>
+      <GraficoPorLideranca barras={barras} categorias={[{ rotulo: 'pessoas', cor }]} totalDaLista={pessoas.length} />
+
+      <Text style={[st.h3, { marginTop: 18 }]}>Por quem cadastrou</Text>
+      {agruparPorResponsavel(pessoas).map((grupo) => (
+        <BlocoDoGrupo key={grupo.responsavel} linhas={grupo.itens.length}>
+          <FaixaDoResponsavel
+            responsavel={grupo.responsavel}
+            quantidade={grupo.itens.length}
+            totalDaLista={pessoas.length}
+            base={base[grupo.responsavel] ?? null}
+          />
+          <Tabela<PessoaDaLista>
+            linhas={grupo.itens}
+            chave={(p) => p.id}
+            colunas={[
+              { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
+              { titulo: 'Pessoa', largura: '36%', celula: (p) => p.nome },
+              { titulo: 'Telefone', largura: '20%', celula: (p) => telefone(p.telefone) },
+              { titulo: 'Bairro', largura: '24%', celula: (p) => p.bairro || '—' },
+              { titulo: 'Cadastro', largura: '14%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
+            ]}
+          />
+        </BlocoDoGrupo>
+      ))}
+    </>
+  );
+}
+
+/** "Telefone compartilhado": quantos numeros, por lideranca, e cada numero com as suas fichas. */
+function SecaoDeTelefones({ pessoas, cor, base }: { pessoas: PessoaDaLista[]; cor: string; base: Record<string, number> }) {
+  const grupos = agruparPorTelefone(pessoas);
+  const barras = barrasPorResponsavel(pessoas, 1, () => [0], base);
+  const maior = grupos[0];
+  return (
+    <>
+      <LinhaDeKpis>
+        <Kpi valor={num(grupos.length)} rotulo="números compartilhados" tom={cor} />
+        <Kpi valor={num(pessoas.length)} rotulo="fichas envolvidas" />
+        <Kpi valor={num(maior?.itens.length ?? 0)} rotulo="fichas no número mais usado" nota={maior ? telefone(maior.telefone) : undefined} tom={C.gold} />
+        <Kpi valor={num(barras.length)} rotulo={barras.length === 1 ? 'responsável envolvido' : 'responsáveis envolvidos'} />
+      </LinhaDeKpis>
+
+      <Text style={st.h3}>Por liderança</Text>
+      <GraficoPorLideranca barras={barras} categorias={[{ rotulo: 'fichas', cor }]} totalDaLista={pessoas.length} />
+
+      <Text style={[st.h3, { marginTop: 18 }]}>Por número</Text>
+      <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 2 }}>
+        Cada número e as fichas que o usam. Pode ser família — ou o número de uma liderança digitado no lugar do da pessoa.
+      </Text>
+      {grupos.map((grupo) => {
         const responsaveis = [...new Set(grupo.itens.map((p) => p.cadastradoPor))];
         return (
           <BlocoDoGrupo key={grupo.telefone} linhas={grupo.itens.length}>
@@ -96,13 +189,12 @@ function PorNumero({ pessoas }: { pessoas: PessoaDaLista[] }) {
             />
             <Tabela<PessoaDaLista>
               linhas={grupo.itens}
-              chave={(p, i) => `${grupo.telefone}-${i}`}
+              chave={(p) => `${grupo.telefone}-${p.id}`}
               colunas={[
                 { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
-                { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
-                { titulo: 'Cadastrado por', largura: '37%', celula: (p) => p.cadastradoPor },
-                { titulo: 'Bairro', largura: '15%', celula: (p) => p.bairro || '—' },
-                { titulo: 'Cadastro', largura: '12%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
+                { titulo: 'Pessoa', largura: '38%', celula: (p) => p.nome },
+                { titulo: 'Cadastrado por', largura: '42%', celula: (p) => p.cadastradoPor },
+                { titulo: 'Cadastro', largura: '14%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
               ]}
             />
           </BlocoDoGrupo>
@@ -112,187 +204,153 @@ function PorNumero({ pessoas }: { pessoas: PessoaDaLista[] }) {
   );
 }
 
-function Titulo({ titulo, sub, chips }: { titulo: string; sub: string; chips: { texto: string; cor: string; fundo: string }[] }) {
+/** "Cadastrado mais de uma vez": o cartao da tela para cada pessoa. */
+function SecaoDeRepetidos({ grupos, cor, base }: { grupos: GrupoRepetidoPdf[]; cor: string; base: Record<string, number> }) {
+  const sobrando = grupos.reduce((soma, g) => soma + g.registros.length - 1, 0);
+  const emDois = grupos.filter((g) => g.responsaveis.length > 1).length;
+  const copias = grupos.flatMap((g) => g.registros.filter((r) => !r.primeiro));
+  const barras = barrasPorResponsavel(copias, 1, () => [0], base);
   return (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={st.kicker}>PENDÊNCIAS DE INTEGRIDADE</Text>
-      <Text style={{ fontSize: 19, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.2, marginTop: 3 }}>{s(titulo)}</Text>
-      <Text style={{ fontSize: 9, color: C.muted, marginTop: 3 }}>{s(sub)}</Text>
-      <View style={{ width: 42, height: 2, backgroundColor: C.gold, marginTop: 8 }} />
-      {chips.length ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-          {chips.map((c) => (
-            <View key={c.texto} style={{ marginRight: 4, marginBottom: 4 }}>
-              <Chip {...c} />
-            </View>
-          ))}
-        </View>
-      ) : null}
-    </View>
+    <>
+      <LinhaDeKpis>
+        <Kpi valor={num(grupos.length)} rotulo="pessoas cadastradas mais de uma vez" tom={cor} />
+        <Kpi valor={num(sobrando)} rotulo="cadastros sobrando" nota="as cópias, a excluir" tom={C.warning} />
+        <Kpi valor={num(emDois)} rotulo="contam para mais de um responsável" nota="inflam o ranking" tom={C.gold} />
+      </LinhaDeKpis>
+
+      <Text style={st.h3}>Por liderança</Text>
+      <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 6 }}>As cópias (o 2º cadastro em diante), por quem as cadastrou.</Text>
+      <GraficoPorLideranca barras={barras} categorias={[{ rotulo: 'cópias', cor }]} totalDaLista={copias.length} />
+
+      <Text style={[st.h3, { marginTop: 18 }]}>Cadastrados mais de uma vez</Text>
+      <Text style={{ fontSize: 7.8, color: C.muted, marginBottom: 8 }}>
+        {s(`${num(sobrando)} ${sobrando === 1 ? 'cadastro sobrando' : 'cadastros sobrando'}. O primeiro registro costuma ser o original — os outros são as cópias.`)}
+      </Text>
+      {grupos.map((g, i) => (
+        <CartaoRepetido key={`${g.nome}-${i}`} grupo={g} />
+      ))}
+    </>
   );
 }
+
+function CorpoDaSecao({ secao, cor, base }: { secao: SecaoDoFiltro; cor: string; base: Record<string, number> }) {
+  if (secao.tipo === 'repetidos') return <SecaoDeRepetidos grupos={secao.grupos} cor={cor} base={base} />;
+  if (secao.tipo === 'telefones') return <SecaoDeTelefones pessoas={secao.pessoas} cor={cor} base={base} />;
+  return <SecaoDePessoas pessoas={secao.pessoas} cor={cor} base={base} />;
+}
+
+function tituloDaSecao(secao: SecaoDoFiltro): string {
+  const n = quantosNaSecao(secao);
+  if (secao.tipo === 'repetidos') return `${num(n)} ${n === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} mais de uma vez`;
+  if (secao.tipo === 'telefones') {
+    const numeros = agruparPorTelefone(secao.pessoas).length;
+    return `${num(numeros)} ${numeros === 1 ? 'número compartilhado' : 'números compartilhados'}`;
+  }
+  return `${secao.rotulo}: ${num(n)} ${n === 1 ? 'pessoa' : 'pessoas'}`;
+}
+
+/* --- o documento ------------------------------------------------------- */
 
 /**
- * A lista que vai para a coordenacao — ou para cada lideranca corrigir a
- * sua parte: primeiro QUEM concentra (o grafico), depois a lista separada
- * por quem cadastrou, de quem tem mais para quem tem menos.
+ * A lista dos filtros marcados, num PDF so.
+ *
+ * Um filtro: o documento e a secao dele, na estrutura dele. Varios: uma
+ * abertura com o resumo (quantos em cada filtro e o grafico por lideranca
+ * de todos juntos) e, depois, uma secao por filtro — cada uma na SUA
+ * estrutura, comecando em pagina nova.
  */
-export function ListaFiltrada(props: ListaFiltradaProps) {
-  const indice = props.indiceDoTelefoneCompartilhado ?? null;
-  if (indice !== null && props.filtros.length === 1) return <ListaDeNumeros {...props} />;
-  return <ListaPorResponsavel {...props} />;
-}
+export function ListaFiltrada({ time, responsavel, geradaEm, secoes, basePorResponsavel = {} }: ListaFiltradaProps) {
+  const chipDoResponsavel: Chip3[] = responsavel ? [{ texto: `Cadastrados por ${responsavel}`, cor: C.navy, fundo: C.bg }] : [];
+  const sub = `${time} · ${dataLonga(geradaEm)}`;
+  const unica = secoes.length === 1 ? secoes[0] : null;
 
-/** So o filtro "Telefone compartilhado": o documento inteiro por numero. */
-function ListaDeNumeros({ time, filtros, responsavel, pessoas, geradaEm }: ListaFiltradaProps) {
-  const grupos = agruparPorTelefone(pessoas);
-  const responsaveis = new Set(pessoas.map((p) => p.cadastradoPor)).size;
-  const maior = grupos[0]?.itens.length ?? 0;
-  const barras = grupos.map((g) => ({
-    responsavel: telefone(g.telefone),
-    quantidades: [g.itens.length],
-    total: g.itens.length,
-    base: null,
-  }));
-
-  return (
-    <Document title={s(`Telefones compartilhados — ${time}`)} author={s(appConfig.name)} language="pt-BR">
-      <Page size="A4" style={st.page}>
-        <Cabecalho esquerda={`Telefones compartilhados · ${time}`} direita={appConfig.shortName} />
-        <Rodape texto={AVISO} />
-        <Titulo
-          titulo={`${num(grupos.length)} ${grupos.length === 1 ? 'número compartilhado' : 'números compartilhados'}`}
-          sub={`${time} · ${dataLonga(geradaEm)} · ${num(pessoas.length)} fichas usam um número que aparece em outra ficha do time`}
-          chips={[
-            ...filtros.map((f) => ({ texto: f, cor: C.white, fundo: CORES_DE_CATEGORIA[0] })),
-            ...(responsavel ? [{ texto: `Cadastrados por ${responsavel}`, cor: C.navy, fundo: C.bg }] : []),
-          ]}
-        />
-
-        {grupos.length === 0 ? (
-          <Text style={{ fontSize: 9, color: C.faint }}>Nenhum número compartilhado.</Text>
-        ) : (
-          <>
-            <LinhaDeKpis>
-              <Kpi valor={num(grupos.length)} rotulo="números compartilhados" tom={C.danger} />
-              <Kpi valor={num(pessoas.length)} rotulo="fichas envolvidas" />
-              <Kpi valor={num(maior)} rotulo="fichas no número mais usado" nota={telefone(grupos[0].telefone)} tom={C.gold} />
-              <Kpi valor={num(responsaveis)} rotulo={responsaveis === 1 ? 'responsável envolvido' : 'responsáveis envolvidos'} />
-            </LinhaDeKpis>
-
-            <Text style={st.h3}>Números com mais fichas</Text>
-            <GraficoPorLideranca
-              barras={barras}
-              categorias={[{ rotulo: 'fichas', cor: CORES_DE_CATEGORIA[0] }]}
-              totalDaLista={pessoas.length}
-              limite={15}
-            />
-
-            <Text style={[st.h3, { marginTop: 18 }]}>Por número</Text>
-            <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 2 }}>
-              Cada número e as fichas que o usam. Pode ser família — ou o número de uma liderança digitado no lugar do da pessoa.
-            </Text>
-            <PorNumero pessoas={pessoas} />
-          </>
-        )}
-      </Page>
-    </Document>
+  // Varias secoes: cada pessoa conta uma vez por filtro em que caiu.
+  const categorias: CategoriaDoGrafico[] = secoes.map((sec, i) => ({ rotulo: sec.rotulo, cor: corDaSecao(i) }));
+  const porPessoa = new Map<string, { cadastradoPor: string; secoes: number[] }>();
+  secoes.forEach((sec, i) =>
+    itensDaSecao(sec).forEach((item) => {
+      const atual = porPessoa.get(item.id) ?? { cadastradoPor: item.cadastradoPor, secoes: [] };
+      if (!atual.secoes.includes(i)) atual.secoes.push(i);
+      porPessoa.set(item.id, atual);
+    }),
   );
-}
-
-function ListaPorResponsavel({
-  time,
-  filtros,
-  responsavel,
-  pessoas,
-  geradaEm,
-  basePorResponsavel = {},
-  indiceDoTelefoneCompartilhado = null,
-}: ListaFiltradaProps) {
-  const categorias: CategoriaDoGrafico[] = filtros.map((rotulo, i) => ({ rotulo, cor: CORES_DE_CATEGORIA[i % CORES_DE_CATEGORIA.length] }));
-  const barras = barrasPorResponsavel(pessoas, filtros.length, (p) => p.filtros, basePorResponsavel);
-  const grupos = agruparPorResponsavel(pessoas);
-  const top3 = barras.slice(0, 3).reduce((soma, b) => soma + b.total, 0);
-  const variosFiltros = filtros.length > 1;
+  const todas = [...porPessoa.values()];
+  const barras = barrasPorResponsavel(todas, secoes.length, (p) => p.secoes, basePorResponsavel);
 
   return (
     <Document title={s(`Dados para corrigir — ${time}`)} author={s(appConfig.name)} language="pt-BR">
       <Page size="A4" style={st.page}>
         <Cabecalho esquerda={`Dados para corrigir · ${time}`} direita={appConfig.shortName} />
         <Rodape texto={AVISO} />
-        <Titulo
-          titulo={`${num(pessoas.length)} ${pessoas.length === 1 ? 'pessoa' : 'pessoas'} para corrigir`}
-          sub={`${time} · ${dataLonga(geradaEm)}`}
-          chips={[
-            ...categorias.map((c) => ({ texto: c.rotulo, cor: C.white, fundo: c.cor })),
-            ...(responsavel ? [{ texto: `Cadastrados por ${responsavel}`, cor: C.navy, fundo: C.bg }] : []),
-          ]}
-        />
 
-        {pessoas.length === 0 ? (
-          <Text style={{ fontSize: 9, color: C.faint }}>Ninguém nesse filtro.</Text>
+        {secoes.length === 0 || todas.length === 0 ? (
+          <>
+            <Titulo titulo="Dados para corrigir" sub={sub} chips={chipDoResponsavel} />
+            <Text style={{ fontSize: 9, color: C.faint }}>Ninguém nesse filtro.</Text>
+          </>
+        ) : unica ? (
+          <>
+            <Titulo
+              titulo={tituloDaSecao(unica)}
+              sub={sub}
+              chips={[{ texto: unica.rotulo, cor: C.white, fundo: corDaSecao(0) }, ...chipDoResponsavel]}
+            />
+            <CorpoDaSecao secao={unica} cor={corDaSecao(0)} base={basePorResponsavel} />
+          </>
         ) : (
           <>
+            <Titulo
+              titulo={`${num(todas.length)} ${todas.length === 1 ? 'pessoa para corrigir' : 'pessoas para corrigir'}`}
+              sub={sub}
+              chips={[...categorias.map((c) => ({ texto: c.rotulo, cor: C.white, fundo: c.cor })), ...chipDoResponsavel]}
+            />
             <LinhaDeKpis>
-              <Kpi valor={num(pessoas.length)} rotulo="pessoas para corrigir" tom={C.danger} />
-              <Kpi valor={num(grupos.length)} rotulo={grupos.length === 1 ? 'responsável envolvido' : 'responsáveis envolvidos'} />
-              <Kpi
-                valor={`${pct(top3, pessoas.length)}%`}
-                rotulo={grupos.length > 3 ? 'nos 3 responsáveis com mais pendências' : 'da lista com quem mais tem'}
-                nota={barras[0] ? `${barras[0].responsavel}: ${num(barras[0].total)}` : undefined}
-                tom={C.gold}
-              />
+              <Kpi valor={num(todas.length)} rotulo="pessoas para corrigir" tom={C.danger} />
+              <Kpi valor={num(secoes.length)} rotulo="filtros neste documento" />
+              <Kpi valor={num(barras.length)} rotulo={barras.length === 1 ? 'responsável envolvido' : 'responsáveis envolvidos'} tom={C.gold} />
             </LinhaDeKpis>
 
+            <Text style={st.h3}>Neste documento</Text>
+            <Tabela
+              linhas={secoes.map((sec, i) => ({ sec, i }))}
+              chave={(x) => x.sec.rotulo}
+              colunas={[
+                {
+                  titulo: 'Filtro',
+                  largura: '46%',
+                  celula: (x) => (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 1.5, backgroundColor: corDaSecao(x.i), marginRight: 5 }} />
+                      <Text>{s(x.sec.rotulo)}</Text>
+                    </View>
+                  ),
+                },
+                { titulo: 'Como vem', largura: '32%', celula: (x) => (x.sec.tipo === 'repetidos' ? 'um cartão por pessoa' : x.sec.tipo === 'telefones' ? 'por número' : 'por quem cadastrou') },
+                {
+                  titulo: 'Quantos',
+                  largura: '22%',
+                  alinhar: 'right',
+                  celula: (x) => {
+                    const n = quantosNaSecao(x.sec);
+                    const [um, varios] = x.sec.tipo === 'telefones' ? ['ficha', 'fichas'] : ['pessoa', 'pessoas'];
+                    return `${num(n)} ${n === 1 ? um : varios}`;
+                  },
+                },
+              ]}
+            />
+
             <Text style={st.h3}>Por liderança</Text>
-            <GraficoPorLideranca barras={barras} categorias={categorias} totalDaLista={pessoas.length} />
+            <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 6 }}>
+              Cada pessoa conta uma vez por filtro em que caiu. Nos cadastrados mais de uma vez, contam as cópias.
+            </Text>
+            <GraficoPorLideranca barras={barras} categorias={categorias} totalDaLista={todas.length} />
 
-            <Text style={[st.h3, { marginTop: 18 }]}>Lista por quem cadastrou</Text>
-            {variosFiltros ? (
-              <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 2 }}>
-                Os quadradinhos ao lado do nome mostram em quais filtros a pessoa caiu, nas cores da legenda.
-              </Text>
-            ) : null}
-            {grupos.map((grupo) => (
-              <BlocoDoGrupo key={grupo.responsavel} linhas={grupo.itens.length}>
-                <FaixaDoResponsavel
-                  responsavel={grupo.responsavel}
-                  quantidade={grupo.itens.length}
-                  totalDaLista={pessoas.length}
-                  base={basePorResponsavel[grupo.responsavel] ?? null}
-                />
-                <Tabela<PessoaDaLista>
-                  linhas={grupo.itens}
-                  chave={(p, i) => `${grupo.responsavel}-${i}`}
-                  colunas={[
-                    { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
-                    {
-                      titulo: 'Pessoa',
-                      largura: '36%',
-                      celula: (p) => (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Text>{s(p.nome)}</Text>
-                          {variosFiltros ? <Marcadores indices={p.filtros} categorias={categorias} /> : null}
-                        </View>
-                      ),
-                    },
-                    { titulo: 'Telefone', largura: '20%', celula: (p) => telefone(p.telefone) },
-                    { titulo: 'Bairro', largura: '24%', celula: (p) => p.bairro || '—' },
-                    { titulo: 'Cadastro', largura: '14%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
-                  ]}
-                />
-              </BlocoDoGrupo>
-            ))}
-
-            {indiceDoTelefoneCompartilhado !== null ? (
-              <View break>
-                <Text style={[st.h3, { marginTop: 0 }]}>Números compartilhados</Text>
-                <Text style={{ fontSize: 7.4, color: C.muted, marginBottom: 2 }}>
-                  As fichas do filtro “{s(filtros[indiceDoTelefoneCompartilhado])}”, agora organizadas por número.
-                </Text>
-                <PorNumero pessoas={pessoas.filter((p) => p.filtros.includes(indiceDoTelefoneCompartilhado))} />
+            {secoes.map((sec, i) => (
+              <View key={sec.rotulo} break>
+                <Titulo kicker={`FILTRO ${i + 1} DE ${secoes.length}`} titulo={tituloDaSecao(sec)} sub={sec.rotulo} chips={[]} />
+                <CorpoDaSecao secao={sec} cor={corDaSecao(i)} base={basePorResponsavel} />
               </View>
-            ) : null}
+            ))}
           </>
         )}
       </Page>
@@ -308,24 +366,8 @@ export async function gerarPdfDaLista(props: ListaFiltradaProps): Promise<Blob> 
    Relatorio do quadro inteiro
    ------------------------------------------------------------------------- */
 
-export interface RegistroParaPdf {
-  nome: string;
-  telefone: string;
-  cadastradoPor: string;
-  cadastradoEm: string;
-  primeiro: boolean;
-}
-
-export interface GrupoParaPdf {
-  nome: string;
-  certeza: string;
-  /** "certa", "provavel" ou "possivel": pinta o grupo. */
-  nivel: 'certa' | 'provavel' | 'possivel';
-  evidencias: string[];
-  divergencias: string[];
-  responsaveis: string[];
-  registros: RegistroParaPdf[];
-}
+/** O grupo de repetidos no formato do cartao (ver `CartaoRepetido`). */
+export type GrupoParaPdf = GrupoRepetidoPdf;
 
 export interface SecaoParaPdf {
   titulo: string;
@@ -346,11 +388,6 @@ export interface RelatorioDeInconsistenciasProps {
   basePorResponsavel?: Record<string, number>;
 }
 
-const TOM_CERTEZA = {
-  certa: { cor: C.danger, fundo: C.dangerSoft },
-  provavel: { cor: C.warning, fundo: C.warningSoft },
-  possivel: { cor: C.muted, fundo: C.bg },
-};
 
 export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProps) {
   const { time, responsavel, geradoEm, total, pessoasComProblema, saude, repetidos, secoes, basePorResponsavel = {} } = props;
@@ -431,36 +468,9 @@ export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProp
         {repetidos.length ? (
           <View>
             <Text style={st.h3}>{s(`Cadastrados mais de uma vez (${num(repetidos.length)})`)}</Text>
-            {repetidos.map((g, gi) => {
-              const tom = TOM_CERTEZA[g.nivel];
-              return (
-                <View key={`${g.nome}-${gi}`} style={{ marginBottom: 6, borderWidth: 0.6, borderColor: C.line }} wrap={false}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 6, backgroundColor: C.bg }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, flex: 1 }}>{s(g.nome)}</Text>
-                    <Chip texto={g.certeza} cor={tom.cor} fundo={tom.fundo} />
-                  </View>
-                  <Text style={{ fontSize: 7.4, color: C.muted, paddingHorizontal: 6, paddingTop: 3 }}>
-                    {s(`Por quê: ${g.evidencias.join(', ')}${g.divergencias.length ? ` · discordam em ${g.divergencias.join(', ')}` : ''}`)}
-                  </Text>
-                  {g.registros.map((r, ri) => (
-                    <View key={ri} style={{ flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 2.5, fontSize: 7.8 }}>
-                      <Text style={{ width: '14%', color: r.primeiro ? C.success : C.danger, fontFamily: 'Helvetica-Bold' }}>
-                        {r.primeiro ? '1º cadastro' : `${ri + 1}º cadastro`}
-                      </Text>
-                      <Text style={{ width: '27%' }}>{s(r.nome)}</Text>
-                      <Text style={{ width: '17%', color: C.muted }}>{s(telefone(r.telefone))}</Text>
-                      <Text style={{ width: '30%', color: C.muted }}>{s(`por ${r.cadastradoPor}`)}</Text>
-                      <Text style={{ width: '12%', textAlign: 'right', color: C.muted }}>{data(r.cadastradoEm)}</Text>
-                    </View>
-                  ))}
-                  {g.responsaveis.length > 1 ? (
-                    <Text style={{ fontSize: 7.4, color: C.warning, paddingHorizontal: 6, paddingBottom: 4 }}>
-                      {s(`Conta para ${g.responsaveis.length} responsáveis no ranking: ${g.responsaveis.join(' e ')}.`)}
-                    </Text>
-                  ) : null}
-                </View>
-              );
-            })}
+            {repetidos.map((g, gi) => (
+              <CartaoRepetido key={`${g.nome}-${gi}`} grupo={g} />
+            ))}
           </View>
         ) : null}
 

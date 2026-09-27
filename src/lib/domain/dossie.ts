@@ -5,9 +5,8 @@ import { recruiterText } from './recruitment';
 import { camposFaltantes } from './member-completeness';
 import { dadosParaConferir } from './conferencia';
 import { seloDoLider, type Selo } from './perfil-do-lider';
+import { grupoRepetidoParaPdf, type GrupoRepetidoParaPdf } from './repetidos-pdf';
 import {
-  CERTEZA_ROTULO,
-  EVIDENCIA_INFO,
   TIPO_INFO,
   TIPOS,
   diagnosticar,
@@ -89,13 +88,8 @@ export interface Contagem {
   quantidade: number;
 }
 
-export interface GrupoRepetidoNoDossie {
-  nome: string;
-  certeza: string;
-  evidencias: string[];
-  registros: { nome: string; cadastradoPor: string; cadastradoEm: string; primeiro: boolean }[];
-  responsaveis: string[];
-}
+/** No formato do cartao da tela: o PDF mostra o mesmo cartao. */
+export type GrupoRepetidoNoDossie = GrupoRepetidoParaPdf;
 
 export interface ProblemaNoDossie {
   tipo: TipoDaFicha;
@@ -458,18 +452,7 @@ export function montarDossie(
       saude: diagnostico.saude,
       pessoasComProblema: diagnostico.pessoasComProblema,
       excedentes: diagnostico.excedentes,
-      repetidos: certos.map((g) => ({
-        nome: g.nome,
-        certeza: CERTEZA_ROTULO[g.certeza],
-        evidencias: g.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo),
-        registros: g.registros.map((r) => ({
-          nome: r.member.name,
-          cadastradoPor: recruiterText(r.member.recruitedBy),
-          cadastradoEm: r.member.createdAt,
-          primeiro: r.primeiro,
-        })),
-        responsaveis: g.responsaveis,
-      })),
+      repetidos: certos.map(grupoRepetidoParaPdf),
       possiveisRepetidos: diagnostico.repetidos.length - certos.length,
       telefonesCompartilhados: diagnostico.telefones.length,
       incompletos: diagnostico.incompletos.membros.length,
