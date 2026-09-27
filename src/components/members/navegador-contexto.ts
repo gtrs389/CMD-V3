@@ -17,6 +17,8 @@ export interface Navegador {
   editar: (id: string) => void;
   /** O Lider (integrante) por tras de um usuario responsavel, se estiver no time. */
   liderDoUsuario: (userId: string | null | undefined) => Member | null;
+  /** Quantas pessoas da lista o Lider cadastrou: a Equipe que mostra a tag dele. */
+  tamanhoDaEquipe: (lider: Member) => number;
 }
 
 export const ContextoDoNavegador = createContext<Navegador | null>(null);

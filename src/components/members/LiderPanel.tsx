@@ -10,6 +10,7 @@ import {
   MapPin,
   PencilLine,
   Search,
+  Tag,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -31,6 +32,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { useSession } from '@/components/layout/SessionProvider';
+import { EditarTagModal, NomeComTag, TagDoLider } from './TagDoLider';
 
 const TOM_DO_SELO: Record<Selo, string> = {
   Motor: 'bg-success-50 text-success-700',
@@ -90,6 +93,10 @@ export function LiderPanel({
     [p, aba, busca, idsConferir, idsIncompletos, idsRepetidos],
   );
 
+  const { can } = useSession();
+  const podeEditarTag = can('member.update');
+  const [editandoTag, setEditandoTag] = useState(false);
+
   const maiorSemana = Math.max(1, ...p.semanas.map((s) => s.quantidade));
   const acimaDaMedia = p.total - p.mediaDoTime;
 
@@ -111,6 +118,7 @@ export function LiderPanel({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-xl font-bold text-ink-900">{lider.name}</h3>
+              <TagDoLider member={lider} className="px-2.5 py-1 text-xs" />
               <span className={cn('rounded-pill px-2.5 py-1 text-xs font-semibold', TOM_DO_SELO[p.selo])} title={SELO_EXPLICACAO[p.selo]}>
                 {p.selo}
               </span>
@@ -125,6 +133,17 @@ export function LiderPanel({
               </span>
             </p>
             <p className="mt-1 text-xs text-ink-400">{SELO_EXPLICACAO[p.selo]}</p>
+            {/* A tag e do Lider e vale para a Equipe inteira dele. */}
+            {podeEditarTag ? (
+              <button
+                type="button"
+                onClick={() => setEditandoTag(true)}
+                className="mt-1 inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
+              >
+                <Tag aria-hidden="true" className="size-3.5" />
+                {lider.tag ? 'Trocar a tag' : 'Colocar tag no Líder'}
+              </button>
+            ) : null}
           </div>
         </header>
 
@@ -282,7 +301,7 @@ export function LiderPanel({
                     <button type="button" onClick={() => onOpenMember(m)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-ink-50">
                       <Avatar name={m.name} src={m.photo} size="sm" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-ink-900">{m.name}</span>
+                        <NomeComTag member={m} nomeClassName="text-sm font-medium text-ink-900" />
                         <span className="block truncate text-xs text-ink-500">
                           {m.phone ? formatPhone(m.phone) : 'sem telefone'} · {formatDate(m.createdAt)}
                           {m.district ? ` · ${m.district}` : ''}
@@ -323,6 +342,15 @@ export function LiderPanel({
           </Button>
         </div>
       </div>
+
+      {podeEditarTag ? (
+        <EditarTagModal
+          open={editandoTag}
+          lider={lider}
+          tamanhoDaEquipe={p.total}
+          onClose={() => setEditandoTag(false)}
+        />
+      ) : null}
     </Modal>
   );
 }

@@ -67,6 +67,7 @@ function pessoa(partes: Partial<Member>): Member {
     source: n % 3 ? 'invite' : 'admin',
     recruitedBy: MARINA,
     tier: 'LIDER',
+    tag: null,
     recruiterChange: null,
     access: 'ACTIVE',
     userId: null,

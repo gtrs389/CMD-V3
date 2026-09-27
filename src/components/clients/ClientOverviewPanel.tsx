@@ -28,6 +28,7 @@ import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
 import { useNavegador } from '@/components/members/NavegadorDePessoas';
+import { TagDoLider } from '@/components/members/TagDoLider';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
@@ -160,6 +161,7 @@ export function ClientOverviewPanel({
         key: member.id,
         userId: member.userId,
         name: member.name,
+        tag: member.tag,
         photo: member.photo,
         count: member.userId ? (porResponsavel.get(member.userId) ?? 0) : 0,
       }))
@@ -723,6 +725,8 @@ interface RankingRow {
   /** Usuario do integrante. Nulo enquanto ele nao tem acesso proprio. */
   userId: string | null;
   name: string;
+  /** Tag do Lider (migration 048), ao lado do nome. */
+  tag: string | null;
   photo: string | null;
   count: number;
 }
@@ -822,11 +826,14 @@ function RankingCard({
               )}
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink-900">
-                  {row.name}
-                  {row.userId && row.userId === currentUserId ? (
-                    <span className="ml-1.5 text-[0.6875rem] font-medium text-ink-500">(você)</span>
-                  ) : null}
+                <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-900">
+                  <span className="min-w-0 truncate">
+                    {row.name}
+                    {row.userId && row.userId === currentUserId ? (
+                      <span className="ml-1.5 text-[0.6875rem] font-medium text-ink-500">(você)</span>
+                    ) : null}
+                  </span>
+                  <TagDoLider member={{ tier: 'LIDER', tag: row.tag, recruitedBy: null }} />
                 </p>
 
                 {/* Barra proporcional ao primeiro colocado: a diferenca

@@ -66,6 +66,12 @@ export interface Member extends Timestamped {
    */
   tier: TeamTier;
   /**
+   * Tag que o ADMIN geral colocou neste Lider (migration 048). Nula na
+   * Equipe: quem e da Equipe mostra a tag do Lider dela, que chega em
+   * `recruitedBy.tag` — ver `domain/tag-do-lider.ts`.
+   */
+  tag: string | null;
+  /**
    * Ultima troca de responsavel, quando houve (migration 027).
    *
    * O sistema conta quantas pessoas cada um cadastrou, e esse numero e lido

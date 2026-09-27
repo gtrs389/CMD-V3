@@ -76,6 +76,7 @@ export function createLocalMemberRepository(
         // link: a implementacao local nao inventa responsavel.
         recruitedBy: null,
         tier: 'LIDER',
+        tag: null,
     recruiterChange: null,
         access: normalizePhone(input.phone).length >= 10 ? 'PENDING' : 'NO_PHONE',
         // A referencia local nao cria acesso: o usuario vive so no servidor.

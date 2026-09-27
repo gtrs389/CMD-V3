@@ -41,6 +41,7 @@ function integrante(partes: Partial<Member> = {}): Member {
     source: 'invite',
     recruitedBy: null,
     tier: 'LIDER',
+    tag: null,
     recruiterChange: null,
     access: 'ACTIVE',
     userId: null,

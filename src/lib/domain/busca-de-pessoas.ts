@@ -1,12 +1,13 @@
 import type { Member } from '@/lib/types';
 import { normalizeSearch } from '@/lib/utils/text';
 import { recruiterText } from './recruitment';
+import { tagDaPessoa } from './tag-do-lider';
 
 /**
  * A busca da lista do time: uma caixa so, que acha por qualquer dado.
  *
- * Nome, telefone, CPF, titulo, bairro, rua, municipio, zona/secao e quem
- * cadastrou. Numero e comparado SO PELOS DIGITOS — "529.982.247-25",
+ * Nome, telefone, CPF, titulo, bairro, rua, municipio, zona/secao, quem
+ * cadastrou e a tag do Lider. Numero e comparado SO PELOS DIGITOS — "529.982.247-25",
  * "52998224725" e "529982" acham a mesma pessoa, com ou sem mascara.
  *
  * Varias palavras se somam: "maria centro" e a Maria que mora no Centro, e
@@ -27,6 +28,7 @@ export type CampoDaBusca =
   | 'município'
   | 'zona/seção'
   | 'responsável'
+  | 'tag'
   | 'e-mail';
 
 export interface ResultadoDaBusca {
@@ -45,6 +47,7 @@ const ORDEM: CampoDaBusca[] = [
   'município',
   'zona/seção',
   'responsável',
+  'tag',
   'e-mail',
 ];
 
@@ -73,6 +76,8 @@ export function buscarPessoa(member: Member, termo: string): ResultadoDaBusca {
     ['rua', normalizeSearch(member.street)],
     ['município', normalizeSearch(member.city)],
     ['responsável', normalizeSearch(recruiterText(member.recruitedBy))],
+    // A tag do Lider acha o Lider e a Equipe inteira dele.
+    ['tag', normalizeSearch(tagDaPessoa(member))],
     ['e-mail', normalizeSearch(member.email)],
   ];
   const numeros: [CampoDaBusca, string][] = [
