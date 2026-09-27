@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Download, FileText, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { AlertTriangle, Check, Download, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Dossie } from '@/lib/domain/dossie';
 import type { AnaliseDoNeo } from '@/lib/domain/neo';
 import { api } from '@/lib/repositories/http/api';
@@ -141,7 +141,7 @@ export function NeoRelatorioModal({
               Cancelar
             </Button>
             <Button onClick={gerar}>
-              <Sparkles aria-hidden="true" className="size-4" />
+              <FileText aria-hidden="true" className="size-4" />
               {estado.fase === 'erro' ? 'Tentar de novo' : 'Gerar relatório'}
             </Button>
           </div>
@@ -164,7 +164,7 @@ function Inicio({ erro }: { erro: string | null }) {
     <div className="space-y-4">
       <div className="flex items-start gap-3">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-card bg-navy-900 text-white">
-          <Sparkles aria-hidden="true" className="size-5" />
+          <FileText aria-hidden="true" className="size-5" />
         </span>
         <div>
           <p className="text-sm font-semibold text-ink-900">O NEO lê o time inteiro e escreve o relatório.</p>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Database } from 'lucide-react';
 import { loadSampleData } from '@/lib/mock/seed';
 import { NetworkError } from '@/lib/repositories';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +33,7 @@ export function SampleDataButton() {
 
   return (
     <Button variant="secondary" loading={loading} onClick={handleClick}>
-      {!loading ? <Sparkles aria-hidden="true" className="size-4" /> : null}
+      {!loading ? <Database aria-hidden="true" className="size-4" /> : null}
       Carregar dados de exemplo
     </Button>
   );
