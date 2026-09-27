@@ -1,6 +1,7 @@
 import type { Member } from '@/lib/types';
-import { isValidCpf, isValidVoterId, normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
-import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
+import { normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
+import { normalizePhone } from '@/lib/utils/phone';
+import { dadosParaConferir } from './conferencia';
 import { normalizeSearch } from '@/lib/utils/text';
 import { camposFaltantes } from './member-completeness';
 import { recruiterKey, recruiterText, NO_RECRUITER_KEY } from './recruitment';
@@ -316,9 +317,9 @@ export const TIPO_INFO: Record<
   { titulo: string; explicacao: string; gravidade: Gravidade }
 > = {
   invalido: {
-    titulo: 'Dados que não fecham',
+    titulo: 'Dados para conferir',
     explicacao:
-      'Título, CPF ou telefone preenchidos, mas que não podem existir do jeito que estão: dígito trocado, faltando ou sobrando.',
+      'Título, CPF ou telefone que entraram do jeito que vieram, mas não podem existir assim: dígito trocado, faltando ou sobrando. A ficha já está com a etiqueta "Conferir".',
     gravidade: 'alta',
   },
   'lider-sem-acesso': {
@@ -375,17 +376,12 @@ export function municipioDaOperacao(time: {
   return { state: ENDERECO_FIXO.state, cities: [ENDERECO_FIXO.city] };
 }
 
+/** A mesma regra da etiqueta "Conferir" da ficha: uma so, em todo lugar. */
 function dadosInvalidos(member: Member): string[] {
-  const erros: string[] = [];
-  const titulo = normalizeVoterId(member.voterId ?? '');
-  if (titulo && !isValidVoterId(titulo)) erros.push('título inválido');
-  const cpf = normalizeCpf(member.cpf ?? '');
-  if (cpf && !isValidCpf(cpf)) erros.push('CPF inválido');
-  const telefone = normalizePhone(member.phone ?? '');
-  if (telefone && !isValidPhone(telefone)) erros.push(`telefone com ${telefone.length} dígitos`);
-  if (member.zone?.trim() && !member.section?.trim()) erros.push('zona sem seção');
-  if (member.section?.trim() && !member.zone?.trim()) erros.push('seção sem zona');
-  return erros;
+  // O telefone repetido tem secoes proprias aqui (telefone compartilhado e
+  // Lider sem acesso): contado tambem nesta, a mesma pessoa apareceria duas
+  // vezes pelo mesmo motivo.
+  return dadosParaConferir({ ...member, access: null });
 }
 
 function foraDoMunicipio(member: Member, referencia: MunicipioDaOperacao): string | null {

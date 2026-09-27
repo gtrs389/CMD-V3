@@ -4,6 +4,7 @@ import {
   ENDERECO_FIXO,
   MODELO_SEPARADOR,
   lerPlanilha,
+  conferirDaLinha,
   faltasDaLinha,
   problemasDaLinha,
   separarEndereco,
@@ -196,12 +197,17 @@ describe('o que impede uma linha de ser cadastrada', () => {
     ).toEqual([]);
   });
 
-  it('telefone com dígitos demais continua barrado: não é falta, é número errado', () => {
-    // A normalização corta o que passa de onze dígitos, e o número cortado
-    // parece certo e liga para outra pessoa.
-    expect(problemasDaLinha(linha({ phone: '829999493112' }))).toEqual([
-      'telefone com dígitos demais',
-    ]);
+  it('telefone com dígitos demais entra, inteiro, marcado para conferir', () => {
+    // Cortar o dígito extra daria um número que parece certo e liga para
+    // outra pessoa. Ele entra como veio, e a etiqueta diz o que conferir.
+    expect(problemasDaLinha(linha({ phone: '829999493112' }))).toEqual([]);
+    expect(conferirDaLinha(linha({ phone: '829999493112' }))).toEqual(['telefone com 12 dígitos']);
+  });
+
+  it('CPF que não fecha e título incompleto entram marcados', () => {
+    const torta = linha({ voterId: '1000000027', phone: '82999990002' });
+    expect(problemasDaLinha(torta)).toEqual([]);
+    expect(conferirDaLinha(torta)).toEqual(['título com 10 dígitos']);
   });
 
   /** Linha sem buraco nenhum, para comparar. */
@@ -216,8 +222,9 @@ describe('o que impede uma linha de ser cadastrada', () => {
   it('as faltas são listadas sem impedir nada', () => {
     expect(faltasDaLinha(linha(completa))).toEqual([]);
     expect(faltasDaLinha(linha({ ...completa, phone: '' }))).toEqual(['telefone']);
-    // Curto demais conta como falta: não identifica ninguém e não abre acesso.
-    expect(faltasDaLinha(linha({ ...completa, phone: '1234' }))).toEqual(['telefone']);
+    // Curto demais não é falta — está preenchido, e errado: vai para conferir.
+    expect(faltasDaLinha(linha({ ...completa, phone: '1234' }))).toEqual([]);
+    expect(conferirDaLinha(linha({ ...completa, phone: '1234' }))).toEqual(['telefone com 4 dígitos']);
     expect(faltasDaLinha(linha({ voterId: '', zone: '', section: '', district: '' }))).toEqual([
       'título de eleitor',
       'zona',
@@ -355,7 +362,9 @@ describe('telefone com dígito a mais', () => {
     );
 
     expect(linhas[0].phone).toBe('829999493112');
-    expect(problemasDaLinha(linhas[0])).toContain('telefone com dígitos demais');
+    // Nao barra mais: entra inteiro, com a etiqueta.
+    expect(problemasDaLinha(linhas[0])).toEqual([]);
+    expect(conferirDaLinha(linhas[0])).toEqual(['telefone com 12 dígitos']);
   });
 
   it('código do país não é dígito a mais', () => {

@@ -4,7 +4,6 @@ import { requirePermission } from '@/lib/server/guard';
 import { forbidden, jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { surveyMemberSchema } from '@/lib/validation/server.schema';
 import { createMember, rollbackMember } from '@/lib/server/member.service';
-import { assertTeamPhoneAvailable } from '@/lib/server/user.service';
 import { submitSurveyAnswerFromPanel } from '@/lib/server/survey.service';
 import { createPendingLocation, resolveLocation } from '@/lib/server/map-location.service';
 
@@ -41,7 +40,10 @@ export async function POST(request: NextRequest) {
   try {
     const input = await readJson(request, surveyMemberSchema);
 
+    // `bulkImport` ja nao muda nada aqui: telefone repetido nao recusa em
+    // caminho nenhum. Continua no schema porque a planilha o envia.
     const { answers, bulkImport, ...ficha } = input;
+    void bulkImport;
 
     // O time e o proprio da sessao: esta tela e do lider, e nao existe
     // cadastrar "no time de outro" por aqui. Perfil sem time (o ADMIN geral)
@@ -51,15 +53,9 @@ export async function POST(request: NextRequest) {
 
     const clientId = user.candidateId;
 
-    // Telefone repetido no time interrompe antes de gravar: nada orfao e
-    // criado, e o numero continua identificando uma unica pessoa.
-    //
-    // Vindo de PLANILHA, nao: ali a lista e do mundo real, onde marido e
-    // mulher dividem um numero, e recusar a linha perde a pessoa. Quem
-    // responde o Formulario 2 nao recebe acesso de qualquer forma, entao
-    // aqui nao ha credencial duplicada a evitar.
-    if (!bulkImport) await assertTeamPhoneAvailable(clientId, ficha.phone);
-
+    // Telefone repetido no time nao recusa ninguem: quem entra pelo
+    // Formulario 2 nao recebe acesso de qualquer forma, entao nao ha
+    // credencial duplicada a evitar. A ficha mostra o numero para conferir.
     const member = await createMember(
       // Sem `responses`: pergunta do Formulario 2 nao e resposta de
       // integrante — ela tem tabela propria, logo abaixo.

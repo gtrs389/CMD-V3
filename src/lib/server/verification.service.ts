@@ -26,6 +26,7 @@ import { decryptJson, encryptJson, hasEncryptionKey } from './crypto';
 import { consultCpf, consultTse, FonteDataError } from './fontedata.service';
 import { createPendingLocation, invalidateLocation, resolveLocation } from './map-location.service';
 import { badRequest, notFound } from './http';
+import { isValidCpf } from '@/lib/utils/documents';
 
 /**
  * Verificacao cadastral do integrante.
@@ -351,7 +352,11 @@ async function execute(
   let cadastro = decryptJson<CpfResult>(row.cpf_payload);
 
   if (run.cpf) {
-    if (!member.cpf) {
+    // CPF que nao fecha entra no cadastro (marcado para conferir), mas NAO
+    // vai para a FonteData: a consulta e paga, e com um numero que nao pode
+    // existir a resposta ja e sabida. A etapa eleitoral depende do CPF, entao
+    // ela tambem nao acontece — nenhuma das duas cobra nada.
+    if (!member.cpf || !isValidCpf(member.cpf)) {
       const outcome = skipped('cpf', row.cpf_attempts);
       Object.assign(patch, outcome.patch);
       cpfStatus = outcome.status;

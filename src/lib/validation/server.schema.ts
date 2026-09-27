@@ -11,11 +11,10 @@ import {
   GENDER_VALUES,
   SECTION_MAX_LENGTH,
   UF_OPTIONS,
-  VOTER_ID_LENGTH,
   ZONE_MAX_LENGTH,
   isValidCpf,
 } from '@/lib/utils/documents';
-import { isUsablePhone, isValidPhone } from '@/lib/utils/phone';
+import { isValidPhone, normalizePhone } from '@/lib/utils/phone';
 
 /**
  * Validacao de tudo que chega ao servidor.
@@ -211,54 +210,35 @@ const opcional = <T extends z.ZodType>(schema: T) =>
     .optional()
     .transform((value) => (value === '' || value === undefined ? null : value));
 
-/** Campos padrao com regra brasileira. Todos opcionais. */
+/**
+ * So os digitos do que veio, ou nulo.
+ *
+ * CPF, titulo, zona e secao entram como vierem — com digito a menos, a mais
+ * ou que nao fecham. NADA disso recusa o cadastro: a pessoa entra e a ficha
+ * nasce com a etiqueta "Conferir" (`domain/conferencia.ts`). O limite de
+ * tamanho e so o que o banco guarda; a normalizacao final acontece no
+ * servico, antes de gravar.
+ */
+const numeros = (maximo: number) =>
+  opcional(
+    z
+      .string()
+      .trim()
+      .max(40)
+      .transform((value) => value.replace(/\D/g, '').slice(0, maximo) || null),
+  );
+
+/** Campos padrao com regra brasileira. Todos opcionais, e nenhum barra. */
 const standardMemberFields = {
   gender: opcional(z.enum(GENDER_VALUES)),
-  cpf: opcional(
-    z
-      .string()
-      .trim()
-      .max(20)
-      .refine((value) => isValidCpf(value), 'CPF inválido.'),
-  ),
-  /**
-   * Titulo de eleitor: doze digitos, e so.
-   *
-   * O digito verificador NAO recusa mais o cadastro. Ele continua sendo
-   * conferido — quem tem o titulo torto aparece com um aviso na ficha e na
-   * lista —, mas recusar significaria deixar a pessoa de fora do cadastro
-   * por causa de um numero mal copiado de uma planilha. Uma pessoa dentro
-   * com um aviso vale mais do que uma pessoa fora.
-   */
-  voterId: opcional(
-    z
-      .string()
-      .trim()
-      .max(20)
-      .transform((value) => value.replace(/\D/g, ''))
-      .refine(
-        (value) => value.length === VOTER_ID_LENGTH,
-        'Título de eleitor deve ter doze dígitos.',
-      ),
-  ),
-  zone: opcional(
-    z
-      .string()
-      .trim()
-      .regex(/^\d+$/, 'Zona eleitoral inválida.')
-      .max(ZONE_MAX_LENGTH, 'Zona eleitoral inválida.'),
-  ),
-  section: opcional(
-    z
-      .string()
-      .trim()
-      .regex(/^\d+$/, 'Seção eleitoral inválida.')
-      .max(SECTION_MAX_LENGTH, 'Seção eleitoral inválida.'),
-  ),
+  cpf: numeros(14),
+  voterId: numeros(14),
+  zone: numeros(ZONE_MAX_LENGTH + 4),
+  section: numeros(SECTION_MAX_LENGTH + 4),
   state: opcional(z.string().trim().toUpperCase().pipe(z.enum(UF_CODES))),
-  city: opcional(z.string().trim().min(2, 'Município muito curto.').max(120)),
-  district: opcional(z.string().trim().min(2, 'Bairro muito curto.').max(120)),
-  street: opcional(z.string().trim().min(2, 'Rua muito curta.').max(120)),
+  city: opcional(z.string().trim().min(1).max(120)),
+  district: opcional(z.string().trim().min(1).max(120)),
+  street: opcional(z.string().trim().min(1).max(120)),
   relationshipOptionId: opcional(z.string().trim().max(64).regex(/^[A-Za-z0-9_-]+$/)),
   relationshipLabel: opcional(z.string().trim().min(1).max(80)),
 };
@@ -277,7 +257,9 @@ const standardMemberFields = {
  */
 const memberPhone = trimmed(30)
   .min(1, 'Informe o telefone.')
-  .refine((value) => isUsablePhone(value), 'Telefone muito curto. Use DDD + número.');
+  // Qualquer quantidade de digitos entra: o incompleto ganha a etiqueta
+  // "Conferir" e fica sem acesso ao painel ate ser corrigido.
+  .refine((value) => normalizePhone(value).length > 0, 'Use apenas números no telefone.');
 
 /**
  * O mesmo telefone, podendo faltar por inteiro.
@@ -520,7 +502,7 @@ export const surveyAnswerSchema = z.object({
     .trim()
     // Mesma regra do cadastro: numero incompleto entra, e nao derruba quem
     // esta respondendo.
-    .refine((value) => isUsablePhone(value), 'Telefone muito curto. Use DDD + número.'),
+    .refine((value) => normalizePhone(value).length > 0, 'Informe o telefone.'),
   answers: z
     .array(z.object({ fieldId: z.string().min(1).max(64), value: surveyValueSchema }))
     .max(appConfig.limits.maxFieldsPerForm),

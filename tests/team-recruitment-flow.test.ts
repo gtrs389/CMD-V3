@@ -218,9 +218,7 @@ const { resolveInvite, inviteAccepts, ensurePersonalInvite, findInviteByUser } =
 const { createMember, listMembersForUser, rollbackMember, listMembersRecruitedBy } = await import(
   '@/lib/server/member.service'
 );
-const { assertTeamPhoneAvailable, createMemberAccess } = await import(
-  '@/lib/server/user.service'
-);
+const { createMemberAccess, teamPhoneTaken } = await import('@/lib/server/user.service');
 
 const OPERACAO_A = 'cli-a';
 const OPERACAO_B = 'cli-b';
@@ -319,9 +317,9 @@ async function cadastrarPeloLink(token: string, entrada: { name: string; phone: 
   const invite = await resolveInvite(token);
   if (!inviteAccepts(invite) || !invite) throw new Error('link inativo');
 
-  // O telefone identifica a pessoa no acesso: conflito no time barra antes
-  // de gravar qualquer coisa.
-  await assertTeamPhoneAvailable(invite.clientId, entrada.phone);
+  // Telefone ja usado no time nao recusa a pessoa: ela entra, e o acesso
+  // nao nasce — o numero ja e a credencial de outra pessoa.
+  const telefoneRepetido = await teamPhoneTaken(invite.clientId, entrada.phone);
 
   const member = await createMember(
     {
@@ -339,12 +337,14 @@ async function cadastrarPeloLink(token: string, entrada: { name: string; phone: 
   );
 
   try {
-    const userId = await createMemberAccess({
-      clientId: invite.clientId,
-      memberId: member.id,
-      name: member.name,
-      phone: member.phone,
-    });
+    const userId = telefoneRepetido
+      ? null
+      : await createMemberAccess({
+          clientId: invite.clientId,
+          memberId: member.id,
+          name: member.name,
+          phone: member.phone,
+        });
     return { member, userId };
   } catch (error) {
     await rollbackMember(member.id);
@@ -474,17 +474,27 @@ describe('acesso criado com o cadastro', () => {
     expect(db.cmd_users.find((row) => row.member_id === member.id)).toBeUndefined();
   });
 
-  it('telefone já usado no time interrompe antes de gravar: nenhum registro órfão', async () => {
+  it('telefone já usado no time não recusa a pessoa: ela entra, sem acesso', async () => {
     await cadastrarPeloLink('token-marina', { name: 'João Silva', phone: '11911110001' });
 
     const antes = { membros: db.cmd_members.length, usuarios: db.cmd_users.length };
 
-    await expect(
-      cadastrarPeloLink('token-marina', { name: 'Outro João', phone: '11911110001' }),
-    ).rejects.toThrow();
+    const { member, userId } = await cadastrarPeloLink('token-marina', {
+      name: 'Outro João',
+      phone: '11911110001',
+    });
 
-    expect(db.cmd_members).toHaveLength(antes.membros);
+    // A ficha existe; o acesso nao — o numero ja abre a porta do Joao.
+    expect(db.cmd_members).toHaveLength(antes.membros + 1);
+    expect(userId).toBeNull();
     expect(db.cmd_users).toHaveLength(antes.usuarios);
+
+    // E a ficha diz o motivo, em vez de um "acesso pendente" sem explicacao.
+    const [lida] = await listMembersForUser(
+      { id: 'u-marina', role: 'CANDIDATE', candidateId: OPERACAO_A },
+      OPERACAO_A,
+    ).then((lista) => lista.filter((m) => m.id === member.id));
+    expect(lida.access).toBe('DUPLICATE_PHONE');
   });
 
   it('o mesmo telefone em outro time é aceito: quem identifica o time é o link', async () => {

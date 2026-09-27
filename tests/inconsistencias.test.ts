@@ -169,7 +169,7 @@ describe('problemas de cada ficha', () => {
   it('título e telefone que não fecham', () => {
     const ficha = pessoa({ voterId: '123456789012', phone: '829999' });
     const [problema] = problemasDasFichas([ficha], PALMEIRA).filter((p) => p.tipo === 'invalido');
-    expect(problema.detalhe).toContain('título inválido');
+    expect(problema.detalhe).toContain('título não confere');
     expect(problema.detalhe).toContain('telefone com 6 dígitos');
   });
 

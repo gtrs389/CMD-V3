@@ -17,14 +17,16 @@ import {
 import {
   ENDERECO_FIXO,
   EXEMPLO_CSV,
+  conferirDaLinha,
   faltasDaLinha,
   lerPlanilha,
   problemasDaLinha,
   type LinhaImportada,
 } from '@/lib/domain/csv-import';
 import { resumoDasFaltas } from '@/lib/domain/member-completeness';
-import { isValidVoterId, maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
-import { maskPhone, normalizePhone } from '@/lib/utils/phone';
+import { maskSection, maskZone, normalizeVoterId } from '@/lib/utils/documents';
+import { problemaDoTelefone, problemaDoTitulo } from '@/lib/domain/conferencia';
+import { digitosDoTelefone, maskPhone } from '@/lib/utils/phone';
 import { baixarCsv } from '@/lib/utils/download';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/Button';
@@ -98,6 +100,7 @@ export function SpreadsheetImportModal({
   // nao segura mais ninguem — a pessoa entra marcada como incompleta.
   const prontas = pendentes.filter((linha) => problemasDaLinha(linha).length === 0);
   const incompletas = prontas.filter((linha) => faltasDaLinha(linha).length > 0).length;
+  const paraConferir = prontas.filter((linha) => conferirDaLinha(linha).length > 0).length;
   const salvas = linhas.filter((linha) => situacoes[linha.id]?.estado === 'salva').length;
 
   function limpar() {
@@ -243,6 +246,7 @@ export function SpreadsheetImportModal({
                 ? 'Nenhuma planilha carregada.'
                 : `${prontas.length} ${prontas.length === 1 ? 'pronta' : 'prontas'} para cadastrar` +
                   (incompletas > 0 ? ` (${incompletas} incompleta${incompletas === 1 ? '' : 's'})` : '') +
+                  (paraConferir > 0 ? ` (${paraConferir} para conferir)` : '') +
                   (pendentes.length - prontas.length > 0
                     ? `, ${pendentes.length - prontas.length} por corrigir`
                     : '') +
@@ -349,6 +353,8 @@ export function SpreadsheetImportModal({
                 const problemas = salva ? [] : problemasDaLinha(linha);
                 // Falta nao impede: a linha entra e a ficha nasce marcada.
                 const faltas = salva || problemas.length > 0 ? [] : faltasDaLinha(linha);
+                // Preenchido errado tambem nao impede: entra com "Conferir".
+                const conferir = salva || problemas.length > 0 ? [] : conferirDaLinha(linha);
                 const bloqueado = salva || salvando;
                 const campo = (nome: string) => `planilha-${linha.id}-${nome}`;
 
@@ -361,7 +367,7 @@ export function SpreadsheetImportModal({
                         ? 'border-success-600/40 bg-success-50/40'
                         : situacao?.estado === 'falhou'
                           ? 'border-danger-200 bg-danger-50/40'
-                          : problemas.length > 0 || faltas.length > 0
+                          : problemas.length > 0 || faltas.length > 0 || conferir.length > 0
                             ? 'border-warning-600/40 bg-warning-50/40'
                             : 'border-line',
                     )}
@@ -382,12 +388,21 @@ export function SpreadsheetImportModal({
                           <span className="text-danger-700">
                             Corrija {problemas.join(' e ')}
                           </span>
-                        ) : faltas.length > 0 ? (
-                          // Entra assim mesmo, e a ficha dela ja nasce com a
-                          // etiqueta: quem sobe a planilha decide se completa
+                        ) : faltas.length > 0 || conferir.length > 0 ? (
+                          // Entra assim mesmo, e a ficha dela ja nasce com as
+                          // etiquetas: quem sobe a planilha decide se corrige
                           // agora ou depois.
-                          <span className="text-warning-600">
-                            Entra incompleta: falta {resumoDasFaltas(faltas, faltas.length)}
+                          <span className="flex flex-col gap-0.5">
+                            {faltas.length > 0 ? (
+                              <span className="text-warning-600">
+                                Entra incompleta: falta {resumoDasFaltas(faltas, faltas.length)}
+                              </span>
+                            ) : null}
+                            {conferir.length > 0 ? (
+                              <span className="text-danger-700">
+                                Entra para conferir: {resumoDasFaltas(conferir, conferir.length)}
+                              </span>
+                            ) : null}
                           </span>
                         ) : (
                           <span>Pronta para cadastrar</span>
@@ -426,21 +441,28 @@ export function SpreadsheetImportModal({
                         />
                       </Field>
 
+                      {/* Telefone torto — curto ou com digito a mais — entra
+                          INTEIRO e marcado. Com mais de onze digitos a mascara
+                          sai, para nenhum digito sumir da tela. */}
                       <Field
                         id={campo('telefone')}
                         label="Telefone"
-                        required
-                        error={problemas.includes('telefone') ? 'Telefone inválido.' : undefined}
+                        aside={
+                          problemaDoTelefone(linha.phone) ? (
+                            <Badge tone="danger" title={problemaDoTelefone(linha.phone) ?? undefined}>
+                              Conferir
+                            </Badge>
+                          ) : null
+                        }
                       >
                         <Input
                           id={campo('telefone')}
                           inputMode="numeric"
-                          value={maskPhone(linha.phone)}
+                          value={linha.phone.length > 11 ? linha.phone : maskPhone(linha.phone)}
                           disabled={bloqueado}
-                          invalid={problemas.includes('telefone')}
                           leading={<Phone className="size-4" />}
                           onChange={(event) =>
-                            editar(linha.id, 'phone', normalizePhone(event.target.value))
+                            editar(linha.id, 'phone', digitosDoTelefone(event.target.value))
                           }
                         />
                       </Field>
@@ -452,8 +474,10 @@ export function SpreadsheetImportModal({
                         id={campo('titulo')}
                         label="Título de eleitor"
                         aside={
-                          linha.voterId && !isValidVoterId(linha.voterId) ? (
-                            <Badge tone="warning">Conferir</Badge>
+                          problemaDoTitulo(linha.voterId) ? (
+                            <Badge tone="danger" title={problemaDoTitulo(linha.voterId) ?? undefined}>
+                              Conferir
+                            </Badge>
                           ) : null
                         }
                       >
@@ -520,8 +544,9 @@ export function SpreadsheetImportModal({
 
             <p className="text-[0.8125rem] leading-relaxed text-ink-500">
               Corrija o que precisar aqui mesmo — nada foi gravado ainda. Só o nome é
-              obrigatório: telefone, título, zona, seção, bairro e rua podem ficar em branco, e a
-              pessoa entra marcada como <strong>incompleta</strong>. Estado e município são
+              obrigatório: telefone, título, zona, seção, bairro e rua podem ficar em branco —
+              a pessoa entra marcada como <strong>incompleta</strong> — ou chegar tortos, com
+              dígito a menos ou a mais — ela entra marcada para <strong>conferir</strong>. Estado e município são
               sempre <strong>Alagoas</strong> e <strong>Palmeira dos Índios</strong>. Quem já foi
               cadastrado fica em verde e não é cadastrado de novo.
             </p>

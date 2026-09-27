@@ -35,16 +35,21 @@ describe('schema dinamico', () => {
     expect(paths).toContain(systemField(config, 'phone').id);
   });
 
-  it('recusa telefone fora do padrão brasileiro', () => {
+  it('telefone incompleto não barra o envio: entra marcado para conferir', () => {
     const config = configWith();
-    const values = {
-      ...emptyValues(config),
-      [systemField(config, 'name').id]: 'Ana Souza',
-      [systemField(config, 'phone').id]: '(11) 1234',
+    const campo = systemField(config, 'phone').id;
+    const erroDoTelefone = (telefone: string) => {
+      const result = buildDynamicSchema(config).safeParse({
+        ...emptyValues(config),
+        [systemField(config, 'name').id]: 'Ana Souza',
+        [campo]: telefone,
+      });
+      return result.success ? undefined : result.error.issues.find((i) => i.path[0] === campo);
     };
 
-    const result = buildDynamicSchema(config).safeParse(values);
-    expect(result.success).toBe(false);
+    expect(erroDoTelefone('(11) 1234')).toBeUndefined();
+    // Sem digito nenhum nao e telefone.
+    expect(erroDoTelefone('sem número')).toBeDefined();
   });
 
   it('aceita o preenchimento mínimo valido', () => {
