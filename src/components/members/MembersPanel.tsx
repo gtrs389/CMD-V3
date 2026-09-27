@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
+  BarChart3,
   Download,
   Eye,
   FileSpreadsheet,
@@ -10,6 +11,7 @@ import {
   Trash2,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
 import type { Client, Member, TeamTier } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
@@ -17,15 +19,15 @@ import {
   RECRUITED_BY_LABEL,
   recruiterKey,
   recruiterOptions,
-  recruiterText,
 } from '@/lib/domain/recruitment';
 import { montarCsvDaEquipe, nomeDoArquivo } from '@/lib/domain/csv-export';
 import { byNewest, formatDate } from '@/lib/utils/date';
 import { baixarCsv } from '@/lib/utils/download';
-import { formatPhone, normalizePhone } from '@/lib/utils/phone';
+import { formatPhone } from '@/lib/utils/phone';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
 import { avisoDeConferencia, precisaConferir } from '@/lib/domain/conferencia';
-import { matchesSearch } from '@/lib/utils/text';
+import { buscarPessoa, type CampoDaBusca } from '@/lib/domain/busca-de-pessoas';
+import { cn } from '@/lib/utils/cn';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -44,6 +46,7 @@ import { SpreadsheetImportModal } from './SpreadsheetImportModal';
 import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
+import { LiderPanel } from './LiderPanel';
 
 interface MembersPanelProps {
   client: Client;
@@ -122,6 +125,8 @@ export function MembersPanel({
     'todas',
   );
   const [viewing, setViewing] = useState<Member | null>(null);
+  /** Painel do Lider clicado: quanto trouxe, ritmo, Equipe e inconsistencias. */
+  const [liderAberto, setLiderAberto] = useState<Member | null>(null);
   /**
    * Ficha do endereco que a pessoa ja fechou.
    *
@@ -151,9 +156,17 @@ export function MembersPanel({
 
   const responsaveis = useMemo(() => recruiterOptions(ordered), [ordered]);
 
-  const filtered = useMemo(() => {
-    const digits = normalizePhone(term);
-    return ordered.filter((member) => {
+  /**
+   * A lista filtrada, e ONDE a busca achou cada pessoa.
+   *
+   * A busca olha todos os dados da pessoa (`busca-de-pessoas.ts`): nome,
+   * telefone, CPF, titulo, bairro, rua, zona/secao e quem cadastrou. O
+   * "achado no CPF" aparece na linha quando o nome nao explica por que ela
+   * esta ali.
+   */
+  const { filtered, achadoEm } = useMemo(() => {
+    const achadoEm = new Map<string, CampoDaBusca[]>();
+    const filtered = ordered.filter((member) => {
       if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
       if (nivel !== 'todos' && member.tier !== nivel) return false;
       if (situacao === 'conferir' && !precisaConferir(member)) return false;
@@ -162,19 +175,63 @@ export function MembersPanel({
         return false;
       }
 
-      if (
-        matchesSearch(
-          term,
-          member.name,
-          member.email ?? '',
-          recruiterText(member.recruitedBy),
-        )
-      ) {
-        return true;
+      const resultado = buscarPessoa(member, term);
+      if (!resultado.achou) return false;
+      const alemDoNome = resultado.campos.filter((campo) => campo !== 'nome');
+      if (term.trim() && !resultado.campos.includes('nome') && alemDoNome.length) {
+        achadoEm.set(member.id, alemDoNome);
       }
-      return digits.length >= 2 && member.phone.includes(digits);
+      return true;
     });
+    return { filtered, achadoEm };
   }, [ordered, term, recruiter, nivel, situacao]);
+
+  /** Contagens de cada botao de filtro, sobre o time inteiro. */
+  const contagens = useMemo(
+    () => ({
+      lideres: ordered.filter((m) => m.tier === 'LIDER').length,
+      equipe: ordered.filter((m) => m.tier === 'EQUIPE').length,
+      conferir: ordered.filter((m) => precisaConferir(m)).length,
+      incompleto: ordered.filter((m) => cadastroIncompleto(m)).length,
+      emOrdem: ordered.filter((m) => !precisaConferir(m) && !cadastroIncompleto(m)).length,
+    }),
+    [ordered],
+  );
+
+  const filtrosAtivos = [
+    term.trim() ? { id: 'busca', rotulo: `“${term.trim()}”`, limpar: () => setTerm('') } : null,
+    nivel !== 'todos'
+      ? { id: 'nivel', rotulo: nivel === 'LIDER' ? 'Líderes' : 'Equipe', limpar: () => setNivel('todos') }
+      : null,
+    situacao !== 'todas'
+      ? {
+          id: 'situacao',
+          rotulo:
+            situacao === 'conferir' ? 'Para conferir' : situacao === 'incompleto' ? 'Incompletos' : 'Em ordem',
+          limpar: () => setSituacao('todas'),
+        }
+      : null,
+    recruiter !== 'todos'
+      ? {
+          id: 'responsavel',
+          rotulo: `Por ${responsaveis.find((r) => r.key === recruiter)?.label ?? 'responsável'}`,
+          limpar: () => setRecruiter('todos'),
+        }
+      : null,
+  ].filter((f): f is { id: string; rotulo: string; limpar: () => void } => f !== null);
+
+  function limparTudo() {
+    setTerm('');
+    setNivel('todos');
+    setSituacao('todas');
+    setRecruiter('todos');
+  }
+
+  /** Clicar no nome: Lider abre o painel dele; os outros, a ficha. */
+  function abrir(member: Member) {
+    if (member.tier === 'LIDER' && !somenteBasico) setLiderAberto(member);
+    else setViewing(member);
+  }
 
   async function handleRemove() {
     if (!removing) return;
@@ -349,84 +406,104 @@ export function MembersPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      {/* A busca: uma caixa so, que acha por qualquer dado da pessoa. */}
+      <div className="space-y-3 rounded-card border border-line bg-surface p-3 shadow-card sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <SearchInput
             id="busca-integrantes"
             value={term}
             onChange={setTerm}
-            label="Pesquisar integrantes por nome, e-mail, telefone ou responsável"
-            placeholder="Pesquisar por nome, e-mail ou responsável"
-            className="sm:max-w-sm"
+            label="Buscar pessoas por nome, telefone, CPF, título, bairro, rua, zona e seção ou responsável"
+            placeholder={
+              somenteBasico
+                ? 'Buscar por nome ou telefone'
+                : 'Buscar por nome, telefone, CPF, título, bairro, rua ou responsável'
+            }
+            className="lg:flex-1"
           />
-
-          {/* Na pagina do Lider a lista inteira e a Equipe dele: o filtro
-              so aparece para quem ve o time todo. */}
-          {!somenteBasico ? (
-            <Select
-              id="filtro-nivel"
-              aria-label="Filtrar por nível"
-              value={nivel}
-              onChange={(event) => setNivel(event.target.value as 'todos' | TeamTier)}
-              className="sm:max-w-40"
-            >
-              <option value="todos">Nível: todos</option>
-              <option value="LIDER">Líderes ({ordered.filter((m) => m.tier === 'LIDER').length})</option>
-              <option value="EQUIPE">Equipe ({ordered.filter((m) => m.tier === 'EQUIPE').length})</option>
-            </Select>
-          ) : null}
-
-          {!somenteBasico ? (
-            <Select
-              id="filtro-situacao"
-              aria-label="Filtrar pela situação do cadastro"
-              value={situacao}
-              onChange={(event) => setSituacao(event.target.value as typeof situacao)}
-              className="sm:max-w-48"
-            >
-              <option value="todas">Situação: todas</option>
-              <option value="conferir">
-                Para conferir ({ordered.filter((m) => precisaConferir(m)).length})
-              </option>
-              <option value="incompleto">
-                Incompletos ({ordered.filter((m) => cadastroIncompleto(m)).length})
-              </option>
-              <option value="em-ordem">Em ordem</option>
-            </Select>
-          ) : null}
-
-          {responsaveis.length > 1 ? (
-            <Select
-              id="filtro-responsavel"
-              aria-label={`Filtrar por ${RECRUITED_BY_LABEL.toLowerCase()}`}
-              value={recruiter}
-              onChange={(event) => setRecruiter(event.target.value)}
-              className="sm:max-w-56"
-            >
-              <option value="todos">{RECRUITED_BY_LABEL}: todos</option>
-              {responsaveis.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label} ({option.count})
-                </option>
-              ))}
-            </Select>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            {botaoExportar}
+            {podeCriar ? (
+              // O rotulo curto cabe na barra; o completo fica no titulo e na
+              // leitura por tecnologia assistiva, dizendo QUAL formulario abre.
+              <>
+                {botaoPlanilha}
+                <Button onClick={openCreate} title={rotuloAdicionar} aria-label={rotuloAdicionar}>
+                  <UserPlus aria-hidden="true" className="size-4" />
+                  Adicionar
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="shrink-0 text-sm whitespace-nowrap text-ink-500">
-            {filtered.length} de {ordered.length}
-          </p>
-          {botaoExportar}
-          {podeCriar ? (
-            // O rotulo curto cabe na barra; o completo fica no titulo e na
-            // leitura por tecnologia assistiva, dizendo QUAL formulario abre.
-            <>
-              {botaoPlanilha}
-              <Button onClick={openCreate} title={rotuloAdicionar} aria-label={rotuloAdicionar}>
-                <UserPlus aria-hidden="true" className="size-4" />
-                Adicionar
-              </Button>
-            </>
+
+        {/* Na pagina do Lider a lista inteira e a Equipe dele, e ele ve so
+            o basico: os filtros sao de quem ve o time todo. */}
+        {!somenteBasico ? (
+          <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+            <Segmentos
+              rotulo="Nível"
+              valor={nivel}
+              onChange={(v) => setNivel(v as 'todos' | TeamTier)}
+              opcoes={[
+                { valor: 'todos', rotulo: 'Todos', quantidade: ordered.length },
+                { valor: 'LIDER', rotulo: 'Líderes', quantidade: contagens.lideres },
+                { valor: 'EQUIPE', rotulo: 'Equipe', quantidade: contagens.equipe },
+              ]}
+            />
+            <Segmentos
+              rotulo="Situação"
+              valor={situacao}
+              onChange={(v) => setSituacao(v as typeof situacao)}
+              opcoes={[
+                { valor: 'todas', rotulo: 'Todas' },
+                { valor: 'conferir', rotulo: 'Para conferir', quantidade: contagens.conferir, tom: 'danger' },
+                { valor: 'incompleto', rotulo: 'Incompletos', quantidade: contagens.incompleto, tom: 'warning' },
+                { valor: 'em-ordem', rotulo: 'Em ordem', quantidade: contagens.emOrdem, tom: 'success' },
+              ]}
+            />
+            {responsaveis.length > 1 ? (
+              <Select
+                id="filtro-responsavel"
+                aria-label={`Filtrar por ${RECRUITED_BY_LABEL.toLowerCase()}`}
+                value={recruiter}
+                onChange={(event) => setRecruiter(event.target.value)}
+                className="lg:max-w-64"
+              >
+                <option value="todos">{RECRUITED_BY_LABEL}: qualquer um</option>
+                {responsaveis.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label} ({option.count})
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* O que esta ligado, dito em uma linha — e desligavel peca por peca. */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-sm">
+          <span className="font-semibold text-ink-900 tabular-nums">
+            {filtered.length === ordered.length
+              ? `${ordered.length} ${ordered.length === 1 ? 'pessoa' : 'pessoas'}`
+              : `${filtered.length} de ${ordered.length}`}
+          </span>
+          {filtrosAtivos.map((filtro) => (
+            <button
+              key={filtro.id}
+              type="button"
+              onClick={filtro.limpar}
+              className="inline-flex items-center gap-1 rounded-pill bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700 transition-colors hover:bg-accent-100"
+              aria-label={`Tirar o filtro ${filtro.rotulo}`}
+            >
+              {filtro.rotulo}
+              <X aria-hidden="true" className="size-3" />
+            </button>
+          ))}
+          {filtrosAtivos.length > 1 ? (
+            <button type="button" onClick={limparTudo} className="text-xs font-medium text-ink-500 hover:text-ink-900">
+              Limpar tudo
+            </button>
           ) : null}
         </div>
       </div>
@@ -435,11 +512,15 @@ export function MembersPanel({
         <EmptyState
           compact
           icon={<SearchX className="size-5" />}
-          title="Nenhum resultado"
-          description={`Nada encontrado para "${term}".`}
+          title="Ninguém com esses filtros"
+          description={
+            term.trim()
+              ? `Nada encontrado para "${term.trim()}" — a busca olha nome, telefone, CPF, título, bairro, rua e responsável.`
+              : 'Nenhuma pessoa combina com os filtros escolhidos.'
+          }
           action={
-            <Button variant="secondary" onClick={() => setTerm('')}>
-              Limpar pesquisa
+            <Button variant="secondary" onClick={limparTudo}>
+              Limpar filtros
             </Button>
           }
         />
@@ -453,7 +534,14 @@ export function MembersPanel({
                   <CardBody className="flex items-start gap-3">
                     <Avatar name={member.name} src={member.photo} size="md" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-ink-900">{member.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => abrir(member)}
+                        className="block max-w-full truncate text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
+                      >
+                        {member.name}
+                      </button>
+                      <AchadoEm campos={achadoEm.get(member.id)} />
                       <p className="truncate text-sm text-ink-500">
                         {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
                       </p>
@@ -496,6 +584,12 @@ export function MembersPanel({
                       ) : null}
 
                       <div className="mt-3 flex flex-wrap gap-2">
+                        {member.tier === 'LIDER' && !somenteBasico ? (
+                          <Button size="sm" onClick={() => setLiderAberto(member)}>
+                            <BarChart3 aria-hidden="true" className="size-4" />
+                            Painel do Líder
+                          </Button>
+                        ) : null}
                         <Button variant="secondary" size="sm" onClick={() => setViewing(member)}>
                           <Eye aria-hidden="true" className="size-4" />
                           Ficha
@@ -559,22 +653,31 @@ export function MembersPanel({
                       <div className="flex items-center gap-3">
                         <Avatar name={member.name} src={member.photo} size="sm" />
                         <span className="min-w-0">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate font-medium text-ink-900">
-                              {member.name}
+                          {/* O nome em uma linha so, inteiro; as etiquetas
+                              embaixo — lado a lado elas cortavam o nome. */}
+                          <button
+                            type="button"
+                            onClick={() => abrir(member)}
+                            className="block max-w-full truncate text-left font-medium text-ink-900 hover:text-brand-700 hover:underline"
+                            title={member.tier === 'LIDER' && !somenteBasico ? 'Abrir o painel do Líder' : 'Abrir a ficha'}
+                          >
+                            {member.name}
+                          </button>
+                          {!somenteBasico ? (
+                            <span className="mt-1 flex flex-wrap items-center gap-1">
+                              <TierBadge tier={member.tier} className="px-2 py-0.5 text-[0.6875rem]" />
+                              {cadastroIncompleto(member) ? (
+                                <Badge tone="warning" title={avisoDeFaltas(member)} className="px-2 py-0.5 text-[0.6875rem]">
+                                  Incompleto
+                                </Badge>
+                              ) : null}
+                              {precisaConferir(member) ? (
+                                <Badge tone="danger" title={avisoDeConferencia(member)} className="px-2 py-0.5 text-[0.6875rem]">
+                                  Conferir
+                                </Badge>
+                              ) : null}
                             </span>
-                            {!somenteBasico ? <TierBadge tier={member.tier} /> : null}
-                            {!somenteBasico && cadastroIncompleto(member) ? (
-                              <Badge tone="warning" title={avisoDeFaltas(member)}>
-                                Incompleto
-                              </Badge>
-                            ) : null}
-                            {!somenteBasico && precisaConferir(member) ? (
-                              <Badge tone="danger" title={avisoDeConferencia(member)}>
-                                Conferir
-                              </Badge>
-                            ) : null}
-                          </span>
+                          ) : null}
                           {/* E-mail historico: sem endereco a linha some, e
                               nenhum cadastro novo tem um. */}
                           {!somenteBasico && member.email ? (
@@ -582,6 +685,7 @@ export function MembersPanel({
                               {member.email}
                             </span>
                           ) : null}
+                          <AchadoEm campos={achadoEm.get(member.id)} />
                         </span>
                       </div>
                     </td>
@@ -598,6 +702,13 @@ export function MembersPanel({
                     ) : null}
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
+                        {member.tier === 'LIDER' && !somenteBasico ? (
+                          <IconButton
+                            label={`Painel do Líder ${member.name}`}
+                            icon={<BarChart3 className="size-4" />}
+                            onClick={() => setLiderAberto(member)}
+                          />
+                        ) : null}
                         <IconButton
                           label={`Ver ficha de ${member.name}`}
                           icon={<Eye className="size-4" />}
@@ -627,6 +738,30 @@ export function MembersPanel({
           </Card>
         </>
       )}
+
+      {liderAberto ? (
+        <LiderPanel
+          lider={liderAberto}
+          members={members}
+          onClose={() => setLiderAberto(null)}
+          // Um dialogo por vez: a ficha abre no lugar do painel.
+          onOpenMember={(member) => {
+            setLiderAberto(null);
+            setViewing(member);
+          }}
+          onFiltrarEquipe={
+            liderAberto.userId
+              ? () => {
+                  setRecruiter(liderAberto.userId as string);
+                  setNivel('todos');
+                  setSituacao('todas');
+                  setTerm('');
+                  setLiderAberto(null);
+                }
+              : undefined
+          }
+        />
+      ) : null}
 
       <MemberDetailModal
         open={shownMember !== null}
@@ -672,6 +807,56 @@ export function MembersPanel({
           </p>
         }
       />
+    </div>
+  );
+}
+
+/** "achado no CPF": por que a pessoa apareceu, quando nao foi pelo nome. */
+function AchadoEm({ campos }: { campos: CampoDaBusca[] | undefined }) {
+  if (!campos?.length) return null;
+  return (
+    <span className="mt-0.5 inline-flex items-center gap-1 rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-medium text-accent-700">
+      achado {campos.length === 1 ? 'no campo' : 'nos campos'} {campos.join(', ')}
+    </span>
+  );
+}
+
+/** Botoes lado a lado, com a contagem: um so ligado por vez. */
+function Segmentos({
+  rotulo,
+  valor,
+  onChange,
+  opcoes,
+}: {
+  rotulo: string;
+  valor: string;
+  onChange: (valor: string) => void;
+  opcoes: { valor: string; rotulo: string; quantidade?: number; tom?: 'danger' | 'warning' | 'success' }[];
+}) {
+  const ponto = { danger: 'bg-danger-600', warning: 'bg-warning-600', success: 'bg-success-600' };
+  return (
+    <div role="group" aria-label={rotulo} className="flex flex-wrap items-center gap-1 rounded-control bg-ink-50 p-1">
+      {opcoes.map((opcao) => {
+        const ativo = opcao.valor === valor;
+        return (
+          <button
+            key={opcao.valor}
+            type="button"
+            aria-pressed={ativo}
+            onClick={() => onChange(opcao.valor)}
+            className={cn(
+              'inline-flex min-h-9 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 text-xs font-medium whitespace-nowrap transition-colors',
+              ativo ? 'bg-surface text-ink-900 shadow-card' : 'text-ink-500 hover:text-ink-900',
+            )}
+          >
+            {opcao.tom ? <span aria-hidden="true" className={cn('size-1.5 rounded-full', ponto[opcao.tom])} /> : null}
+            {opcao.rotulo}
+            {opcao.quantidade !== undefined ? (
+              <span className={cn('tabular-nums', ativo ? 'text-ink-500' : 'text-ink-400')}>{opcao.quantidade}</span>
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

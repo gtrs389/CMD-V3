@@ -517,6 +517,7 @@ export function ClientDetailView({
           members={memberList}
           onOpenTab={setTab}
           onOpenForm={mostrarFormulario ? () => setTab('formulario') : undefined}
+          onOpenMember={abrirFicha}
           // O link de cadastro fica no botao do cabecalho: o cartao
           // "Meu link de cadastro" sai da visao geral.
           showInviteCard={false}
