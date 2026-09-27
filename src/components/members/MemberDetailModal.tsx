@@ -25,7 +25,6 @@ import { Modal } from '@/components/ui/Modal';
 import { InspectMemberButton } from './InspectMemberButton';
 import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberSignupLinkSection } from './MemberSignupLinkSection';
-import { MemberVerificationSection } from './MemberVerificationSection';
 import { RecruitedBy } from './RecruitedBy';
 import { useNavegador } from './navegador-contexto';
 import {
@@ -264,7 +263,6 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
   const { can, user } = useSession();
   const podeEditar = can('member.update');
   const [transferindo, setTransferindo] = useState(false);
-  const podeVerificar = can('verification.view');
   const podeVerAparelho = can('device.view');
   // O integrante da equipe ve apenas nome, foto e telefone: o resto da
   // ficha (CPF, endereco, e-mail, respostas, origem) fica so com o ADMIN.
@@ -429,13 +427,6 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
             )}
           </div>
         </>
-      ) : null}
-
-      {podeVerificar ? (
-        <MemberVerificationSection
-          member={member}
-          verificationEnabled={client.verificationEnabled}
-        />
       ) : null}
 
       {podeVerAparelho && member.source === 'invite' ? (
