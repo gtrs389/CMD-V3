@@ -2,6 +2,7 @@ import { Circle, Document, Page, Path, Rect, Svg, Text, View, pdf } from '@react
 import type { Dossie, LiderNoDossie, PessoaNoDossie } from '@/lib/domain/dossie';
 import type { AnaliseDoNeo } from '@/lib/domain/neo';
 import { analiseAutomatica } from '@/lib/domain/leitura-automatica';
+import { nomeDaPendencia, nomeDoProblemaDaFicha, nomesDasFaltas } from '@/lib/domain/filtros-de-dados';
 import {
   Anel,
   Barras,
@@ -818,7 +819,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
         vazio="Nenhum dado inconsistente."
         colunas={[
           { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
-          { titulo: 'Problema', largura: '36%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.conferir.join(', '))}</Text> },
+          { titulo: 'Problema', largura: '36%', celula: (p) => <Text style={{ color: C.danger }}>{s([...new Set(p.conferir.map(nomeDaPendencia))].join(' · '))}</Text> },
           { titulo: 'Liderança responsável', largura: '34%', celula: (p) => p.cadastradoPor },
         ]}
       />
@@ -830,7 +831,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
         vazio="Nenhum dado faltando."
         colunas={[
           { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
-          { titulo: 'Problema', largura: '36%', celula: (p) => <Text style={{ color: C.warning }}>{s(`falta ${p.faltas.join(', ')}`)}</Text> },
+          { titulo: 'Problema', largura: '36%', celula: (p) => <Text style={{ color: C.warning }}>{s(nomesDasFaltas(p.faltas))}</Text> },
           { titulo: 'Liderança responsável', largura: '34%', celula: (p) => p.cadastradoPor },
         ]}
       />
@@ -850,7 +851,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
               chave={(x, i) => `${p.tipo}-${i}`}
               colunas={[
                 { titulo: 'Pessoa', largura: '30%', celula: (x) => x.nome },
-                { titulo: 'Problema', largura: '36%', celula: (x) => x.detalhe },
+                { titulo: 'Problema', largura: '36%', celula: (x) => nomeDoProblemaDaFicha(p.tipo, x.detalhe) },
                 { titulo: 'Cadastrado por', largura: '34%', celula: (x) => x.cadastradoPor },
               ]}
             />

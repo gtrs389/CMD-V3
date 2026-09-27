@@ -196,6 +196,20 @@ export interface PessoaFiltrada {
   filtros: string[];
 }
 
+/**
+ * O NOME do problema, para a coluna "Problema" dos PDFs: "Número
+ * compartilhado", "Título incompleto", "Sem zona e seção". O detalhe
+ * ("título com 10 dígitos") fica na tela; no documento vai o nome, igual
+ * para todo mundo que tem o mesmo problema.
+ */
+export function nomeDoProblema(filtroId: string, motivo: string): string {
+  if (filtroId === 'telefone-repetido') return 'Número compartilhado';
+  if (filtroId === 'repetido') return 'Cadastrado mais de uma vez';
+  // "sem zona", "sem seção" ou "sem zona e seção": o motivo ja e o nome certo.
+  if (filtroId === 'sem-zona-secao') return motivo.charAt(0).toUpperCase() + motivo.slice(1);
+  return FILTROS_DE_DADOS.find((f) => f.id === filtroId)?.rotulo ?? motivo;
+}
+
 /** Quem cai em QUALQUER um dos filtros marcados, com todos os motivos. */
 export function aplicarFiltros(
   members: readonly Member[],
@@ -227,4 +241,67 @@ export function contarPorFiltro(
     contagem[filtro.id] = members.filter((m) => filtro.motivo(m, contexto)).length;
   }
   return contagem;
+}
+
+const FALTA_PARA_NOME: Record<string, string> = {
+  telefone: 'Sem telefone',
+  'título de eleitor': 'Sem título',
+  zona: 'Sem zona',
+  seção: 'Sem seção',
+  estado: 'Sem estado',
+  município: 'Sem município',
+  bairro: 'Sem bairro',
+  rua: 'Sem rua',
+};
+
+/** "falta título de eleitor e rua" vira "Sem título · Sem rua": os nomes, na ordem do cadastro. */
+export function nomesDasFaltas(faltas: readonly string[]): string {
+  return faltas.map((f) => FALTA_PARA_NOME[f] ?? `Sem ${f}`).join(' · ');
+}
+
+/**
+ * O nome de uma pendencia a partir do motivo escrito pelas regras
+ * ("CPF com 9 dígitos", "telefone repetido no time", "zona sem seção"...):
+ * o mesmo vocabulario dos filtros, para o PDF falar uma lingua so.
+ */
+export function nomeDaPendencia(motivo: string): string {
+  const texto = motivo.trim();
+  const digitos = /^(CPF|título|telefone) com (\d+) d[ií]gitos?$/i.exec(texto);
+  if (digitos) {
+    const [, campo, n] = digitos;
+    const esperado = /cpf/i.test(campo) ? 11 : /t[ií]tulo/i.test(campo) ? 12 : 10;
+    const nome = /cpf/i.test(campo) ? 'CPF' : /t[ií]tulo/i.test(campo) ? 'Título' : 'Telefone';
+    return Number(n) < esperado ? `${nome} incompleto` : `${nome} que não confere`;
+  }
+  const mapa: Record<string, string> = {
+    'cpf não confere': 'CPF que não confere',
+    'título não confere': 'Título que não confere',
+    'telefone não confere': 'Telefone que não confere',
+    'telefone repetido no time': 'Número compartilhado',
+    'zona sem seção': 'Sem seção',
+    'seção sem zona': 'Sem zona',
+    'sem telefone válido': 'Sem telefone válido',
+    'origem desconhecida': 'Sem origem',
+  };
+  const chave = texto.toLowerCase();
+  if (mapa[chave]) return mapa[chave];
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** O nome do problema de uma ficha do quadro (`problemasDasFichas`), pelo tipo. */
+export function nomeDoProblemaDaFicha(tipo: string, detalhe: string): string {
+  switch (tipo) {
+    case 'invalido':
+      return [...new Set(detalhe.split(/,\s*/).filter(Boolean).map(nomeDaPendencia))].join(' · ');
+    case 'fora-do-municipio':
+      return 'Fora do município';
+    case 'terceiro-nivel':
+      return 'Cadastrado pela Equipe';
+    case 'responsavel-removido':
+      return 'Responsável sem acesso';
+    case 'sem-origem':
+      return 'Sem origem';
+    default:
+      return nomeDaPendencia(detalhe);
+  }
 }
