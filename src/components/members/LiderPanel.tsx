@@ -55,6 +55,9 @@ export function LiderPanel({
   onClose,
   onOpenMember,
   onFiltrarEquipe,
+  onBack,
+  backLabel,
+  inactive,
 }: {
   lider: Member;
   members: Member[];
@@ -62,6 +65,10 @@ export function LiderPanel({
   onOpenMember: (member: Member) => void;
   /** Filtra a lista do time pela Equipe deste Lider. */
   onFiltrarEquipe?: () => void;
+  /** Pilha de janelas (ver `NavegadorDePessoas`). */
+  onBack?: () => void;
+  backLabel?: string;
+  inactive?: boolean;
 }) {
   const repetidos = useMemo(() => cadastrosRepetidos(members), [members]);
   const p = useMemo(() => perfilDoLider(lider, members, repetidos), [lider, members, repetidos]);
@@ -87,7 +94,16 @@ export function LiderPanel({
   const acimaDaMedia = p.total - p.mediaDoTime;
 
   return (
-    <Modal open onClose={onClose} title={`Líder · ${lider.name}`} description="Tudo o que este Líder trouxe para o time." size="lg">
+    <Modal
+      open
+      onClose={onClose}
+      title={`Líder · ${lider.name}`}
+      description="Tudo o que este Líder trouxe para o time."
+      size="lg"
+      onBack={onBack}
+      backLabel={backLabel}
+      inactive={inactive}
+    >
       <div className="space-y-5">
         {/* Quem e */}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center">

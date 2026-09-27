@@ -677,6 +677,79 @@ export async function syncMemberAccess(
   await ensurePersonalInvite(user.id, patch.clientId).catch(() => undefined);
 }
 
+/**
+ * Deixa o integrante pronto para o ADMIN geral entrar no painel dele, e
+ * devolve o usuario.
+ *
+ * Antes, o botao "Entrar no painel" simplesmente SUMIA de quem nao tinha
+ * acesso ativo — e varios Lideres ficavam sem o botao, sem ninguem saber
+ * por que. Agora cada caso tem um destino:
+ *
+ *   acesso ativo              entra (mesmo sem telefone no usuario: quem
+ *                             entra aqui e o ADMIN, nao o link do time);
+ *   sem usuario, celular ok   o acesso nasce agora, como teria nascido no
+ *                             cadastro (com o link pessoal, se for Lider);
+ *   acesso desligado          religa, se o telefone continua sendo so dele;
+ *   celular incompleto,       recusa COM O MOTIVO e o que fazer — nunca um
+ *   repetido, ou DEMO         "nao foi possivel" mudo.
+ *
+ * Nenhum desses caminhos da acesso a quem as regras de sempre nao dariam:
+ * a checagem de telefone e a mesma do cadastro.
+ */
+export async function prepararPainelDoIntegrante(member: {
+  id: string;
+  clientId: string;
+  name: string;
+  phone: string | null;
+}): Promise<string> {
+  if (await isDemoClient(member.clientId)) {
+    throw badRequest('Pessoa de demonstração não tem painel próprio.');
+  }
+
+  const telefone = normalizePhone(member.phone ?? '');
+  const existente = await findUserByMember(member.id);
+
+  if (existente?.is_active) return existente.id;
+
+  if (!isValidPhone(telefone)) {
+    throw badRequest(
+      'Sem celular completo no cadastro, esta pessoa não tem painel. Corrija o telefone na ficha e o acesso é liberado na hora.',
+    );
+  }
+
+  // O mesmo numero ja e a entrada de OUTRA pessoa ativa do time: liberar
+  // aqui faria o link do time recusar as duas.
+  try {
+    await assertTeamPhoneAvailable(member.clientId, telefone, { memberId: member.id });
+  } catch {
+    throw badRequest(
+      'O telefone desta pessoa já é o acesso de outra pessoa do time. Corrija o número na ficha para liberar o painel dela.',
+    );
+  }
+
+  if (existente) {
+    // Desligado: religa com o telefone do cadastro, que acabou de ser
+    // conferido como unico no time.
+    await updateRows<UserRow>(
+      TABLES.users,
+      { id: `eq.${existente.id}` },
+      { is_active: true, phone: telefone },
+      'id',
+    );
+    await ensurePersonalInvite(existente.id, member.clientId).catch(() => undefined);
+    return existente.id;
+  }
+
+  const criado = await createMemberAccess({
+    clientId: member.clientId,
+    memberId: member.id,
+    name: member.name,
+    phone: telefone,
+  });
+  if (!criado) throw badRequest('Não foi possível liberar o acesso desta pessoa.');
+  return criado;
+}
+
 /* -------------------------------------------------------------------------
    Acoes sobre um usuario
    ------------------------------------------------------------------------- */

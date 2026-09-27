@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -31,7 +31,13 @@ import { Menu } from '@/components/ui/Menu';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormsPanel } from '@/components/fields/FormsPanel';
-import { MembersPanel } from '@/components/members/MembersPanel';
+import { MembersPanel, type PedidoDeFiltro } from '@/components/members/MembersPanel';
+import {
+  NavegadorDePessoas,
+  useNavegador,
+  type Navegador,
+} from '@/components/members/NavegadorDePessoas';
+import { trocarParametros } from '@/lib/utils/historico';
 import { diagnosticar, municipioDaOperacao } from '@/lib/domain/inconsistencias';
 import { formatNumber, pluralize } from '@/lib/utils/text';
 import { InconsistenciasPanel } from './InconsistenciasPanel';
@@ -124,11 +130,11 @@ export function ClientDetailView({
     [memberList, client?.stateUf, client?.cities],
   );
 
-  /** Abre a ficha da pessoa na aba da equipe, pelo endereco de sempre. */
-  function abrirFicha(memberId: string) {
-    setTab('equipe');
-    router.push(`/candidatos/${clientId}?integrante=${memberId}`, { scroll: false });
-  }
+  /**
+   * "Ver a Equipe na lista" do painel de um Lider, aberto de qualquer aba:
+   * vai para a lista ja filtrada por ele.
+   */
+  const [pedidoDeFiltro, setPedidoDeFiltro] = useState<PedidoDeFiltro | null>(null);
 
   // O time enxerga apenas o proprio cadastro, em leitura. As rotas de
   // gravacao recusam o perfil no servidor: aqui so evitamos oferecer a acao.
@@ -163,6 +169,20 @@ export function ClientDetailView({
   // Perfil sem acesso ao formulario nunca fica preso na aba: qualquer
   // tentativa cai na visao geral.
   const abaAtiva: TabId = tab === 'formulario' && !mostrarFormulario ? 'visao-geral' : tab;
+
+  // A aba fica no endereco (`?aba=`): recarregar ou mandar o link abre na
+  // mesma aba. Troca a entrada atual do historico, sem criar um "voltar"
+  // por aba. Tambem depois de um "voltar" do navegador, que pode pousar
+  // numa entrada gravada com a aba de antes.
+  const abaNoEndereco = useRef(abaAtiva);
+  useEffect(() => {
+    abaNoEndereco.current = abaAtiva;
+    const gravar = () =>
+      trocarParametros({ aba: abaNoEndereco.current === 'visao-geral' ? null : abaNoEndereco.current });
+    gravar();
+    window.addEventListener('popstate', gravar);
+    return () => window.removeEventListener('popstate', gravar);
+  }, [abaAtiva]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -462,99 +482,116 @@ export function ClientDetailView({
         </div>
       </header>
 
-      <Tabs
-        variant="underline"
-        label="Seções do time"
-        items={tabs}
-        active={abaAtiva}
-        onChange={(id) => setTab(id as TabId)}
-      />
+      <NavegadorDePessoas
+        client={client}
+        members={memberList}
+        carregando={loadingMembers}
+        inicial={initialMemberId}
+        onFiltrarEquipe={(lider) => {
+          const responsavel = lider.userId;
+          if (!responsavel) return;
+          setPedidoDeFiltro((atual) => ({ responsavel, vez: (atual?.vez ?? 0) + 1 }));
+          setTab('equipe');
+        }}
+      >
+        <Tabs
+          variant="underline"
+          label="Seções do time"
+          items={tabs}
+          active={abaAtiva}
+          onChange={(id) => setTab(id as TabId)}
+        />
 
-      <TabPanel id="visao-geral" active={abaAtiva}>
-        {/* O que esta errado aparece na entrada, e nao so na aba: cadastro
-            repetido infla o total e o ranking que esta logo abaixo. */}
-        {!loadingMembers && diagnostico.pessoasComProblema > 0 ? (
-          <button
-            type="button"
-            onClick={() => setTab('inconsistencias')}
-            className="group mb-3 flex w-full items-center gap-3 rounded-card border border-warning-600/30 bg-warning-50/70 px-4 py-3 text-left transition-colors hover:bg-warning-50"
-          >
-            <span
-              aria-hidden="true"
-              className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-warning-600"
+        <TabPanel id="visao-geral" active={abaAtiva}>
+          {/* O que esta errado aparece na entrada, e nao so na aba: cadastro
+              repetido infla o total e o ranking que esta logo abaixo. */}
+          {!loadingMembers && diagnostico.pessoasComProblema > 0 ? (
+            <button
+              type="button"
+              onClick={() => setTab('inconsistencias')}
+              className="group mb-3 flex w-full items-center gap-3 rounded-card border border-warning-600/30 bg-warning-50/70 px-4 py-3 text-left transition-colors hover:bg-warning-50"
             >
-              <AlertTriangle className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1 text-sm text-ink-700">
-              <strong className="font-semibold text-ink-900">
-                {formatNumber(diagnostico.pessoasComProblema)}{' '}
-                {pluralize(diagnostico.pessoasComProblema, 'cadastro precisa', 'cadastros precisam')} de
-                atenção
-              </strong>
-              <span className="block text-xs text-ink-500 sm:inline sm:before:content-['_·_']">
-                {[
-                  diagnostico.excedentes > 0
-                    ? `${formatNumber(diagnostico.excedentes)} ${pluralize(diagnostico.excedentes, 'repetido', 'repetidos')}`
-                    : null,
-                  diagnostico.incompletos.membros.length > 0
-                    ? `${formatNumber(diagnostico.incompletos.membros.length)} ${pluralize(diagnostico.incompletos.membros.length, 'incompleto', 'incompletos')}`
-                    : null,
-                  `saúde do cadastro em ${diagnostico.saude}%`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+              <span
+                aria-hidden="true"
+                className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface text-warning-600"
+              >
+                <AlertTriangle className="size-4" />
               </span>
-            </span>
-            <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold text-warning-600 sm:inline-flex">
-              Ver quadro
-              <ArrowRight aria-hidden="true" className="size-3.5 transition-transform group-hover:translate-x-0.5" />
-            </span>
-          </button>
-        ) : null}
+              <span className="min-w-0 flex-1 text-sm text-ink-700">
+                <strong className="font-semibold text-ink-900">
+                  {formatNumber(diagnostico.pessoasComProblema)}{' '}
+                  {pluralize(diagnostico.pessoasComProblema, 'cadastro precisa', 'cadastros precisam')} de
+                  atenção
+                </strong>
+                <span className="block text-xs text-ink-500 sm:inline sm:before:content-['_·_']">
+                  {[
+                    diagnostico.excedentes > 0
+                      ? `${formatNumber(diagnostico.excedentes)} ${pluralize(diagnostico.excedentes, 'repetido', 'repetidos')}`
+                      : null,
+                    diagnostico.incompletos.membros.length > 0
+                      ? `${formatNumber(diagnostico.incompletos.membros.length)} ${pluralize(diagnostico.incompletos.membros.length, 'incompleto', 'incompletos')}`
+                      : null,
+                    `saúde do cadastro em ${diagnostico.saude}%`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </span>
+              <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold text-warning-600 sm:inline-flex">
+                Ver quadro
+                <ArrowRight aria-hidden="true" className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </button>
+          ) : null}
 
-        <ClientOverviewPanel
-          client={client}
-          members={memberList}
-          onOpenTab={setTab}
-          onOpenForm={mostrarFormulario ? () => setTab('formulario') : undefined}
-          onOpenMember={abrirFicha}
-          // O link de cadastro fica no botao do cabecalho: o cartao
-          // "Meu link de cadastro" sai da visao geral.
-          showInviteCard={false}
-          // Os cartoes "Administradores do time" e "Acesso ao sistema" saem
-          // da visao geral: quem administra aparece no cabecalho, ao lado do
-          // nome, e os dois links de acesso viraram botao la em cima. Editar
-          // quem administra continua em "Editar time".
-        />
-      </TabPanel>
-
-      <TabPanel id="equipe" active={abaAtiva}>
-        <MembersPanel
-          client={client}
-          members={memberList}
-          loading={loadingMembers}
-          openMemberId={initialMemberId}
-          // Fechou a ficha: o endereco volta a ser o do time. Assim, pedir a
-          // mesma ficha de novo muda a URL outra vez e ela reabre.
-          onDeepLinkClose={() => router.replace(`/candidatos/${clientId}`, { scroll: false })}
-        />
-      </TabPanel>
-
-      <TabPanel id="inconsistencias" active={abaAtiva}>
-        <InconsistenciasPanel
-          clientName={client.name}
-          members={memberList}
-          diagnostico={diagnostico}
-          onOpenMember={abrirFicha}
-          canExport={can('member.export')}
-        />
-      </TabPanel>
-
-      {mostrarFormulario ? (
-        <TabPanel id="formulario" active={abaAtiva}>
-          <FormsPanel client={client} members={memberList} onChanged={reload} />
+          <ClientOverviewPanel
+            client={client}
+            members={memberList}
+            onOpenTab={setTab}
+            onOpenForm={mostrarFormulario ? () => setTab('formulario') : undefined}
+            // O link de cadastro fica no botao do cabecalho: o cartao
+            // "Meu link de cadastro" sai da visao geral.
+            showInviteCard={false}
+            // Os cartoes "Administradores do time" e "Acesso ao sistema" saem
+            // da visao geral: quem administra aparece no cabecalho, ao lado do
+            // nome, e os dois links de acesso viraram botao la em cima. Editar
+            // quem administra continua em "Editar time".
+          />
         </TabPanel>
-      ) : null}
+
+        {/* Equipe e Inconsistencias ficam montadas depois de abertas: sair
+            e voltar encontra a busca, os filtros e a rolagem como estavam.
+            Fichas e paineis abrem por cima, pelo navegador — nunca trocam de
+            aba. */}
+        <TabPanel id="equipe" active={abaAtiva} keepMounted>
+          <MembersPanel
+            client={client}
+            members={memberList}
+            loading={loadingMembers}
+            filtroDeResponsavel={pedidoDeFiltro}
+          />
+        </TabPanel>
+
+        <TabPanel id="inconsistencias" active={abaAtiva} keepMounted>
+          <ComNavegador>
+            {(navegador) => (
+              <InconsistenciasPanel
+                clientName={client.name}
+                members={memberList}
+                diagnostico={diagnostico}
+                onOpenMember={(id) => navegador?.abrirPessoa(id)}
+                canExport={can('member.export')}
+              />
+            )}
+          </ComNavegador>
+        </TabPanel>
+
+        {mostrarFormulario ? (
+          <TabPanel id="formulario" active={abaAtiva}>
+            <FormsPanel client={client} members={memberList} onChanged={reload} />
+          </TabPanel>
+        ) : null}
+      </NavegadorDePessoas>
 
       <BatchLinksModal open={lote} client={client} onClose={() => setLote(false)} />
 
@@ -615,6 +652,11 @@ export function ClientDetailView({
       />
     </div>
   );
+}
+
+/** Entrega o navegador da pagina a quem so recebe callbacks. */
+function ComNavegador({ children }: { children: (navegador: Navegador | null) => ReactNode }) {
+  return children(useNavegador());
 }
 
 function DetailSkeleton() {
