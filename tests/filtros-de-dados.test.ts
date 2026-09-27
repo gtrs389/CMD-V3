@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import { pdf } from '@react-pdf/renderer';
 import type { Member } from '@/lib/types';
-import { FILTROS_DE_DADOS, aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone } from '@/lib/domain/filtros-de-dados';
+import { FILTROS_DE_DADOS, aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone, nomeDaPendencia, nomeDoProblema, nomeDoProblemaDaFicha, nomesDasFaltas } from '@/lib/domain/filtros-de-dados';
 import { agruparPorResponsavel, agruparPorTelefone, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
 import { ListaFiltrada, RelatorioDeInconsistencias } from '@/components/neo/ListasPdf';
 import type { GrupoRepetidoPdf } from '@/components/neo/pdf-base';
@@ -96,6 +96,20 @@ describe('filtro por dado', () => {
     expect(FILTROS_DE_DADOS.find((f) => f.id === 'telefone-errado')?.rotulo).toBe('Telefone que não confere');
   });
 
+  it('a coluna "Problema" diz o NOME do problema, e não o detalhe', () => {
+    expect(nomeDoProblema('telefone-repetido', 'telefone compartilhado (17 fichas)')).toBe('Número compartilhado');
+    expect(nomeDoProblema('titulo-incompleto', 'título com 10 dígitos')).toBe('Título incompleto');
+    expect(nomeDoProblema('telefone-incompleto', 'telefone com 8 dígitos')).toBe('Telefone incompleto');
+    expect(nomeDoProblema('sem-zona-secao', 'sem seção')).toBe('Sem seção');
+    expect(nomeDaPendencia('CPF com 9 dígitos')).toBe('CPF incompleto');
+    expect(nomeDaPendencia('título com 13 dígitos')).toBe('Título que não confere');
+    expect(nomeDaPendencia('CPF não confere')).toBe('CPF que não confere');
+    expect(nomeDaPendencia('telefone repetido no time')).toBe('Número compartilhado');
+    expect(nomesDasFaltas(['título de eleitor', 'rua'])).toBe('Sem título · Sem rua');
+    expect(nomeDoProblemaDaFicha('invalido', 'telefone com 9 dígitos, CPF não confere')).toBe('Telefone incompleto · CPF que não confere');
+    expect(nomeDoProblemaDaFicha('fora-do-municipio', 'Maceió/AL')).toBe('Fora do município');
+  });
+
   it('conta quantos caem em cada filtro', () => {
     const contagem = contarPorFiltro(todos, contexto);
     expect(contagem['cpf-incompleto']).toBe(1);
@@ -142,7 +156,7 @@ describe('filtro por dado', () => {
       filtros: i % 3 === 0 ? [0, 1] : [i % 2],
     }));
     const comProblema = (k: number) =>
-      pessoas.filter((p) => p.filtros.includes(k)).map((p) => ({ ...p, problema: k === 0 ? 'título com 10 dígitos' : 'sem zona e seção' }));
+      pessoas.filter((p) => p.filtros.includes(k)).map((p) => ({ ...p, problema: k === 0 ? 'Título incompleto' : 'Sem zona e seção' }));
     const doc = createElement(ListaFiltrada, {
       time: 'Time Palmeira',
       secoes: [
@@ -177,7 +191,7 @@ describe('filtro por dado', () => {
     ];
     const contagem = new Map<string, number>();
     for (const x of pessoas) contagem.set(x.telefone.replace(/\D/g, ''), (contagem.get(x.telefone.replace(/\D/g, '')) ?? 0) + 1);
-    for (const x of pessoas) x.problema = `telefone compartilhado (${contagem.get(x.telefone.replace(/\D/g, ''))} fichas)`;
+    for (const x of pessoas) x.problema = 'Número compartilhado';
     const grupos = agruparPorTelefone(pessoas);
     expect(grupos.map((g) => [g.telefone, g.itens.length])).toEqual([
       ['8299247526', 4],
@@ -241,7 +255,7 @@ describe('filtro por dado', () => {
     }));
     const doc = createElement(ListaFiltrada, {
       time: 'Time Palmeira', responsavel: null, geradaEm: '2026-09-27T12:00:00Z',
-      secoes: ['Sem título', 'Sem rua', 'Sem bairro'].map((rotulo, k) => ({ tipo: 'pessoas' as const, rotulo, pessoas: pessoas.filter((p) => p.filtros.includes(k)).map((p) => ({ ...p, problema: rotulo.toLowerCase() })) })),
+      secoes: ['Sem título', 'Sem rua', 'Sem bairro'].map((rotulo, k) => ({ tipo: 'pessoas' as const, rotulo, pessoas: pessoas.filter((p) => p.filtros.includes(k)).map((p) => ({ ...p, problema: rotulo })) })),
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
@@ -263,17 +277,17 @@ describe('filtro por dado', () => {
         {
           titulo: 'Cadastros com dado faltando', explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.', gravidade: 'media',
           pessoas: [
-            { nome: 'Caio Mendes', telefone: '82999990001', detalhe: 'falta título de eleitor', cadastradoPor: 'João Silva · Líder' },
-            { nome: 'Alice Freitas', telefone: '82999990002', detalhe: 'falta rua', cadastradoPor: 'João Silva · Líder' },
-            { nome: 'Rui Barbosa', telefone: '82999990003', detalhe: 'falta zona e seção', cadastradoPor: 'Bruna Costa · Líder' },
-            { nome: 'Nina Costa', telefone: '82999990004', detalhe: 'falta bairro', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Caio Mendes', telefone: '82999990001', detalhe: 'Sem título', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Alice Freitas', telefone: '82999990002', detalhe: 'Sem rua', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Rui Barbosa', telefone: '82999990003', detalhe: 'Sem zona · Sem seção', cadastradoPor: 'Bruna Costa · Líder' },
+            { nome: 'Nina Costa', telefone: '82999990004', detalhe: 'Sem bairro', cadastradoPor: 'João Silva · Líder' },
           ],
         },
         {
           titulo: 'Dados para conferir', explicacao: 'Preenchidos, mas não podem existir assim.', gravidade: 'alta',
           pessoas: [
-            { nome: 'Caio Mendes', telefone: '82999990001', detalhe: 'CPF não confere', cadastradoPor: 'João Silva · Líder' },
-            { nome: 'Lia Souza', telefone: '82999990005', detalhe: 'título com 10 dígitos', cadastradoPor: 'Carla Nunes · Líder' },
+            { nome: 'Caio Mendes', telefone: '82999990001', detalhe: 'CPF que não confere', cadastradoPor: 'João Silva · Líder' },
+            { nome: 'Lia Souza', telefone: '82999990005', detalhe: 'Título incompleto', cadastradoPor: 'Carla Nunes · Líder' },
           ],
         },
       ],

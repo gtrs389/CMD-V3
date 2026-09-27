@@ -7,6 +7,7 @@ import {
   FILTROS_DE_DADOS,
   aplicarFiltros,
   contarPorFiltro,
+  nomeDoProblema,
   type ContextoDosFiltros,
 } from '@/lib/domain/filtros-de-dados';
 import { recruiterText } from '@/lib/domain/recruitment';
@@ -85,7 +86,7 @@ export function FiltroDeDadosCard({
           bairro: member.district ?? '',
           cadastradoPor: recruiterText(member.recruitedBy),
           cadastradoEm: member.createdAt,
-          problema: motivos.join(', '),
+          problema: nomeDoProblema(filtro.id, motivos[0] ?? ''),
         }));
         return {
           tipo: filtro.id === 'telefone-repetido' ? 'telefones' : 'pessoas',

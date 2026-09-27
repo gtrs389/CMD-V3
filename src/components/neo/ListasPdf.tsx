@@ -53,7 +53,7 @@ export interface PessoaDaLista {
   bairro: string;
   cadastradoPor: string;
   cadastradoEm: string;
-  /** O problema desta pessoa NESTE filtro: "telefone com 8 dígitos", "sem rua"... */
+  /** O nome do problema NESTE filtro: "Número compartilhado", "Título incompleto"... */
   problema: string;
 }
 
@@ -198,15 +198,9 @@ function SecaoDeTelefones({ pessoas, cor, base }: { pessoas: PessoaDaLista[]; co
               chave={(p) => `${grupo.telefone}-${p.id}`}
               colunas={[
                 { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
-                { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
+                { titulo: 'Pessoa', largura: '28%', celula: (p) => p.nome },
                 { titulo: 'Cadastrado por', largura: '34%', celula: (p) => p.cadastradoPor },
-                {
-                  // O problema aqui e o proprio numero: dito curto, com o
-                  // tamanho do grupo.
-                  titulo: 'Problema',
-                  largura: '18%',
-                  celula: () => <Text style={{ color: C.danger }}>{s(`número em ${num(grupo.itens.length)} fichas`)}</Text>,
-                },
+                { titulo: 'Problema', largura: '20%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.problema)}</Text> },
                 { titulo: 'Cadastro', largura: '12%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
               ]}
             />

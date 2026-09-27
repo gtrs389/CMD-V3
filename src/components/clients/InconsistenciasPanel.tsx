@@ -34,7 +34,11 @@ import {
 } from '@/lib/domain/inconsistencias';
 import { resumoDasFaltas } from '@/lib/domain/member-completeness';
 import { recruiterOptions, recruiterText } from '@/lib/domain/recruitment';
-import { contextoDosFiltros } from '@/lib/domain/filtros-de-dados';
+import {
+  contextoDosFiltros,
+  nomeDoProblemaDaFicha,
+  nomesDasFaltas,
+} from '@/lib/domain/filtros-de-dados';
 import { basePorResponsavel } from '@/lib/domain/por-responsavel';
 import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
 import { baixarArquivo } from '@/lib/utils/download';
@@ -193,14 +197,14 @@ export function InconsistenciasPanel({
               titulo: 'Cadastros com dado faltando',
               explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.',
               gravidade: 'media' as const,
-              pessoas: visto.incompletos.map(({ member, faltas }) => pessoa(member, `falta ${resumoDasFaltas(faltas, faltas.length)}`)),
+              pessoas: visto.incompletos.map(({ member, faltas }) => pessoa(member, nomesDasFaltas(faltas))),
             }]
           : []),
         ...TIPOS.filter((tipo) => porTipo.has(tipo)).map((tipo) => ({
           titulo: TIPO_INFO[tipo].titulo,
           explicacao: TIPO_INFO[tipo].explicacao,
           gravidade: TIPO_INFO[tipo].gravidade,
-          pessoas: (porTipo.get(tipo) ?? []).map((p) => pessoa(p.member, p.detalhe)),
+          pessoas: (porTipo.get(tipo) ?? []).map((p) => pessoa(p.member, nomeDoProblemaDaFicha(p.tipo, p.detalhe))),
         })),
         ...(visto.telefones.length
           ? [{
@@ -208,7 +212,7 @@ export function InconsistenciasPanel({
               explicacao: 'Pessoas diferentes com o mesmo número. Pode ser família — ou o número do Líder digitado no lugar.',
               gravidade: 'baixa' as const,
               pessoas: visto.telefones.flatMap((t) =>
-                t.membros.map((member) => pessoa(member, `${t.membros.length} pessoas com este número`)),
+                t.membros.map((member) => pessoa(member, 'Número compartilhado')),
               ),
             }]
           : []),
