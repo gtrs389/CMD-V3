@@ -27,6 +27,7 @@ import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
+import { LiderPanel } from '@/components/members/LiderPanel';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
@@ -56,6 +57,8 @@ interface ClientOverviewPanelProps {
   showInviteCard?: boolean;
   /** Abre o link de cadastro. Sem ele o cartao nao oferece a acao. */
   onManageInvite?: () => void;
+  /** Abre a ficha de uma pessoa (a partir do painel do Lider). */
+  onOpenMember?: (memberId: string) => void;
 }
 
 function startOfDay(date: Date): number {
@@ -76,6 +79,7 @@ export function ClientOverviewPanel({
   onOpenForm,
   showInviteCard = true,
   onManageInvite,
+  onOpenMember,
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
@@ -93,6 +97,8 @@ export function ClientOverviewPanel({
   // do proprio Lider a lista e a Equipe dele, que nao cadastra ninguem: o
   // quadro so mostraria zeros.
   const mostrarRanking = user?.role !== 'EQUIPE';
+  /** O Lider clicado no ranking: abre o painel dele. */
+  const [liderAberto, setLiderAberto] = useState<Member | null>(null);
 
   const stats = useMemo(() => {
     const today = startOfDay(now);
@@ -252,7 +258,11 @@ export function ClientOverviewPanel({
             {/* Quem mais cadastrou: a leitura que o responsavel pela operacao
                 abre primeiro. */}
             {mostrarRanking ? (
-              <RankingCard rows={ranking} currentUserId={user?.id ?? null} />
+              <RankingCard
+                rows={ranking}
+                currentUserId={user?.id ?? null}
+                onOpen={(id) => setLiderAberto(members.find((m) => m.id === id) ?? null)}
+              />
             ) : null}
 
             {form && onOpenForm ? (
@@ -267,6 +277,18 @@ export function ClientOverviewPanel({
           </div>
         ) : null}
       </div>
+
+      {liderAberto ? (
+        <LiderPanel
+          lider={liderAberto}
+          members={members}
+          onClose={() => setLiderAberto(null)}
+          onOpenMember={(member) => {
+            setLiderAberto(null);
+            onOpenMember?.(member.id);
+          }}
+        />
+      ) : null}
 
       {podeVerMapa ? (
         <MobilizationMap
@@ -741,10 +763,13 @@ const MEDAL_CLASSES = [
 function RankingCard({
   rows,
   currentUserId,
+  onOpen,
 }: {
   rows: RankingRow[];
   /** Destaca a linha de quem esta olhando o painel. */
   currentUserId: string | null;
+  /** Clicar em um Lider abre o painel dele. */
+  onOpen?: (memberId: string) => void;
 }) {
   const maior = rows[0]?.count ?? 0;
   const comCadastro = rows.filter((row) => row.count > 0).length;
@@ -776,7 +801,14 @@ function RankingCard({
       ) : (
         <ul className="scrollbar-slim max-h-80 flex-1 divide-y divide-line overflow-y-auto px-4">
           {rows.map((row, index) => (
-            <li key={row.key} className="flex items-center gap-2.5 py-2.5">
+            <li key={row.key}>
+              <button
+                type="button"
+                onClick={() => onOpen?.(row.key)}
+                disabled={!onOpen}
+                title={onOpen ? `Abrir o painel de ${row.name}` : undefined}
+                className="-mx-2 flex w-[calc(100%+1rem)] items-center gap-2.5 rounded-control px-2 py-2.5 text-left transition-colors enabled:hover:bg-ink-50"
+              >
               <span
                 aria-hidden="true"
                 className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold ${
@@ -837,6 +869,7 @@ function RankingCard({
                   {pluralize(row.count, 'cadastro', 'cadastros')}
                 </span>
               </span>
+              </button>
             </li>
           ))}
         </ul>
