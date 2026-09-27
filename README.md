@@ -826,6 +826,46 @@ em planilha alheia é execução de algo que quem abriu não escreveu.
 
 ---
 
+## Quadro de inconsistências
+
+A página do time tem a aba **Inconsistências**, com um contador do que precisa de
+atenção. Na **Visão geral**, uma faixa avisa assim que existe alguma coisa, porque
+um cadastro repetido infla o total e o ranking que estão logo abaixo.
+
+No topo fica a **saúde do cadastro**: a fração da equipe sem nenhum problema
+sério. Ela é seguida pelas seções, da mais cara para a mais leve:
+
+| Seção | O que mostra |
+| --- | --- |
+| Cadastrados mais de uma vez | A mesma pessoa em mais de um registro, com a linha do tempo de cada um: quando, por quem, pelo link ou pelo painel, onde mora e onde vota. Avisa quando a pessoa conta para dois responsáveis no ranking e em que os registros discordam |
+| Cadastros incompletos | O que mais falta, de quem são os cadastros incompletos (em % de cada responsável) e quem completar |
+| Dados que não fecham | Título, CPF ou telefone que não podem existir como estão; zona sem seção e vice-versa |
+| Endereço fora do município | Outro estado ou município que não o da operação |
+| Líderes sem acesso ao painel | Líder sem telefone válido, com número repetido ou com acesso desativado |
+| Cadastrados por quem é da Equipe | O terceiro nível, de antes da regra Líder/Equipe |
+| Responsável sem acesso | Cadastros cujo responsável foi removido: ninguém acompanha a pessoa |
+| Pode ser a mesma pessoa | Mesmo nome e nada mais em comum. É uma pergunta, e não um erro |
+| Telefone compartilhado | Pessoas diferentes com o mesmo número |
+| Sem origem registrada | Cadastros de antes do rastreamento |
+
+**Como a repetição é achada.** São cinco evidências, da mais forte para a mais
+fraca: mesmo título, mesmo CPF, mesmo nome e telefone, mesmo nome e seção, e
+mesmo nome. O nome é comparado sem acento, caixa, pontuação nem conectivo:
+"José da Silva" e "JOSE SILVA" são o mesmo. A união é transitiva: se A tem o
+título de B, e B tem o nome e o telefone de C, os três formam um grupo. O grupo
+recebe a certeza da evidência mais forte que tem. A busca é por chave, e não
+cada pessoa contra cada outra: cinco mil pessoas levam milissegundos.
+
+**Nada é gravado.** O quadro é calculado no navegador, sobre a mesma lista que a
+página já recebeu, com o mesmo recorte de hierarquia. Corrigir a ficha tira a
+pessoa do quadro na hora. Cada nome abre a ficha, onde a correção acontece. O
+filtro por responsável mostra só o que passa pelos cadastros dele, e um grupo de
+repetidos aparece se *qualquer* registro for dele. O ADMIN geral baixa o quadro
+inteiro em `.csv` (**Baixar relatório**). A regra fica em
+`src/lib/domain/inconsistencias.ts`.
+
+---
+
 ## Cadastrar a equipe por planilha
 
 O botão **Planilha**, na barra da equipe, lê um `.csv` com **sete colunas**:

@@ -13,17 +13,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   { invalid, className, children, ...props },
   ref,
 ) {
+  // A classe vai no CONTORNO, e nao no <select>: quem limita a largura
+  // ("sm:max-w-56") precisa limitar os dois juntos. Aplicada so no <select>,
+  // a caixa encolhia e a seta ficava la no fim da linha, solta.
   return (
-    <div className="relative flex w-full items-center">
+    <div className={cn('relative flex w-full items-center', className)}>
       <select
         ref={ref}
         aria-invalid={invalid || undefined}
-        className={cn(
-          CONTROL_CLASSES,
-          'appearance-none pr-10',
-          invalid && CONTROL_ERROR_CLASSES,
-          className,
-        )}
+        className={cn(CONTROL_CLASSES, 'appearance-none pr-10', invalid && CONTROL_ERROR_CLASSES)}
         {...props}
       >
         {children}
