@@ -1,5 +1,7 @@
 import type { Member } from '@/lib/types';
+import { normalizePhone } from '@/lib/utils/phone';
 import { problemaDoCpf, problemaDoTelefone, problemaDoTitulo } from './conferencia';
+import type { GrupoRepetido } from './inconsistencias';
 
 /**
  * Filtros por DADO do quadro de inconsistencias.
@@ -25,6 +27,51 @@ export interface FiltroDeDado {
 export interface ContextoDosFiltros {
   /** Quem esta em algum grupo de cadastro repetido (certo ou provavel). */
   repetidos: ReadonlySet<string>;
+  /**
+   * Em quantas fichas do time aparece o telefone de cada pessoa — so para
+   * quem divide o numero com pelo menos mais uma ficha.
+   *
+   * Contado pelos NUMEROS, e nao pelo estado do acesso: o acesso so diz
+   * "telefone repetido" em um caso estreito (quem entrou depois, sem
+   * usuario), e o filtro chegava a mostrar zero com o time cheio de numero
+   * repetido.
+   */
+  telefones: ReadonlyMap<string, number>;
+}
+
+/** Quem divide o telefone com outra ficha do time, e com quantas no total. */
+export function fichasPorTelefone(members: readonly Member[]): Map<string, number> {
+  const porNumero = new Map<string, string[]>();
+  for (const member of members) {
+    const numero = normalizePhone(member.phone ?? '');
+    if (numero.length < 10) continue;
+    porNumero.set(numero, [...(porNumero.get(numero) ?? []), member.id]);
+  }
+  const resultado = new Map<string, number>();
+  for (const ids of porNumero.values()) {
+    if (ids.length < 2) continue;
+    for (const id of ids) resultado.set(id, ids.length);
+  }
+  return resultado;
+}
+
+/**
+ * O contexto dos filtros, montado do time INTEIRO — mesmo quando a tela
+ * esta recortada por um responsavel: o numero de um Lider pode estar
+ * repetido justamente na ficha de outro.
+ */
+export function contextoDosFiltros(
+  members: readonly Member[],
+  repetidos: readonly GrupoRepetido[],
+): ContextoDosFiltros {
+  return {
+    repetidos: new Set(
+      repetidos
+        .filter((grupo) => grupo.certeza !== 'possivel')
+        .flatMap((grupo) => grupo.registros.map((r) => r.member.id)),
+    ),
+    telefones: fichasPorTelefone(members),
+  };
 }
 
 const vazio = (valor: string | null | undefined) => !valor || !valor.trim();
@@ -32,10 +79,12 @@ const digitos = (valor: string | null | undefined) => (valor ?? '').replace(/\D/
 
 export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
   {
+    // So Lider: quem e da Equipe nao e obrigado a informar CPF, e contar a
+    // Equipe aqui enchia o filtro de gente que esta em ordem.
     id: 'sem-cpf',
     grupo: 'CPF',
-    rotulo: 'Sem CPF',
-    motivo: (m) => (vazio(m.cpf) ? 'sem CPF' : null),
+    rotulo: 'Líder sem CPF',
+    motivo: (m) => (m.tier === 'LIDER' && vazio(m.cpf) ? 'Líder sem CPF' : null),
   },
   {
     id: 'cpf-incompleto',
@@ -84,7 +133,10 @@ export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
     id: 'telefone-repetido',
     grupo: 'Telefone',
     rotulo: 'Telefone repetido no time',
-    motivo: (m) => (m.access === 'DUPLICATE_PHONE' ? 'telefone repetido no time' : null),
+    motivo: (m, c) => {
+      const fichas = c.telefones.get(m.id);
+      return fichas ? `telefone em ${fichas} fichas do time` : null;
+    },
   },
   {
     id: 'sem-zona-secao',

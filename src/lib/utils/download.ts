@@ -23,3 +23,19 @@ export function baixarCsv(nomeDoArquivo: string, conteudo: string): void {
   link.click();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Baixa um arquivo ja montado (o PDF, por exemplo). O endereco temporario e
+ * solto um instante depois: soltar na hora cancela o download em alguns
+ * navegadores.
+ */
+export function baixarArquivo(nomeDoArquivo: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomeDoArquivo;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}

@@ -34,10 +34,13 @@ import {
 } from '@/lib/domain/inconsistencias';
 import { resumoDasFaltas } from '@/lib/domain/member-completeness';
 import { recruiterOptions, recruiterText } from '@/lib/domain/recruitment';
-import { celula, nomeDoArquivo } from '@/lib/domain/csv-export';
-import { baixarCsv } from '@/lib/utils/download';
+import { contextoDosFiltros } from '@/lib/domain/filtros-de-dados';
+import { baixarArquivo } from '@/lib/utils/download';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
+import { slug } from '@/components/neo/pdf-base';
+import type { SecaoParaPdf } from '@/components/neo/ListasPdf';
+import { useToast } from '@/components/ui/Toast';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { cn } from '@/lib/utils/cn';
 import { Badge } from '@/components/ui/Badge';
@@ -140,15 +143,9 @@ export function InconsistenciasPanel({
     () => members.filter((member) => doResponsavel(member, responsavel)),
     [members, responsavel],
   );
-  const contextoDosFiltros = useMemo(
-    () => ({
-      repetidos: new Set(
-        diagnostico.repetidos
-          .filter((grupo) => grupo.certeza !== 'possivel')
-          .flatMap((grupo) => grupo.registros.map((r) => r.member.id)),
-      ),
-    }),
-    [diagnostico.repetidos],
+  const contexto = useMemo(
+    () => contextoDosFiltros(members, diagnostico.repetidos),
+    [members, diagnostico.repetidos],
   );
   const rotuloDoResponsavel = responsavel
     ? (responsaveis.find((opcao) => opcao.key === responsavel)?.label ?? null)
@@ -171,35 +168,77 @@ export function InconsistenciasPanel({
     visto.problemas.length === 0 &&
     visto.telefones.length === 0;
 
-  function baixarRelatorio() {
-    const linhas: string[][] = [['Tipo', 'Pessoa', 'Telefone', 'Cadastrado por', 'Detalhe']];
-    const linha = (tipo: string, member: Member, detalhe: string) =>
-      linhas.push([tipo, member.name, formatPhone(member.phone ?? ''), recruiterText(member.recruitedBy), detalhe]);
+  const toast = useToast();
+  const [baixando, setBaixando] = useState(false);
 
-    for (const grupo of visto.repetidos) {
-      for (const registro of grupo.registros) {
-        linha(
-          CERTEZA_ROTULO[grupo.certeza],
-          registro.member,
-          `${grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo).join(', ')}` +
-            ` · ${registro.primeiro ? '1º cadastro' : 'cadastro repetido'} em ${formatDateTime(registro.member.createdAt)}`,
-        );
-      }
+  /** O quadro que esta na tela — com o recorte do responsavel —, em PDF. */
+  async function baixarRelatorio() {
+    setBaixando(true);
+    try {
+      const { gerarPdfDasInconsistencias } = await import('@/components/neo/ListasPdf');
+      const pessoa = (member: Member, detalhe: string) => ({
+        nome: member.name,
+        telefone: member.phone ?? '',
+        detalhe,
+        cadastradoPor: recruiterText(member.recruitedBy),
+      });
+      const secoes: SecaoParaPdf[] = [
+        ...(visto.incompletos.length
+          ? [{
+              titulo: 'Cadastros com dado faltando',
+              explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.',
+              gravidade: 'media' as const,
+              pessoas: visto.incompletos.map(({ member, faltas }) => pessoa(member, `falta ${resumoDasFaltas(faltas, faltas.length)}`)),
+            }]
+          : []),
+        ...TIPOS.filter((tipo) => porTipo.has(tipo)).map((tipo) => ({
+          titulo: TIPO_INFO[tipo].titulo,
+          explicacao: TIPO_INFO[tipo].explicacao,
+          gravidade: TIPO_INFO[tipo].gravidade,
+          pessoas: (porTipo.get(tipo) ?? []).map((p) => pessoa(p.member, p.detalhe)),
+        })),
+        ...(visto.telefones.length
+          ? [{
+              titulo: 'Telefone dividido entre pessoas',
+              explicacao: 'Pessoas diferentes com o mesmo número. Pode ser família — ou o número do Líder digitado no lugar.',
+              gravidade: 'baixa' as const,
+              pessoas: visto.telefones.flatMap((t) =>
+                t.membros.map((member) => pessoa(member, `${t.membros.length} pessoas com este número`)),
+              ),
+            }]
+          : []),
+      ];
+      const blob = await gerarPdfDasInconsistencias({
+        time: clientName,
+        responsavel: rotuloDoResponsavel,
+        geradoEm: new Date().toISOString(),
+        total: doRecorte.length,
+        pessoasComProblema: diagnostico.pessoasComProblema,
+        saude: diagnostico.saude,
+        repetidos: visto.repetidos.map((grupo) => ({
+          nome: grupo.nome,
+          certeza: CERTEZA_ROTULO[grupo.certeza],
+          nivel: grupo.certeza,
+          evidencias: grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo),
+          divergencias: grupo.divergencias,
+          responsaveis: grupo.responsaveis,
+          registros: grupo.registros.map((r) => ({
+            nome: r.member.name,
+            telefone: r.member.phone ?? '',
+            cadastradoPor: recruiterText(r.member.recruitedBy),
+            cadastradoEm: r.member.createdAt,
+            primeiro: r.primeiro,
+          })),
+        })),
+        secoes,
+      });
+      baixarArquivo(`inconsistencias-${slug(clientName)}-${new Date().toISOString().slice(0, 10)}.pdf`, blob);
+      toast.success('Relatório de inconsistências baixado.');
+    } catch {
+      toast.error('Não foi possível montar o PDF. Tente de novo.');
+    } finally {
+      setBaixando(false);
     }
-    for (const { member, faltas } of visto.incompletos) {
-      linha('Cadastro incompleto', member, `falta ${resumoDasFaltas(faltas, faltas.length)}`);
-    }
-    for (const problema of visto.problemas) {
-      linha(TIPO_INFO[problema.tipo].titulo, problema.member, problema.detalhe);
-    }
-    for (const compartilhado of visto.telefones) {
-      for (const member of compartilhado.membros) {
-        linha('Telefone compartilhado', member, `${compartilhado.membros.length} pessoas com este número`);
-      }
-    }
-
-    const csv = linhas.map((colunas) => colunas.map(celula).join(';')).join('\r\n');
-    baixarCsv(nomeDoArquivo(clientName).replace(/^integrantes-/, 'inconsistencias-'), csv);
   }
 
   return (
@@ -234,9 +273,9 @@ export function InconsistenciasPanel({
         }
         exportar={
           canExport && !nada ? (
-            <Button variant="secondary" onClick={baixarRelatorio} className="shrink-0 whitespace-nowrap">
+            <Button variant="secondary" onClick={baixarRelatorio} loading={baixando} className="shrink-0 whitespace-nowrap">
               <Download aria-hidden="true" className="size-4" />
-              Baixar relatório
+              {baixando ? 'Montando o PDF...' : 'Baixar PDF'}
             </Button>
           ) : null
         }
@@ -246,7 +285,7 @@ export function InconsistenciasPanel({
         clientName={clientName}
         members={doRecorte}
         responsavel={rotuloDoResponsavel}
-        contexto={contextoDosFiltros}
+        contexto={contexto}
         onOpenMember={onOpenMember}
         canExport={canExport}
       />

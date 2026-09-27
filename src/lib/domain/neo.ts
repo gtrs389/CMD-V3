@@ -38,58 +38,101 @@ export const NEO_MODELO_PADRAO = 'gpt-5.4-mini';
 /** Nomes de pessoas da Equipe nao vao; de quem coordena, vao. */
 export function resumoParaONeo(dossie: Dossie) {
   const q = dossie.qualidade;
+  const e = dossie.estrategia;
   return {
-    time: {
+    operacao: {
       nome: dossie.time.nome,
       local: `${dossie.time.municipios.join(', ')} / ${dossie.time.uf}`,
-      demonstracao: dossie.time.demonstracao,
-      criadoEm: dossie.time.criadoEm.slice(0, 10),
-      confirmacaoDeDadosLigada: dossie.time.confirmacaoDeDados,
+      ambienteDeDemonstracao: dossie.time.demonstracao,
+      inicioDaOperacao: dossie.time.criadoEm.slice(0, 10),
     },
     dataDoRelatorio: dossie.geradoEm.slice(0, 10),
-    numeros: dossie.numeros,
-    administradores: dossie.administradores.map((a) => ({
+    indiceDeMobilizacao: {
+      valor: e.indice.valor,
+      faixa: e.indice.rotulo,
+      componentes: e.indice.componentes.map((c) => ({ componente: c.rotulo, valor: c.valor, pesoPercentual: c.peso })),
+    },
+    base: {
+      declarada: e.baseDeclarada,
+      duplicados: e.duplicados,
+      liquida: e.baseLiquida,
+      coordenadores: dossie.numeros.administradores,
+      liderancas: dossie.numeros.lideres,
+      baseTrazidaPelasLiderancas: dossie.numeros.equipe,
+    },
+    ritmo: {
+      hoje: dossie.numeros.hoje,
+      ultimos7Dias: dossie.numeros.ultimos7,
+      variacaoSobreASemanaAnteriorPercentual: dossie.numeros.variacao7,
+      ultimos30Dias: dossie.numeros.ultimos30,
+      mediaPorDia30: dossie.numeros.ritmo30,
+      semanas: dossie.crescimento.map((s, i) => ({
+        semanaQueComecaEm: s.inicio.slice(0, 10),
+        novos: s.quantidade,
+        totalAcumulado: e.acumulado[i],
+      })),
+      projecaoMantidoORitmo: e.projecao
+        ? { em30Dias: e.projecao.em30, em60Dias: e.projecao.em60, em90Dias: e.projecao.em90 }
+        : null,
+    },
+    rede: {
+      ativacaoDasLiderancasPercentual: e.ativacao,
+      liderancasQueJaTrouxeramAlguem: dossie.numeros.lideresAtivos,
+      liderancasQueCadastraramNosUltimos30Dias: e.lideresRecentes,
+      engajamentoRecentePercentual: e.engajamento,
+      pessoasPorLiderancaAtiva: e.multiplicador,
+      parteDaBaseNas3MaioresLiderancasPercentual: e.concentracaoTop3,
+      liderancasQueSomam80PorCentoDaBase: e.lideresPara80,
+      liderancasPorTamanho: e.faixas,
+      liderancasPorSelo: e.selos,
+    },
+    coordenadores: dossie.administradores.map((a) => ({
       nome: a.nome,
-      lideresQueCadastrou: a.cadastrou,
+      liderancasQueCadastrou: a.cadastrou,
     })),
     // Os 40 primeiros do ranking bastam para a leitura; o resto vira numero.
-    lideres: dossie.lideres.slice(0, 40).map((l) => ({
+    liderancas: dossie.lideres.slice(0, 40).map((l) => ({
+      posicao: l.posicao,
       nome: l.nome,
-      equipe: l.equipe,
+      selo: l.selo,
+      base: l.equipe,
       participacaoPercentual: l.participacao,
-      cadastrosUltimos7Dias: l.equipeUltimos7,
-      incompletosNaEquipe: l.incompletos,
-      paraConferirNaEquipe: l.paraConferir,
+      novosUltimos7Dias: l.equipeUltimos7,
+      novosUltimos30Dias: l.equipeUltimos30,
+      integridadeDaBasePercentual: l.integridade,
       ultimoCadastro: l.ultimoCadastro?.slice(0, 10) ?? null,
-      lider_desde: l.desde.slice(0, 10),
-      temAcessoAoPainel: l.temAcesso,
+      liderancaDesde: l.desde.slice(0, 10),
     })),
-    lideresForaDaLista: Math.max(0, dossie.lideres.length - 40),
-    crescimentoSemanal: dossie.crescimento.map((s) => ({
-      semanaQueComecaEm: s.inicio.slice(0, 10),
-      cadastros: s.quantidade,
-    })),
-    genero: dossie.genero,
-    territorio: dossie.territorio,
-    qualidade: {
-      saudePercentual: q.saude,
-      pessoasComProblema: q.pessoasComProblema,
-      cadastrosRepetidosSobrando: q.excedentes,
-      gruposDeRepetidos: q.repetidos.length,
-      repetidosContadosPorMaisDeUmResponsavel: q.repetidos.filter(
-        (g) => g.responsaveis.length > 1,
-      ).length,
-      possiveisRepetidos: q.possiveisRepetidos,
-      telefonesCompartilhados: q.telefonesCompartilhados,
-      incompletos: q.incompletos,
-      faltasPorCampo: q.faltasPorCampo,
-      paraConferir: q.paraConferir,
-      conferirPorMotivo: q.conferirPorMotivo,
-      problemas: q.problemas.map((p) => ({
-        tipo: p.titulo,
-        gravidade: p.gravidade,
-        quantidade: p.pessoas.length,
-      })),
+    liderancasForaDaLista: Math.max(0, dossie.lideres.length - 40),
+    territorio: {
+      bairrosAlcancados: e.eleitoral.bairros,
+      zonasEleitorais: e.eleitoral.zonas,
+      secoesEleitorais: e.eleitoral.secoes,
+      parteDaBaseNos3MaioresBairrosPercentual: e.eleitoral.concentracaoTop3Bairros,
+      bairros: dossie.territorio.bairros,
+      zonas: dossie.territorio.zonas,
+      secoes: dossie.territorio.secoes,
+      semBairro: dossie.territorio.semBairro,
+    },
+    qualificacaoEleitoral: {
+      comTituloValido: e.eleitoral.tituloValido,
+      comTituloValidoPercentual: e.eleitoral.tituloValidoPct,
+      comZonaESecao: e.eleitoral.zonaSecao,
+      comZonaESecaoPercentual: e.eleitoral.zonaSecaoPct,
+    },
+    integridade: {
+      integridadePercentual: q.saude,
+      pessoasComPendencia: q.pessoasComProblema,
+      duplicados: q.excedentes,
+      pessoasCadastradasMaisDeUmaVez: q.repetidos.length,
+      duplicadosContadosPorMaisDeUmaLideranca: q.repetidos.filter((g) => g.responsaveis.length > 1).length,
+      possiveisHomonimos: q.possiveisRepetidos,
+      telefonesDivididosEntrePessoas: q.telefonesCompartilhados,
+      cadastrosComDadoFaltando: q.incompletos,
+      oQueMaisFalta: q.faltasPorCampo,
+      cadastrosComDadoInconsistente: q.paraConferir,
+      inconsistenciasPorMotivo: q.conferirPorMotivo,
+      pendencias: q.problemas.map((p) => ({ tipo: p.titulo, gravidade: p.gravidade, quantidade: p.pessoas.length })),
     },
   };
 }
@@ -100,25 +143,30 @@ export type ResumoParaONeo = ReturnType<typeof resumoParaONeo>;
    Instrucoes
    ------------------------------------------------------------------------- */
 
-export const NEO_INSTRUCOES = `Você é o NEO, analista de mobilização de campo do sistema CMD (Cadastro Mobilização Digital).
+export const NEO_INSTRUCOES = `Você é o NEO, o núcleo de inteligência de mobilização que assina este relatório.
 
-Você recebe, em JSON, os números de UM time e escreve a análise desse time para quem o administra. O relatório final é um PDF formal, lido por coordenadores.
+QUEM LÊ
+O relatório é entregue à direção de um partido político — o presidente do partido e a coordenação política. É gente experiente, com pouco tempo, que decide com base no que lê aqui. Escreva como uma consultoria estratégica de primeira linha escreveria para um cliente desse porte: firme, preciso, elegante, sem rodeio e sem bajulação.
 
-COMO O TIME FUNCIONA
-- Administradores do time cadastram os Líderes.
-- Cada Líder cadastra a própria Equipe. A Equipe não cadastra ninguém.
-- "Saúde do cadastro" é a parte da equipe sem nenhum problema sério.
-- "Repetidos sobrando" são cadastros duplicados da mesma pessoa; quando um repetido conta para dois responsáveis, o ranking dos dois está inflado.
-- "Para conferir" são dados preenchidos, mas que não podem existir assim (CPF que não fecha, título com dígito a menos, telefone curto).
+A OPERAÇÃO
+- Coordenadores (os administradores do time) recrutam as lideranças.
+- Cada liderança mobiliza a própria base de apoiadores. A base não recruta ninguém.
+- "Base declarada" é tudo o que está cadastrado; "base líquida" conta cada pessoa uma vez só (sem duplicados). Fale da base líquida quando falar do tamanho real da rede.
+- O Índice de Mobilização (0 a 100) já vem CALCULADO, com seus componentes e pesos. Você não recalcula nem dá outra nota: você explica o que o índice diz e o que o puxa para cima ou para baixo.
+- O selo de cada liderança já vem calculado: Motor (cadastrou nos últimos 7 dias e está no terço de cima do ranking), Constante (cadastrou nos últimos 7 dias), Esfriando (cadastrou nos últimos 30 dias, mas não nesta semana), Parado (tem base, mas não cadastra há mais de 30 dias), Sem Equipe (ainda não trouxe ninguém).
+- A projeção de 30/60/90 dias é apenas a continuação do ritmo dos últimos 30 dias. Trate-a como cenário, nunca como promessa.
+- CPF não é exigido da base: nunca trate falta de CPF como problema.
 
-REGRAS
-1. Use SOMENTE os números recebidos. Nunca invente, estime ou arredonde para cima uma quantidade. Se um número não foi dado, não fale dele.
-2. Cite números concretos sempre que fizer uma afirmação ("14 dos 22 Líderes", "38% do total").
-3. Seja direto, específico e acionável. Nada de frase genérica que serviria para qualquer time.
-4. Nomeie Líderes quando isso ajudar a agir (quem puxa, quem parou, quem concentra problemas). Seja justo: fatos, não julgamento de caráter.
-5. Se o time for de demonstração, diga isso uma vez no resumo, sem drama.
-6. Português do Brasil, tom profissional e humano. Sem emojis. Sem markdown: texto corrido; parágrafos separados por uma linha em branco.
-7. Se os dados forem poucos (time novo ou vazio), diga isso com honestidade e foque no que fazer para começar.`;
+REGRAS DE OURO
+1. Use SOMENTE os números recebidos. Não invente, não estime, não arredonde para cima e não faça contas novas: prefira os percentuais e totais que já vêm prontos. Se um número não veio, não fale dele.
+2. Toda afirmação importante carrega um número concreto ("14 das 22 lideranças", "38% da base").
+3. Nada de frase genérica que serviria para qualquer operação. Cada parágrafo precisa dizer algo que só vale para esta.
+4. Nomeie lideranças quando isso ajudar a decidir: quem sustenta a rede, quem esfriou, quem concentra pendências. Fatos, nunca julgamento pessoal.
+5. Não fale em votos, intenção de voto ou resultado eleitoral: o relatório mede mobilização e organização da base, não voto.
+6. Vocabulário: diga "coordenação", "lideranças", "base mobilizada", "rede", "apoiadores". Nunca use jargão de sistema: nada de "painel", "link", "cadastro pelo link", "sistema", "planilha", "saúde do cadastro", "Time DEMO", "etiqueta". Chame inconsistências de "pendências de integridade".
+7. Se a operação estiver em ambiente de demonstração, registre isso uma única vez, no primeiro parágrafo da carta, com naturalidade.
+8. Se os dados forem poucos (operação nova ou vazia), diga isso com honestidade e foque em como estruturar a rede.
+9. Português do Brasil impecável. Sem emojis, sem markdown, sem listas dentro dos textos. Parágrafos separados por uma linha em branco. Frases de no máximo 30 palavras.`;
 
 /* -------------------------------------------------------------------------
    O formato da resposta (Structured Outputs, strict)
@@ -135,53 +183,54 @@ const objeto = (propriedades: Record<string, unknown>) => ({
 
 const lista = (item: unknown, descricao: string) => ({ type: 'array', description: descricao, items: item });
 
+export const PRAZOS = ['Imediato', 'Até 7 dias', 'Até 30 dias', 'Até 90 dias'] as const;
+export const NATUREZAS = ['forca', 'atencao', 'oportunidade'] as const;
+
 /**
  * Schema em JSON Schema puro, como a API pede: todo campo obrigatorio e
  * `additionalProperties: false` em todo objeto — exigencias do modo strict.
  */
 export const NEO_SCHEMA = objeto({
-  manchete: texto('Uma frase, até 110 caracteres, que resume o momento do time.'),
-  resumoExecutivo: texto('Dois ou três parágrafos curtos: situação, o que mais importa, o que fazer.'),
-  indice: objeto({
-    valor: { type: 'integer', description: 'Prontidão do time, de 0 a 100.' },
-    rotulo: { type: 'string', enum: ['Crítico', 'Em atenção', 'Estável', 'Forte', 'Excelente'] },
-    justificativa: texto('Uma ou duas frases explicando o valor, com números.'),
-  }),
-  destaques: lista(
-    objeto({ titulo: texto('Título curto.'), detalhe: texto('Uma ou duas frases, com número.') }),
-    'De 3 a 5 pontos fortes ou fatos marcantes.',
+  manchete: texto('A frase-título da capa: afirmativa, com um número, até 120 caracteres.'),
+  carta: texto(
+    'Carta executiva à direção, em 3 ou 4 parágrafos: onde a rede está, o que a sustenta, o que a ameaça e a decisão mais importante agora.',
   ),
-  riscos: lista(
+  leituraDoIndice: texto('Duas frases: o que o Índice de Mobilização diz e qual componente mais o puxa para baixo.'),
+  conclusoes: lista(
     objeto({
-      titulo: texto('Título curto.'),
-      detalhe: texto('O risco e a consequência, com número.'),
-      gravidade: { type: 'string', enum: ['alta', 'media', 'baixa'] },
+      titulo: texto('Título curto, até 60 caracteres.'),
+      texto: texto('Uma ou duas frases, com número.'),
+      natureza: { type: 'string', enum: [...NATUREZAS] },
     }),
-    'De 2 a 5 riscos, do mais grave ao mais leve.',
+    'De 4 a 6 conclusões-chave: forças, pontos de atenção e oportunidades.',
   ),
-  lideres: lista(
+  forcaDaRede: texto('Um ou dois parágrafos sobre a estrutura: ativação, engajamento, multiplicador e concentração.'),
+  cenario: texto('Um parágrafo sobre a trajetória das 12 semanas e o cenário de 30/60/90 dias, em linguagem condicional.'),
+  liderancas: lista(
     objeto({
       nome: texto('Nome exatamente como recebido.'),
-      perfil: { type: 'string', enum: ['Motor', 'Constante', 'Em arranque', 'Parado', 'Atenção'] },
-      leitura: texto('Uma frase sobre este Líder, com número.'),
+      leitura: texto('Uma frase sobre esta liderança, com número.'),
+      proximoPasso: texto('O que a coordenação deve fazer com ela, começando por verbo.'),
     }),
-    'Até 8 Líderes que merecem comentário (os que mais puxam, os parados, os com mais problema).',
+    'De 4 a 8 lideranças que merecem comentário: as que sustentam a rede, as que esfriaram e as com mais pendências.',
   ),
-  territorio: texto('Um parágrafo sobre onde a equipe está (bairros, zonas, seções) e onde há vazio.'),
-  qualidadeDosDados: texto('Um parágrafo sobre as inconsistências e o que elas custam.'),
-  planoDeAcao: lista(
+  territorio: texto('Um ou dois parágrafos sobre a presença territorial: bairros, zonas e seções, concentração e vazios.'),
+  integridade: texto('Um parágrafo sobre as pendências de integridade e o que elas custam à leitura da rede.'),
+  recomendacoes: lista(
     objeto({
-      acao: texto('Ação concreta, começando por verbo.'),
-      responsavel: texto('Quem faz: "Administração do time", um Líder pelo nome, ou "ADMIN geral".'),
-      prazo: { type: 'string', enum: ['Hoje', 'Esta semana', 'Este mês'] },
-      impacto: texto('O que muda quando for feito, com número se possível.'),
+      titulo: texto('Título curto da recomendação.'),
+      acao: texto('A ação concreta, começando por verbo.'),
+      responsavel: texto('Quem executa: "Coordenação", uma liderança pelo nome, ou "Direção".'),
+      prazo: { type: 'string', enum: [...PRAZOS] },
+      resultadoEsperado: texto('O que muda quando for feito, com número quando possível.'),
     }),
-    'De 4 a 7 ações, em ordem de prioridade.',
+    'De 4 a 6 recomendações, em ordem de prioridade.',
   ),
-  perguntas: lista(
-    texto('Pergunta.'),
-    'De 2 a 4 perguntas que a administração deveria fazer ao time na próxima reunião.',
+  decisoesDaDirecao: lista(
+    texto('Uma decisão ou pergunta estratégica.'),
+    'De 2 a 4 decisões que cabem à direção do partido, não à coordenação.',
   ),
+  fechamento: texto('Um parágrafo curto de encerramento: a mensagem que a direção deve levar.'),
 });
 
 /* -------------------------------------------------------------------------
@@ -192,44 +241,31 @@ const curto = (max: number) => z.string().trim().min(1).max(max);
 
 const analiseSchema = z.object({
   manchete: curto(220),
-  resumoExecutivo: curto(4000),
-  indice: z.object({
-    valor: z.number().int().min(0).max(100),
-    rotulo: z.enum(['Crítico', 'Em atenção', 'Estável', 'Forte', 'Excelente']),
-    justificativa: curto(600),
-  }),
-  destaques: z.array(z.object({ titulo: curto(120), detalhe: curto(600) })).max(8),
-  riscos: z
+  carta: curto(5000),
+  leituraDoIndice: curto(800),
+  conclusoes: z
+    .array(z.object({ titulo: curto(120), texto: curto(600), natureza: z.enum(NATUREZAS) }))
+    .max(8),
+  forcaDaRede: curto(2500),
+  cenario: curto(1500),
+  liderancas: z
+    .array(z.object({ nome: curto(120), leitura: curto(400), proximoPasso: curto(300) }))
+    .max(12),
+  territorio: curto(2500),
+  integridade: curto(2000),
+  recomendacoes: z
     .array(
       z.object({
-        titulo: curto(120),
-        detalhe: curto(600),
-        gravidade: z.enum(['alta', 'media', 'baixa']),
+        titulo: curto(140),
+        acao: curto(400),
+        responsavel: curto(120),
+        prazo: z.enum(PRAZOS),
+        resultadoEsperado: curto(400),
       }),
     )
     .max(8),
-  lideres: z
-    .array(
-      z.object({
-        nome: curto(120),
-        perfil: z.enum(['Motor', 'Constante', 'Em arranque', 'Parado', 'Atenção']),
-        leitura: curto(400),
-      }),
-    )
-    .max(12),
-  territorio: curto(2000),
-  qualidadeDosDados: curto(2000),
-  planoDeAcao: z
-    .array(
-      z.object({
-        acao: curto(300),
-        responsavel: curto(120),
-        prazo: z.enum(['Hoje', 'Esta semana', 'Este mês']),
-        impacto: curto(400),
-      }),
-    )
-    .max(10),
-  perguntas: z.array(curto(300)).max(6),
+  decisoesDaDirecao: z.array(curto(400)).max(6),
+  fechamento: curto(1500),
 });
 
 export type AnaliseDoNeo = z.infer<typeof analiseSchema>;

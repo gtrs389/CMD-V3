@@ -30,11 +30,11 @@ type Estado =
  * travada. As etapas sao as de verdade, na ordem de verdade.
  */
 const ETAPAS = [
-  'Contando as pessoas do time',
-  'Montando Administradores, Líderes e Equipe',
-  'Procurando repetidos, faltas e dados para conferir',
-  'Lendo o ritmo das últimas 12 semanas',
-  'O NEO está escrevendo a análise',
+  'Contando a base e descontando os duplicados',
+  'Calculando o Índice de Mobilização',
+  'Lendo lideranças, território e integridade',
+  'Projetando o cenário de 30, 60 e 90 dias',
+  'O NEO está escrevendo o relatório para a direção',
 ];
 
 /**
@@ -167,20 +167,21 @@ function Inicio({ erro }: { erro: string | null }) {
           <FileText aria-hidden="true" className="size-5" />
         </span>
         <div>
-          <p className="text-sm font-semibold text-ink-900">O NEO lê o time inteiro e escreve o relatório.</p>
+          <p className="text-sm font-semibold text-ink-900">Relatório Estratégico de Mobilização</p>
           <p className="mt-1 text-sm text-ink-500">
-            Estrutura, Líderes, ritmo, território, inconsistências e um plano de ação — e, no fim,
-            quem é cada pessoa, agrupada sob o Líder que a trouxe. Sai em PDF.
+            O documento para apresentar à direção: carta executiva, Índice de Mobilização, força da
+            rede, lideranças, território, integridade da base e recomendações — com a nominata
+            completa em anexo. Sai em PDF.
           </p>
         </div>
       </div>
 
       <ul className="grid gap-2 sm:grid-cols-2">
         {[
-          ['Números do cadastro', 'Toda contagem vem do banco. O NEO interpreta, não conta.'],
-          ['Análise do NEO', 'Destaques, riscos, leitura de cada Líder e plano de ação.'],
-          ['Inconsistências com nome', 'Repetidos, faltas e dados para conferir, com responsável.'],
-          ['Anexo completo', 'Cada pessoa do time, com telefone, bairro e situação.'],
+          ['Números garantidos', 'Toda contagem e o índice são calculados do cadastro. O NEO interpreta, não conta.'],
+          ['Escrito para a direção', 'Carta executiva, conclusões-chave, leitura das lideranças e recomendações com prazo.'],
+          ['Cenário e território', 'Trajetória de 12 semanas, projeção de 30/60/90 dias, bairros, zonas e seções.'],
+          ['Anexos completos', 'Pendências com nome e responsável, e a nominata de cada liderança.'],
         ].map(([titulo, texto]) => (
           <li key={titulo} className="rounded-control border border-line p-3">
             <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-900">
@@ -245,30 +246,32 @@ function Lendo({ etapa }: { etapa: number }) {
 
 function Pronto({ resposta }: { resposta: Resposta }) {
   const { dossie, neo, neoErro } = resposta;
-  const n = dossie.numeros;
+  const e = dossie.estrategia;
   const indicadores: [string, number | string][] = [
-    ['pessoas', n.total],
-    ['Líderes', n.lideres],
-    ['na Equipe', n.equipe],
-    ['em ordem', `${dossie.qualidade.saude}%`],
+    ['base mobilizada', e.baseLiquida],
+    ['lideranças', dossie.numeros.lideres],
+    ['novos em 30 dias', dossie.numeros.ultimos30],
+    ['base íntegra', `${dossie.qualidade.saude}%`],
   ];
+  const conclusoes = neo?.conclusoes ?? [];
 
   return (
     <div className="space-y-4">
-      {neo ? (
-        <div className="rounded-card bg-navy-900 p-4 text-white">
-          <p className="text-[0.6875rem] font-semibold tracking-wide text-navy-300 uppercase">
-            Índice NEO · {neo.indice.valor} · {neo.indice.rotulo}
-          </p>
-          <p className="mt-1 text-base leading-snug font-semibold">“{neo.manchete}”</p>
-          <p className="mt-2 text-xs text-navy-300">{neo.indice.justificativa}</p>
-        </div>
-      ) : (
+      <div className="rounded-card bg-navy-900 p-4 text-white">
+        <p className="text-[0.6875rem] font-semibold tracking-wide text-navy-300 uppercase">
+          Índice de Mobilização · {e.indice.valor} · {e.indice.rotulo}
+        </p>
+        {neo ? <p className="mt-1 text-base leading-snug font-semibold">“{neo.manchete}”</p> : null}
+        {neo ? <p className="mt-2 text-xs text-navy-300">{neo.leituraDoIndice}</p> : null}
+      </div>
+
+      {!neo ? (
         <p className="flex items-start gap-2 rounded-control bg-warning-50 px-3 py-2 text-sm text-warning-600">
           <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {neoErro ?? 'A análise escrita não ficou pronta.'} O PDF sai com todos os números.
+          {neoErro ?? 'A análise escrita não ficou pronta.'} O PDF sai completo, com a leitura automática
+          montada dos números.
         </p>
-      )}
+      ) : null}
 
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {indicadores.map(([rotulo, valor]) => (
@@ -281,18 +284,17 @@ function Pronto({ resposta }: { resposta: Resposta }) {
         ))}
       </dl>
 
-      {neo ? (
+      {conclusoes.length ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Lista titulo="Destaques" itens={neo.destaques.map((d) => d.titulo)} tom="success" />
-          <Lista titulo="Riscos" itens={neo.riscos.map((r) => r.titulo)} tom="danger" />
+          <Lista titulo="Forças e oportunidades" itens={conclusoes.filter((c) => c.natureza !== 'atencao').map((c) => c.titulo)} tom="success" />
+          <Lista titulo="Pontos de atenção" itens={conclusoes.filter((c) => c.natureza === 'atencao').map((c) => c.titulo)} tom="danger" />
         </div>
       ) : null}
 
       <p className="text-xs text-ink-500">
-        O PDF traz a capa, o resumo, os números, os {formatNumber(n.lideres)} Líderes, o território,
-        {' '}
-        {formatNumber(dossie.qualidade.pessoasComProblema)} cadastros que precisam de atenção, o plano de
-        ação e o anexo com as {formatNumber(n.total)} pessoas.
+        O PDF traz a capa, o sumário executivo, a força da rede, as {formatNumber(dossie.numeros.lideres)} lideranças, o
+        território, a integridade da base, as recomendações, as pendências com nome e a nominata com os{' '}
+        {formatNumber(dossie.numeros.total)} cadastros.
       </p>
     </div>
   );

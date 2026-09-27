@@ -1,454 +1,154 @@
-import type { ReactNode } from 'react';
-import {
-  Document,
-  Page,
-  Path,
-  Rect,
-  StyleSheet,
-  Svg,
-  Text,
-  View,
-  pdf,
-} from '@react-pdf/renderer';
-import type { Contagem, Dossie, LiderNoDossie, PessoaNoDossie } from '@/lib/domain/dossie';
+import { Circle, Document, Page, Path, Rect, Svg, Text, View, pdf } from '@react-pdf/renderer';
+import type { Dossie, LiderNoDossie, PessoaNoDossie } from '@/lib/domain/dossie';
 import type { AnaliseDoNeo } from '@/lib/domain/neo';
-import { appConfig } from '@/config/app.config';
+import { analiseAutomatica } from '@/lib/domain/leitura-automatica';
+import {
+  Anel,
+  Barras,
+  C,
+  Cabecalho,
+  Chip,
+  Kpi,
+  LinhaDeKpis,
+  Paragrafos,
+  Rodape,
+  Secao,
+  TOM_GRAVIDADE,
+  TOM_SELO,
+  Tabela,
+  data,
+  dataLonga,
+  num,
+  s,
+  slug,
+  st,
+  telefone,
+} from './pdf-base';
+
+export {
+  ListaFiltrada,
+  gerarPdfDaLista,
+  type ListaFiltradaProps,
+  type PessoaDaLista,
+} from './ListasPdf';
 
 /**
- * O relatorio do time, em PDF.
+ * Relatorio Estrategico de Mobilizacao — o documento que vai para a direcao.
  *
- * Montado NO NAVEGADOR de quem pediu: a lista de pessoas, com telefone, sai
- * do servidor so para esta tela, e o arquivo nasce aqui. Nenhum servidor de
- * PDF, nenhuma copia guardada.
+ * Quem le e o dirigente partidario: pouco tempo, muita decisao. Por isso a
+ * ordem e a de uma consultoria, e nao a de uma tela do sistema:
  *
- * A estrutura segue a ordem em que um coordenador le:
+ *   capa           o time, a frase-titulo e os quatro numeros que importam;
+ *   01 sumario     a carta a direcao, o Indice de Mobilizacao (com os
+ *                  componentes) e as conclusoes-chave;
+ *   02 rede        piramide, ativacao, engajamento, concentracao, a
+ *                  trajetoria de 12 semanas e o cenario de 30/60/90 dias;
+ *   03 liderancas  podio, a leitura de quem importa e o ranking inteiro;
+ *   04 territorio  bairros, zonas, secoes e a qualificacao eleitoral;
+ *   05 integridade base declarada x base liquida e o quadro das pendencias;
+ *   06 recomendac. o que fazer, quem, ate quando, e o que cabe a direcao;
+ *   anexos         pendencias com nome, a nominata por lideranca e a nota
+ *                  metodologica.
  *
- *   capa          o time, a manchete do NEO e os quatro numeros que importam;
- *   1. resumo     o indice do NEO, o resumo, os destaques e os riscos;
- *   2. numeros    estrutura (Administradores -> Lideres -> Equipe), ritmo,
- *                 crescimento de 12 semanas, origem e genero;
- *   3. lideres    a leitura do NEO sobre quem puxa e quem parou, o ranking
- *                 inteiro e os Administradores;
- *   4. territorio bairros, zonas e secoes, e onde ha vazio;
- *   5. qualidade  saude do cadastro e TODAS as inconsistencias, com nome;
- *   6. plano      o que fazer, por quem e ate quando, e o que perguntar;
- *   anexo         quem e cada pessoa, agrupada sob o Lider que a trouxe.
+ * Os NUMEROS saem do dossie, nunca do texto: o NEO interpreta, o desenho
+ * conta. Sem o NEO, os textos vem da leitura automatica — o documento sai
+ * com a mesma estrutura, apresentavel, e nunca com um buraco.
  *
- * Os NUMEROS saem do dossie, nunca do texto do NEO: o texto interpreta, o
- * desenho conta. Sem o NEO (sem chave, fora do ar), o relatorio sai inteiro,
- * e os trechos dele dizem que a analise nao foi escrita.
+ * Montado NO NAVEGADOR de quem pediu: a nominata, com telefone, nao passa
+ * por servidor de PDF nenhum.
  */
-
-/* -------------------------------------------------------------------------
-   Identidade
-   ------------------------------------------------------------------------- */
-
-const C = {
-  navy: '#0f1e35',
-  navy2: '#1d3050',
-  navy3: '#8ea6c4',
-  accent: '#2563eb',
-  accentSoft: '#eaf1fe',
-  ink: '#17212b',
-  ink2: '#2e3d4b',
-  muted: '#4b5967',
-  faint: '#7b8d9d',
-  line: '#d5dde5',
-  bg: '#f2f5f8',
-  success: '#166534',
-  successSoft: '#e8f3ec',
-  warning: '#8a5200',
-  warningSoft: '#fbf3e4',
-  danger: '#b42318',
-  dangerSoft: '#fcedec',
-  white: '#ffffff',
-};
-
-/**
- * Helvetica embutida fala WinAnsi: todo o portugues cabe, mas uma seta ou um
- * emoji vindo do texto do NEO viraria um quadrado. Troca o que da e tira o
- * resto.
- */
-const WIN_ANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
-function s(texto: string | number | null | undefined): string {
-  return String(texto ?? '')
-    .replace(/→/g, '->')
-    .replace(/←/g, '<-')
-    .replace(/≥/g, '>=')
-    .replace(/≤/g, '<=')
-    .replace(/×/g, 'x')
-    .split('')
-    .filter((c) => c.charCodeAt(0) <= 0xff || WIN_ANSI_EXTRA.has(c))
-    .join('');
-}
-
-const num = (n: number) => n.toLocaleString('pt-BR');
-const data = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
-const dataLonga = (iso: string) =>
-  new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
-const telefone = (t: string) => {
-  const d = t.replace(/\D/g, '');
-  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return d || '—';
-};
-const pct = (parte: number, total: number) => (total ? Math.round((parte / total) * 100) : 0);
-
-const st = StyleSheet.create({
-  page: {
-    paddingTop: 58,
-    paddingBottom: 54,
-    paddingHorizontal: 42,
-    fontFamily: 'Helvetica',
-    fontSize: 9.5,
-    color: C.ink,
-    lineHeight: 1.45,
-  },
-  cabecalho: {
-    position: 'absolute',
-    top: 22,
-    left: 42,
-    right: 42,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 0.6,
-    borderBottomColor: C.line,
-    paddingBottom: 6,
-    fontSize: 7.5,
-    color: C.faint,
-  },
-  rodape: {
-    position: 'absolute',
-    bottom: 22,
-    left: 42,
-    right: 42,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    fontSize: 7,
-    color: C.faint,
-  },
-  capitulo: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 14 },
-  capituloNumero: { fontSize: 30, fontFamily: 'Helvetica-Bold', color: C.accent, marginRight: 10, lineHeight: 1 },
-  capituloTitulo: { fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.1 },
-  capituloSub: { fontSize: 8.5, color: C.muted, marginTop: 2 },
-  h3: { fontSize: 10.5, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 6, marginTop: 14 },
-  paragrafo: { fontSize: 9.5, color: C.ink2, marginBottom: 6, textAlign: 'justify' },
-  rotulo: { fontSize: 7, color: C.faint, letterSpacing: 0.8, textTransform: 'uppercase' },
-  caixa: { borderRadius: 6, padding: 10, backgroundColor: C.bg },
-  linha: { flexDirection: 'row' },
-  tabelaCab: {
-    flexDirection: 'row',
-    backgroundColor: C.navy,
-    color: C.white,
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 7.5,
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-  },
-  tabelaLinha: {
-    flexDirection: 'row',
-    fontSize: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderBottomWidth: 0.5,
-    borderBottomColor: C.line,
-  },
-  chip: {
-    fontSize: 7,
-    paddingVertical: 1.5,
-    paddingHorizontal: 5,
-    borderRadius: 8,
-    fontFamily: 'Helvetica-Bold',
-  },
-  semNeo: {
-    fontSize: 8.5,
-    color: C.muted,
-    fontStyle: 'italic',
-    padding: 8,
-    borderRadius: 4,
-    borderWidth: 0.6,
-    borderColor: C.line,
-    borderStyle: 'dashed',
-    marginBottom: 6,
-  },
-});
-
-/* -------------------------------------------------------------------------
-   Pecas
-   ------------------------------------------------------------------------- */
-
-function Cabecalho({ dossie }: { dossie: Dossie }) {
-  return (
-    <View style={st.cabecalho} fixed>
-      <Text>{s(`RELATÓRIO DO TIME · ${dossie.time.nome.toUpperCase()}`)}</Text>
-      <Text>{s(`NEO · ${appConfig.shortName}`)}</Text>
-    </View>
-  );
-}
-
-function Rodape({ dossie }: { dossie: Dossie }) {
-  return (
-    <View style={st.rodape} fixed>
-      <Text>
-        {s(`Gerado em ${dataLonga(dossie.geradoEm)} · Confidencial: contém dados pessoais (LGPD). Não compartilhe fora da coordenação.`)}
-      </Text>
-      <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
-    </View>
-  );
-}
-
-function Capitulo({ numero, titulo, sub }: { numero: string; titulo: string; sub: string }) {
-  return (
-    <View style={st.capitulo} wrap={false}>
-      <Text style={st.capituloNumero}>{numero}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={st.capituloTitulo}>{s(titulo)}</Text>
-        <Text style={st.capituloSub}>{s(sub)}</Text>
-      </View>
-    </View>
-  );
-}
-
-function Paragrafos({ texto }: { texto: string }) {
-  return (
-    <>
-      {s(texto)
-        .split(/\n\s*\n/)
-        .map((p) => p.trim())
-        .filter(Boolean)
-        .map((p, i) => (
-          <Text key={i} style={st.paragrafo}>
-            {p}
-          </Text>
-        ))}
-    </>
-  );
-}
-
-function SemNeo({ oque }: { oque: string }) {
-  return <Text style={st.semNeo}>{s(`A análise escrita do NEO não está disponível neste relatório (${oque}). Os números abaixo são do cadastro.`)}</Text>;
-}
-
-/** Numero grande com rotulo. */
-function Kpi({ valor, rotulo, nota, tom = C.navy }: { valor: string; rotulo: string; nota?: string; tom?: string }) {
-  return (
-    <View style={{ flex: 1, padding: 10, borderRadius: 6, backgroundColor: C.bg, borderLeftWidth: 3, borderLeftColor: tom }}>
-      <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: tom, lineHeight: 1.1 }}>{s(valor)}</Text>
-      <Text style={{ fontSize: 7.5, color: C.muted, marginTop: 2 }}>{s(rotulo)}</Text>
-      {nota ? <Text style={{ fontSize: 7, color: C.faint, marginTop: 1 }}>{s(nota)}</Text> : null}
-    </View>
-  );
-}
-
-/** Anel: arco proporcional, desenhado com Path para nao depender de dasharray. */
-function Anel({ valor, cor, tamanho = 84, rotulo }: { valor: number; cor: string; tamanho?: number; rotulo: string }) {
-  const r = 40;
-  const v = Math.max(0, Math.min(100, valor));
-  const ang = (v / 100) * 2 * Math.PI - Math.PI / 2;
-  const x = 50 + r * Math.cos(ang);
-  const y = 50 + r * Math.sin(ang);
-  const grande = v > 50 ? 1 : 0;
-  return (
-    <View style={{ width: tamanho, height: tamanho, position: 'relative' }}>
-      <Svg viewBox="0 0 100 100" style={{ width: tamanho, height: tamanho }}>
-        <Path d="M 50 10 A 40 40 0 1 1 49.99 10" stroke="#e7ecf1" strokeWidth={10} fill="none" />
-        {v >= 99.9 ? (
-          <Path d="M 50 10 A 40 40 0 1 1 49.99 10" stroke={cor} strokeWidth={10} fill="none" />
-        ) : v > 0 ? (
-          <Path d={`M 50 10 A 40 40 0 ${grande} 1 ${x.toFixed(2)} ${y.toFixed(2)}`} stroke={cor} strokeWidth={10} fill="none" strokeLinecap="round" />
-        ) : null}
-      </Svg>
-      <View style={{ position: 'absolute', top: 0, left: 0, width: tamanho, height: tamanho, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontSize: tamanho / 4.2, fontFamily: 'Helvetica-Bold', color: cor, lineHeight: 1 }}>{v}</Text>
-        <Text style={{ fontSize: 6.5, color: C.muted, marginTop: 2 }}>{s(rotulo)}</Text>
-      </View>
-    </View>
-  );
-}
-
-/** Barras horizontais com rotulo e valor. */
-function Barras({ itens, cor = C.accent, total }: { itens: Contagem[]; cor?: string; total?: number }) {
-  const maior = Math.max(1, ...itens.map((i) => i.quantidade));
-  if (itens.length === 0) return <Text style={{ fontSize: 8.5, color: C.faint }}>Sem dados.</Text>;
-  return (
-    <View>
-      {itens.map((item) => (
-        <View key={item.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3.5 }} wrap={false}>
-          <Text style={{ width: 118, fontSize: 8, color: C.ink2 }}>{s(item.rotulo)}</Text>
-          <View style={{ flex: 1, height: 7, backgroundColor: '#e7ecf1', borderRadius: 4 }}>
-            <View style={{ width: `${Math.max(2, (item.quantidade / maior) * 100)}%`, height: 7, backgroundColor: cor, borderRadius: 4 }} />
-          </View>
-          <Text style={{ width: 52, textAlign: 'right', fontSize: 8, fontFamily: 'Helvetica-Bold' }}>
-            {num(item.quantidade)}
-            {total ? <Text style={{ fontFamily: 'Helvetica', color: C.faint }}>{` ${pct(item.quantidade, total)}%`}</Text> : null}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-/** Colunas verticais das 12 semanas. */
-function Crescimento({ semanas }: { semanas: Dossie['crescimento'] }) {
-  const largura = 510;
-  const altura = 96;
-  const maior = Math.max(1, ...semanas.map((w) => w.quantidade));
-  const passo = largura / semanas.length;
-  return (
-    <View>
-      <Svg viewBox={`0 0 ${largura} ${altura}`} style={{ width: largura, height: altura }}>
-        {semanas.map((w, i) => {
-          const h = Math.max(w.quantidade ? 3 : 1, (w.quantidade / maior) * (altura - 14));
-          const ultima = i === semanas.length - 1;
-          return (
-            <Rect
-              key={w.inicio}
-              x={i * passo + passo * 0.18}
-              y={altura - h}
-              width={passo * 0.64}
-              height={h}
-              fill={ultima ? C.accent : C.navy2}
-              rx={2}
-            />
-          );
-        })}
-      </Svg>
-      <View style={{ flexDirection: 'row' }}>
-        {semanas.map((w) => (
-          <View key={w.inicio} style={{ width: passo, alignItems: 'center' }}>
-            <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold' }}>{num(w.quantidade)}</Text>
-            <Text style={{ fontSize: 6, color: C.faint }}>{data(w.inicio).slice(0, 5)}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const TOM_GRAVIDADE: Record<string, { cor: string; fundo: string; rotulo: string }> = {
-  alta: { cor: C.danger, fundo: C.dangerSoft, rotulo: 'ALTA' },
-  media: { cor: C.warning, fundo: C.warningSoft, rotulo: 'MÉDIA' },
-  baixa: { cor: C.muted, fundo: C.bg, rotulo: 'BAIXA' },
-};
-
-const TOM_PERFIL: Record<string, { cor: string; fundo: string }> = {
-  Motor: { cor: C.success, fundo: C.successSoft },
-  Constante: { cor: C.accent, fundo: C.accentSoft },
-  'Em arranque': { cor: C.navy2, fundo: C.bg },
-  Parado: { cor: C.danger, fundo: C.dangerSoft },
-  Atenção: { cor: C.warning, fundo: C.warningSoft },
-};
-
-function Chip({ texto, cor, fundo }: { texto: string; cor: string; fundo: string }) {
-  return <Text style={[st.chip, { color: cor, backgroundColor: fundo }]}>{s(texto)}</Text>;
-}
-
-function Tabela<T>({
-  colunas,
-  linhas,
-  chave,
-  vazio = 'Nada a listar.',
-}: {
-  colunas: { titulo: string; largura: number | string; celula: (item: T, indice: number) => ReactNode; alinhar?: 'right' | 'left' }[];
-  linhas: T[];
-  chave: (item: T) => string;
-  vazio?: string;
-}) {
-  if (linhas.length === 0) return <Text style={{ fontSize: 8.5, color: C.faint }}>{s(vazio)}</Text>;
-  return (
-    <View>
-      <View style={st.tabelaCab} fixed>
-        {colunas.map((c) => (
-          <Text key={c.titulo} style={{ width: c.largura, textAlign: c.alinhar ?? 'left' }}>
-            {s(c.titulo)}
-          </Text>
-        ))}
-      </View>
-      {linhas.map((item, i) => (
-        <View key={chave(item)} style={[st.tabelaLinha, i % 2 === 1 ? { backgroundColor: '#f8fafc' } : {}]} wrap={false}>
-          {colunas.map((c) => (
-            <View key={c.titulo} style={{ width: c.largura, alignItems: c.alinhar === 'right' ? 'flex-end' : 'flex-start' }}>
-              {(() => {
-                const conteudo = c.celula(item, i);
-                return typeof conteudo === 'string' || typeof conteudo === 'number' ? (
-                  <Text>{s(conteudo)}</Text>
-                ) : (
-                  conteudo
-                );
-              })()}
-            </View>
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function situacao(p: PessoaNoDossie) {
-  if (p.conferir.length) return <Chip texto="Conferir" cor={C.danger} fundo={C.dangerSoft} />;
-  if (p.faltas.length) return <Chip texto="Incompleto" cor={C.warning} fundo={C.warningSoft} />;
-  return <Chip texto="Em ordem" cor={C.success} fundo={C.successSoft} />;
-}
 
 /* -------------------------------------------------------------------------
    Capa
    ------------------------------------------------------------------------- */
 
-function Capa({ dossie, neo, modelo }: { dossie: Dossie; neo: AnaliseDoNeo | null; modelo: string }) {
-  const n = dossie.numeros;
-  const saude = dossie.qualidade.saude;
-  const kpis: [string, string][] = [
-    [num(n.total), 'pessoas no time'],
-    [num(n.lideres), 'Líderes'],
-    [num(n.equipe), 'na Equipe'],
-    [`${saude}%`, 'saúde do cadastro'],
+function Capa({ dossie, analise }: { dossie: Dossie; analise: AnaliseDoNeo }) {
+  const e = dossie.estrategia;
+  const kpis: [string, string, string?][] = [
+    [num(e.baseLiquida), 'base mobilizada', e.duplicados ? `${num(e.baseDeclarada)} declarados` : undefined],
+    [num(dossie.numeros.lideres), 'lideranças', `${num(dossie.numeros.lideresAtivos)} com base própria`],
+    [String(e.indice.valor), 'Índice de Mobilização', e.indice.rotulo],
+    [num(dossie.numeros.ultimos30), 'novos em 30 dias', `${dossie.numeros.ritmo30.toLocaleString('pt-BR')} por dia`],
   ];
   return (
     <Page size="A4" style={{ backgroundColor: C.navy, color: C.white, padding: 0, fontFamily: 'Helvetica' }}>
-      {/* Faixa diagonal de fundo: desenho, nao dado. */}
-      {/* A4 tem 595,28 x 841,89 pontos: um fundo de 842 transbordava e
-          empurrava a capa para uma segunda pagina. */}
+      {/* Fundo: desenho, nao dado. A4 tem 595,28 x 841,89 pontos — um fundo
+          de 842 transbordaria para uma segunda pagina. */}
       <Svg viewBox="0 0 595 841" style={{ position: 'absolute', top: 0, left: 0, width: 595, height: 841 }}>
-        <Path d="M 360 0 L 595 0 L 595 841 L 150 841 Z" fill={C.navy2} />
-        <Path d="M 470 0 L 595 0 L 595 300 Z" fill={C.accent} />
+        <Path d="M 395 0 L 595 0 L 595 841 L 205 841 Z" fill={C.navy2} />
+        <Path d="M 520 0 L 595 0 L 595 190 Z" fill={C.gold} />
       </Svg>
 
-      <View style={{ paddingHorizontal: 48, paddingTop: 56, flex: 1 }}>
-        <Text style={{ fontSize: 8, letterSpacing: 2, color: C.navy3 }}>
-          {s(`${appConfig.shortName} · ${appConfig.name.toUpperCase()}`)}
-        </Text>
-
-        <Text style={{ marginTop: 150, fontSize: 11, letterSpacing: 3, color: C.navy3 }}>RELATÓRIO DO TIME</Text>
-        <Text style={{ fontSize: 38, fontFamily: 'Helvetica-Bold', marginTop: 6, lineHeight: 1.05 }}>{s(dossie.time.nome)}</Text>
-        <Text style={{ fontSize: 11, color: C.navy3, marginTop: 8 }}>
-          {s(`${dossie.time.municipios.join(', ')} / ${dossie.time.uf} · ${dataLonga(dossie.geradoEm)}`)}
-          {dossie.time.demonstracao ? s(' · TIME DE DEMONSTRAÇÃO') : ''}
-        </Text>
-
-        {neo ? (
-          <View style={{ marginTop: 34, borderLeftWidth: 3, borderLeftColor: C.accent, paddingLeft: 14, width: 380 }}>
-            <Text style={{ fontSize: 15, lineHeight: 1.35 }}>{s(`“${neo.manchete}”`)}</Text>
-            <Text style={{ fontSize: 8, color: C.navy3, marginTop: 6 }}>— NEO</Text>
+      <View style={{ paddingHorizontal: 48, paddingTop: 50, flex: 1 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View>
+            <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', letterSpacing: 4 }}>NEO</Text>
+            <Text style={{ fontSize: 6.8, color: C.navy3, letterSpacing: 2, marginTop: 2 }}>INTELIGÊNCIA DE MOBILIZAÇÃO</Text>
           </View>
-        ) : null}
+          <Text style={{ fontSize: 7, color: '#c9d4e3', letterSpacing: 2, fontFamily: 'Helvetica-Bold', marginTop: 6, marginRight: 86 }}>RESERVADO</Text>
+        </View>
 
-        <View style={{ flexDirection: 'row', marginTop: 'auto', marginBottom: 26 }}>
-          {kpis.map(([valor, rotulo], i) => (
-            <View key={rotulo} style={{ flex: 1, paddingRight: 12, borderLeftWidth: i ? 0.6 : 0, borderLeftColor: C.navy3, paddingLeft: i ? 12 : 0 }}>
-              <Text style={{ fontSize: 26, fontFamily: 'Helvetica-Bold' }}>{s(valor)}</Text>
-              <Text style={{ fontSize: 8, color: C.navy3 }}>{s(rotulo)}</Text>
+        <Text style={{ marginTop: 150, fontSize: 9, letterSpacing: 3.4, color: C.gold, fontFamily: 'Helvetica-Bold' }}>
+          RELATÓRIO ESTRATÉGICO DE MOBILIZAÇÃO
+        </Text>
+        <View style={{ width: 46, height: 2.4, backgroundColor: C.gold, marginTop: 14 }} />
+        <Text style={{ fontSize: 36, fontFamily: 'Helvetica-Bold', marginTop: 16, lineHeight: 1.08, width: 440 }}>
+          {s(dossie.time.nome)}
+        </Text>
+        <Text style={{ fontSize: 10.5, color: C.navy3, marginTop: 10 }}>
+          {s(`${dossie.time.municipios.join(', ')} / ${dossie.time.uf} · ${dataLonga(dossie.geradoEm)}`)}
+        </Text>
+
+        <Text style={{ marginTop: 40, fontFamily: 'Times-Italic', fontSize: 17, lineHeight: 1.38, width: 400, color: '#f2f5fa' }}>
+          {s(`“${analise.manchete}”`)}
+        </Text>
+
+        {/* O que o documento traz: a direcao sabe onde procurar. */}
+        <View style={{ marginTop: 44, width: 330 }}>
+          <Text style={{ fontSize: 6.8, color: C.gold, letterSpacing: 2, fontFamily: 'Helvetica-Bold', marginBottom: 6 }}>NESTE RELATÓRIO</Text>
+          {[
+            ['01', 'Sumário executivo'],
+            ['02', 'A força da rede'],
+            ['03', 'Lideranças'],
+            ['04', 'Presença territorial'],
+            ['05', 'Integridade da base'],
+            ['06', 'Recomendações estratégicas'],
+            ['A · B', 'Pendências nominais e nominata da rede'],
+          ].map(([n, t]) => (
+            <View key={n} style={{ flexDirection: 'row', paddingVertical: 2.6, borderBottomWidth: 0.4, borderBottomColor: '#29456f' }}>
+              <Text style={{ width: 34, fontSize: 7.6, color: C.gold, fontFamily: 'Helvetica-Bold' }}>{n}</Text>
+              <Text style={{ fontSize: 7.8, color: '#d5deea' }}>{s(t)}</Text>
             </View>
           ))}
         </View>
 
-        <View style={{ borderTopWidth: 0.6, borderTopColor: C.navy2, paddingTop: 12, marginBottom: 34, flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: 7.5, color: C.navy3 }}>
-            {s(`Análise: NEO (${modelo}) · Números: cadastro do ${appConfig.shortName}`)}
+        <View style={{ flexDirection: 'row', marginTop: 'auto', marginBottom: 26 }}>
+          {kpis.map(([valor, rotulo, nota], i) => (
+            <View
+              key={rotulo}
+              style={{ flex: 1, paddingRight: 10, borderLeftWidth: i ? 0.6 : 0, borderLeftColor: '#3a5680', paddingLeft: i ? 12 : 0 }}
+            >
+              <Text style={{ fontSize: 25, fontFamily: 'Helvetica-Bold', color: i === 2 ? C.gold : C.white }}>{s(valor)}</Text>
+              <Text style={{ fontSize: 7.6, color: '#d5deea', marginTop: 2 }}>{s(rotulo)}</Text>
+              {nota ? <Text style={{ fontSize: 6.6, color: C.navy3, marginTop: 1 }}>{s(nota)}</Text> : null}
+            </View>
+          ))}
+        </View>
+
+        <View
+          style={{
+            borderTopWidth: 0.6,
+            borderTopColor: '#2b4a78',
+            paddingTop: 12,
+            marginBottom: 32,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Text style={{ fontSize: 7, color: C.navy3 }}>
+            {s(`Preparado por NEO · Núcleo de Inteligência de Mobilização${dossie.time.demonstracao ? ' · Ambiente de demonstração, dados fictícios' : ''}`)}
           </Text>
-          <Text style={{ fontSize: 7.5, color: C.navy3 }}>CONFIDENCIAL · CONTÉM DADOS PESSOAIS</Text>
+          <Text style={{ fontSize: 7, color: C.navy3, letterSpacing: 1 }}>USO EXCLUSIVO DA DIREÇÃO</Text>
         </View>
       </View>
     </Page>
@@ -456,349 +156,717 @@ function Capa({ dossie, neo, modelo }: { dossie: Dossie; neo: AnaliseDoNeo | nul
 }
 
 /* -------------------------------------------------------------------------
-   Capitulos
+   01 · Sumario executivo
    ------------------------------------------------------------------------- */
 
-function Resumo({ dossie, neo, neoErro }: { dossie: Dossie; neo: AnaliseDoNeo | null; neoErro: string | null }) {
-  const corIndice = !neo ? C.muted : neo.indice.valor >= 70 ? C.success : neo.indice.valor >= 45 ? C.warning : C.danger;
+const NATUREZA: Record<string, { rotulo: string; cor: string; fundo: string }> = {
+  forca: { rotulo: 'FORÇA', cor: C.success, fundo: C.successSoft },
+  atencao: { rotulo: 'PONTO DE ATENÇÃO', cor: C.danger, fundo: C.dangerSoft },
+  oportunidade: { rotulo: 'OPORTUNIDADE', cor: C.gold, fundo: C.goldSoft },
+};
+
+function corDoIndice(valor: number) {
+  return valor >= 70 ? C.success : valor >= 55 ? C.blue : valor >= 40 ? C.warning : C.danger;
+}
+
+function Assinatura() {
   return (
-    <View>
-      <Capitulo numero="1" titulo="Resumo executivo" sub="O momento do time, em uma página." />
-
-      <View style={{ flexDirection: 'row', marginBottom: 10 }} wrap={false}>
-        <View style={{ alignItems: 'center', marginRight: 16 }}>
-          {/* Sem o NEO nao ha indice: um "0" pareceria nota, e seria mentira.
-              O anel mostra entao o que o cadastro sabe — a saude. */}
-          {neo ? (
-            <>
-              <Anel valor={neo.indice.valor} cor={corIndice} rotulo="índice NEO" />
-              <Chip texto={neo.indice.rotulo} cor={corIndice} fundo={C.bg} />
-            </>
-          ) : (
-            <Anel
-              valor={dossie.qualidade.saude}
-              cor={dossie.qualidade.saude >= 90 ? C.success : dossie.qualidade.saude >= 70 ? C.warning : C.danger}
-              rotulo="% em ordem"
-            />
-          )}
-        </View>
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          {neo ? (
-            <>
-              <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.3 }}>{s(neo.manchete)}</Text>
-              <Text style={{ fontSize: 8.5, color: C.muted, marginTop: 4 }}>{s(neo.indice.justificativa)}</Text>
-            </>
-          ) : (
-            <>
-              {/* O resumo em numeros, montado do cadastro: sem o NEO, a
-                  primeira pagina ainda diz o essencial. */}
-              <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.35 }}>
-                {s(
-                  `${num(dossie.numeros.total)} pessoas: ${num(dossie.numeros.lideres)} Líderes ` +
-                    `(${num(dossie.numeros.lideresAtivos)} já trouxeram alguém) e ${num(dossie.numeros.equipe)} na Equipe. ` +
-                    `${num(dossie.numeros.ultimos7)} cadastros nos últimos 7 dias; ${dossie.qualidade.saude}% do cadastro em ordem.`,
-                )}
-              </Text>
-              <Text style={[st.semNeo, { marginTop: 6 }]}>{s(neoErro ?? 'Análise indisponível.')}</Text>
-            </>
-          )}
-        </View>
-      </View>
-
-      {neo ? <Paragrafos texto={neo.resumoExecutivo} /> : null}
-
-      <View style={{ flexDirection: 'row', marginTop: 6 }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={st.h3}>O que está indo bem</Text>
-          {neo?.destaques.length ? (
-            neo.destaques.map((d) => (
-              <View key={d.titulo} style={{ padding: 8, marginBottom: 5, borderRadius: 5, backgroundColor: C.successSoft }} wrap={false}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', color: C.success, fontSize: 9 }}>{s(d.titulo)}</Text>
-                <Text style={{ fontSize: 8.5, color: C.ink2 }}>{s(d.detalhe)}</Text>
-              </View>
-            ))
-          ) : (
-            <SemNeo oque="destaques" />
-          )}
-        </View>
-        <View style={{ flex: 1, marginLeft: 8 }}>
-          <Text style={st.h3}>O que preocupa</Text>
-          {neo?.riscos.length ? (
-            neo.riscos.map((r) => {
-              const tom = TOM_GRAVIDADE[r.gravidade];
-              return (
-                <View key={r.titulo} style={{ padding: 8, marginBottom: 5, borderRadius: 5, backgroundColor: tom.fundo }} wrap={false}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', color: tom.cor, fontSize: 9, flex: 1 }}>{s(r.titulo)}</Text>
-                    <Text style={{ fontSize: 6.5, color: tom.cor, fontFamily: 'Helvetica-Bold' }}>{tom.rotulo}</Text>
-                  </View>
-                  <Text style={{ fontSize: 8.5, color: C.ink2 }}>{s(r.detalhe)}</Text>
-                </View>
-              );
-            })
-          ) : (
-            <SemNeo oque="riscos" />
-          )}
-        </View>
-      </View>
-
-      {dossie.time.demonstracao ? (
-        <Text style={{ fontSize: 8, color: C.muted, marginTop: 6 }}>
-          Este é um time de demonstração: as pessoas são fictícias, e os locais de votação são reais.
-        </Text>
-      ) : null}
+    <View style={{ marginTop: 4 }} wrap={false}>
+      <View style={{ width: 90, height: 0.6, backgroundColor: C.navy3, marginBottom: 4 }} />
+      <Text style={{ fontFamily: 'Times-Italic', fontSize: 10.5, color: C.navy }}>NEO</Text>
+      <Text style={{ fontSize: 7, color: C.faint, letterSpacing: 0.8 }}>NÚCLEO DE INTELIGÊNCIA DE MOBILIZAÇÃO</Text>
     </View>
   );
 }
 
-function Numeros({ dossie }: { dossie: Dossie }) {
-  const n = dossie.numeros;
-  const variacao = `${n.variacao7 >= 0 ? '+' : ''}${n.variacao7}% sobre a semana anterior`;
+function Sumario({ dossie, analise }: { dossie: Dossie; analise: AnaliseDoNeo }) {
+  const indice = dossie.estrategia.indice;
+  const cor = corDoIndice(indice.valor);
   return (
-    <View break>
-      <Capitulo numero="2" titulo="O time em números" sub="Tudo contado do cadastro, no momento em que o relatório foi gerado." />
+    <View>
+      <Secao numero="01" titulo="Sumário executivo" sub="O essencial para a direção, em uma leitura." />
 
-      <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-        <Kpi valor={num(n.total)} rotulo="pessoas no time" />
-        <View style={{ width: 8 }} />
-        <Kpi valor={num(n.hoje)} rotulo="cadastros hoje" tom={C.accent} />
-        <View style={{ width: 8 }} />
-        <Kpi valor={num(n.ultimos7)} rotulo="nos últimos 7 dias" nota={variacao} tom={C.accent} />
-        <View style={{ width: 8 }} />
-        <Kpi valor={num(n.ultimos30)} rotulo="nos últimos 30 dias" nota={`${n.ritmo30.toLocaleString('pt-BR')} por dia`} tom={C.accent} />
+      <Text style={[st.rotulo, { marginBottom: 6, color: C.gold }]}>Carta à direção</Text>
+      <Paragrafos texto={analise.carta} estilo="serifa" />
+      <Assinatura />
+
+      {/* O indice e calculado: o NEO so o le. */}
+      <View style={{ marginTop: 18, padding: 14, backgroundColor: C.bg, borderLeftWidth: 3, borderLeftColor: cor }} wrap={false}>
+        <View style={{ flexDirection: 'row' }}>
+          <View style={{ alignItems: 'center', marginRight: 16, width: 96 }}>
+            <Anel valor={indice.valor} cor={cor} tamanho={88} rotulo="de 100" />
+            <View style={{ marginTop: 5 }}>
+              <Chip texto={indice.rotulo.toUpperCase()} cor={C.white} fundo={cor} />
+            </View>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 11.5, fontFamily: 'Helvetica-Bold', color: C.navy }}>Índice de Mobilização</Text>
+            <Text style={{ fontSize: 8.6, color: C.ink2, marginTop: 3, marginBottom: 8 }}>{s(analise.leituraDoIndice)}</Text>
+            {indice.componentes.map((c) => (
+              <View key={c.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Text style={{ width: 118, fontSize: 7.8, color: C.ink2 }}>{s(c.rotulo)}</Text>
+                <View style={{ flex: 1, height: 6, backgroundColor: '#dfe5ec', borderRadius: 3 }}>
+                  <View style={{ width: `${Math.max(1.5, c.valor)}%`, height: 6, backgroundColor: corDoIndice(c.valor), borderRadius: 3 }} />
+                </View>
+                <Text style={{ width: 34, textAlign: 'right', fontSize: 7.8, fontFamily: 'Helvetica-Bold' }}>{`${c.valor}%`}</Text>
+                <Text style={{ width: 40, textAlign: 'right', fontSize: 6.8, color: C.faint }}>{`peso ${c.peso}%`}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
       </View>
 
-      <Text style={st.h3}>Estrutura</Text>
-      {/* Administradores -> Lideres -> Equipe: a hierarquia como ela e. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }} wrap={false}>
-        {[
-          { valor: n.administradores, rotulo: 'Administradores do time', nota: 'cadastram os Líderes', cor: C.navy },
-          { valor: n.lideres, rotulo: 'Líderes', nota: `${num(n.lideresAtivos)} já trouxeram alguém`, cor: C.navy2 },
-          { valor: n.equipe, rotulo: 'na Equipe', nota: `média de ${n.equipeMedia.toLocaleString('pt-BR')} por Líder ativo`, cor: C.accent },
-        ].map((nivel, i) => (
-          <View key={nivel.rotulo} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            {i > 0 ? <Text style={{ fontSize: 16, color: C.faint, marginHorizontal: 6 }}>{'>'}</Text> : null}
-            <View style={{ flex: 1, padding: 10, borderRadius: 6, backgroundColor: nivel.cor }}>
-              <Text style={{ fontSize: 20, fontFamily: 'Helvetica-Bold', color: C.white, lineHeight: 1.15, marginBottom: 2 }}>
-                {num(nivel.valor)}
-              </Text>
-              <Text style={{ fontSize: 8, color: C.white }}>{s(nivel.rotulo)}</Text>
-              <Text style={{ fontSize: 7, color: '#c9d6e8', marginTop: 2 }}>{s(nivel.nota)}</Text>
+      <Text style={st.h3}>Conclusões-chave</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -3 }}>
+        {analise.conclusoes.map((c) => {
+          const tom = NATUREZA[c.natureza] ?? NATUREZA.forca;
+          return (
+            <View key={c.titulo} style={{ width: '50%', padding: 3 }} wrap={false}>
+              <View style={{ padding: 9, borderLeftWidth: 2.5, borderLeftColor: tom.cor, backgroundColor: tom.fundo, minHeight: 62 }}>
+                <Text style={{ fontSize: 6.4, color: tom.cor, fontFamily: 'Helvetica-Bold', letterSpacing: 1 }}>{tom.rotulo}</Text>
+                <Text style={{ fontSize: 9.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginTop: 2 }}>{s(c.titulo)}</Text>
+                <Text style={{ fontSize: 8.2, color: C.ink2, marginTop: 2 }}>{s(c.texto)}</Text>
+              </View>
             </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   02 · A forca da rede
+   ------------------------------------------------------------------------- */
+
+function Piramide({ dossie }: { dossie: Dossie }) {
+  const n = dossie.numeros;
+  const niveis = [
+    { valor: n.administradores, rotulo: n.administradores === 1 ? 'coordenador' : 'coordenadores', largura: '44%', cor: C.navy },
+    { valor: n.lideres, rotulo: n.lideres === 1 ? 'liderança' : 'lideranças', largura: '70%', cor: C.navy2 },
+    { valor: n.equipe, rotulo: 'apoiadores trazidos pelas lideranças', largura: '96%', cor: C.blue },
+  ];
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {niveis.map((nivel) => (
+        <View
+          key={nivel.rotulo}
+          style={{
+            width: nivel.largura,
+            backgroundColor: nivel.cor,
+            paddingVertical: 6,
+            marginBottom: 3,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: C.white, fontSize: 15, fontFamily: 'Helvetica-Bold', lineHeight: 1.1 }}>{num(nivel.valor)}</Text>
+          <Text style={{ color: '#dbe4f0', fontSize: 7.2 }}>{s(nivel.rotulo)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Novos por semana (barras) e total acumulado (linha). */
+function Trajetoria({ dossie }: { dossie: Dossie }) {
+  const semanas = dossie.crescimento;
+  const acumulado = dossie.estrategia.acumulado;
+  const largura = 503;
+  const altura = 96;
+  const topo = 14;
+  const passo = largura / semanas.length;
+  const maiorNovos = Math.max(1, ...semanas.map((w) => w.quantidade));
+  const maiorTotal = Math.max(1, ...acumulado);
+  const menorTotal = Math.min(...acumulado);
+  const faixa = Math.max(1, maiorTotal - menorTotal);
+  const yTotal = (v: number) => topo + (altura - topo - 8) * (1 - (v - menorTotal) / faixa) * 0.85;
+  const pontos = acumulado.map((v, i) => [i * passo + passo / 2, yTotal(v)] as const);
+  const linha = pontos.map(([x, y], i) => `${i ? 'L' : 'M'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+
+  return (
+    <View wrap={false}>
+      <Svg viewBox={`0 0 ${largura} ${altura}`} style={{ width: largura, height: altura }}>
+        {[0.25, 0.5, 0.75].map((f) => (
+          <Path key={f} d={`M 0 ${altura * f} L ${largura} ${altura * f}`} stroke="#e8edf2" strokeWidth={0.5} />
+        ))}
+        {semanas.map((w, i) => {
+          const h = Math.max(w.quantidade ? 3 : 1, (w.quantidade / maiorNovos) * (altura - topo - 30));
+          const ultima = i === semanas.length - 1;
+          return (
+            <Rect
+              key={w.inicio}
+              x={i * passo + passo * 0.22}
+              y={altura - h}
+              width={passo * 0.56}
+              height={h}
+              fill={ultima ? C.gold : '#b9c8dc'}
+            />
+          );
+        })}
+        {acumulado.length > 1 ? <Path d={linha} stroke={C.navy} strokeWidth={1.6} fill="none" /> : null}
+        {pontos.map(([x, y], i) => (
+          <Circle key={i} cx={x} cy={y} r={i === pontos.length - 1 ? 3 : 1.8} fill={C.navy} />
+        ))}
+      </Svg>
+      <View style={{ flexDirection: 'row' }}>
+        {semanas.map((w) => (
+          <View key={w.inicio} style={{ width: passo, alignItems: 'center' }}>
+            <Text style={{ fontSize: 7.2, fontFamily: 'Helvetica-Bold' }}>{`+${num(w.quantidade)}`}</Text>
+            <Text style={{ fontSize: 5.8, color: C.faint }}>{data(w.inicio).slice(0, 5)}</Text>
           </View>
         ))}
       </View>
-
-      <Text style={st.h3}>Crescimento — últimas 12 semanas</Text>
-      <Crescimento semanas={dossie.crescimento} />
-
-      <View style={{ flexDirection: 'row', marginTop: 4 }}>
-        <View style={{ flex: 1, marginRight: 10 }}>
-          <Text style={st.h3}>Por onde entraram</Text>
-          <Barras
-            total={n.total}
-            itens={[
-              { rotulo: 'Pelo link de cadastro', quantidade: n.viaLink },
-              { rotulo: 'Pelo painel ou planilha', quantidade: n.viaPainel },
-            ]}
-          />
-          <Text style={{ fontSize: 8, color: C.muted, marginTop: 4 }}>
-            {s(`${num(n.comAcesso)} pessoas com acesso ativo ao painel.`)}
-          </Text>
+      <View style={{ flexDirection: 'row', marginTop: 5 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 14 }}>
+          <View style={{ width: 8, height: 8, backgroundColor: '#b9c8dc', marginRight: 4 }} />
+          <Text style={{ fontSize: 7, color: C.muted }}>novos na semana (a atual em dourado)</Text>
         </View>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={st.h3}>Gênero</Text>
-          <Barras itens={dossie.genero} total={n.total} cor={C.navy2} />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ width: 12, height: 1.6, backgroundColor: C.navy, marginRight: 4 }} />
+          <Text style={{ fontSize: 7, color: C.muted }}>{s(`total acumulado · hoje ${num(acumulado[acumulado.length - 1] ?? 0)}`)}</Text>
         </View>
       </View>
     </View>
   );
 }
 
-function Lideres({ dossie, neo }: { dossie: Dossie; neo: AnaliseDoNeo | null }) {
-  const maior = Math.max(1, ...dossie.lideres.map((l) => l.equipe));
+function Rede({ dossie, analise }: { dossie: Dossie; analise: AnaliseDoNeo }) {
+  const e = dossie.estrategia;
+  const n = dossie.numeros;
+  const variacao = `${n.variacao7 >= 0 ? '+' : ''}${n.variacao7}% na última semana`;
   return (
     <View break>
-      <Capitulo numero="3" titulo="Líderes e Administração" sub="Quem puxa, quem parou, e quem precisa de ajuda." />
+      <Secao numero="02" titulo="A força da rede" sub="Estrutura, ativação das lideranças, ritmo e trajetória." />
 
-      {neo?.lideres.length ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
-          {neo.lideres.map((l) => {
-            const tom = TOM_PERFIL[l.perfil] ?? TOM_PERFIL.Constante;
+      <LinhaDeKpis>
+        <Kpi valor={num(e.baseLiquida)} rotulo="base mobilizada (líquida)" nota={e.duplicados ? `${num(e.baseDeclarada)} declarados, ${num(e.duplicados)} duplicados` : 'sem duplicados'} />
+        <Kpi valor={num(e.multiplicador)} rotulo="apoiadores por liderança ativa" tom={C.blue} />
+        <Kpi valor={num(n.ultimos7)} rotulo="novos nos últimos 7 dias" nota={variacao} tom={C.gold} />
+        <Kpi valor={num(n.ultimos30)} rotulo="novos nos últimos 30 dias" nota={`${n.ritmo30.toLocaleString('pt-BR')} por dia`} tom={C.gold} />
+      </LinhaDeKpis>
+
+      <View style={{ flexDirection: 'row', marginTop: 10 }} wrap={false}>
+        <View style={{ flex: 1.35, marginRight: 14 }}>
+          <Text style={[st.h3, { marginTop: 0 }]}>A pirâmide da rede</Text>
+          <Piramide dossie={dossie} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[st.h3, { marginTop: 0 }]}>Lideranças em ação</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+            <View style={{ alignItems: 'center', width: 96 }}>
+              <Anel valor={e.ativacao} cor={corDoIndice(e.ativacao)} tamanho={70} sufixo="%" />
+              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', marginTop: 4, textAlign: 'center' }}>Ativação</Text>
+              <Text style={{ fontSize: 6.6, color: C.faint, textAlign: 'center' }}>{s(`${num(n.lideresAtivos)} de ${num(n.lideres)} já trouxeram alguém`)}</Text>
+            </View>
+            <View style={{ alignItems: 'center', width: 96 }}>
+              <Anel valor={e.engajamento} cor={corDoIndice(e.engajamento)} tamanho={70} sufixo="%" />
+              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', marginTop: 4, textAlign: 'center' }}>Engajamento</Text>
+              <Text style={{ fontSize: 6.6, color: C.faint, textAlign: 'center' }}>{s(`${num(e.lideresRecentes)} cadastraram em 30 dias`)}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      <View style={{ marginTop: 14 }}>
+        <Paragrafos texto={analise.forcaDaRede} />
+      </View>
+
+      {dossie.numeros.lideresAtivos > 0 ? (
+        <View style={{ marginTop: 10, padding: 10, backgroundColor: C.goldSoft, borderLeftWidth: 2.5, borderLeftColor: C.gold }} wrap={false}>
+          <Text style={{ fontSize: 8.8, color: C.ink }}>
+            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(`Concentração: `)}</Text>
+            {s(
+              `as 3 maiores lideranças respondem por ${e.concentracaoTop3}% da base trazida pelas lideranças; ` +
+                `${num(e.lideresPara80)} ${e.lideresPara80 === 1 ? 'liderança soma' : 'lideranças somam'} 80% dela.`,
+            )}
+          </Text>
+        </View>
+      ) : null}
+
+      <Text style={st.h3}>Trajetória — últimas 12 semanas</Text>
+      <Trajetoria dossie={dossie} />
+
+      {/* Titulo, numeros e texto andam juntos: nunca um paragrafo sozinho
+          numa pagina. */}
+      <View wrap={false}>
+      <Text style={st.h3}>Cenário — mantido o ritmo atual</Text>
+      {e.projecao ? (
+        <View style={{ flexDirection: 'row', marginBottom: 8 }} wrap={false}>
+          {([
+            ['em 30 dias', e.projecao.em30],
+            ['em 60 dias', e.projecao.em60],
+            ['em 90 dias', e.projecao.em90],
+          ] as const).map(([rotulo, valor], i) => (
+            <View key={rotulo} style={{ flex: 1, marginLeft: i ? 6 : 0, padding: 10, borderWidth: 0.6, borderColor: C.line, borderStyle: 'dashed' }}>
+              <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(valor)}</Text>
+              <Text style={{ fontSize: 7.4, color: C.muted }}>{s(`apoiadores ${rotulo}`)}</Text>
+              <Text style={{ fontSize: 6.6, color: C.faint }}>{s(`+${num(valor - e.baseLiquida)} sobre hoje`)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      <Paragrafos texto={analise.cenario} />
+      </View>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   03 · Liderancas
+   ------------------------------------------------------------------------- */
+
+function SeloChip({ selo }: { selo: string }) {
+  const tom = TOM_SELO[selo] ?? TOM_SELO['Sem Equipe'];
+  return <Chip texto={selo.toUpperCase()} cor={tom.cor} fundo={tom.fundo} />;
+}
+
+function Liderancas({ dossie, analise }: { dossie: Dossie; analise: AnaliseDoNeo }) {
+  const podio = dossie.lideres.filter((l) => l.equipe > 0).slice(0, 3);
+  const porNome = new Map(dossie.lideres.map((l) => [l.nome, l]));
+  const maior = Math.max(1, ...dossie.lideres.map((l) => l.equipe));
+
+  return (
+    <View break>
+      <Secao numero="03" titulo="Lideranças" sub="Quem sustenta a rede, quem esfriou e o que fazer com cada uma." />
+
+      {podio.length ? (
+        <View style={{ flexDirection: 'row', marginBottom: 6 }} wrap={false}>
+          {podio.map((l, i) => (
+            <View
+              key={l.id}
+              style={{
+                flex: 1,
+                marginLeft: i ? 6 : 0,
+                padding: 11,
+                backgroundColor: i === 0 ? C.navy : C.bg,
+                borderTopWidth: 2.5,
+                borderTopColor: C.gold,
+              }}
+            >
+              <Text style={{ fontSize: 20, fontFamily: 'Helvetica-Bold', color: C.gold, lineHeight: 1 }}>{`${i + 1}º`}</Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: i === 0 ? C.white : C.navy, marginTop: 5 }}>{s(l.nome)}</Text>
+              <Text style={{ fontSize: 7.6, color: i === 0 ? '#cdd8e6' : C.muted, marginTop: 2 }}>
+                {s(`${num(l.equipe)} apoiadores · ${l.participacao.toLocaleString('pt-BR')}% da base`)}
+              </Text>
+              <Text style={{ fontSize: 7, color: i === 0 ? C.navy3 : C.faint, marginTop: 1, marginBottom: 5 }}>
+                {s(`${num(l.equipeUltimos30)} novos em 30 dias · integridade ${l.integridade}%`)}
+              </Text>
+              <SeloChip selo={l.selo} />
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={{ flexDirection: 'row' }} wrap={false}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={st.h3}>Lideranças por tamanho da base</Text>
+          <Barras itens={dossie.estrategia.faixas} cor={C.navy2} larguraDoRotulo={96} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={st.h3}>Lideranças por momento</Text>
+          <Barras
+            itens={dossie.estrategia.selos.map((x) => ({ ...x, cor: TOM_SELO[x.rotulo]?.cor }))}
+            larguraDoRotulo={96}
+          />
+        </View>
+      </View>
+
+      {analise.liderancas.length ? (
+        <View>
+          <Text style={st.h3}>Leitura das lideranças</Text>
+          {analise.liderancas.map((l) => {
+            const dados = porNome.get(l.nome);
             return (
-              <View key={l.nome} style={{ width: '50%', padding: 3 }} wrap={false}>
-                <View style={{ padding: 8, borderRadius: 5, borderWidth: 0.6, borderColor: C.line, minHeight: 52 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, flex: 1 }}>{s(l.nome)}</Text>
-                    <Chip texto={l.perfil} cor={tom.cor} fundo={tom.fundo} />
-                  </View>
-                  <Text style={{ fontSize: 8, color: C.ink2 }}>{s(l.leitura)}</Text>
+              <View key={l.nome} style={{ flexDirection: 'row', paddingVertical: 7, borderBottomWidth: 0.5, borderBottomColor: C.line }} wrap={false}>
+                <View style={{ width: 132, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(l.nome)}</Text>
+                  {dados ? (
+                    <View style={{ flexDirection: 'row', marginTop: 3 }}>
+                      <SeloChip selo={dados.selo} />
+                    </View>
+                  ) : null}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 8.6, color: C.ink2 }}>{s(l.leitura)}</Text>
+                  <Text style={{ fontSize: 8, color: C.blue, marginTop: 2 }}>
+                    <Text style={{ fontFamily: 'Helvetica-Bold' }}>{'Próximo passo › '}</Text>
+                    {s(l.proximoPasso)}
+                  </Text>
                 </View>
               </View>
             );
           })}
         </View>
-      ) : (
-        <SemNeo oque="leitura dos Líderes" />
-      )}
+      ) : null}
 
-      <Text style={st.h3}>{s(`Ranking dos Líderes (${num(dossie.lideres.length)})`)}</Text>
+      <Text style={st.h3}>{s(`Ranking das lideranças (${num(dossie.lideres.length)})`)}</Text>
       <Tabela<LiderNoDossie>
         linhas={dossie.lideres}
         chave={(l) => l.id}
-        vazio="Nenhum Líder cadastrado ainda."
+        vazio="Nenhuma liderança cadastrada ainda."
         colunas={[
-          { titulo: '#', largura: '5%', celula: (_, i) => String(i + 1) },
-          { titulo: 'Líder', largura: '27%', celula: (l) => l.nome },
+          { titulo: '#', largura: '5%', celula: (l) => String(l.posicao) },
+          { titulo: 'Liderança', largura: '25%', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(l.nome)}</Text> },
+          { titulo: 'Momento', largura: '14%', celula: (l) => <SeloChip selo={l.selo} /> },
           {
-            titulo: 'Equipe',
-            largura: '22%',
+            titulo: 'Base',
+            largura: '19%',
             celula: (l) => (
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ width: 60, height: 5, backgroundColor: '#e7ecf1', borderRadius: 3, marginRight: 4 }}>
-                  <View style={{ width: `${(l.equipe / maior) * 100}%`, height: 5, backgroundColor: C.accent, borderRadius: 3 }} />
+                <View style={{ width: 48, height: 4.5, backgroundColor: '#e7ecf1', borderRadius: 2, marginRight: 4 }}>
+                  <View style={{ width: `${(l.equipe / maior) * 100}%`, height: 4.5, backgroundColor: C.blue, borderRadius: 2 }} />
                 </View>
                 <Text style={{ fontFamily: 'Helvetica-Bold' }}>{num(l.equipe)}</Text>
               </View>
             ),
           },
-          { titulo: '7 dias', largura: '8%', alinhar: 'right', celula: (l) => num(l.equipeUltimos7) },
-          { titulo: 'Incompl.', largura: '9%', alinhar: 'right', celula: (l) => num(l.incompletos) },
-          { titulo: 'Conferir', largura: '9%', alinhar: 'right', celula: (l) => num(l.paraConferir) },
-          { titulo: 'Último cadastro', largura: '12%', alinhar: 'right', celula: (l) => data(l.ultimoCadastro) },
-          {
-            titulo: 'Acesso',
-            largura: '8%',
-            alinhar: 'right',
-            celula: (l) => (l.temAcesso ? <Chip texto="Ativo" cor={C.success} fundo={C.successSoft} /> : <Chip texto="Sem" cor={C.danger} fundo={C.dangerSoft} />),
-          },
+          { titulo: '30 dias', largura: '8%', alinhar: 'right', celula: (l) => num(l.equipeUltimos30) },
+          { titulo: 'Part.', largura: '8%', alinhar: 'right', celula: (l) => `${l.participacao.toLocaleString('pt-BR')}%` },
+          { titulo: 'Integr.', largura: '8%', alinhar: 'right', celula: (l) => (l.equipe ? `${l.integridade}%` : '—') },
+          { titulo: 'Último', largura: '13%', alinhar: 'right', celula: (l) => data(l.ultimoCadastro) },
         ]}
       />
 
-      <Text style={st.h3}>{s(`Administradores do time (${num(dossie.administradores.length)})`)}</Text>
+      <Text style={st.h3}>{s(`Coordenação (${num(dossie.administradores.length)})`)}</Text>
       <Tabela
         linhas={dossie.administradores}
-        chave={(a) => a.nome + a.telefone}
-        vazio="Nenhum Administrador cadastrado."
+        chave={(a, i) => `${i}-${a.nome}`}
+        vazio="Nenhum coordenador cadastrado."
         colunas={[
-          { titulo: 'Administrador', largura: '50%', celula: (a) => a.nome },
-          { titulo: 'Telefone', largura: '25%', celula: (a) => telefone(a.telefone) },
-          { titulo: 'Líderes que cadastrou', largura: '25%', alinhar: 'right', celula: (a) => num(a.cadastrou) },
+          { titulo: 'Coordenador', largura: '70%', celula: (a) => a.nome },
+          { titulo: 'Lideranças recrutadas', largura: '30%', alinhar: 'right', celula: (a) => num(a.cadastrou) },
         ]}
       />
     </View>
   );
 }
 
-function Territorio({ dossie, neo }: { dossie: Dossie; neo: AnaliseDoNeo | null }) {
-  const t = dossie.territorio;
-  // Capitulo curto: segue na mesma pagina do anterior quando cabe, em vez
-  // de deixar meia pagina em branco.
-  return (
-    <View style={{ marginTop: 22 }}>
-      <Capitulo numero="4" titulo="Território" sub={s(`Onde a equipe está — ${dossie.time.municipios.join(', ')} / ${dossie.time.uf}.`)} />
-      {neo ? <Paragrafos texto={neo.territorio} /> : <SemNeo oque="leitura do território" />}
+/* -------------------------------------------------------------------------
+   04 · Territorio
+   ------------------------------------------------------------------------- */
 
-      <View style={{ flexDirection: 'row' }}>
-        <View style={{ flex: 1, marginRight: 10 }}>
-          <Text style={st.h3}>Bairros com mais gente</Text>
-          <Barras itens={t.bairros} total={dossie.numeros.total} />
-          <Text style={{ fontSize: 8, color: C.muted, marginTop: 4 }}>{s(`${num(t.semBairro)} pessoas sem bairro informado.`)}</Text>
+function Territorio({ dossie, analise }: { dossie: Dossie; analise: AnaliseDoNeo }) {
+  const t = dossie.territorio;
+  const el = dossie.estrategia.eleitoral;
+  const total = dossie.numeros.total;
+  return (
+    <View break>
+      <Secao
+        numero="04"
+        titulo="Presença territorial"
+        sub={s(`Onde a rede está — ${dossie.time.municipios.join(', ')} / ${dossie.time.uf}.`)}
+      />
+
+      <LinhaDeKpis>
+        <Kpi valor={num(el.bairros)} rotulo="bairros alcançados" />
+        <Kpi valor={num(el.zonas)} rotulo="zonas eleitorais" tom={C.blue} />
+        <Kpi valor={num(el.secoes)} rotulo="seções eleitorais" tom={C.blue} />
+        <Kpi valor={`${el.concentracaoTop3Bairros}%`} rotulo="da base nos 3 maiores bairros" tom={C.gold} />
+      </LinhaDeKpis>
+
+      <View style={{ marginTop: 10 }}>
+        <Paragrafos texto={analise.territorio} />
+      </View>
+
+      <View style={{ flexDirection: 'row' }} wrap={false}>
+        <View style={{ flex: 1.2, marginRight: 12 }}>
+          <Text style={st.h3}>Bairros com mais apoiadores</Text>
+          <Barras itens={t.bairros} total={total} larguraDoRotulo={104} />
+          {t.semBairro ? (
+            <Text style={{ fontSize: 7.4, color: C.faint, marginTop: 3 }}>{s(`${num(t.semBairro)} sem bairro informado.`)}</Text>
+          ) : null}
         </View>
-        <View style={{ flex: 1, marginLeft: 10 }}>
+        <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={st.h3}>Zonas eleitorais</Text>
-          <Barras itens={t.zonas} total={dossie.numeros.total} cor={C.navy2} />
-          <Text style={st.h3}>Seções com mais gente</Text>
-          <Barras itens={t.secoes} cor={C.navy2} />
-          <Text style={{ fontSize: 8, color: C.muted, marginTop: 4 }}>{s(`${num(t.semSecao)} pessoas sem zona ou seção.`)}</Text>
+          <Barras itens={t.zonas} total={total} cor={C.navy2} larguraDoRotulo={70} />
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', marginTop: 4 }} wrap={false}>
+        <View style={{ flex: 1.2, marginRight: 12 }}>
+          <Text style={st.h3}>Seções com mais apoiadores</Text>
+          <Tabela
+            linhas={t.secoes}
+            chave={(x) => x.rotulo}
+            vazio="Nenhuma seção informada."
+            colunas={[
+              { titulo: 'Zona e seção', largura: '70%', celula: (x) => x.rotulo },
+              { titulo: 'Apoiadores', largura: '30%', alinhar: 'right', celula: (x) => num(x.quantidade) },
+            ]}
+          />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={st.h3}>Qualificação eleitoral</Text>
+          {[
+            { valor: el.tituloValidoPct, rotulo: 'com título de eleitor válido', qtd: el.tituloValido },
+            { valor: el.zonaSecaoPct, rotulo: 'com zona e seção informadas', qtd: el.zonaSecao },
+          ].map((x) => (
+            <View key={x.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Anel valor={x.valor} cor={corDoIndice(x.valor)} tamanho={56} sufixo="%" />
+              <View style={{ marginLeft: 10, flex: 1 }}>
+                <Text style={{ fontSize: 8.4, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(`${num(x.qtd)} apoiadores`)}</Text>
+                <Text style={{ fontSize: 7.6, color: C.muted }}>{s(x.rotulo)}</Text>
+              </View>
+            </View>
+          ))}
+          <Text style={{ fontSize: 7, color: C.faint }}>
+            Título válido e zona e seção são o que permite localizar cada apoiador no mapa eleitoral.
+          </Text>
         </View>
       </View>
     </View>
   );
 }
 
-function Qualidade({ dossie, neo }: { dossie: Dossie; neo: AnaliseDoNeo | null }) {
+/* -------------------------------------------------------------------------
+   05 · Integridade da base
+   ------------------------------------------------------------------------- */
+
+/**
+ * As pendencias com o nome e o encaminhamento que fazem sentido para a
+ * direcao — o quadro do sistema fala a lingua da operacao ("painel",
+ * "Equipe"); o relatorio, a da direcao.
+ */
+const PENDENCIA: Record<string, { titulo: string; encaminhamento: string }> = {
+  repetidos: { titulo: 'Cadastrados mais de uma vez', encaminhamento: 'Manter o primeiro cadastro e remover as cópias.' },
+  faltando: { titulo: 'Cadastros com dado faltando', encaminhamento: 'Completar com a liderança responsável.' },
+  invalido: { titulo: 'Dados inconsistentes', encaminhamento: 'Conferir documento e telefone com a pessoa.' },
+  'lider-sem-acesso': { titulo: 'Lideranças sem acesso ao sistema', encaminhamento: 'Corrigir o telefone da liderança.' },
+  'fora-do-municipio': { titulo: 'Endereço fora do município', encaminhamento: 'Confirmar o endereço da pessoa.' },
+  'terceiro-nivel': { titulo: 'Cadastrados fora da hierarquia', encaminhamento: 'Passar para a liderança correta.' },
+  'responsavel-removido': { titulo: 'Responsável desligado', encaminhamento: 'Designar uma nova liderança responsável.' },
+  'sem-origem': { titulo: 'Sem origem registrada', encaminhamento: 'Atribuir a uma liderança, se possível.' },
+};
+
+function Integridade({ dossie, analise }: { dossie: Dossie; analise: AnaliseDoNeo }) {
   const q = dossie.qualidade;
-  const cor = q.saude >= 90 ? C.success : q.saude >= 70 ? C.warning : C.danger;
+  const e = dossie.estrategia;
+  const cor = corDoIndice(q.saude);
+  const linhas = [
+    ...(q.repetidos.length ? [{ tipo: 'repetidos', gravidade: 'alta', quantidade: q.repetidos.length }] : []),
+    ...(q.incompletos ? [{ tipo: 'faltando', gravidade: 'media', quantidade: q.incompletos }] : []),
+    ...q.problemas.map((p) => ({ tipo: p.tipo as string, gravidade: p.gravidade, quantidade: p.pessoas.length })),
+  ];
+
+  const bloco = (valor: number, rotulo: string, fundo: string, corTexto = C.white) => (
+    <View style={{ flex: 1, padding: 10, backgroundColor: fundo, alignItems: 'center' }}>
+      <Text style={{ fontSize: 17, fontFamily: 'Helvetica-Bold', color: corTexto }}>{num(valor)}</Text>
+      <Text style={{ fontSize: 7.2, color: corTexto === C.white ? '#dbe4f0' : C.muted }}>{s(rotulo)}</Text>
+    </View>
+  );
+  const sinal = (t: string) => (
+    <Text style={{ width: 22, textAlign: 'center', fontSize: 15, color: C.faint, fontFamily: 'Helvetica-Bold' }}>{t}</Text>
+  );
+
   return (
     <View break>
-      <Capitulo numero="5" titulo="Qualidade dos dados e inconsistências" sub="O que está repetido, faltando ou errado — com nome e responsável." />
+      <Secao numero="05" titulo="Integridade da base" sub="O que precisa ser corrigido para a contagem refletir a rede real." />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }} wrap={false}>
-        <Anel valor={q.saude} cor={cor} rotulo="% em ordem" />
-        <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', marginLeft: 14 }}>
-          {[
-            [q.pessoasComProblema, 'pessoas precisam de atenção', C.navy],
-            [q.excedentes, 'cadastros repetidos sobrando', C.danger],
-            [q.incompletos, 'cadastros incompletos', C.warning],
-            [q.paraConferir, 'com dado para conferir', C.danger],
-            [q.possiveisRepetidos, 'possíveis homônimos', C.muted],
-            [q.telefonesCompartilhados, 'telefones compartilhados', C.muted],
-          ].map(([valor, rotulo, tom]) => (
-            <View key={rotulo as string} style={{ width: '33%', paddingVertical: 4 }}>
-              <Text style={{ fontSize: 15, fontFamily: 'Helvetica-Bold', color: tom as string }}>{num(valor as number)}</Text>
-              <Text style={{ fontSize: 7.5, color: C.muted }}>{s(rotulo as string)}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }} wrap={false}>
+        {bloco(e.baseDeclarada, 'base declarada', C.navy2)}
+        {sinal('-')}
+        {bloco(e.duplicados, 'cadastros duplicados', C.dangerSoft, C.danger)}
+        {sinal('=')}
+        {bloco(e.baseLiquida, 'base líquida', C.navy)}
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14 }} wrap={false}>
+        <Anel valor={q.saude} cor={cor} tamanho={78} sufixo="%" rotulo="íntegra" />
+        <View style={{ flex: 1, marginLeft: 14 }}>
+          <Paragrafos texto={analise.integridade} />
+        </View>
+      </View>
+
+      <Text style={st.h3}>Quadro das pendências</Text>
+      <Tabela
+        linhas={linhas}
+        chave={(l) => l.tipo}
+        vazio="Nenhuma pendência: a base está íntegra."
+        colunas={[
+          { titulo: 'Pendência', largura: '36%', celula: (l) => PENDENCIA[l.tipo]?.titulo ?? l.tipo },
+          {
+            titulo: 'Gravidade',
+            largura: '14%',
+            celula: (l) => <Chip texto={TOM_GRAVIDADE[l.gravidade].rotulo} cor={TOM_GRAVIDADE[l.gravidade].cor} fundo={TOM_GRAVIDADE[l.gravidade].fundo} />,
+          },
+          { titulo: 'Pessoas', largura: '12%', alinhar: 'center', celula: (l) => num(l.quantidade) },
+          { titulo: 'Encaminhamento', largura: '38%', celula: (l) => <Text style={{ color: C.muted }}>{s(PENDENCIA[l.tipo]?.encaminhamento ?? 'Revisar com a coordenação.')}</Text> },
+        ]}
+      />
+
+      <View style={{ flexDirection: 'row' }} wrap={false}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={st.h3}>O que mais falta</Text>
+          <Barras itens={q.faltasPorCampo} cor={C.warning} larguraDoRotulo={96} vazio="Nenhum dado faltando." />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={st.h3}>Dados inconsistentes, por motivo</Text>
+          <Barras itens={q.conferirPorMotivo} cor={C.danger} larguraDoRotulo={120} vazio="Nenhum dado inconsistente." />
+        </View>
+      </View>
+
+      <Text style={{ fontSize: 7.6, color: C.faint, marginTop: 10 }}>
+        O detalhamento nominal de cada pendência, com a liderança responsável, está no Anexo A. CPF não é exigido dos apoiadores e
+        não conta como pendência.
+      </Text>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   06 · Recomendacoes
+   ------------------------------------------------------------------------- */
+
+const TOM_PRAZO: Record<string, { cor: string; fundo: string }> = {
+  Imediato: { cor: C.white, fundo: C.danger },
+  'Até 7 dias': { cor: C.white, fundo: C.warning },
+  'Até 30 dias': { cor: C.white, fundo: C.blue },
+  'Até 90 dias': { cor: C.white, fundo: C.navy2 },
+};
+
+function Recomendacoes({ analise }: { analise: AnaliseDoNeo }) {
+  return (
+    <View break>
+      <Secao numero="06" titulo="Recomendações estratégicas" sub="O que fazer, quem executa e até quando — em ordem de prioridade." />
+
+      {analise.recomendacoes.map((r, i) => {
+        const tom = TOM_PRAZO[r.prazo] ?? TOM_PRAZO['Até 30 dias'];
+        return (
+          <View key={`${i}-${r.titulo}`} style={{ flexDirection: 'row', marginBottom: 10 }} wrap={false}>
+            <Text style={{ width: 34, fontSize: 22, fontFamily: 'Helvetica-Bold', color: C.gold, lineHeight: 1 }}>
+              {String(i + 1).padStart(2, '0')}
+            </Text>
+            <View style={{ flex: 1, borderBottomWidth: 0.6, borderBottomColor: C.line, paddingBottom: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10.5, flex: 1, color: C.navy }}>{s(r.titulo)}</Text>
+                <Chip texto={r.prazo.toUpperCase()} cor={tom.cor} fundo={tom.fundo} />
+              </View>
+              <Text style={{ fontSize: 9, color: C.ink2, marginTop: 3 }}>{s(r.acao)}</Text>
+              <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                <Text style={{ fontSize: 7.6, color: C.muted, width: 150 }}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold' }}>Quem executa: </Text>
+                  {s(r.responsavel)}
+                </Text>
+                <Text style={{ fontSize: 7.6, color: C.success, flex: 1 }}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold' }}>Resultado esperado: </Text>
+                  {s(r.resultadoEsperado)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        );
+      })}
+
+      {analise.decisoesDaDirecao.length ? (
+        <View style={{ marginTop: 8, padding: 14, backgroundColor: C.navy }} wrap={false}>
+          <Text style={{ fontSize: 7, color: C.gold, letterSpacing: 2, fontFamily: 'Helvetica-Bold' }}>CABE À DIREÇÃO</Text>
+          <Text style={{ fontSize: 12, color: C.white, fontFamily: 'Helvetica-Bold', marginTop: 3, marginBottom: 8 }}>
+            Decisões estratégicas
+          </Text>
+          {analise.decisoesDaDirecao.map((d, i) => (
+            <View key={i} style={{ flexDirection: 'row', marginBottom: 5 }}>
+              <Text style={{ width: 14, color: C.gold, fontFamily: 'Helvetica-Bold', fontSize: 9 }}>{`${i + 1}.`}</Text>
+              <Text style={{ flex: 1, color: '#e6ecf4', fontSize: 9 }}>{s(d)}</Text>
             </View>
           ))}
         </View>
+      ) : null}
+
+      <View style={{ marginTop: 18 }} wrap={false}>
+        <Text style={[st.rotulo, { color: C.gold, marginBottom: 6 }]}>Mensagem final</Text>
+        <Paragrafos texto={analise.fechamento} estilo="serifa" />
+        <Assinatura />
       </View>
+    </View>
+  );
+}
 
-      {neo ? <Paragrafos texto={neo.qualidadeDosDados} /> : <SemNeo oque="leitura da qualidade" />}
+/* -------------------------------------------------------------------------
+   Anexos
+   ------------------------------------------------------------------------- */
 
-      <View style={{ flexDirection: 'row' }}>
-        <View style={{ flex: 1, marginRight: 10 }}>
-          <Text style={st.h3}>O que mais falta</Text>
-          <Barras itens={q.faltasPorCampo} cor={C.warning} />
-        </View>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={st.h3}>O que mais precisa ser conferido</Text>
-          <Barras itens={q.conferirPorMotivo} cor={C.danger} />
-        </View>
-      </View>
+function situacao(p: PessoaNoDossie) {
+  if (p.conferir.length) return <Chip texto="Conferir" cor={C.danger} fundo={C.dangerSoft} />;
+  if (p.faltas.length) return <Chip texto="Incompleto" cor={C.warning} fundo={C.warningSoft} />;
+  return <Chip texto="Em ordem" cor={C.success} fundo={C.successSoft} />;
+}
 
-      <Text style={st.h3}>
-        {s(`Cadastrados mais de uma vez (${num(q.repetidos.length)} ${q.repetidos.length === 1 ? 'pessoa' : 'pessoas'})`)}
-      </Text>
+function AnexoPendencias({ dossie }: { dossie: Dossie }) {
+  const q = dossie.qualidade;
+  const incompletos = dossie.pessoas.filter((p) => p.faltas.length > 0);
+  const inconsistentes = dossie.pessoas.filter((p) => p.conferir.length > 0);
+  // "Dados para conferir" ja vem nas pessoas, com o motivo exato: a secao do
+  // mesmo nome em `problemas` repetiria as mesmas linhas.
+  const problemas = q.problemas.filter((p) => p.tipo !== 'invalido');
+
+  return (
+    <View break>
+      <Secao numero="ANEXO A" titulo="Pendências de integridade" sub="Cada pendência com nome e liderança responsável, para correção." />
+
+      <Text style={[st.h3, { marginTop: 0 }]}>{s(`Cadastrados mais de uma vez (${num(q.repetidos.length)})`)}</Text>
       {q.repetidos.length === 0 ? (
-        <Text style={{ fontSize: 8.5, color: C.faint }}>Nenhum cadastro repetido.</Text>
+        <Text style={{ fontSize: 8.4, color: C.faint }}>Nenhum cadastro repetido.</Text>
       ) : (
         q.repetidos.map((g, gi) => (
-          <View key={`${g.nome}-${gi}`} style={{ marginBottom: 6, borderWidth: 0.6, borderColor: C.line, borderRadius: 5 }} wrap={false}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 6, backgroundColor: C.bg, borderTopLeftRadius: 5, borderTopRightRadius: 5 }}>
-              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9 }}>{s(g.nome)}</Text>
-              <Text style={{ fontSize: 7.5, color: C.danger }}>{s(`${g.certeza} · ${g.evidencias.join(', ')}`)}</Text>
+          <View key={`${g.nome}-${gi}`} style={{ marginBottom: 6, borderWidth: 0.6, borderColor: C.line }} wrap={false}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 6, backgroundColor: C.bg }}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 8.8 }}>{s(g.nome)}</Text>
+              <Text style={{ fontSize: 7.2, color: C.danger }}>{s(`${g.certeza} · ${g.evidencias.join(', ')}`)}</Text>
             </View>
             {g.registros.map((r, ri) => (
-              <View key={ri} style={{ flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 3, fontSize: 8 }}>
-                <Text style={{ width: '14%', color: r.primeiro ? C.success : C.danger, fontFamily: 'Helvetica-Bold' }}>{r.primeiro ? '1º cadastro' : `${ri + 1}º cadastro`}</Text>
-                <Text style={{ width: '32%' }}>{s(r.nome)}</Text>
-                <Text style={{ width: '38%', color: C.muted }}>{s(`por ${r.cadastradoPor}`)}</Text>
-                <Text style={{ width: '16%', textAlign: 'right', color: C.muted }}>{data(r.cadastradoEm)}</Text>
+              <View key={ri} style={{ flexDirection: 'row', paddingHorizontal: 6, paddingVertical: 2.5, fontSize: 7.8 }}>
+                <Text style={{ width: '15%', color: r.primeiro ? C.success : C.danger, fontFamily: 'Helvetica-Bold' }}>
+                  {r.primeiro ? 'manter' : 'remover'}
+                </Text>
+                <Text style={{ width: '31%' }}>{s(r.nome)}</Text>
+                <Text style={{ width: '40%', color: C.muted }}>{s(`por ${r.cadastradoPor}`)}</Text>
+                <Text style={{ width: '14%', textAlign: 'right', color: C.muted }}>{data(r.cadastradoEm)}</Text>
               </View>
             ))}
-            {g.responsaveis.length > 1 ? (
-              <Text style={{ fontSize: 7.5, color: C.warning, paddingHorizontal: 6, paddingBottom: 4 }}>
-                {s(`Conta para ${g.responsaveis.length} responsáveis no ranking: ${g.responsaveis.join(' e ')}.`)}
-              </Text>
-            ) : null}
           </View>
         ))
       )}
 
-      {q.problemas.map((p) => {
+      <Text style={st.h3}>{s(`Dados inconsistentes (${num(inconsistentes.length)})`)}</Text>
+      <Tabela
+        linhas={inconsistentes}
+        chave={(p) => p.id}
+        vazio="Nenhum dado inconsistente."
+        colunas={[
+          { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
+          { titulo: 'O quê', largura: '36%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.conferir.join(', '))}</Text> },
+          { titulo: 'Liderança responsável', largura: '34%', celula: (p) => p.cadastradoPor },
+        ]}
+      />
+
+      <Text style={st.h3}>{s(`Dados faltando (${num(incompletos.length)})`)}</Text>
+      <Tabela
+        linhas={incompletos}
+        chave={(p) => p.id}
+        vazio="Nenhum dado faltando."
+        colunas={[
+          { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
+          { titulo: 'Falta', largura: '36%', celula: (p) => <Text style={{ color: C.warning }}>{s(p.faltas.join(', '))}</Text> },
+          { titulo: 'Liderança responsável', largura: '34%', celula: (p) => p.cadastradoPor },
+        ]}
+      />
+
+      {problemas.map((p) => {
         const tom = TOM_GRAVIDADE[p.gravidade];
         return (
           <View key={p.tipo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 5 }} wrap={false}>
-              <Text style={[st.h3, { marginTop: 0, marginBottom: 0, marginRight: 6 }]}>{s(`${p.titulo} (${num(p.pessoas.length)})`)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 5 }} wrap={false} minPresenceAhead={50}>
+              <Text style={[st.h3, { marginTop: 0, marginBottom: 0, marginRight: 6 }]}>
+                {s(`${PENDENCIA[p.tipo]?.titulo ?? p.titulo} (${num(p.pessoas.length)})`)}
+              </Text>
               <Chip texto={tom.rotulo} cor={tom.cor} fundo={tom.fundo} />
             </View>
             <Tabela
               linhas={p.pessoas}
-              chave={(x) => `${p.tipo}-${x.nome}-${x.detalhe}`}
+              chave={(x, i) => `${p.tipo}-${i}`}
               colunas={[
-                { titulo: 'Pessoa', largura: '32%', celula: (x) => x.nome },
-                { titulo: 'O quê', largura: '34%', celula: (x) => x.detalhe },
+                { titulo: 'Pessoa', largura: '30%', celula: (x) => x.nome },
+                { titulo: 'O quê', largura: '36%', celula: (x) => x.detalhe },
                 { titulo: 'Cadastrado por', largura: '34%', celula: (x) => x.cadastradoPor },
               ]}
             />
@@ -809,53 +877,7 @@ function Qualidade({ dossie, neo }: { dossie: Dossie; neo: AnaliseDoNeo | null }
   );
 }
 
-function Plano({ neo }: { neo: AnaliseDoNeo | null }) {
-  const corPrazo: Record<string, { cor: string; fundo: string }> = {
-    Hoje: { cor: C.danger, fundo: C.dangerSoft },
-    'Esta semana': { cor: C.warning, fundo: C.warningSoft },
-    'Este mês': { cor: C.accent, fundo: C.accentSoft },
-  };
-  return (
-    <View break>
-      <Capitulo numero="6" titulo="Plano de ação" sub="O que fazer, por quem e até quando — em ordem de prioridade." />
-      {neo?.planoDeAcao.length ? (
-        neo.planoDeAcao.map((a, i) => {
-          const tom = corPrazo[a.prazo] ?? corPrazo['Este mês'];
-          return (
-            <View key={a.acao} style={{ flexDirection: 'row', marginBottom: 8 }} wrap={false}>
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.navy, justifyContent: 'center', alignItems: 'center', marginRight: 10 }}>
-                <Text style={{ color: C.white, fontFamily: 'Helvetica-Bold', fontSize: 10 }}>{i + 1}</Text>
-              </View>
-              <View style={{ flex: 1, borderBottomWidth: 0.6, borderBottomColor: C.line, paddingBottom: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, flex: 1, color: C.navy }}>{s(a.acao)}</Text>
-                  <Chip texto={a.prazo} cor={tom.cor} fundo={tom.fundo} />
-                </View>
-                <Text style={{ fontSize: 8, color: C.muted, marginTop: 2 }}>{s(`Quem: ${a.responsavel}`)}</Text>
-                <Text style={{ fontSize: 8.5, color: C.ink2, marginTop: 1 }}>{s(a.impacto)}</Text>
-              </View>
-            </View>
-          );
-        })
-      ) : (
-        <SemNeo oque="plano de ação" />
-      )}
-
-      {neo?.perguntas.length ? (
-        <View style={[st.caixa, { marginTop: 10, backgroundColor: C.accentSoft }]} wrap={false}>
-          <Text style={[st.h3, { marginTop: 0 }]}>Para a próxima reunião</Text>
-          {neo.perguntas.map((p) => (
-            <Text key={p} style={{ fontSize: 9, color: C.ink2, marginBottom: 3 }}>
-              {s(`•  ${p}`)}
-            </Text>
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function Anexo({ dossie }: { dossie: Dossie }) {
+function AnexoNominata({ dossie }: { dossie: Dossie }) {
   const porResponsavel = new Map<string, PessoaNoDossie[]>();
   for (const p of dossie.pessoas) {
     if (!p.responsavelId) continue;
@@ -866,39 +888,50 @@ function Anexo({ dossie }: { dossie: Dossie }) {
   const blocos = dossie.lideres.map((l) => {
     const proprio = pessoaPorId.get(l.id);
     if (proprio) agrupadas.add(proprio.id);
-    const equipe = l.usuarioId ? (porResponsavel.get(l.usuarioId) ?? []) : [];
-    for (const m of equipe) agrupadas.add(m.id);
-    return { lider: l, proprio, equipe };
+    const base = l.usuarioId ? (porResponsavel.get(l.usuarioId) ?? []) : [];
+    for (const m of base) agrupadas.add(m.id);
+    return { lider: l, proprio, base };
   });
   const demais = dossie.pessoas.filter((p) => !agrupadas.has(p.id));
 
   const colunas = [
-    { titulo: 'Nome', largura: '27%', celula: (p: PessoaNoDossie) => p.nome },
+    { titulo: 'Nome', largura: '28%', celula: (p: PessoaNoDossie) => p.nome },
     { titulo: 'Telefone', largura: '15%', celula: (p: PessoaNoDossie) => telefone(p.telefone) },
-    { titulo: 'Bairro', largura: '18%', celula: (p: PessoaNoDossie) => p.bairro || '—' },
+    { titulo: 'Bairro', largura: '19%', celula: (p: PessoaNoDossie) => p.bairro || '—' },
     { titulo: 'Zona / Seção', largura: '12%', celula: (p: PessoaNoDossie) => (p.zona || p.secao ? `${p.zona || '?'} / ${p.secao || '?'}` : '—') },
-    { titulo: 'Cadastro', largura: '11%', celula: (p: PessoaNoDossie) => data(p.cadastradoEm) },
-    { titulo: 'Situação', largura: '17%', alinhar: 'right' as const, celula: situacao },
+    { titulo: 'Desde', largura: '11%', celula: (p: PessoaNoDossie) => data(p.cadastradoEm) },
+    { titulo: 'Situação', largura: '15%', alinhar: 'right' as const, celula: situacao },
   ];
 
   return (
     <View break>
-      <Capitulo numero="A" titulo="Anexo — quem é cada pessoa" sub={s(`As ${num(dossie.numeros.total)} pessoas do time, cada uma sob o Líder que a trouxe.`)} />
+      <Secao
+        numero="ANEXO B"
+        titulo="Nominata da rede"
+        sub={s(`Os ${num(dossie.numeros.total)} cadastros, cada apoiador sob a liderança que o trouxe.`)}
+      />
 
-      {blocos.map(({ lider, proprio, equipe }) => (
-        <View key={lider.id} style={{ marginBottom: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.accentSoft, padding: 6, borderRadius: 4, marginBottom: 2 }} wrap={false} minPresenceAhead={40}>
-            <Chip texto="LÍDER" cor={C.white} fundo={C.accent} />
-            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5, marginLeft: 6, flex: 1 }}>{s(lider.nome)}</Text>
-            <Text style={{ fontSize: 7.5, color: C.muted }}>
-              {s(`${telefone(lider.telefone)} · trazido por ${lider.cadastradoPor} · ${num(equipe.length)} na Equipe`)}
+      {blocos.map(({ lider, proprio, base }) => (
+        <View key={lider.id} style={{ marginBottom: 12 }}>
+          {/* Sem borda aqui: borda em bloco com `minPresenceAhead` quebra o
+              desenho da biblioteca na virada de pagina. A faixa dourada e
+              um bloco proprio. */}
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navySoft, padding: 6, marginBottom: 2 }}
+            wrap={false}
+          >
+            <View style={{ width: 2.5, height: 12, backgroundColor: C.gold, marginRight: 6 }} />
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.2, flex: 1, color: C.navy }}>{s(`${lider.posicao}. ${lider.nome}`)}</Text>
+            <Text style={{ fontSize: 7.2, color: C.muted, marginRight: 6 }}>
+              {s(`${telefone(lider.telefone)} · ${num(base.length)} ${base.length === 1 ? 'apoiador' : 'apoiadores'}`)}
             </Text>
-            {proprio ? <View style={{ marginLeft: 6 }}>{situacao(proprio)}</View> : null}
+            <SeloChip selo={lider.selo} />
+            {proprio ? <View style={{ marginLeft: 4 }}>{situacao(proprio)}</View> : null}
           </View>
-          {equipe.length ? (
-            <Tabela linhas={equipe} chave={(p) => p.id} colunas={colunas} />
+          {base.length ? (
+            <Tabela linhas={base} chave={(p) => p.id} colunas={colunas} />
           ) : (
-            <Text style={{ fontSize: 8, color: C.faint, paddingLeft: 6 }}>Ainda sem Equipe.</Text>
+            <Text style={{ fontSize: 7.8, color: C.faint, paddingLeft: 6 }}>Ainda sem apoiadores.</Text>
           )}
         </View>
       ))}
@@ -906,20 +939,44 @@ function Anexo({ dossie }: { dossie: Dossie }) {
       {demais.length ? (
         <View>
           <Text style={st.h3}>{s(`Demais cadastros (${num(demais.length)})`)}</Text>
-          <Text style={{ fontSize: 8, color: C.muted, marginBottom: 4 }}>
-            Pessoas que não estão sob um Líder do time: cadastros sem origem, de responsável removido ou de quem é da Equipe.
+          <Text style={{ fontSize: 7.8, color: C.muted, marginBottom: 4 }}>
+            Cadastros que não estão sob uma liderança: sem origem registrada, de responsável removido ou vindos da base.
           </Text>
           <Tabela
             linhas={demais}
             chave={(p) => p.id}
             colunas={[
               ...colunas.slice(0, 2),
-              { titulo: 'Cadastrado por', largura: '18%', celula: (p: PessoaNoDossie) => p.cadastradoPor },
+              { titulo: 'Cadastrado por', largura: '19%', celula: (p: PessoaNoDossie) => p.cadastradoPor },
               ...colunas.slice(3),
             ]}
           />
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function Metodologia({ dossie, neo, modelo }: { dossie: Dossie; neo: boolean; modelo: string }) {
+  const itens: [string, string][] = [
+    ['Fonte dos números', `Todos os números deste relatório foram contados do cadastro da operação em ${dataLonga(dossie.geradoEm)}. Nenhuma quantidade foi estimada — exceto o cenário de 30/60/90 dias, identificado como tal.`],
+    ['Base declarada e base líquida', 'Base declarada é tudo o que está cadastrado. Base líquida conta cada pessoa uma única vez: descontados os cadastros repetidos com certeza (mesmo título, mesmo CPF, ou mesmo nome e telefone) e os muito prováveis (mesmo nome e mesma seção).'],
+    ['Índice de Mobilização', dossie.estrategia.indice.componentes.map((c) => `${c.rotulo} (${c.peso}%): ${c.explicacao.toLowerCase()}`).join(' ') + ' Faixas: até 39 Crítico; 40 a 54 Em atenção; 55 a 69 Estável; 70 a 84 Forte; 85 ou mais Excelente.'],
+    ['Momento das lideranças', 'Motor: cadastrou nos últimos 7 dias e está no terço de cima do ranking. Constante: cadastrou nos últimos 7 dias. Esfriando: cadastrou nos últimos 30 dias, mas não nesta semana. Parado: tem base, mas não cadastra há mais de 30 dias. Sem Equipe: ainda não trouxe ninguém.'],
+    ['Integridade', 'Uma pessoa está íntegra quando não é cópia de outro cadastro, não tem dado essencial faltando (telefone, título, zona, seção e endereço) e não tem documento ou telefone com dígitos inconsistentes. CPF não é exigido dos apoiadores.'],
+    ['Cenário', 'O cenário de 30/60/90 dias apenas prolonga o ritmo médio dos últimos 30 dias sobre a base líquida. Não é meta nem previsão.'],
+    ['Análise', neo ? `Textos analíticos redigidos pelo NEO (modelo ${modelo}) a partir dos números agregados. Nenhum telefone, documento ou endereço foi enviado para a análise.` : 'Textos analíticos montados automaticamente a partir dos números, com as mesmas regras.'],
+    ['Confidencialidade', 'Este documento contém dados pessoais protegidos pela LGPD. Uso restrito à direção e à coordenação da operação.'],
+  ];
+  return (
+    <View break>
+      <Secao numero="NOTA" titulo="Nota metodológica" sub="Como os números deste relatório foram obtidos." />
+      {itens.map(([titulo, texto]) => (
+        <View key={titulo} style={{ flexDirection: 'row', paddingVertical: 7, borderBottomWidth: 0.5, borderBottomColor: C.line }} wrap={false}>
+          <Text style={{ width: 140, fontSize: 8.6, fontFamily: 'Helvetica-Bold', color: C.navy, paddingRight: 10 }}>{s(titulo)}</Text>
+          <Text style={{ flex: 1, fontSize: 8.4, color: C.ink2, lineHeight: 1.45 }}>{s(texto)}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -935,26 +992,31 @@ export interface RelatorioProps {
   modelo: string;
 }
 
-export function RelatorioDoTime({ dossie, neo, neoErro, modelo }: RelatorioProps) {
+export function RelatorioDoTime({ dossie, neo, modelo }: RelatorioProps) {
+  const analise = neo ?? analiseAutomatica(dossie);
   return (
     <Document
-      title={s(`Relatório do time ${dossie.time.nome}`)}
-      author={s(`NEO · ${appConfig.name}`)}
-      subject="Relatório do time"
-      creator={appConfig.name}
+      title={s(`Relatório Estratégico de Mobilização — ${dossie.time.nome}`)}
+      author="NEO · Núcleo de Inteligência de Mobilização"
+      subject="Relatório Estratégico de Mobilização"
+      creator="NEO"
       language="pt-BR"
     >
-      <Capa dossie={dossie} neo={neo} modelo={modelo} />
+      <Capa dossie={dossie} analise={analise} />
       <Page size="A4" style={st.page}>
-        <Cabecalho dossie={dossie} />
-        <Resumo dossie={dossie} neo={neo} neoErro={neoErro} />
-        <Numeros dossie={dossie} />
-        <Lideres dossie={dossie} neo={neo} />
-        <Territorio dossie={dossie} neo={neo} />
-        <Qualidade dossie={dossie} neo={neo} />
-        <Plano neo={neo} />
-        <Anexo dossie={dossie} />
-        <Rodape dossie={dossie} />
+        <Cabecalho esquerda="NEO · Relatório Estratégico de Mobilização" direita={dossie.time.nome} />
+        {/* Os blocos fixos vem PRIMEIRO: um bloco `fixed` so se repete nas
+            paginas a partir de onde aparece no fluxo. */}
+        <Rodape texto={`${dataLonga(dossie.geradoEm)} · Documento reservado à direção · Contém dados pessoais (LGPD)`} />
+        <Sumario dossie={dossie} analise={analise} />
+        <Rede dossie={dossie} analise={analise} />
+        <Liderancas dossie={dossie} analise={analise} />
+        <Territorio dossie={dossie} analise={analise} />
+        <Integridade dossie={dossie} analise={analise} />
+        <Recomendacoes analise={analise} />
+        <AnexoPendencias dossie={dossie} />
+        <AnexoNominata dossie={dossie} />
+        <Metodologia dossie={dossie} neo={Boolean(neo)} modelo={modelo} />
       </Page>
     </Document>
   );
@@ -965,90 +1027,7 @@ export async function gerarPdfDoRelatorio(props: RelatorioProps): Promise<Blob> 
   return pdf(<RelatorioDoTime {...props} />).toBlob();
 }
 
-/** relatorio-<time>-<data>.pdf, sem acento nem espaco. */
+/** relatorio-estrategico-<time>-<data>.pdf, sem acento nem espaco. */
 export function nomeDoPdf(dossie: Dossie): string {
-  const time = dossie.time.nome
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return `relatorio-${time || 'time'}-${dossie.geradoEm.slice(0, 10)}.pdf`;
-}
-
-/* -------------------------------------------------------------------------
-   Lista filtrada (quadro de inconsistencias)
-   ------------------------------------------------------------------------- */
-
-export interface PessoaDaLista {
-  nome: string;
-  telefone: string;
-  motivos: string[];
-  cadastradoPor: string;
-  cadastradoEm: string;
-}
-
-export interface ListaFiltradaProps {
-  time: string;
-  filtros: string[];
-  responsavel: string | null;
-  pessoas: PessoaDaLista[];
-  geradaEm: string;
-}
-
-/**
- * So quem foi filtrado, com o motivo e quem cadastrou. E a lista que se
- * leva para a reuniao, ou se entrega ao Lider para ele corrigir.
- */
-export function ListaFiltrada({ time, filtros, responsavel, pessoas, geradaEm }: ListaFiltradaProps) {
-  return (
-    <Document title={s(`Dados para corrigir — ${time}`)} author={s(appConfig.name)} language="pt-BR">
-      <Page size="A4" style={st.page}>
-        <View style={st.cabecalho} fixed>
-          <Text>{s(`DADOS PARA CORRIGIR · ${time.toUpperCase()}`)}</Text>
-          <Text>{s(appConfig.shortName)}</Text>
-        </View>
-
-        <View style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.25 }}>{s(`${num(pessoas.length)} ${pessoas.length === 1 ? 'pessoa' : 'pessoas'} para corrigir`)}</Text>
-          <Text style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>{s(`${time} · ${dataLonga(geradaEm)}`)}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-            {filtros.map((f) => (
-              <View key={f} style={{ marginRight: 4, marginBottom: 4 }}>
-                <Chip texto={f} cor={C.accent} fundo={C.accentSoft} />
-              </View>
-            ))}
-            {responsavel ? (
-              <View style={{ marginRight: 4, marginBottom: 4 }}>
-                <Chip texto={`Cadastrados por ${responsavel}`} cor={C.navy} fundo={C.bg} />
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        <Tabela<PessoaDaLista>
-          linhas={pessoas}
-          chave={(p) => `${p.nome}-${p.telefone}-${p.cadastradoEm}`}
-          vazio="Ninguém nesse filtro."
-          colunas={[
-            { titulo: '#', largura: '5%', celula: (_, i) => String(i + 1) },
-            { titulo: 'Pessoa', largura: '25%', celula: (p) => p.nome },
-            { titulo: 'Telefone', largura: '15%', celula: (p) => telefone(p.telefone) },
-            { titulo: 'O que corrigir', largura: '24%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.motivos.join(', '))}</Text> },
-            { titulo: 'Cadastrado por', largura: '21%', celula: (p) => p.cadastradoPor },
-            { titulo: 'Em', largura: '10%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
-          ]}
-        />
-
-        <View style={st.rodape} fixed>
-          <Text>{s('Confidencial: contém dados pessoais (LGPD). Não compartilhe fora da coordenação.')}</Text>
-          <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
-        </View>
-      </Page>
-    </Document>
-  );
-}
-
-export async function gerarPdfDaLista(props: ListaFiltradaProps): Promise<Blob> {
-  return pdf(<ListaFiltrada {...props} />).toBlob();
+  return `relatorio-estrategico-${slug(dossie.time.nome)}-${dossie.geradoEm.slice(0, 10)}.pdf`;
 }

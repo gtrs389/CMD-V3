@@ -1,9 +1,10 @@
 import type { Client, Member, TeamTier } from '@/lib/types';
-import { genderLabel } from '@/lib/utils/documents';
+import { genderLabel, isValidVoterId, normalizeVoterId } from '@/lib/utils/documents';
 import { normalizeSearch } from '@/lib/utils/text';
 import { recruiterText } from './recruitment';
 import { camposFaltantes } from './member-completeness';
 import { dadosParaConferir } from './conferencia';
+import { seloDoLider, type Selo } from './perfil-do-lider';
 import {
   CERTEZA_ROTULO,
   EVIDENCIA_INFO,
@@ -63,6 +64,13 @@ export interface LiderNoDossie {
   /** Parte do total de cadastros feitos por Lideres, de 0 a 100. */
   participacao: number;
   equipeUltimos7: number;
+  equipeUltimos30: number;
+  /** Posicao no ranking, 1 = quem mais trouxe. */
+  posicao: number;
+  /** Motor, Constante, Esfriando, Parado ou Sem Equipe — a regra do painel. */
+  selo: Selo;
+  /** Parte da Equipe dele sem falta nem dado para conferir, de 0 a 100. */
+  integridade: number;
   incompletos: number;
   paraConferir: number;
   ultimoCadastro: string | null;
@@ -94,6 +102,73 @@ export interface ProblemaNoDossie {
   titulo: string;
   gravidade: 'alta' | 'media' | 'baixa';
   pessoas: { nome: string; detalhe: string; cadastradoPor: string }[];
+}
+
+export interface ComponenteDoIndice {
+  rotulo: string;
+  /** 0 a 100. */
+  valor: number;
+  /** Peso na conta, em %. */
+  peso: number;
+  explicacao: string;
+}
+
+export type RotuloDoIndice = 'Crítico' | 'Em atenção' | 'Estável' | 'Forte' | 'Excelente';
+
+/**
+ * A leitura estrategica, CALCULADA: o que um dirigente quer saber da rede,
+ * em numeros que o sistema garante. O NEO interpreta estes numeros; nao
+ * inventa nenhum deles.
+ */
+export interface Estrategia {
+  /** Tudo o que esta no cadastro. */
+  baseDeclarada: number;
+  /** Cadastros repetidos da mesma pessoa, a mais. */
+  duplicados: number;
+  /** Pessoas, contadas uma vez so. */
+  baseLiquida: number;
+  /** Parte dos Lideres que ja trouxe alguem, de 0 a 100. */
+  ativacao: number;
+  /** Lideres que cadastraram alguem nos ultimos 30 dias. */
+  lideresRecentes: number;
+  /** Parte dos Lideres que cadastrou nos ultimos 30 dias, de 0 a 100. */
+  engajamento: number;
+  /** Pessoas trazidas por Lider ativo. */
+  multiplicador: number;
+  /** Parte da Equipe trazida pelos 3 maiores Lideres, de 0 a 100. */
+  concentracaoTop3: number;
+  /** Quantos Lideres, juntos, trouxeram 80% da Equipe. */
+  lideresPara80: number;
+  /** Lideres por tamanho de Equipe. */
+  faixas: Contagem[];
+  /** Lideres por selo. */
+  selos: Contagem[];
+  eleitoral: {
+    /** Titulo com 12 digitos que fecha o digito verificador. */
+    tituloValido: number;
+    tituloValidoPct: number;
+    /** Zona e secao preenchidas: da para achar o local de votacao. */
+    zonaSecao: number;
+    zonaSecaoPct: number;
+    bairros: number;
+    zonas: number;
+    secoes: number;
+    /** Parte da base nos 3 bairros com mais gente, de 0 a 100. */
+    concentracaoTop3Bairros: number;
+  };
+  /** Mantido o ritmo dos ultimos 30 dias. Nulo sem cadastro recente. */
+  projecao: { ritmoDia: number; em30: number; em60: number; em90: number } | null;
+  /** Total acumulado no fim de cada uma das 12 semanas. */
+  acumulado: number[];
+  indice: { valor: number; rotulo: RotuloDoIndice; componentes: ComponenteDoIndice[] };
+}
+
+export function rotuloDoIndice(valor: number): RotuloDoIndice {
+  if (valor >= 85) return 'Excelente';
+  if (valor >= 70) return 'Forte';
+  if (valor >= 55) return 'Estável';
+  if (valor >= 40) return 'Em atenção';
+  return 'Crítico';
 }
 
 export interface Dossie {
@@ -152,6 +227,7 @@ export interface Dossie {
     problemas: ProblemaNoDossie[];
   };
   pessoas: PessoaNoDossie[];
+  estrategia: Estrategia;
 }
 
 const DIA = 86_400_000;
@@ -216,7 +292,9 @@ export function montarDossie(
     0,
   );
 
-  const lideres: LiderNoDossie[] = lideresBrutos
+  const temProblema = (m: Member) => camposFaltantes(m).length > 0 || dadosParaConferir(m).length > 0;
+
+  const lideresSemPosicao = lideresBrutos
     .map((l) => {
       const equipe = l.userId ? (porResponsavel.get(l.userId) ?? []) : [];
       const ultimo = equipe.reduce<string | null>(
@@ -235,6 +313,10 @@ export function montarDossie(
           ? Math.round((equipe.length / cadastrosDeLideres) * 1000) / 10
           : 0,
         equipeUltimos7: equipe.filter((m) => ts(m) > agora.getTime() - 7 * DIA).length,
+        equipeUltimos30: equipe.filter((m) => ts(m) > agora.getTime() - 30 * DIA).length,
+        integridade: equipe.length
+          ? Math.round(((equipe.length - equipe.filter(temProblema).length) / equipe.length) * 100)
+          : 100,
         incompletos: equipe.filter((m) => camposFaltantes(m).length > 0).length,
         paraConferir: equipe.filter((m) => dadosParaConferir(m).length > 0).length,
         ultimoCadastro: ultimo,
@@ -243,7 +325,18 @@ export function montarDossie(
     })
     .sort((a, b) => b.equipe - a.equipe || a.nome.localeCompare(b.nome, 'pt-BR'));
 
-  const lideresAtivos = lideres.filter((l) => l.equipe > 0).length;
+  const lideresAtivos = lideresSemPosicao.filter((l) => l.equipe > 0).length;
+  const lideres: LiderNoDossie[] = lideresSemPosicao.map((l, i) => ({
+    ...l,
+    posicao: i + 1,
+    selo: seloDoLider({
+      equipe: l.equipe,
+      ultimos7: l.equipeUltimos7,
+      ultimos30: l.equipeUltimos30,
+      posicao: i + 1,
+      ativos: lideresAtivos,
+    }),
+  }));
 
   // Administradores: quantos Lideres cada um trouxe, pelo nome gravado na
   // origem — a pessoa do time nao tem usuario proprio exposto aqui.
@@ -302,6 +395,17 @@ export function montarDossie(
   }).filter((p) => p.pessoas.length > 0);
 
   const certos = diagnostico.repetidos.filter((g) => g.certeza !== 'possivel');
+
+  const estrategia = leituraEstrategica({
+    members,
+    lideres,
+    lideresAtivos,
+    cadastrosDeLideres,
+    excedentes: diagnostico.excedentes,
+    saude: diagnostico.saude,
+    ultimos30,
+    crescimento,
+  });
 
   return {
     geradoEm: agora.toISOString(),
@@ -378,5 +482,135 @@ export function montarDossie(
       problemas,
     },
     pessoas,
+    estrategia,
+  };
+}
+
+const pctDe = (parte: number, total: number) => (total ? Math.round((parte / total) * 100) : 0);
+
+/** A leitura estrategica: tudo contado, nada estimado — so a projecao, que diz que e. */
+function leituraEstrategica(x: {
+  members: readonly Member[];
+  lideres: LiderNoDossie[];
+  lideresAtivos: number;
+  cadastrosDeLideres: number;
+  excedentes: number;
+  saude: number;
+  ultimos30: number;
+  crescimento: { inicio: string; quantidade: number }[];
+}): Estrategia {
+  const { members, lideres } = x;
+  const total = members.length;
+  const baseLiquida = total - x.excedentes;
+
+  const lideresRecentes = lideres.filter((l) => l.equipeUltimos30 > 0).length;
+  const ativacao = pctDe(x.lideresAtivos, lideres.length);
+  const engajamento = pctDe(lideresRecentes, lideres.length);
+
+  // Concentracao: quanto da Equipe depende de poucos.
+  const tamanhos = lideres.map((l) => l.equipe).sort((a, b) => b - a);
+  const top3 = tamanhos.slice(0, 3).reduce((soma, v) => soma + v, 0);
+  let acumulado80 = 0;
+  let lideresPara80 = 0;
+  for (const tamanho of tamanhos) {
+    if (x.cadastrosDeLideres === 0 || acumulado80 >= x.cadastrosDeLideres * 0.8) break;
+    acumulado80 += tamanho;
+    lideresPara80 += 1;
+  }
+
+  const faixa = (min: number, max: number) => lideres.filter((l) => l.equipe >= min && l.equipe <= max).length;
+  const faixas: Contagem[] = [
+    { rotulo: 'Sem Equipe ainda', quantidade: faixa(0, 0) },
+    { rotulo: '1 a 5 pessoas', quantidade: faixa(1, 5) },
+    { rotulo: '6 a 15 pessoas', quantidade: faixa(6, 15) },
+    { rotulo: '16 a 30 pessoas', quantidade: faixa(16, 30) },
+    { rotulo: 'Mais de 30 pessoas', quantidade: faixa(31, Number.MAX_SAFE_INTEGER) },
+  ];
+  const selos: Contagem[] = (['Motor', 'Constante', 'Esfriando', 'Parado', 'Sem Equipe'] as const).map((selo) => ({
+    rotulo: selo,
+    quantidade: lideres.filter((l) => l.selo === selo).length,
+  }));
+
+  const tituloValido = members.filter((m) => {
+    const t = normalizeVoterId(m.voterId ?? '');
+    return t.length === 12 && isValidVoterId(t);
+  }).length;
+  const zonaSecao = members.filter((m) => m.zone?.trim() && m.section?.trim()).length;
+  const distintos = (valores: (string | null | undefined)[]) =>
+    new Set(valores.map((v) => normalizeSearch(v ?? '')).filter(Boolean)).size;
+  const porBairro = contar(members.map((m) => m.district ?? ''), 3);
+  const top3Bairros = porBairro.reduce((soma, b) => soma + b.quantidade, 0);
+
+  const ritmoDia = Math.round((x.ultimos30 / 30) * 10) / 10;
+  const projecao =
+    x.ultimos30 > 0
+      ? {
+          ritmoDia,
+          em30: baseLiquida + Math.round((x.ultimos30 / 30) * 30),
+          em60: baseLiquida + Math.round((x.ultimos30 / 30) * 60),
+          em90: baseLiquida + Math.round((x.ultimos30 / 30) * 90),
+        }
+      : null;
+
+  // Total no fim de cada semana: quem ja estava antes da primeira, mais o
+  // que entrou semana a semana.
+  const antes = members.filter((m) => new Date(m.createdAt).getTime() < new Date(x.crescimento[0]?.inicio ?? 0).getTime()).length;
+  let soma = antes;
+  const acumulado = x.crescimento.map((semana) => (soma += semana.quantidade));
+
+  const tituloValidoPct = pctDe(tituloValido, total);
+  const componentes: ComponenteDoIndice[] = [
+    {
+      rotulo: 'Ativação das lideranças',
+      valor: ativacao,
+      peso: 30,
+      explicacao: 'Parte dos Líderes que já trouxe ao menos uma pessoa.',
+    },
+    {
+      rotulo: 'Engajamento recente',
+      valor: engajamento,
+      peso: 30,
+      explicacao: 'Parte dos Líderes que cadastrou alguém nos últimos 30 dias.',
+    },
+    {
+      rotulo: 'Integridade da base',
+      valor: x.saude,
+      peso: 25,
+      explicacao: 'Parte da base sem cadastro repetido, sem dado faltando e sem dado para conferir.',
+    },
+    {
+      rotulo: 'Qualificação eleitoral',
+      valor: tituloValidoPct,
+      peso: 15,
+      explicacao: 'Parte da base com título de eleitor completo e válido.',
+    },
+  ];
+  const valor = total === 0 ? 0 : Math.round(componentes.reduce((s2, c) => s2 + (c.valor * c.peso) / 100, 0));
+
+  return {
+    baseDeclarada: total,
+    duplicados: x.excedentes,
+    baseLiquida,
+    ativacao,
+    lideresRecentes,
+    engajamento,
+    multiplicador: x.lideresAtivos ? Math.round((x.cadastrosDeLideres / x.lideresAtivos) * 10) / 10 : 0,
+    concentracaoTop3: pctDe(top3, x.cadastrosDeLideres),
+    lideresPara80,
+    faixas,
+    selos,
+    eleitoral: {
+      tituloValido,
+      tituloValidoPct,
+      zonaSecao,
+      zonaSecaoPct: pctDe(zonaSecao, total),
+      bairros: distintos(members.map((m) => m.district)),
+      zonas: distintos(members.map((m) => m.zone)),
+      secoes: distintos(members.map((m) => (m.zone?.trim() && m.section?.trim() ? `${m.zone}/${m.section}` : ''))),
+      concentracaoTop3Bairros: pctDe(top3Bairros, total),
+    },
+    projecao,
+    acumulado,
+    indice: { valor, rotulo: rotuloDoIndice(valor), componentes },
   };
 }
