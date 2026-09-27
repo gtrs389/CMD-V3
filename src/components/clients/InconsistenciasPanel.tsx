@@ -153,6 +153,9 @@ export function InconsistenciasPanel({
     ? (responsaveis.find((opcao) => opcao.key === responsavel)?.label ?? null)
     : null;
 
+  const cadastrosRepetidos = visto.certos.reduce((soma, grupo) => soma + grupo.registros.length, 0);
+  const copiasRepetidas = cadastrosRepetidos - visto.certos.length;
+
   const porTipo = useMemo(() => {
     const mapa = new Map<TipoDaFicha, ProblemaDaFicha[]>();
     for (const problema of visto.problemas) {
@@ -301,12 +304,14 @@ export function InconsistenciasPanel({
           icone={<Copy className="size-4" />}
           tom="danger"
           titulo="Cadastrados mais de uma vez"
-          quantidade={visto.certos.length}
-          descricao={`${formatNumber(diagnostico.excedentes)} ${pluralize(
-            diagnostico.excedentes,
-            'cadastro sobrando',
-            'cadastros sobrando',
-          )} no total do time. O primeiro registro costuma ser o original — os outros são as cópias.`}
+          // O numero e de CADASTROS, como no filtro "Cadastrado mais de uma
+          // vez": contar pessoas aqui e fichas la dava 7 num e 15 no outro.
+          quantidade={cadastrosRepetidos}
+          descricao={`${formatNumber(cadastrosRepetidos)} ${pluralize(cadastrosRepetidos, 'cadastro', 'cadastros')} de ${formatNumber(
+            visto.certos.length,
+          )} ${pluralize(visto.certos.length, 'pessoa', 'pessoas')}: o primeiro de cada uma costuma ser o original, e ${
+            copiasRepetidas === 1 ? 'o outro é cópia' : `os outros ${formatNumber(copiasRepetidas)} são cópias`
+          }.`}
         >
           <ListaQueCresce
             itens={visto.certos}

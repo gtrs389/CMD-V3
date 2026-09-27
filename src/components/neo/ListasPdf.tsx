@@ -53,6 +53,8 @@ export interface PessoaDaLista {
   bairro: string;
   cadastradoPor: string;
   cadastradoEm: string;
+  /** O problema desta pessoa NESTE filtro: "telefone com 8 dígitos", "sem rua"... */
+  problema: string;
 }
 
 /**
@@ -110,8 +112,11 @@ function itensDaSecao(secao: SecaoDoFiltro): { id: string; cadastradoPor: string
   return secao.pessoas;
 }
 
+/** Repetidos contam CADASTROS (as fichas, originais e copias), como o filtro na tela. */
 function quantosNaSecao(secao: SecaoDoFiltro): number {
-  return secao.tipo === 'repetidos' ? secao.grupos.length : secao.pessoas.length;
+  return secao.tipo === 'repetidos'
+    ? secao.grupos.reduce((soma, g) => soma + g.registros.length, 0)
+    : secao.pessoas.length;
 }
 
 /* --- as tres estruturas ------------------------------------------------ */
@@ -138,10 +143,11 @@ function SecaoDePessoas({ pessoas, cor, base }: { pessoas: PessoaDaLista[]; cor:
             chave={(p) => p.id}
             colunas={[
               { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
-              { titulo: 'Pessoa', largura: '36%', celula: (p) => p.nome },
-              { titulo: 'Telefone', largura: '20%', celula: (p) => telefone(p.telefone) },
-              { titulo: 'Bairro', largura: '24%', celula: (p) => p.bairro || '—' },
-              { titulo: 'Cadastro', largura: '14%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
+              { titulo: 'Pessoa', largura: '28%', celula: (p) => p.nome },
+              { titulo: 'Telefone', largura: '17%', celula: (p) => telefone(p.telefone) },
+              { titulo: 'Bairro', largura: '16%', celula: (p) => p.bairro || '—' },
+              { titulo: 'Problema', largura: '21%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.problema)}</Text> },
+              { titulo: 'Cadastro', largura: '12%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
             ]}
           />
         </BlocoDoGrupo>
@@ -192,9 +198,16 @@ function SecaoDeTelefones({ pessoas, cor, base }: { pessoas: PessoaDaLista[]; co
               chave={(p) => `${grupo.telefone}-${p.id}`}
               colunas={[
                 { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
-                { titulo: 'Pessoa', largura: '38%', celula: (p) => p.nome },
-                { titulo: 'Cadastrado por', largura: '42%', celula: (p) => p.cadastradoPor },
-                { titulo: 'Cadastro', largura: '14%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
+                { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
+                { titulo: 'Cadastrado por', largura: '34%', celula: (p) => p.cadastradoPor },
+                {
+                  // O problema aqui e o proprio numero: dito curto, com o
+                  // tamanho do grupo.
+                  titulo: 'Problema',
+                  largura: '18%',
+                  celula: () => <Text style={{ color: C.danger }}>{s(`número em ${num(grupo.itens.length)} fichas`)}</Text>,
+                },
+                { titulo: 'Cadastro', largura: '12%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
               ]}
             />
           </BlocoDoGrupo>
@@ -213,8 +226,9 @@ function SecaoDeRepetidos({ grupos, cor, base }: { grupos: GrupoRepetidoPdf[]; c
   return (
     <>
       <LinhaDeKpis>
-        <Kpi valor={num(grupos.length)} rotulo="pessoas cadastradas mais de uma vez" tom={cor} />
-        <Kpi valor={num(sobrando)} rotulo="cadastros sobrando" nota="as cópias, a excluir" tom={C.warning} />
+        <Kpi valor={num(sobrando + grupos.length)} rotulo="cadastros repetidos" nota="originais e cópias" tom={cor} />
+        <Kpi valor={num(grupos.length)} rotulo={grupos.length === 1 ? 'pessoa' : 'pessoas'} nota="cada uma em mais de um cadastro" />
+        <Kpi valor={num(sobrando)} rotulo="cópias sobrando" nota="a excluir" tom={C.warning} />
         <Kpi valor={num(emDois)} rotulo="contam para mais de um responsável" nota="inflam o ranking" tom={C.gold} />
       </LinhaDeKpis>
 
@@ -224,7 +238,9 @@ function SecaoDeRepetidos({ grupos, cor, base }: { grupos: GrupoRepetidoPdf[]; c
 
       <Text style={[st.h3, { marginTop: 18 }]}>Cadastrados mais de uma vez</Text>
       <Text style={{ fontSize: 7.8, color: C.muted, marginBottom: 8 }}>
-        {s(`${num(sobrando)} ${sobrando === 1 ? 'cadastro sobrando' : 'cadastros sobrando'}. O primeiro registro costuma ser o original — os outros são as cópias.`)}
+        {s(
+          `${num(sobrando + grupos.length)} cadastros de ${num(grupos.length)} ${grupos.length === 1 ? 'pessoa' : 'pessoas'}: o primeiro de cada uma costuma ser o original, e ${sobrando === 1 ? 'o outro é cópia' : `os outros ${num(sobrando)} são cópias`}.`,
+        )}
       </Text>
       {grupos.map((g, i) => (
         <CartaoRepetido key={`${g.nome}-${i}`} grupo={g} />
@@ -241,7 +257,10 @@ function CorpoDaSecao({ secao, cor, base }: { secao: SecaoDoFiltro; cor: string;
 
 function tituloDaSecao(secao: SecaoDoFiltro): string {
   const n = quantosNaSecao(secao);
-  if (secao.tipo === 'repetidos') return `${num(n)} ${n === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} mais de uma vez`;
+  if (secao.tipo === 'repetidos') {
+    const pessoas = secao.grupos.length;
+    return `${num(n)} cadastros de ${num(pessoas)} ${pessoas === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} mais de uma vez`;
+  }
   if (secao.tipo === 'telefones') {
     const numeros = agruparPorTelefone(secao.pessoas).length;
     return `${num(numeros)} ${numeros === 1 ? 'número compartilhado' : 'números compartilhados'}`;
@@ -332,7 +351,8 @@ export function ListaFiltrada({ time, responsavel, geradaEm, secoes, basePorResp
                   alinhar: 'right',
                   celula: (x) => {
                     const n = quantosNaSecao(x.sec);
-                    const [um, varios] = x.sec.tipo === 'telefones' ? ['ficha', 'fichas'] : ['pessoa', 'pessoas'];
+                    const [um, varios] =
+                      x.sec.tipo === 'telefones' ? ['ficha', 'fichas'] : x.sec.tipo === 'repetidos' ? ['cadastro', 'cadastros'] : ['pessoa', 'pessoas'];
                     return `${num(n)} ${n === 1 ? um : varios}`;
                   },
                 },
@@ -438,7 +458,7 @@ export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProp
         <Tabela
           linhas={[
             ...(repetidos.length
-              ? [{ titulo: 'Cadastrados mais de uma vez', gravidade: 'alta' as const, quantidade: repetidos.length }]
+              ? [{ titulo: 'Cadastrados mais de uma vez', gravidade: 'alta' as const, quantidade: repetidos.reduce((soma, g) => soma + g.registros.length, 0) }]
               : []),
             ...secoes.map((sec) => ({ titulo: sec.titulo, gravidade: sec.gravidade, quantidade: sec.pessoas.length })),
           ]}
@@ -467,7 +487,7 @@ export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProp
 
         {repetidos.length ? (
           <View>
-            <Text style={st.h3}>{s(`Cadastrados mais de uma vez (${num(repetidos.length)})`)}</Text>
+            <Text style={st.h3}>{s(`Cadastrados mais de uma vez (${num(repetidos.reduce((soma, g) => soma + g.registros.length, 0))} cadastros de ${num(repetidos.length)} ${repetidos.length === 1 ? 'pessoa' : 'pessoas'})`)}</Text>
             {repetidos.map((g, gi) => (
               <CartaoRepetido key={`${g.nome}-${gi}`} grupo={g} />
             ))}
@@ -504,7 +524,7 @@ export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProp
                       { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
                       { titulo: 'Pessoa', largura: '38%', celula: (p) => p.nome },
                       { titulo: 'Telefone', largura: '22%', celula: (p) => telefone(p.telefone) },
-                      { titulo: 'Detalhe', largura: '34%', celula: (p) => <Text style={{ color: tom.cor }}>{s(p.detalhe)}</Text> },
+                      { titulo: 'Problema', largura: '34%', celula: (p) => <Text style={{ color: tom.cor }}>{s(p.detalhe)}</Text> },
                     ]}
                   />
                 </BlocoDoGrupo>

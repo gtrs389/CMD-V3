@@ -78,13 +78,14 @@ export function FiltroDeDadosCard({
         if (filtro.id === 'repetido') {
           return { tipo: 'repetidos', rotulo: filtro.rotulo, grupos: gruposRepetidos.map(grupoRepetidoParaPdf) };
         }
-        const pessoasDoFiltro = aplicarFiltros(members, [filtro.id], contexto).map(({ member }) => ({
+        const pessoasDoFiltro = aplicarFiltros(members, [filtro.id], contexto).map(({ member, motivos }) => ({
           id: member.id,
           nome: member.name,
           telefone: member.phone ?? '',
           bairro: member.district ?? '',
           cadastradoPor: recruiterText(member.recruitedBy),
           cadastradoEm: member.createdAt,
+          problema: motivos.join(', '),
         }));
         return {
           tipo: filtro.id === 'telefone-repetido' ? 'telefones' : 'pessoas',

@@ -804,7 +804,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
     <View break>
       <Secao numero="ANEXO A" titulo="Pendências de integridade" sub="Cada pendência com nome e liderança responsável, para correção." />
 
-      <Text style={[st.h3, { marginTop: 0 }]}>{s(`Cadastrados mais de uma vez (${num(q.repetidos.length)})`)}</Text>
+      <Text style={[st.h3, { marginTop: 0 }]}>{s(`Cadastrados mais de uma vez (${num(q.repetidos.reduce((soma, g) => soma + g.registros.length, 0))} cadastros de ${num(q.repetidos.length)} ${q.repetidos.length === 1 ? 'pessoa' : 'pessoas'})`)}</Text>
       {q.repetidos.length === 0 ? (
         <Text style={{ fontSize: 8.4, color: C.faint }}>Nenhum cadastro repetido.</Text>
       ) : (
@@ -818,7 +818,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
         vazio="Nenhum dado inconsistente."
         colunas={[
           { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
-          { titulo: 'O quê', largura: '36%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.conferir.join(', '))}</Text> },
+          { titulo: 'Problema', largura: '36%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.conferir.join(', '))}</Text> },
           { titulo: 'Liderança responsável', largura: '34%', celula: (p) => p.cadastradoPor },
         ]}
       />
@@ -830,7 +830,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
         vazio="Nenhum dado faltando."
         colunas={[
           { titulo: 'Pessoa', largura: '30%', celula: (p) => p.nome },
-          { titulo: 'Falta', largura: '36%', celula: (p) => <Text style={{ color: C.warning }}>{s(p.faltas.join(', '))}</Text> },
+          { titulo: 'Problema', largura: '36%', celula: (p) => <Text style={{ color: C.warning }}>{s(`falta ${p.faltas.join(', ')}`)}</Text> },
           { titulo: 'Liderança responsável', largura: '34%', celula: (p) => p.cadastradoPor },
         ]}
       />
@@ -850,7 +850,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
               chave={(x, i) => `${p.tipo}-${i}`}
               colunas={[
                 { titulo: 'Pessoa', largura: '30%', celula: (x) => x.nome },
-                { titulo: 'O quê', largura: '36%', celula: (x) => x.detalhe },
+                { titulo: 'Problema', largura: '36%', celula: (x) => x.detalhe },
                 { titulo: 'Cadastrado por', largura: '34%', celula: (x) => x.cadastradoPor },
               ]}
             />

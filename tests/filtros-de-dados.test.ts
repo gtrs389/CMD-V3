@@ -141,11 +141,13 @@ describe('filtro por dado', () => {
       cadastradoEm: new Date(Date.UTC(2026, 7, 1 + i)).toISOString(),
       filtros: i % 3 === 0 ? [0, 1] : [i % 2],
     }));
+    const comProblema = (k: number) =>
+      pessoas.filter((p) => p.filtros.includes(k)).map((p) => ({ ...p, problema: k === 0 ? 'título com 10 dígitos' : 'sem zona e seção' }));
     const doc = createElement(ListaFiltrada, {
       time: 'Time Palmeira',
       secoes: [
-        { tipo: 'pessoas', rotulo: 'Título incompleto', pessoas: pessoas.filter((p) => p.filtros.includes(0)) },
-        { tipo: 'pessoas', rotulo: 'Sem zona ou seção', pessoas: pessoas.filter((p) => p.filtros.includes(1)) },
+        { tipo: 'pessoas', rotulo: 'Título incompleto', pessoas: comProblema(0) },
+        { tipo: 'pessoas', rotulo: 'Sem zona ou seção', pessoas: comProblema(1) },
       ],
       responsavel: null,
       geradaEm: '2026-09-27T12:00:00Z',
@@ -161,7 +163,7 @@ describe('filtro por dado', () => {
     const hugo = 'Hugo Humberto Pereira do Nascimento · Líder';
     const bruna = 'Bruna Costa · Líder';
     const p = (nome: string, tel: string, por: string, bairro = '') => ({
-      id: nome, nome, telefone: tel, bairro, cadastradoPor: por, cadastradoEm: '2026-09-17T12:00:00Z',
+      id: nome, nome, telefone: tel, bairro, cadastradoPor: por, cadastradoEm: '2026-09-17T12:00:00Z', problema: '',
     });
     const pessoas = [
       p('Ana Cleide Martins da Silva', '8299247526', hugo, 'CEP 57607-200'),
@@ -173,6 +175,9 @@ describe('filtro por dado', () => {
       p('Caio Oliveira da Silva Pereira', '8198672444', hugo, 'Aldeia'),
       p('Elisiane Oliveira da Silva Pereira', '8198672444', hugo, 'Aldeia'),
     ];
+    const contagem = new Map<string, number>();
+    for (const x of pessoas) contagem.set(x.telefone.replace(/\D/g, ''), (contagem.get(x.telefone.replace(/\D/g, '')) ?? 0) + 1);
+    for (const x of pessoas) x.problema = `telefone compartilhado (${contagem.get(x.telefone.replace(/\D/g, ''))} fichas)`;
     const grupos = agruparPorTelefone(pessoas);
     expect(grupos.map((g) => [g.telefone, g.itens.length])).toEqual([
       ['8299247526', 4],
@@ -236,7 +241,7 @@ describe('filtro por dado', () => {
     }));
     const doc = createElement(ListaFiltrada, {
       time: 'Time Palmeira', responsavel: null, geradaEm: '2026-09-27T12:00:00Z',
-      secoes: ['Sem título', 'Sem rua', 'Sem bairro'].map((rotulo, k) => ({ tipo: 'pessoas' as const, rotulo, pessoas: pessoas.filter((p) => p.filtros.includes(k)) })),
+      secoes: ['Sem título', 'Sem rua', 'Sem bairro'].map((rotulo, k) => ({ tipo: 'pessoas' as const, rotulo, pessoas: pessoas.filter((p) => p.filtros.includes(k)).map((p) => ({ ...p, problema: rotulo.toLowerCase() })) })),
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
