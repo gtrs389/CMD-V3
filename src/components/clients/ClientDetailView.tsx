@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Building2,
   ShieldCheck,
+  Sparkles,
   RefreshCw,
   FileText,
   Image as ImageIcon,
@@ -34,6 +35,7 @@ import { MembersPanel } from '@/components/members/MembersPanel';
 import { diagnosticar, municipioDaOperacao } from '@/lib/domain/inconsistencias';
 import { formatNumber, pluralize } from '@/lib/utils/text';
 import { InconsistenciasPanel } from './InconsistenciasPanel';
+import { NeoRelatorioModal } from '@/components/neo/NeoRelatorioModal';
 import { BannerTagModal } from './BannerTagModal';
 import { DemoBadge } from './DemoBadge';
 import { ClientFormModal } from './ClientFormModal';
@@ -85,6 +87,8 @@ export function ClientDetailView({
   const [invite, setInvite] = useState(initialInvite);
   /** Links de cadastro em lote: vários de uma vez, para distribuir. */
   const [lote, setLote] = useState(false);
+  /** Relatorio do NEO: so para quem pode tirar a lista do sistema. */
+  const [relatorio, setRelatorio] = useState(false);
   /**
    * Aba pedida pelo endereco, depois que a pagina ja esta aberta.
    *
@@ -357,6 +361,19 @@ export function ClientDetailView({
               }
             />
 
+            {/* O relatorio carrega a lista inteira do time: e da mesma regra
+                da planilha exportada (`member.export`), e a rota confere. */}
+            {can('member.export') ? (
+              <button
+                type="button"
+                onClick={() => setRelatorio(true)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-pill bg-navy-900 px-4 text-sm font-medium whitespace-nowrap text-white shadow-card transition-colors hover:bg-navy-800"
+              >
+                <Sparkles aria-hidden="true" className="size-4" />
+                Relatório do NEO
+              </button>
+            ) : null}
+
             {podeGerenciarConvite ? (
               <button
                 type="button"
@@ -539,6 +556,17 @@ export function ClientDetailView({
       ) : null}
 
       <BatchLinksModal open={lote} client={client} onClose={() => setLote(false)} />
+
+      {/* Montado so quando abre: cada abertura comeca do zero, e o relatorio
+          anterior nao fica guardado na memoria da pagina. */}
+      {relatorio ? (
+        <NeoRelatorioModal
+          open
+          clientId={client.id}
+          clientName={client.name}
+          onClose={() => setRelatorio(false)}
+        />
+      ) : null}
 
       <InviteLinkModal
         open={invite}
