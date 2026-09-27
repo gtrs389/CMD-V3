@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import { pdf } from '@react-pdf/renderer';
 import type { Member } from '@/lib/types';
-import { aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone } from '@/lib/domain/filtros-de-dados';
+import { FILTROS_DE_DADOS, aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone } from '@/lib/domain/filtros-de-dados';
 import { ListaFiltrada, RelatorioDeInconsistencias } from '@/components/neo/ListasPdf';
 
 /**
@@ -33,7 +33,6 @@ const contexto = contextoDosFiltros(todos, []);
 
 describe('filtro por dado', () => {
   it('cada filtro pega só o seu caso', () => {
-    expect(aplicarFiltros(todos, ['sem-cpf'], contexto).map((p) => p.member.name)).toEqual(['Ana Sem CPF']);
     expect(aplicarFiltros(todos, ['cpf-incompleto'], contexto)[0]).toMatchObject({
       member: { name: 'Bia CPF Curto' },
       motivos: ['CPF com 9 dígitos'],
@@ -42,16 +41,16 @@ describe('filtro por dado', () => {
   });
 
   it('marcar vários soma as listas, e quem está em ordem não aparece', () => {
-    const nomes = aplicarFiltros(todos, ['sem-cpf', 'cpf-incompleto', 'cpf-errado'], contexto).map((p) => p.member.name);
-    expect(nomes).toEqual(['Ana Sem CPF', 'Bia CPF Curto', 'Caio CPF Errado']);
+    const nomes = aplicarFiltros(todos, ['cpf-incompleto', 'cpf-errado'], contexto).map((p) => p.member.name);
+    expect(nomes).toEqual(['Bia CPF Curto', 'Caio CPF Errado']);
     expect(aplicarFiltros(todos, [], contexto)).toEqual([]);
   });
 
-  it('Equipe sem CPF não é pendência: o filtro é só de Líder', () => {
-    const equipeSemCpf = pessoa({ name: 'Edu Equipe Sem CPF', cpf: null, tier: 'EQUIPE', phone: '82999990014' });
-    const lista = [...todos, equipeSemCpf];
-    const nomes = aplicarFiltros(lista, ['sem-cpf'], contextoDosFiltros(lista, [])).map((p) => p.member.name);
-    expect(nomes).toEqual(['Ana Sem CPF']);
+  it('não existe filtro "Sem CPF": CPF vazio não é pendência de ninguém', () => {
+    expect(FILTROS_DE_DADOS.some((f) => /sem cpf/i.test(f.rotulo))).toBe(false);
+    expect(aplicarFiltros(todos, ['sem-cpf'], contexto)).toEqual([]);
+    const contagem = contarPorFiltro(todos, contexto);
+    expect(contagem['sem-cpf']).toBeUndefined();
   });
 
   it('telefone compartilhado é contado pelos números, não pelo estado do acesso', () => {
@@ -69,17 +68,16 @@ describe('filtro por dado', () => {
 
   it('conta quantos caem em cada filtro', () => {
     const contagem = contarPorFiltro(todos, contexto);
-    expect(contagem['sem-cpf']).toBe(1);
     expect(contagem['cpf-incompleto']).toBe(1);
     expect(contagem['sem-titulo']).toBe(0);
   });
 
   it('o PDF sai só com os filtrados, com quem cadastrou', async () => {
-    const pessoas = aplicarFiltros(todos, ['sem-cpf'], contexto).map(({ member, motivos }) => ({
+    const pessoas = aplicarFiltros(todos, ['cpf-errado'], contexto).map(({ member, motivos }) => ({
       nome: member.name, telefone: member.phone, motivos, cadastradoPor: 'João Silva · Líder', cadastradoEm: member.createdAt,
     }));
     const doc = createElement(ListaFiltrada, {
-      time: 'Time Palmeira', filtros: ['Sem CPF'], responsavel: null, pessoas, geradaEm: '2026-09-27T12:00:00Z',
+      time: 'Time Palmeira', filtros: ['CPF que não confere'], responsavel: null, pessoas, geradaEm: '2026-09-27T12:00:00Z',
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());

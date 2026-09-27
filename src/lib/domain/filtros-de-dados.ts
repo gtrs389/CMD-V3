@@ -78,14 +78,8 @@ const vazio = (valor: string | null | undefined) => !valor || !valor.trim();
 const digitos = (valor: string | null | undefined) => (valor ?? '').replace(/\D/g, '');
 
 export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
-  {
-    // So Lider: quem e da Equipe nao e obrigado a informar CPF, e contar a
-    // Equipe aqui enchia o filtro de gente que esta em ordem.
-    id: 'sem-cpf',
-    grupo: 'CPF',
-    rotulo: 'Líder sem CPF',
-    motivo: (m) => (m.tier === 'LIDER' && vazio(m.cpf) ? 'Líder sem CPF' : null),
-  },
+  // Nao ha filtro "Sem CPF": CPF nao e obrigatorio, e a lista so enchia de
+  // gente em ordem. Os filtros de CPF olham o CPF PREENCHIDO errado.
   {
     id: 'cpf-incompleto',
     grupo: 'CPF',
