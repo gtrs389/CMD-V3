@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   AtSign,
   Calendar,
@@ -18,6 +18,7 @@ import {
 import type { CustomField } from '@/lib/types';
 import type { DynamicValue } from '@/lib/validation/dynamic-form';
 import { maskPhone } from '@/lib/utils/phone';
+import { avisoDoCampo } from '@/lib/domain/conferencia';
 import {
   GENDER_OPTIONS,
   UF_OPTIONS,
@@ -138,6 +139,16 @@ export function DynamicFieldInput({
   const invalid = Boolean(error);
   const chain = useLocationChain();
 
+  /**
+   * CPF, titulo ou telefone que nao fecham NAO impedem o envio: aparecem com
+   * um aviso amarelo, depois que a pessoa sai do campo — enquanto ela digita,
+   * "CPF com 3 digitos" seria so barulho.
+   */
+  const [saiu, setSaiu] = useState(false);
+  const aviso = saiu
+    ? avisoDoCampo(field.type === 'phone' ? 'phone' : (field.systemKey ?? undefined), value)
+    : null;
+
   // Estado, municipio e bairro viram listas encadeadas quando o formulario
   // esta dentro de `LocationProvider`. Sem ele, seguem os controles simples.
   if (
@@ -148,7 +159,7 @@ export function DynamicFieldInput({
       field.systemKey === 'street')
   ) {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <LocationField
           field={field}
           id={id}
@@ -162,7 +173,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'photo') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <PhotoUpload
           value={typeof value === 'string' ? value : null}
           onChange={(next) => onChange(next)}
@@ -180,7 +191,7 @@ export function DynamicFieldInput({
   // Genero na pagina publica: cartoes de escolha, como no desenho do convite.
   if (variant === 'invite' && field.systemKey === 'gender') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <RadioCardGroup
           idPrefix={id}
           label={field.label}
@@ -202,7 +213,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'checkbox') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside} hideLabel>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside} hideLabel>
         <Checkbox
           id={id}
           label={
@@ -229,7 +240,7 @@ export function DynamicFieldInput({
   if (field.type === 'multiselect') {
     const selected = Array.isArray(value) ? value : [];
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <div
           role="group"
           aria-labelledby={id}
@@ -262,7 +273,7 @@ export function DynamicFieldInput({
 
   if (field.systemKey === 'relationship') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <RelationshipPicker
           idPrefix={id}
           label={field.label}
@@ -292,7 +303,7 @@ export function DynamicFieldInput({
         : field.placeholder || 'Selecione uma opção';
 
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <Select
           id={id}
           value={typeof value === 'string' ? value : ''}
@@ -314,7 +325,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'textarea') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <Textarea
           id={id}
           rows={4}
@@ -354,7 +365,7 @@ export function DynamicFieldInput({
             ? maskZone
             : maskSection;
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <Input
           {...common}
           type="text"
@@ -362,7 +373,10 @@ export function DynamicFieldInput({
           autoComplete="off"
           value={mask(typeof value === 'string' ? value : '')}
           onChange={(event) => onChange(mask(event.target.value))}
-          onBlur={(event) => onBlur?.(mask(event.target.value))}
+          onBlur={(event) => {
+            setSaiu(true);
+            onBlur?.(mask(event.target.value));
+          }}
         />
       </Field>
     );
@@ -370,7 +384,7 @@ export function DynamicFieldInput({
 
   if (field.type === 'phone') {
     return (
-      <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+      <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
         <Input
           {...common}
           type="tel"
@@ -378,6 +392,7 @@ export function DynamicFieldInput({
           autoComplete="tel"
           value={maskPhone(typeof value === 'string' ? value : '')}
           onChange={(event) => onChange(maskPhone(event.target.value))}
+          onBlur={() => setSaiu(true)}
         />
       </Field>
     );
@@ -393,7 +408,7 @@ export function DynamicFieldInput({
   const config = typeMap[field.type] ?? typeMap.text;
 
   return (
-    <Field id={id} label={field.label} help={help} error={error} required={field.required} aside={aside}>
+    <Field id={id} label={field.label} help={help} error={error} warning={aviso} required={field.required} aside={aside}>
       <Input
         {...common}
         type={config.type}

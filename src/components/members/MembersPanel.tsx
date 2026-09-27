@@ -24,6 +24,7 @@ import { byNewest, formatDate } from '@/lib/utils/date';
 import { baixarCsv } from '@/lib/utils/download';
 import { formatPhone, normalizePhone } from '@/lib/utils/phone';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
+import { avisoDeConferencia, precisaConferir } from '@/lib/domain/conferencia';
 import { matchesSearch } from '@/lib/utils/text';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
@@ -116,6 +117,10 @@ export function MembersPanel({
   const [recruiter, setRecruiter] = useState('todos');
   // Filtro por nivel: Lideres, Equipe ou todos. Tambem so leitura.
   const [nivel, setNivel] = useState<'todos' | TeamTier>('todos');
+  // Filtro pela etiqueta: quem esta para conferir, incompleto ou em ordem.
+  const [situacao, setSituacao] = useState<'todas' | 'conferir' | 'incompleto' | 'em-ordem'>(
+    'todas',
+  );
   const [viewing, setViewing] = useState<Member | null>(null);
   /**
    * Ficha do endereco que a pessoa ja fechou.
@@ -151,6 +156,11 @@ export function MembersPanel({
     return ordered.filter((member) => {
       if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
       if (nivel !== 'todos' && member.tier !== nivel) return false;
+      if (situacao === 'conferir' && !precisaConferir(member)) return false;
+      if (situacao === 'incompleto' && !cadastroIncompleto(member)) return false;
+      if (situacao === 'em-ordem' && (precisaConferir(member) || cadastroIncompleto(member))) {
+        return false;
+      }
 
       if (
         matchesSearch(
@@ -164,7 +174,7 @@ export function MembersPanel({
       }
       return digits.length >= 2 && member.phone.includes(digits);
     });
-  }, [ordered, term, recruiter, nivel]);
+  }, [ordered, term, recruiter, nivel, situacao]);
 
   async function handleRemove() {
     if (!removing) return;
@@ -340,7 +350,7 @@ export function MembersPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <SearchInput
             id="busca-integrantes"
             value={term}
@@ -363,6 +373,25 @@ export function MembersPanel({
               <option value="todos">Nível: todos</option>
               <option value="LIDER">Líderes ({ordered.filter((m) => m.tier === 'LIDER').length})</option>
               <option value="EQUIPE">Equipe ({ordered.filter((m) => m.tier === 'EQUIPE').length})</option>
+            </Select>
+          ) : null}
+
+          {!somenteBasico ? (
+            <Select
+              id="filtro-situacao"
+              aria-label="Filtrar pela situação do cadastro"
+              value={situacao}
+              onChange={(event) => setSituacao(event.target.value as typeof situacao)}
+              className="sm:max-w-48"
+            >
+              <option value="todas">Situação: todas</option>
+              <option value="conferir">
+                Para conferir ({ordered.filter((m) => precisaConferir(m)).length})
+              </option>
+              <option value="incompleto">
+                Incompletos ({ordered.filter((m) => cadastroIncompleto(m)).length})
+              </option>
+              <option value="em-ordem">Em ordem</option>
             </Select>
           ) : null}
 
@@ -454,6 +483,14 @@ export function MembersPanel({
                                 Dados incompletos
                               </Badge>
                             ) : null}
+                            {/* Preenchido, mas errado: CPF que nao fecha,
+                                titulo com digito a menos. Entrou assim mesmo,
+                                e a etiqueta diz o que conferir. */}
+                            {precisaConferir(member) ? (
+                              <Badge tone="danger" title={avisoDeConferencia(member)}>
+                                Conferir dados
+                              </Badge>
+                            ) : null}
                           </div>
                         </>
                       ) : null}
@@ -530,6 +567,11 @@ export function MembersPanel({
                             {!somenteBasico && cadastroIncompleto(member) ? (
                               <Badge tone="warning" title={avisoDeFaltas(member)}>
                                 Incompleto
+                              </Badge>
+                            ) : null}
+                            {!somenteBasico && precisaConferir(member) ? (
+                              <Badge tone="danger" title={avisoDeConferencia(member)}>
+                                Conferir
                               </Badge>
                             ) : null}
                           </span>

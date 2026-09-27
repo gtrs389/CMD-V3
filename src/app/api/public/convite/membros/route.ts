@@ -4,7 +4,7 @@ import { badRequest, jsonGone, jsonOk, readJson, toErrorResponse } from '@/lib/s
 import { publicSubmissionSchema } from '@/lib/validation/server.schema';
 import { getInviteContext } from '@/lib/server/client.service';
 import { createMember, rollbackMember } from '@/lib/server/member.service';
-import { assertTeamPhoneAvailable, createMemberAccess } from '@/lib/server/user.service';
+import { createMemberAccess, teamPhoneTaken } from '@/lib/server/user.service';
 import {
   beginInviteSubmit,
   consumeInvite,
@@ -142,12 +142,12 @@ export async function POST(request: NextRequest) {
         throw badRequest('Informe a zona e a seção eleitoral.');
       }
 
-      // Conferencia do telefone ANTES de gravar qualquer coisa: numero ja em
-      // uso naquele time interrompe o cadastro sem deixar integrante,
-      // usuario ou link orfao. E o telefone que identifica a pessoa no
-      // acesso, entao ele nao pode apontar para duas.
-      await etapa('conferência do telefone', () =>
-        assertTeamPhoneAvailable(client.id, input.phone),
+      // Telefone ja em uso naquele time NAO recusa a pessoa: ela entra, e o
+      // que nao nasce e o acesso dela — o telefone e a credencial do link do
+      // time, e nao pode apontar para duas pessoas. A ficha ganha a etiqueta
+      // "Conferir", e o ADMIN resolve quem fica com o numero.
+      const telefoneRepetido = await etapa('conferência do telefone', () =>
+        teamPhoneTaken(client.id, input.phone),
       );
 
       const { device, ...submission } = input;
@@ -163,14 +163,16 @@ export async function POST(request: NextRequest) {
       // Sem e-mail, sem senha e sem primeiro acesso — ele ja entra pelo link
       // do time com o telefone que acabou de informar.
       try {
-        await etapa('criação do acesso', () =>
-          createMemberAccess({
-            clientId: client.id,
-            memberId: member.id,
-            name: member.name,
-            phone: member.phone,
-          }),
-        );
+        if (!telefoneRepetido) {
+          await etapa('criação do acesso', () =>
+            createMemberAccess({
+              clientId: client.id,
+              memberId: member.id,
+              name: member.name,
+              phone: member.phone,
+            }),
+          );
+        }
       } catch (error) {
         await rollbackMember(member.id);
         throw error;

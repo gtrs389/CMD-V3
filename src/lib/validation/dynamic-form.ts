@@ -1,20 +1,16 @@
 import { z } from 'zod';
 import type { ClientFormConfig, CustomField, FieldResponse, FieldValue, Member } from '@/lib/types';
-import { formatPhone, isUsablePhone, normalizePhone } from '@/lib/utils/phone';
+import { formatPhone, normalizePhone } from '@/lib/utils/phone';
 import {
   formatCpf,
   formatVoterId,
   genderLabel,
-  isValidCpf,
-  VOTER_ID_LENGTH,
   normalizeCpf,
   normalizePlace,
   normalizeSection,
   normalizeState,
   normalizeVoterId,
   normalizeZone,
-  SECTION_MAX_LENGTH,
-  ZONE_MAX_LENGTH,
 } from '@/lib/utils/documents';
 
 /**
@@ -76,26 +72,19 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
           ctx.addIssue({ code: 'custom', message: 'E-mail inválido.' });
         }
       }) as z.ZodType<DynamicValue>;
+    // CPF, titulo, zona e secao TORTOS NAO IMPEDEM O ENVIO.
+    //
+    // O que era erro virou aviso: numero que nao fecha, digito a menos ou a
+    // mais — a pessoa entra, e a ficha dela nasce com a etiqueta "Conferir"
+    // (`domain/conferencia.ts`). Aqui so resta a exigencia de ter ALGUM
+    // numero quando o campo e obrigatorio. Recusar por um digito mal copiado
+    // perde a pessoa: ela fecha a pagina e nao volta.
     case 'cpf':
-      return texto((valor) => (isValidCpf(valor) ? null : 'CPF inválido. Confira os números.'));
     case 'voter_id':
-      // Doze digitos bastam para aceitar. O digito verificador continua
-      // sendo conferido, mas como AVISO na ficha — recusar deixaria a pessoa
-      // de fora do cadastro por causa de um numero mal copiado.
-      return texto((valor) =>
-        valor.replace(/\D/g, '').length === VOTER_ID_LENGTH
-          ? null
-          : 'Título de eleitor deve ter doze dígitos.',
-      );
     case 'zone':
-      return texto((valor) =>
-        /^\d+$/.test(valor) && valor.length <= ZONE_MAX_LENGTH ? null : 'Zona eleitoral inválida.',
-      );
     case 'section':
       return texto((valor) =>
-        /^\d+$/.test(valor) && valor.length <= SECTION_MAX_LENGTH
-          ? null
-          : 'Seção eleitoral inválida.',
+        valor.replace(/\D/g, '') ? null : 'Use apenas números.',
       );
     case 'state':
       return texto((valor) => (normalizeState(valor) ? null : 'Selecione um estado.'));
@@ -106,9 +95,9 @@ function systemValidator(field: CustomField): z.ZodType<DynamicValue> | null {
     case 'city':
     case 'district':
     case 'street':
-      return texto((valor) =>
-        valor.length < 2 ? 'Use pelo menos 2 caracteres.' : valor.length > 120 ? 'Use no máximo 120 caracteres.' : null,
-      );
+      // Uma letra so ("Q") ainda e algo que a pessoa escreveu: entra, e quem
+      // confere decide. So o que o banco nao guarda e recusado.
+      return texto((valor) => (valor.length > 120 ? 'Use no máximo 120 caracteres.' : null));
     default:
       return null;
   }
@@ -159,10 +148,12 @@ function validatorFor(field: CustomField): z.ZodType<DynamicValue> {
           if (required) ctx.addIssue({ code: 'custom', message: requiredMessage(field) });
           return;
         }
-        // Numero incompleto passa: quem preenche na rua erra um digito, e
-        // recusar perde a pessoa. A ficha mostra o aviso de conferir.
-        if (!isUsablePhone(trimmed)) {
-          ctx.addIssue({ code: 'custom', message: 'Telefone muito curto. Use DDD + número.' });
+        // Numero incompleto passa, por mais curto que seja: quem preenche na
+        // rua erra um digito, e recusar perde a pessoa. A ficha nasce com a
+        // etiqueta "Conferir", e o acesso ao painel so nasce com o numero
+        // inteiro. So texto sem digito nenhum e recusado — nao e telefone.
+        if (!normalizePhone(trimmed)) {
+          ctx.addIssue({ code: 'custom', message: 'Use apenas números.' });
         }
       }) as z.ZodType<DynamicValue>;
 

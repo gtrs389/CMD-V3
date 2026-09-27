@@ -9,8 +9,8 @@ import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completen
 import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
 import { formatDateTime } from '@/lib/utils/date';
-import { formatPhone, isValidPhone } from '@/lib/utils/phone';
-import { formatCpf, formatVoterId, genderLabel, isValidVoterId } from '@/lib/utils/documents';
+import { formatPhone } from '@/lib/utils/phone';
+import { formatCpf, formatVoterId, genderLabel } from '@/lib/utils/documents';
 import {
   RELATIONSHIP_COLOR_CLASSES,
   relationshipColor,
@@ -27,6 +27,13 @@ import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberSignupLinkSection } from './MemberSignupLinkSection';
 import { MemberVerificationSection } from './MemberVerificationSection';
 import { RecruitedBy } from './RecruitedBy';
+import {
+  avisoDeConferencia,
+  precisaConferir,
+  problemaDoCpf,
+  problemaDoTelefone,
+  problemaDoTitulo,
+} from '@/lib/domain/conferencia';
 import { TierBadge } from './TierBadge';
 import { TransferRecruiterModal } from './TransferRecruiterModal';
 
@@ -99,20 +106,15 @@ function RelationshipRow({ client, member }: { client: Client; member: Member })
   );
 }
 
-/**
- * Aviso do titulo de eleitor.
- *
- * O numero e aceito mesmo com o digito verificador torto — recusar deixaria
- * a pessoa de fora do cadastro por causa de um numero mal copiado. Mas quem
- * olha a ficha precisa saber: este titulo nao fecha, e provavelmente foi
- * digitado errado.
- */
-function tituloSuspeito(member: Member): boolean {
-  return Boolean(member.voterId) && !isValidVoterId(member.voterId ?? '');
-}
-
 /** Campos padrao com coluna propria, sempre na mesma ordem. */
 function StandardFields({ member }: { member: Member }) {
+  // O que precisa ser conferido em cada linha: o dado foi aceito como veio
+  // (`domain/conferencia.ts`), e a ficha diz, ao lado dele, o que nao fecha.
+  const problemas: Record<string, string | null> = {
+    CPF: problemaDoCpf(member.cpf),
+    'Título de eleitor': problemaDoTitulo(member.voterId),
+  };
+
   const linhas: Array<[string, string | null]> = [
     ['Gênero', genderLabel(member.gender)],
     ['CPF', member.cpf ? formatCpf(member.cpf) : null],
@@ -126,7 +128,6 @@ function StandardFields({ member }: { member: Member }) {
   ];
 
   const preenchidas = linhas.filter(([, valor]) => Boolean(valor));
-  const avisoDoTitulo = tituloSuspeito(member);
 
   return (
     <section>
@@ -140,15 +141,15 @@ function StandardFields({ member }: { member: Member }) {
             <div key={rotulo} className="min-w-0">
               <dt className="flex items-center gap-1.5 text-xs text-ink-500">
                 {rotulo}
-                {/* O titulo e aceito mesmo sem fechar o digito verificador:
-                    recusar deixaria a pessoa fora do cadastro por causa de um
-                    numero mal copiado. A tag diz que ele precisa ser
-                    conferido. */}
-                {rotulo === 'Título de eleitor' && avisoDoTitulo ? (
-                  <Badge tone="warning">Conferir</Badge>
-                ) : null}
+                {/* Aceito como veio — recusar deixaria a pessoa fora do
+                    cadastro por um numero mal copiado. A tag diz que ele
+                    precisa ser conferido, e a linha de baixo diz o que. */}
+                {problemas[rotulo] ? <Badge tone="danger">Conferir</Badge> : null}
               </dt>
               <dd className="font-medium break-words text-ink-900">{valor}</dd>
+              {problemas[rotulo] ? (
+                <dd className="text-xs text-danger-600 first-letter:uppercase">{problemas[rotulo]}</dd>
+              ) : null}
             </div>
           ))}
         </dl>
@@ -253,8 +254,10 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
             {/* Numero incompleto entra no cadastro, mas nao abre o acesso
                 pelo link do time: quem olha a ficha precisa saber que ele
                 esta pela metade para poder corrigir. */}
-            {member.phone && !isValidPhone(member.phone) ? (
-              <Badge tone="warning">Conferir</Badge>
+            {problemaDoTelefone(member.phone) ? (
+              <Badge tone="danger" title={problemaDoTelefone(member.phone) ?? undefined}>
+                Conferir
+              </Badge>
             ) : null}
           </p>
           {!somenteBasico ? (
@@ -276,10 +279,16 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                 {/* O que falta aparece por extenso logo abaixo: aqui a
                     etiqueta so avisa que falta alguma coisa. */}
                 {cadastroIncompleto(member) ? <Badge tone="warning">Dados incompletos</Badge> : null}
+                {/* Preenchido, mas errado: e outra etiqueta, porque e outra
+                    correcao. */}
+                {precisaConferir(member) ? <Badge tone="danger">Conferir dados</Badge> : null}
               </div>
 
               {cadastroIncompleto(member) ? (
                 <p className="mt-2 text-sm text-warning-600">{avisoDeFaltas(member)}</p>
+              ) : null}
+              {precisaConferir(member) ? (
+                <p className="mt-1 text-sm text-danger-600">{avisoDeConferencia(member)}</p>
               ) : null}
 
               {/* Entrar no painel desta pessoa: exclusivo do ADMIN geral, e

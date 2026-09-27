@@ -9,6 +9,23 @@ export function normalizePhone(input: string): string {
   return digits.slice(0, 11);
 }
 
+/**
+ * Os digitos do telefone COMO VIERAM, para guardar no cadastro.
+ *
+ * `normalizePhone` corta em onze — e um numero de doze digitos cortado
+ * PARECE certo e liga para outra pessoa, sem ninguem descobrir. No cadastro
+ * o numero fica inteiro (o banco guarda ate quinze), com a etiqueta
+ * "Conferir"; quem olha a ficha ve os doze digitos e decide qual sobra. O
+ * unico acerto e o codigo do pais, que nao e digito a mais.
+ *
+ * O acesso ao painel continua exigindo o numero certo (`isValidPhone`).
+ */
+export function digitosDoTelefone(input: string): string {
+  const digits = (input ?? '').replace(/\D/g, '');
+  if (digits.length > 11 && digits.startsWith('55')) return digits.slice(2, 17);
+  return digits.slice(0, 15);
+}
+
 /** Aplica a mascara (00) 00000-0000 progressivamente, para uso durante a digitacao. */
 export function maskPhone(input: string): string {
   const digits = normalizePhone(input);

@@ -1,7 +1,7 @@
 import 'server-only';
 import type { AccessStatus, Member, MemberInput, Recruiter, SessionUser, TeamTier } from '@/lib/types';
 import { canReachMember } from '@/lib/permissions';
-import { normalizePhone } from '@/lib/utils/phone';
+import { digitosDoTelefone, normalizePhone } from '@/lib/utils/phone';
 import {
   isGenderValue,
   normalizeCpf,
@@ -95,6 +95,7 @@ function statusOf(
   row: AccessColumns | undefined,
   phone: string | null,
   demo = false,
+  repetido = false,
 ): AccessStatus {
   if (row) {
     if (!row.is_active) return 'DISABLED';
@@ -104,6 +105,9 @@ function statusOf(
   // Sem usuario: em Time DEMO isso e o esperado, e nao uma pendencia.
   if (demo) return 'DEMO_NO_ACCESS';
   if (!phone || normalizePhone(phone).length < 10) return 'NO_PHONE';
+  // Entrou com o telefone de outra pessoa do time: o cadastro existe, o
+  // acesso nao nasceu — o numero ja abre a porta de alguem.
+  if (repetido) return 'DUPLICATE_PHONE';
   return 'PENDING';
 }
 
@@ -146,9 +150,37 @@ async function loadContext(rows: MemberRow[]): Promise<MemberContext> {
   const demo =
     semUsuario.length > 0 ? new Set(await demoClientIds()) : new Set<string>();
 
+  /**
+   * Quem ficou sem acesso porque o telefone ja e de outra pessoa ativa do
+   * time. Desde que telefone repetido deixou de recusar o cadastro, e esse o
+   * motivo mais comum de alguem entrar sem acesso — e a ficha precisa dizer
+   * isso, e nao um "Acesso pendente" que ninguem sabe resolver.
+   *
+   * A pergunta so e feita quando existe alguem sem usuario com telefone
+   * inteiro: numa operacao em ordem, nenhuma consulta a mais.
+   */
+  const semUsuarioComTelefone = semUsuario.filter(
+    (row) => !demo.has(row.client_id) && normalizePhone(row.phone ?? '').length >= 10,
+  );
+  const ocupados = new Set<string>();
+  if (semUsuarioComTelefone.length > 0) {
+    const donos = await selectRows<Pick<UserRow, 'client_id' | 'phone'>>(TABLES.users, {
+      select: 'client_id,phone',
+      filters: {
+        phone: inFilter([...new Set(semUsuarioComTelefone.map((row) => normalizePhone(row.phone)))]),
+        is_active: 'is.true',
+      },
+    });
+    for (const dono of donos) ocupados.add(`${dono.client_id}:${dono.phone}`);
+  }
+
   for (const row of rows) {
     const user = byMember.get(row.id);
-    context.access.set(row.id, statusOf(user ?? undefined, row.phone, demo.has(row.client_id)));
+    const repetido = ocupados.has(`${row.client_id}:${normalizePhone(row.phone ?? '')}`);
+    context.access.set(
+      row.id,
+      statusOf(user ?? undefined, row.phone, demo.has(row.client_id), repetido),
+    );
     if (user) context.userId.set(row.id, user.id);
   }
 
@@ -627,7 +659,8 @@ export async function createMember(
   const row = await insertOne<MemberRow>(TABLES.members, {
     client_id: input.clientId,
     name: input.name.trim(),
-    phone: normalizePhone(input.phone),
+    // Inteiro, como veio: digito a mais ganha a etiqueta, e nao um corte.
+    phone: digitosDoTelefone(input.phone),
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
@@ -654,7 +687,7 @@ export async function updateMember(
   const patch: Record<string, string | number | null> = {};
 
   if (input.name !== undefined) patch.name = input.name.trim();
-  if (input.phone !== undefined) patch.phone = normalizePhone(input.phone);
+  if (input.phone !== undefined) patch.phone = digitosDoTelefone(input.phone);
   // O e-mail nao e mais editavel: o valor gravado permanece como esta.
   Object.assign(patch, standardColumns(input));
 

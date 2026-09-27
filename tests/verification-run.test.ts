@@ -12,7 +12,7 @@ import type { MemberVerificationRow } from '@/lib/supabase/tables';
  */
 
 const CADASTRO = {
-  cpf: '12345678901',
+  cpf: '52998224725',
   nome: 'Maria de Souza',
   sexo: 'F',
   idade: 34,
@@ -26,7 +26,7 @@ const CADASTRO = {
 
 const TITULO = {
   status: 'REGULAR',
-  identificacao: { eleitor: 'MARIA DE SOUZA', inscricao: '123456789012' },
+  identificacao: { eleitor: 'MARIA DE SOUZA', inscricao: '529982247252' },
   biometriaColetada: true,
   domicilioEleitoral: { uf: 'SP', zona: '005', secao: '0123' },
 };
@@ -126,7 +126,7 @@ beforeEach(() => {
   // O servico recebe do fornecedor ja no formato retido.
   consultCpf.mockReset().mockResolvedValue(parseCpfResult(CADASTRO));
   consultTse.mockReset().mockResolvedValue(parseTseResult(TITULO));
-  db.member = { id: 'mem-1', client_id: 'cli-1', name: 'Maria', cpf: '12345678901' };
+  db.member = { id: 'mem-1', client_id: 'cli-1', name: 'Maria', cpf: '52998224725' };
   // Time com a confirmacao ligada: e o padrao do banco e o de todo time que
   // ja existia quando a migration 041 entrou.
   db.client = { id: 'cli-1', verification_enabled: true };
@@ -256,7 +256,7 @@ describe('nova tentativa manual', () => {
     expect(consultCpf).toHaveBeenCalledTimes(1);
     expect(consultTse).toHaveBeenCalledTimes(1);
     expect(consultTse).toHaveBeenCalledWith({
-      cpf: '12345678901',
+      cpf: '52998224725',
       nomeMae: 'Ana de Souza',
       dataNascimento: '12/04/1991',
     });
@@ -295,7 +295,7 @@ describe('nova tentativa manual', () => {
     expect(consultCpf).not.toHaveBeenCalled();
     expect(consultTse).toHaveBeenCalledTimes(1);
     expect(consultTse).toHaveBeenCalledWith({
-      cpf: '12345678901',
+      cpf: '52998224725',
       nomeMae: 'Marta Ferreira',
       dataNascimento: '10/12/2003',
     });
@@ -333,7 +333,7 @@ describe('nova tentativa manual', () => {
     expect(consultCpf).not.toHaveBeenCalled();
     expect(consultTse).toHaveBeenCalledTimes(1);
     expect(consultTse).toHaveBeenCalledWith({
-      cpf: '12345678901',
+      cpf: '52998224725',
       nomeMae: 'Marta Ferreira',
       dataNascimento: '01/06/2003',
     });
@@ -359,7 +359,7 @@ describe('leitura pelo ADMIN', () => {
     const view = await getVerification('mem-1', 'user-1');
 
     expect(view?.cadastro?.nome).toBe('Maria de Souza');
-    expect(view?.eleitoral?.inscricao).toBe('123456789012');
+    expect(view?.eleitoral?.inscricao).toBe('529982247252');
 
     const auditoria = db.inserts.find(
       (entry) => entry.table === 'cmd_member_verification_views',

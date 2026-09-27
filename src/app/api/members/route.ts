@@ -5,7 +5,6 @@ import { badRequest, jsonOk, notFound, readJson, toErrorResponse } from '@/lib/s
 import { memberCreateSchema } from '@/lib/validation/server.schema';
 import { createMember, listAllMembers, rollbackMember } from '@/lib/server/member.service';
 import {
-  assertTeamPhoneAvailable,
   createMemberAccess,
   teamPhoneTaken,
 } from '@/lib/server/user.service';
@@ -42,20 +41,15 @@ export async function POST(request: NextRequest) {
       throw badRequest('E necessário registrar o aceite do aviso de privacidade.');
     }
 
-    // Telefone repetido no time interrompe antes de gravar: nada orfao e
-    // criado, e o numero continua identificando uma unica pessoa.
+    // Telefone repetido no time NAO recusa mais a pessoa — em lugar nenhum.
     //
-    // Na PLANILHA a conta e outra. Ali a lista vem do mundo real, onde marido
-    // e mulher dividem um numero, e recusar a linha perde a pessoa. Entao o
-    // numero repetido para de recusar e passa a apenas nao criar o acesso:
-    // ninguem fica com credencial duplicada — o que faria o link do time
-    // recusar a entrada dos DOIS — e a pessoa entra como cadastro.
-    const semAcessoPorTelefoneRepetido =
-      input.bulkImport && (await teamPhoneTaken(client.id, input.phone));
-
-    if (!semAcessoPorTelefoneRepetido) {
-      await assertTeamPhoneAvailable(client.id, input.phone);
-    }
+    // Ela entra como cadastro, e o que nao nasce e o ACESSO dela: o telefone
+    // e a credencial do link do time, e dois donos para o mesmo numero
+    // fariam a entrada dos DOIS ser recusada. A ficha ganha a etiqueta
+    // "Conferir" (telefone repetido no time), e o quadro de inconsistencias
+    // mostra o numero compartilhado. Era assim so na planilha; agora e a
+    // regra: recusar a pessoa por causa do telefone de outra e perde-la.
+    const semAcessoPorTelefoneRepetido = await teamPhoneTaken(client.id, input.phone);
 
     const member = await createMember(
       { ...input, source: 'admin' },

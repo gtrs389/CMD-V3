@@ -1,5 +1,6 @@
 import { normalizeSection, normalizeVoterId, normalizeZone } from '@/lib/utils/documents';
-import { isUsablePhone, normalizePhone } from '@/lib/utils/phone';
+import { normalizePhone } from '@/lib/utils/phone';
+import { dadosParaConferir } from './conferencia';
 
 /**
  * Cadastro de muita gente de uma vez, por planilha.
@@ -349,31 +350,25 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
 /**
  * O que IMPEDE esta linha de ser cadastrada.
  *
- * Vazio quer dizer que ela entra — com buraco ou sem. Dado faltando nao
- * impede mais nada: a pessoa entra e a ficha dela fica marcada como
- * incompleta (`member-completeness.ts`). Uma lista de mutirao sempre chega
- * com telefone faltando, e recusar a linha e perder a pessoa.
+ * So o NOME. O banco exige, e sem nome ninguem sabe quem e a pessoa: uma
+ * ficha anonima nao e um cadastro incompleto, e um cadastro que nao serve
+ * para nada.
  *
- * Sobraram dois impedimentos, e nenhum dos dois e "falta":
- *
- *   NOME       o banco exige, e sem nome ninguem sabe quem e a pessoa. Uma
- *              ficha anonima nao e um cadastro incompleto: e um cadastro
- *              que nao serve para nada;
- *   TELEFONE LONGO DEMAIS  nao e falta, e numero ERRADO. A normalizacao
- *              corta o que passa de onze digitos, entao "829999493112"
- *              viraria um numero que parece certo e liga para outra pessoa.
- *              Comparar com a forma normalizada denuncia o corte.
+ * Todo o resto entra. Dado faltando vira a etiqueta "Incompleto"
+ * (`faltasDaLinha`); dado preenchido errado — CPF que nao fecha, titulo com
+ * digito a menos, telefone com digito A MAIS — vira a etiqueta "Conferir"
+ * (`conferirDaLinha`). O telefone longo, que antes barrava, agora entra
+ * INTEIRO: cortar o digito extra daria um numero que parece certo e liga
+ * para outra pessoa; guardado como veio, ele fica marcado e quem confere
+ * decide qual digito sobra.
  */
 export function problemasDaLinha(linha: LinhaImportada): string[] {
-  const problemas: string[] = [];
+  return linha.name.trim().length < 2 ? ['nome'] : [];
+}
 
-  if (linha.name.trim().length < 2) problemas.push('nome');
-
-  if (linha.phone && normalizePhone(linha.phone) !== linha.phone) {
-    problemas.push('telefone com dígitos demais');
-  }
-
-  return problemas;
+/** O que esta preenchido mas precisa ser conferido — sem impedir nada. */
+export function conferirDaLinha(linha: LinhaImportada): string[] {
+  return dadosParaConferir(linha);
 }
 
 /**
@@ -390,7 +385,8 @@ export function problemasDaLinha(linha: LinhaImportada): string[] {
 export function faltasDaLinha(linha: LinhaImportada): string[] {
   const faltas: string[] = [];
 
-  if (!isUsablePhone(linha.phone)) faltas.push('telefone');
+  // Telefone pela metade nao e falta: e dado para conferir.
+  if (!linha.phone.trim()) faltas.push('telefone');
   if (!linha.voterId.trim()) faltas.push('título de eleitor');
   if (!linha.zone.trim()) faltas.push('zona');
   if (!linha.section.trim()) faltas.push('seção');

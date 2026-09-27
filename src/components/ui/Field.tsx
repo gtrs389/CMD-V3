@@ -20,6 +20,11 @@ interface FieldProps {
    * campo.
    */
   aside?: ReactNode;
+  /**
+   * Aviso que NAO impede o envio: o dado e aceito, e entra marcado para
+   * conferir. Amarelo, e nao vermelho — vermelho quer dizer "nao vai".
+   */
+  warning?: string | null;
 }
 
 /** Envolve um controle com rotulo, texto de ajuda e mensagem de erro. */
@@ -33,6 +38,7 @@ export function Field({
   className,
   hideLabel,
   aside,
+  warning,
 }: FieldProps) {
   return (
     <div className={cn('flex w-full flex-col gap-1.5', className)}>
@@ -54,7 +60,20 @@ export function Field({
 
       {children}
 
-      {help && !error ? (
+      {warning && !error ? (
+        <p
+          id={`${id}-warning`}
+          role="status"
+          className="flex items-start gap-1.5 rounded-control bg-warning-50 px-2.5 py-1.5 text-xs leading-snug text-warning-600"
+        >
+          <span aria-hidden="true" className="mt-px font-bold">
+            !
+          </span>
+          {warning}
+        </p>
+      ) : null}
+
+      {help && !error && !warning ? (
         <p id={`${id}-help`} className="text-xs text-ink-500">
           {help}
         </p>

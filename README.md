@@ -826,6 +826,55 @@ em planilha alheia é execução de algo que quem abriu não escreveu.
 
 ---
 
+## Dado torto entra marcado
+
+**Nenhum dado errado impede um cadastro.** CPF que não fecha, título com dígito
+a menos, telefone curto ou com dígito a mais, bairro de uma letra, CPF ou título
+que já existem no time, telefone que já é de outra pessoa: a pessoa **entra**,
+seja Líder ou Equipe, e a ficha nasce com uma etiqueta. Recusar por um número mal
+copiado perde a pessoa, que fecha a página e não volta.
+
+São duas etiquetas, porque são duas correções diferentes:
+
+| Etiqueta | Quando | Regra |
+| --- | --- | --- |
+| **Incompleto** | Falta o dado | `src/lib/domain/member-completeness.ts` |
+| **Conferir** | O dado está preenchido, mas não pode existir assim | `src/lib/domain/conferencia.ts` |
+
+As duas são **calculadas**, nunca gravadas: corrigir a ficha tira a etiqueta
+na hora. A regra de "Conferir" é uma só e vale em todo lugar: no aviso amarelo
+embaixo do campo enquanto se preenche ("CPF não confere. Pode enviar assim
+mesmo"), na lista da equipe (com o filtro **Situação**), na ficha (campo a
+campo), na conferência da planilha e no quadro de inconsistências.
+
+O que continua sendo exigido:
+
+- **o nome**, que o banco exige. Sem ele ninguém sabe quem é a pessoa;
+- **algum dígito** no telefone do formulário público, porque é por ele que a
+  pessoa entra;
+- **zona e seção**, quando o time está sem a confirmação da FonteData. É
+  configuração do time, e não um dado torto.
+
+Como cada caso é tratado:
+
+- **Telefone com dígito a mais** fica **inteiro**, como veio
+  (`digitosDoTelefone`): cortar daria um número que parece certo e liga para
+  outra pessoa.
+- **Telefone já usado no time** deixa entrar e não cria o acesso: o número
+  continua sendo a credencial de uma pessoa só. A ficha mostra "telefone
+  repetido no time". A exceção é a **edição**: quem edita está corrigindo, e
+  gravar ali o telefone de outra pessoa derrubaria o acesso dela.
+- **CPF que não fecha não vai para a FonteData.** A consulta é paga, e a resposta
+  para um número que não existe já é sabida; a etapa eleitoral, que depende
+  dele, também não acontece.
+- **CPF e título repetidos** entram, e o quadro de inconsistências mostra os dois
+  registros lado a lado.
+
+Requer a migration `047_dado_torto_entra_marcado.sql`: sem ela, o banco ainda
+recusa CPF fora de 11 dígitos, título fora de 12 e CPF ou título repetidos.
+
+---
+
 ## Quadro de inconsistências
 
 A página do time tem a aba **Inconsistências**, com um contador do que precisa de
