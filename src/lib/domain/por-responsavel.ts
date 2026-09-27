@@ -1,4 +1,5 @@
 import type { Member } from '@/lib/types';
+import { normalizePhone } from '@/lib/utils/phone';
 import { normalizeSearch } from '@/lib/utils/text';
 import { recruiterText } from './recruitment';
 
@@ -83,4 +84,26 @@ export function basePorResponsavel(members: readonly Member[]): Record<string, n
     base[quem] = (base[quem] ?? 0) + 1;
   }
   return base;
+}
+
+/**
+ * Pessoas agrupadas pelo TELEFONE que dividem: o filtro "Telefone
+ * compartilhado" se le por numero — quem sao as fichas por tras de cada um.
+ * Numeros com mais fichas primeiro; dentro, ordem alfabetica.
+ */
+export function agruparPorTelefone<T extends { telefone: string; nome: string }>(
+  itens: readonly T[],
+): { telefone: string; itens: T[] }[] {
+  const grupos = new Map<string, T[]>();
+  for (const item of itens) {
+    const numero = normalizePhone(item.telefone ?? '');
+    if (!numero) continue;
+    grupos.set(numero, [...(grupos.get(numero) ?? []), item]);
+  }
+  return [...grupos.entries()]
+    .map(([telefone, lista]) => ({
+      telefone,
+      itens: [...lista].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    }))
+    .sort((a, b) => b.itens.length - a.itens.length || a.telefone.localeCompare(b.telefone));
 }

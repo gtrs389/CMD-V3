@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { pdf } from '@react-pdf/renderer';
 import type { Member } from '@/lib/types';
 import { FILTROS_DE_DADOS, aplicarFiltros, contarPorFiltro, contextoDosFiltros, fichasPorTelefone } from '@/lib/domain/filtros-de-dados';
-import { agruparPorResponsavel, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
+import { agruparPorResponsavel, agruparPorTelefone, barrasPorResponsavel } from '@/lib/domain/por-responsavel';
 import { ListaFiltrada, RelatorioDeInconsistencias } from '@/components/neo/ListasPdf';
 
 /**
@@ -123,6 +123,39 @@ describe('filtro por dado', () => {
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
     if (process.env.PREVIA_LISTA) (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA, bytes);
+  }, 30_000);
+
+  it('só "Telefone compartilhado": o PDF é organizado por número', async () => {
+    const hugo = 'Hugo Humberto Pereira do Nascimento · Líder';
+    const bruna = 'Bruna Costa · Líder';
+    const p = (nome: string, tel: string, por: string, bairro = '') => ({
+      nome, telefone: tel, bairro, cadastradoPor: por, cadastradoEm: '2026-09-17T12:00:00Z', filtros: [0],
+    });
+    const pessoas = [
+      p('Ana Cleide Martins da Silva', '8299247526', hugo, 'CEP 57607-200'),
+      p('Arnaldo Lima da Silva', '(82) 9924-7526', hugo),
+      p('Avanilza Martins da Silva', '8299247526', hugo),
+      p('Daiane Lima da Silva', '8299247526', bruna),
+      p('Ananias Pinto da Silva', '82996321537', hugo, 'Sítio Amaro'),
+      p('Carmem Lúcia Valentin da Silva Pereira', '82996321537', hugo, 'Sítio Amaro'),
+      p('Caio Oliveira da Silva Pereira', '8198672444', hugo, 'Aldeia'),
+      p('Elisiane Oliveira da Silva Pereira', '8198672444', hugo, 'Aldeia'),
+    ];
+    const grupos = agruparPorTelefone(pessoas);
+    expect(grupos.map((g) => [g.telefone, g.itens.length])).toEqual([
+      ['8299247526', 4],
+      ['8198672444', 2],
+      ['82996321537', 2],
+    ]);
+
+    const doc = createElement(ListaFiltrada, {
+      time: 'Time Palmeira', filtros: ['Telefone compartilhado'], responsavel: null, pessoas,
+      geradaEm: '2026-09-27T12:00:00Z', indiceDoTelefoneCompartilhado: 0,
+    });
+    const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
+    const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    if (process.env.PREVIA_LISTA) (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA.replace('.pdf', '-numeros.pdf'), bytes);
   }, 30_000);
 
   it('lista grande: grupos que atravessam páginas saem inteiros', async () => {

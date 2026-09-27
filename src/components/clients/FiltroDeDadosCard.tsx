@@ -73,6 +73,10 @@ export function FiltroDeDadosCard({
         responsavel,
         geradaEm: new Date().toISOString(),
         basePorResponsavel: basePorResponsavel(members),
+        indiceDoTelefoneCompartilhado: (() => {
+          const i = filtros.findIndex((f) => f.id === 'telefone-repetido');
+          return i >= 0 ? i : null;
+        })(),
         pessoas: pessoas.map(({ member, filtros: seus }) => ({
           nome: member.name,
           telefone: member.phone ?? '',
