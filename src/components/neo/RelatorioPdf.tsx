@@ -804,7 +804,7 @@ function AnexoPendencias({ dossie }: { dossie: Dossie }) {
     <View break>
       <Secao numero="ANEXO A" titulo="Pendências de integridade" sub="Cada pendência com nome e liderança responsável, para correção." />
 
-      <Text style={[st.h3, { marginTop: 0 }]}>{s(`Cadastrados mais de uma vez (${num(q.repetidos.length)})`)}</Text>
+      <Text style={[st.h3, { marginTop: 0 }]}>{s(`Cadastrados mais de uma vez (${num(q.repetidos.reduce((soma, g) => soma + g.registros.length, 0))} cadastros de ${num(q.repetidos.length)} ${q.repetidos.length === 1 ? 'pessoa' : 'pessoas'})`)}</Text>
       {q.repetidos.length === 0 ? (
         <Text style={{ fontSize: 8.4, color: C.faint }}>Nenhum cadastro repetido.</Text>
       ) : (
