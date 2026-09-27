@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXEMPLO_CSV,
+  ENDERECO_FIXO,
   MODELO_SEPARADOR,
-  enderecoPadraoDoTime,
   lerPlanilha,
   faltasDaLinha,
   problemasDaLinha,
@@ -17,8 +17,12 @@ import {
  * derruba as outras.
  */
 
+/** A planilha ANTIGA, com o endereço inteiro em uma coluna. Ainda é aceita. */
 const CABECALHO =
   'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral,Endereço';
+
+/** A planilha de agora: sete colunas, com bairro e rua separados. */
+const CABECALHO_NOVO = 'Nome;Telefone;Título;Zona;Seção;Bairro;Rua';
 
 describe('leitura da planilha', () => {
   it('lê as cinco colunas, na ordem que vierem', () => {
@@ -39,7 +43,53 @@ describe('leitura da planilha', () => {
     });
   });
 
-  it('o endereço vem em uma coluna só e chega separado em bairro e rua', () => {
+  it('lê as sete colunas: Nome, Telefone, Título, Zona, Seção, Bairro e Rua', () => {
+    const { linhas, ignoradas } = lerPlanilha(
+      [CABECALHO_NOVO, 'Maria da Silva;82999990001;100000002720;10;147;Jardim Brasil;Rua Brasil Novo, Nº 269'].join(
+        '\n',
+      ),
+    );
+
+    expect(ignoradas).toEqual([]);
+    expect(linhas[0]).toMatchObject({
+      name: 'Maria da Silva',
+      phone: '82999990001',
+      voterId: '100000002720',
+      zone: '10',
+      section: '147',
+      district: 'Jardim Brasil',
+      street: 'Rua Brasil Novo, Nº 269',
+    });
+    expect(faltasDaLinha(linhas[0])).toEqual([]);
+  });
+
+  it('coluna vazia ou ausente não barra ninguém: vira falta', () => {
+    const { linhas } = lerPlanilha(
+      ['Nome;Telefone;Bairro', 'João Alves;;Centro'].join('\n'),
+    );
+
+    expect(problemasDaLinha(linhas[0])).toEqual([]);
+    expect(faltasDaLinha(linhas[0])).toEqual([
+      'telefone',
+      'título de eleitor',
+      'zona',
+      'seção',
+      'rua',
+    ]);
+  });
+
+  it('com Bairro e Rua próprios, uma coluna Endereço a mais é ignorada', () => {
+    const { linhas, ignoradas } = lerPlanilha(
+      [`${CABECALHO_NOVO};Endereço`, 'Ana Lima;82999990002;;1;2;Centro;Rua A;Rua B – Outro'].join(
+        '\n',
+      ),
+    );
+
+    expect(linhas[0]).toMatchObject({ district: 'Centro', street: 'Rua A', address: '' });
+    expect(ignoradas).toEqual(['Endereço']);
+  });
+
+  it('planilha antiga: o endereço vem em uma coluna só e chega separado em bairro e rua', () => {
     const { linhas } = lerPlanilha(
       [CABECALHO, 'Ana Lima,82999990002,,1,2,"Rua Brasil Novo, Nº 269 – Jardim Brasil"'].join('\n'),
     );
@@ -172,13 +222,14 @@ describe('o que impede uma linha de ser cadastrada', () => {
       'título de eleitor',
       'zona',
       'seção',
-      'endereço',
+      'bairro',
+      'rua',
     ]);
   });
 
-  it('endereço conta como presente com bairro OU rua', () => {
-    expect(faltasDaLinha(linha({ ...completa, street: '' }))).not.toContain('endereço');
-    expect(faltasDaLinha(linha({ ...completa, district: '' }))).not.toContain('endereço');
+  it('bairro e rua contam um por um, como na etiqueta da ficha', () => {
+    expect(faltasDaLinha(linha({ ...completa, street: '' }))).toEqual(['rua']);
+    expect(faltasDaLinha(linha({ ...completa, district: '' }))).toEqual(['bairro']);
   });
 });
 
@@ -189,10 +240,8 @@ describe('planilha de exemplo', () => {
     expect(MODELO_SEPARADOR).toBe(';');
 
     const [cabecalho] = EXEMPLO_CSV.split(/\r?\n/);
-    expect(cabecalho.split(';')).toHaveLength(6);
-    expect(cabecalho).toBe(
-      'Nome completo;Telefone;Título de eleitor;Zona eleitoral;Seção eleitoral;Endereço',
-    );
+    expect(cabecalho.split(';')).toHaveLength(7);
+    expect(cabecalho).toBe(CABECALHO_NOVO);
   });
 
   it('o exemplo que o sistema oferece é lido por ele mesmo', () => {
@@ -290,35 +339,10 @@ describe('endereço escrito em uma linha só', () => {
 });
 
 describe('estado e município', () => {
-  it('saem do próprio time, e não de um valor fixo', () => {
-    // Era fixo em Alagoas, Palmeira dos Índios, de quando havia um time só:
-    // em qualquer outro município a planilha entrava com o endereço errado.
-    expect(enderecoPadraoDoTime({ stateUf: 'PE', cities: ['Caruaru', 'Bezerros'] })).toEqual({
-      state: 'PE',
-      city: 'Caruaru',
-    });
-  });
-
-  it('a sigla vai em maiúsculas e o espaço em branco não vira município', () => {
-    expect(enderecoPadraoDoTime({ stateUf: 'al', cities: ['  ', 'Maceió'] })).toEqual({
-      state: 'AL',
-      city: 'Maceió',
-    });
-  });
-
-  it('time sem estado deixa os dois em branco: não se inventa município', () => {
-    expect(enderecoPadraoDoTime({ stateUf: null, cities: ['Palmeira dos Índios'] })).toEqual({
-      state: '',
-      city: '',
-    });
-    expect(enderecoPadraoDoTime({})).toEqual({ state: '', city: '' });
-  });
-
-  it('time com estado e sem município deixa o município para quem confere', () => {
-    expect(enderecoPadraoDoTime({ stateUf: 'AL', cities: [] })).toEqual({
-      state: 'AL',
-      city: '',
-    });
+  it('são fixos: Alagoas, Palmeira dos Índios', () => {
+    // A planilha nem tem essas colunas: toda pessoa que entra por ela é de
+    // Palmeira dos Índios, e a conferência os mostra travados.
+    expect(ENDERECO_FIXO).toEqual({ state: 'AL', city: 'Palmeira dos Índios' });
   });
 });
 
