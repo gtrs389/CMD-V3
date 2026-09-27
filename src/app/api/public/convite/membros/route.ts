@@ -30,6 +30,7 @@ import {
   readOrCreateDeviceToken,
   recordMemberDevice,
 } from '@/lib/server/device';
+import { telefoneParaGravar } from '@/lib/domain/completar-telefone';
 
 /**
  * Envio do formulario publico.
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
       // time, e nao pode apontar para duas pessoas. A ficha ganha a etiqueta
       // "Conferir", e o ADMIN resolve quem fica com o numero.
       const telefoneRepetido = await etapa('conferência do telefone', () =>
-        teamPhoneTaken(client.id, input.phone),
+        teamPhoneTaken(client.id, telefoneParaGravar(input.phone)),
       );
 
       const { device, ...submission } = input;

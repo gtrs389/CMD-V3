@@ -5,6 +5,7 @@ import {
   isValidVoterId,
 } from '@/lib/utils/documents';
 import { digitosDoTelefone, isValidPhone } from '@/lib/utils/phone';
+import { completarTelefone } from './completar-telefone';
 
 /**
  * O que precisa ser CONFERIDO em um cadastro — sem nunca impedi-lo.
@@ -120,6 +121,9 @@ export function avisoDeConferencia(
  */
 export function avisoDoCampo(systemKey: string | undefined, valor: unknown): string | null {
   if (typeof valor !== 'string' || !valor.trim()) return null;
+  // Telefone sem DDD ou sem o 9: o sistema completa sozinho ao gravar
+  // (`completar-telefone.ts`) — nao ha o que avisar.
+  if (systemKey === 'phone' && completarTelefone(valor)) return null;
 
   const problema =
     systemKey === 'cpf'

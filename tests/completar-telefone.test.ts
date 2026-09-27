@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { completarTelefone } from '@/lib/domain/completar-telefone';
+import type { Member } from '@/lib/types';
+import { completarTelefone, formasDoTelefone, telefoneParaGravar } from '@/lib/domain/completar-telefone';
 
 /**
  * Telefone sem DDD ou sem o 9 do celular: completa com DDD 82 — e so nos
@@ -35,82 +36,94 @@ describe('completar telefone', () => {
   });
 });
 
-/* ---- a rota: recalcula no servidor, corrige a ficha, e o acesso so quando o numero e livre ---- */
+describe('gravar e entrar', () => {
+  it('todo cadastro e edição gravam o número completo', () => {
+    expect(telefoneParaGravar('9924-7526')).toBe('82999247526');
+    expect(telefoneParaGravar('(82) 9924-7526')).toBe('82999247526');
+    expect(telefoneParaGravar('(82) 99924-7526')).toBe('82999247526');
+    // O que nao da para completar vai como veio, so os digitos.
+    expect(telefoneParaGravar('9924-752')).toBe('9924752');
+  });
 
-type Ficha = { id: string; clientId: string; phone: string; recruitedBy: null };
-let fichas: Ficha[] = [];
-const gravados: { id: string; phone: string }[] = [];
-const acessos: string[] = [];
+  it('o login aceita o número do jeito antigo e do jeito novo', () => {
+    expect(formasDoTelefone('(82) 99924-7526').sort()).toEqual(['8299247526', '82999247526']);
+    expect(formasDoTelefone('9924-7526').sort()).toEqual(['8299247526', '82999247526']);
+    expect(formasDoTelefone('(82) 3421-1234')).toEqual(['8234211234']);
+    expect(formasDoTelefone('123')).toEqual([]);
+  });
+});
+
+/* ---- a correcao automatica: toda lista que sai do servidor ja vem completa ---- */
+
+type Usuario = { id: string; member_id: string; phone: string | null; is_active: boolean };
+let usuarios: Usuario[] = [];
+const membrosGravados: { id: string; phone: string }[] = [];
+const usuariosGravados: { id: string; phone: string }[] = [];
 const ocupados = new Set<string>();
 
-vi.mock('@/lib/server/guard', () => ({
-  requireClientAccess: async () => ({ id: 'adm', role: 'ADMIN', candidateId: null }),
-}));
-vi.mock('@/lib/server/member.service', () => ({
-  listMembersByClient: async () => fichas,
-  updateMember: async (id: string, input: { phone: string }) => {
-    gravados.push({ id, phone: input.phone });
-    return {};
+vi.mock('@/lib/supabase/rest', () => ({
+  selectOne: async (_t: string, o: { filters: Record<string, string> }) =>
+    usuarios.find((u) => `eq.${u.member_id}` === o.filters.member_id) ?? null,
+  updateRows: async (tabela: string, f: Record<string, string>, valor: { phone: string }) => {
+    const id = f.id.replace('eq.', '');
+    (tabela === 'cmd_members' ? membrosGravados : usuariosGravados).push({ id, phone: valor.phone });
+    return [];
   },
 }));
 vi.mock('@/lib/server/user.service', () => ({
   assertTeamPhoneAvailable: async (_c: string, phone: string) => {
     if (ocupados.has(phone)) throw new Error('ocupado');
   },
-  syncMemberAccess: async (id: string) => {
-    acessos.push(id);
-  },
 }));
 
-const { POST } = await import('@/app/api/clients/[id]/telefones/route');
+const { completarTelefonesPendentes } = await import('@/lib/server/telefone.service');
 
-async function chamar(memberIds: string[]) {
-  const request = new Request('http://x/api/clients/c1/telefones', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ memberIds }),
-  });
-  const resposta = await POST(request as never, { params: Promise.resolve({ id: 'c1' }) } as never);
-  return resposta.json();
-}
+const ficha = (id: string, phone: string) => ({ id, clientId: 'c1', phone }) as unknown as Member;
 
 beforeEach(() => {
-  fichas = [
-    { id: 'a', clientId: 'c1', phone: '99247526', recruitedBy: null },
-    { id: 'b', clientId: 'c1', phone: '8299247526', recruitedBy: null },
-    { id: 'c', clientId: 'c1', phone: '82999990000', recruitedBy: null },
-    { id: 'd', clientId: 'c1', phone: '988887777', recruitedBy: null },
-  ];
-  gravados.length = 0;
-  acessos.length = 0;
+  usuarios = [];
+  membrosGravados.length = 0;
+  usuariosGravados.length = 0;
   ocupados.clear();
 });
 
-describe('rota de completar telefones', () => {
-  it('corrige só as fichas pedidas que se encaixam, com o número recalculado no servidor', async () => {
-    const r = await chamar(['a', 'b', 'c', 'x']);
-    expect([...gravados].sort((x, y) => x.id.localeCompare(y.id))).toEqual([
+describe('correção automática', () => {
+  it('lista sem nada a corrigir: não grava nada', async () => {
+    const lista = [ficha('a', '82999247526')];
+    expect(await completarTelefonesPendentes(lista)).toBe(lista);
+    expect(membrosGravados).toEqual([]);
+  });
+
+  it('corrige, grava e devolve a lista já completa', async () => {
+    const lista = await completarTelefonesPendentes([ficha('a', '99247526'), ficha('b', '82988887777'), ficha('c', '8198672444')]);
+    expect(lista.map((m) => m.phone)).toEqual(['82999247526', '82988887777', '81998672444']);
+    expect([...membrosGravados].sort((x, y) => x.id.localeCompare(y.id))).toEqual([
       { id: 'a', phone: '82999247526' },
-      { id: 'b', phone: '82999247526' },
+      { id: 'c', phone: '81998672444' },
     ]);
-    expect(acessos).toEqual(['a']);
-    // "c" ja estava certo; "x" nao e deste time.
-    expect(r).toEqual({ corrigidos: 2, semMexerNoAcesso: 1, pulados: 2 });
   });
 
-  it('duas fichas que viram o mesmo número: só a primeira fica com o acesso', async () => {
-    // "a" (99247526) e "b" (8299247526) viram 82999247526.
-    const r = await chamar(['a', 'b']);
-    expect(gravados.map((g) => g.id).sort()).toEqual(['a', 'b']);
-    expect(acessos).toEqual(['a']);
-    expect(r).toEqual({ corrigidos: 2, semMexerNoAcesso: 1, pulados: 0 });
+  it('o acesso acompanha o número — sem derrubar ninguém', async () => {
+    usuarios = [{ id: 'u-a', member_id: 'a', phone: '8299247526', is_active: true }];
+    await completarTelefonesPendentes([ficha('a', '8299247526')]);
+    expect(usuariosGravados).toEqual([{ id: 'u-a', phone: '82999247526' }]);
   });
 
-  it('número que já é o acesso de outra pessoa: corrige a ficha, não mexe no acesso', async () => {
-    ocupados.add('82988887777');
-    const r = await chamar(['d']);
-    expect(gravados).toEqual([{ id: 'd', phone: '82988887777' }]);
-    expect(acessos).toEqual([]);
-    expect(r).toEqual({ corrigidos: 1, semMexerNoAcesso: 1, pulados: 0 });
+  it('número completo que já é o acesso de outra pessoa: a ficha corrige, o acesso fica', async () => {
+    usuarios = [{ id: 'u-a', member_id: 'a', phone: '8299247526', is_active: true }];
+    ocupados.add('82999247526');
+    await completarTelefonesPendentes([ficha('a', '8299247526')]);
+    expect(membrosGravados).toEqual([{ id: 'a', phone: '82999247526' }]);
+    expect(usuariosGravados).toEqual([]);
+  });
+
+  it('duas fichas que viram o mesmo número: só a primeira leva o acesso', async () => {
+    usuarios = [
+      { id: 'u-a', member_id: 'a', phone: '8299247526', is_active: true },
+      { id: 'u-b', member_id: 'b', phone: '8299247526', is_active: true },
+    ];
+    await completarTelefonesPendentes([ficha('a', '8299247526'), ficha('b', '99247526')]);
+    expect(membrosGravados).toHaveLength(2);
+    expect(usuariosGravados).toEqual([{ id: 'u-a', phone: '82999247526' }]);
   });
 });

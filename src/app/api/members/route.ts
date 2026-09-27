@@ -10,6 +10,7 @@ import {
 } from '@/lib/server/user.service';
 import { getClient } from '@/lib/server/client.service';
 import { resolveLocation } from '@/lib/server/map-location.service';
+import { telefoneParaGravar } from '@/lib/domain/completar-telefone';
 
 export async function GET() {
   try {
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     // "Conferir" (telefone repetido no time), e o quadro de inconsistencias
     // mostra o numero compartilhado. Era assim so na planilha; agora e a
     // regra: recusar a pessoa por causa do telefone de outra e perde-la.
-    const semAcessoPorTelefoneRepetido = await teamPhoneTaken(client.id, input.phone);
+    const semAcessoPorTelefoneRepetido = await teamPhoneTaken(client.id, telefoneParaGravar(input.phone));
 
     const member = await createMember(
       { ...input, source: 'admin' },

@@ -8,7 +8,6 @@ import type {
 } from '@/lib/types';
 import { createToken, hashToken } from '@/lib/auth/tokens';
 import { SESSION_MAX_AGE } from '@/lib/auth/constants';
-import { normalizePhone } from '@/lib/utils/phone';
 import {
   TABLES,
   type ClientRow,
@@ -16,7 +15,8 @@ import {
   type TeamAccessLinkRow,
   type UserRow,
 } from '@/lib/supabase/tables';
-import { insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
+import { inFilter, insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
+import { formasDoTelefone } from '@/lib/domain/completar-telefone';
 import { signedUrl } from '@/lib/supabase/storage';
 import type { DeviceSignalsInput } from '@/lib/validation/server.schema';
 import { bindAdminDevice } from './admin-device';
@@ -268,8 +268,11 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
     };
   }
 
-  const phone = normalizePhone(rawPhone);
-  if (phone.length < 10) {
+  // O numero como foi digitado, completo (DDD 82, o 9 do celular) e sem o
+  // 9 — acessos gravados antes da correcao automatica continuam entrando,
+  // e quem digita do jeito antigo tambem.
+  const formas = formasDoTelefone(rawPhone);
+  if (formas.length === 0) {
     await registerAccessFailure(link);
     return { user: null, sessionToken: null, message: GENERIC_ACCESS_ERROR, throttled: false };
   }
@@ -289,7 +292,7 @@ export async function loginWithTeamPhone(input: TeamLoginInput): Promise<TeamLog
     filters: {
       client_id: `eq.${link.client_id}`,
       role: `eq.${papel}`,
-      phone: `eq.${phone}`,
+      phone: inFilter(formas),
       is_active: 'is.true',
     },
   });

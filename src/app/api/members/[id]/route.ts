@@ -6,6 +6,7 @@ import { deleteMember, getMember, updateMember } from '@/lib/server/member.servi
 import { assertTeamPhoneAvailable, syncMemberAccess } from '@/lib/server/user.service';
 import { getClient } from '@/lib/server/client.service';
 import { clientForSession } from '@/lib/server/form-visibility';
+import { telefoneParaGravar } from '@/lib/domain/completar-telefone';
 
 /**
  * A ficha de um integrante, com o time a que ela pertence.
@@ -52,7 +53,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<'/api/member
     // O telefone e o que identifica o integrante no acesso: conflito dentro
     // do time barra antes de gravar.
     if (input.phone !== undefined) {
-      await assertTeamPhoneAvailable(current.clientId, input.phone, { memberId: id });
+      await assertTeamPhoneAvailable(current.clientId, telefoneParaGravar(input.phone), { memberId: id });
     }
 
     const member = await updateMember(id, input);
@@ -63,7 +64,7 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<'/api/member
     await syncMemberAccess(id, {
       clientId: member.clientId,
       name: input.name,
-      phone: input.phone,
+      phone: input.phone === undefined ? undefined : member.phone,
     });
 
     return jsonOk({ member });

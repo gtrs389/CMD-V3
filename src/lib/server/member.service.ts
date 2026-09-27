@@ -1,7 +1,7 @@
 import 'server-only';
 import type { AccessStatus, Member, MemberInput, Recruiter, SessionUser, TeamTier } from '@/lib/types';
 import { canReachMember } from '@/lib/permissions';
-import { digitosDoTelefone, normalizePhone } from '@/lib/utils/phone';
+import { normalizePhone } from '@/lib/utils/phone';
 import {
   isGenderValue,
   normalizeCpf,
@@ -37,6 +37,8 @@ import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
 import { EMPTY_CONSENT, buildConsentEvidence } from './consent';
 import { assertCanRecruit, tierOfUser } from './team-tier.service';
+import { completarTelefonesPendentes } from './telefone.service';
+import { telefoneParaGravar } from '@/lib/domain/completar-telefone';
 
 /**
  * Regras de integrante no servidor: respostas, fotos, consentimento e
@@ -395,7 +397,8 @@ export async function listAllMembers(): Promise<Member[]> {
     filters: await withoutDemoClients(),
     order: 'created_at.desc',
   });
-  return assembleMany(rows);
+  // Telefone sem DDD ou sem o 9 sai daqui ja completo (e fica gravado).
+  return completarTelefonesPendentes(await assembleMany(rows));
 }
 
 export async function listMembersByClient(clientId: string): Promise<Member[]> {
@@ -404,7 +407,8 @@ export async function listMembersByClient(clientId: string): Promise<Member[]> {
     filters: { client_id: `eq.${clientId}` },
     order: 'created_at.desc',
   });
-  return assembleMany(rows);
+  // Telefone sem DDD ou sem o 9 sai daqui ja completo (e fica gravado).
+  return completarTelefonesPendentes(await assembleMany(rows));
 }
 
 /**
@@ -422,7 +426,8 @@ export async function listMembersRecruitedBy(
     filters: { client_id: `eq.${clientId}`, recruited_by_user_id: `eq.${userId}` },
     order: 'created_at.desc',
   });
-  return assembleMany(rows);
+  // Telefone sem DDD ou sem o 9 sai daqui ja completo (e fica gravado).
+  return completarTelefonesPendentes(await assembleMany(rows));
 }
 
 /**
@@ -659,8 +664,9 @@ export async function createMember(
   const row = await insertOne<MemberRow>(TABLES.members, {
     client_id: input.clientId,
     name: input.name.trim(),
-    // Inteiro, como veio: digito a mais ganha a etiqueta, e nao um corte.
-    phone: digitosDoTelefone(input.phone),
+    // Inteiro, como veio (digito a mais ganha a etiqueta, e nao um corte) —
+    // e completo quando falta so o DDD 82 ou o 9 do celular.
+    phone: telefoneParaGravar(input.phone),
     photo_path: photo?.path ?? null,
     photo_mime: photo?.mime ?? null,
     photo_size: photo?.size ?? null,
@@ -687,7 +693,7 @@ export async function updateMember(
   const patch: Record<string, string | number | null> = {};
 
   if (input.name !== undefined) patch.name = input.name.trim();
-  if (input.phone !== undefined) patch.phone = digitosDoTelefone(input.phone);
+  if (input.phone !== undefined) patch.phone = telefoneParaGravar(input.phone);
   // O e-mail nao e mais editavel: o valor gravado permanece como esta.
   Object.assign(patch, standardColumns(input));
 

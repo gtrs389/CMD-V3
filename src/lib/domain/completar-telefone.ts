@@ -1,4 +1,4 @@
-import { isValidPhone } from '@/lib/utils/phone';
+import { digitosDoTelefone, isValidPhone, normalizePhone } from '@/lib/utils/phone';
 
 /**
  * Completar telefone cadastrado pela metade — sem DDD, ou sem o 9 do
@@ -57,4 +57,30 @@ export function completarTelefone(atual: string | null | undefined, ddd = DDD_DA
   }
 
   return correcao && isValidPhone(correcao.novo) ? correcao : null;
+}
+
+/**
+ * O numero como deve ser GRAVADO: completo quando as regras sabem
+ * completar, e so os digitos quando nao sabem. Todo cadastro e toda edicao
+ * passam por aqui — o numero nasce certo.
+ */
+export function telefoneParaGravar(atual: string | null | undefined): string {
+  return completarTelefone(atual)?.novo ?? digitosDoTelefone(atual ?? '');
+}
+
+/**
+ * As formas de um numero digitado no LOGIN: como veio, completo, e — para
+ * acessos antigos, gravados antes da correcao — sem o 9. Quem digitou do
+ * jeito antigo ou do jeito novo entra do mesmo jeito.
+ */
+export function formasDoTelefone(digitado: string): string[] {
+  const d = normalizePhone(digitado);
+  const formas = new Set<string>();
+  if (d.length >= 10) formas.add(d);
+  const completo = completarTelefone(digitado)?.novo;
+  if (completo) formas.add(completo);
+  for (const f of [...formas]) {
+    if (f.length === 11 && f[2] === '9' && f[3] >= '6') formas.add(`${f.slice(0, 2)}${f.slice(3)}`);
+  }
+  return [...formas];
 }
