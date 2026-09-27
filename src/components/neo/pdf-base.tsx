@@ -410,17 +410,6 @@ export interface BarraDoGrafico {
   base: number | null;
 }
 
-/** Quadradinhos coloridos: em quais categorias a pessoa caiu. */
-export function Marcadores({ indices, categorias }: { indices: number[]; categorias: CategoriaDoGrafico[] }) {
-  return (
-    <View style={{ flexDirection: 'row', marginLeft: 4 }}>
-      {indices.map((i) => (
-        <View key={i} style={{ width: 5.5, height: 5.5, borderRadius: 1.2, backgroundColor: categorias[i]?.cor ?? C.faint, marginLeft: 1.5 }} />
-      ))}
-    </View>
-  );
-}
-
 export function Legenda({ categorias }: { categorias: CategoriaDoGrafico[] }) {
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 }}>
@@ -555,6 +544,7 @@ export function FaixaDeGrupo({ rotulo, titulo, direita }: { rotulo: string; titu
    ------------------------------------------------------------------------- */
 
 export interface RegistroRepetidoPdf {
+  id: string;
   nome: string;
   /** "Líder" ou "Equipe". */
   nivel: string;

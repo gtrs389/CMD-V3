@@ -8,6 +8,7 @@ import { recruiterText } from './recruitment';
  * prontos para o PDF: o PDF mostra o mesmo cartao, com as mesmas linhas.
  */
 export interface RegistroRepetidoParaPdf {
+  id: string;
   nome: string;
   nivel: string;
   cadastradoEm: string;
@@ -31,6 +32,7 @@ export interface GrupoRepetidoParaPdf {
 
 export function registroParaPdf(member: Member, primeiro: boolean): RegistroRepetidoParaPdf {
   return {
+    id: member.id,
     nome: member.name,
     nivel: member.tier === 'LIDER' ? 'Líder' : 'Equipe',
     cadastradoEm: member.createdAt,

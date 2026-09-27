@@ -44,8 +44,8 @@ const HELEN: GrupoRepetidoPdf = {
   divergencias: 'telefone e bairro',
   responsaveis: ['João Pedro de Jesus · Líder', 'Josefa Maria Araujo dos Santos · Líder'],
   registros: [
-    { nome: 'Helen Karollynne Luciana da Silva', nivel: 'Equipe', cadastradoEm: '2026-09-27T13:47:00Z', como: 'Pelo painel', ondeMora: 'Conjunto Edval Gaia', cadastradoPor: 'João Pedro de Jesus · Líder', telefone: '82999570721', votaEm: 'Zona 10 · Seção 66', primeiro: true },
-    { nome: 'Helen Karolaynne Luciana da Silva', nivel: 'Equipe', cadastradoEm: '2026-09-27T16:34:00Z', como: 'Pelo painel', ondeMora: 'Vila Nova · Rua Maria Tenório Cavalcante, nº 132', cadastradoPor: 'Josefa Maria Araujo dos Santos · Líder', telefone: '82996082322', votaEm: 'Zona 10 · Seção 66', primeiro: false },
+    { id: 'h1', nome: 'Helen Karollynne Luciana da Silva', nivel: 'Equipe', cadastradoEm: '2026-09-27T13:47:00Z', como: 'Pelo painel', ondeMora: 'Conjunto Edval Gaia', cadastradoPor: 'João Pedro de Jesus · Líder', telefone: '82999570721', votaEm: 'Zona 10 · Seção 66', primeiro: true },
+    { id: 'h2', nome: 'Helen Karolaynne Luciana da Silva', nivel: 'Equipe', cadastradoEm: '2026-09-27T16:34:00Z', como: 'Pelo painel', ondeMora: 'Vila Nova · Rua Maria Tenório Cavalcante, nº 132', cadastradoPor: 'Josefa Maria Araujo dos Santos · Líder', telefone: '82996082322', votaEm: 'Zona 10 · Seção 66', primeiro: false },
   ],
 };
 
@@ -84,6 +84,18 @@ describe('filtro por dado', () => {
     expect(achados[0].motivos).toEqual(['telefone compartilhado (3 fichas)']);
   });
 
+  it('telefone incompleto e telefone que não confere são filtros diferentes', () => {
+    const curto = pessoa({ name: 'Curto', phone: '8299990' });
+    const semNove = pessoa({ name: 'Sem Nove', phone: '82899990001' });
+    const sobrando = pessoa({ name: 'Sobrando', phone: '829999900012' });
+    const lista = [curto, semNove, sobrando, emOrdem];
+    const ctx = contextoDosFiltros(lista, []);
+    expect(aplicarFiltros(lista, ['telefone-incompleto'], ctx).map((p) => [p.member.name, p.motivos[0]])).toEqual([['Curto', 'telefone com 7 dígitos']]);
+    expect(aplicarFiltros(lista, ['telefone-errado'], ctx).map((p) => p.member.name)).toEqual(['Sem Nove', 'Sobrando']);
+    expect(FILTROS_DE_DADOS.find((f) => f.id === 'telefone-incompleto')?.rotulo).toBe('Telefone incompleto');
+    expect(FILTROS_DE_DADOS.find((f) => f.id === 'telefone-errado')?.rotulo).toBe('Telefone que não confere');
+  });
+
   it('conta quantos caem em cada filtro', () => {
     const contagem = contarPorFiltro(todos, contexto);
     expect(contagem['cpf-incompleto']).toBe(1);
@@ -116,11 +128,12 @@ describe('filtro por dado', () => {
     expect(barras[1]).toMatchObject({ responsavel: 'Bruna', total: 1, base: null });
   });
 
-  it('o PDF sai agrupado por quem cadastrou, com o gráfico por liderança', async () => {
+  it('vários filtros: resumo e uma seção por filtro, agrupada por quem cadastrou', async () => {
     const lideres = ['João Silva · Líder', 'Bruna Costa · Líder', 'Carla Nunes · Líder', 'Marina Alves · Administração do time'];
     const bairros = ['Centro', 'Xucurus', 'Jardim Brasil', 'São Cristóvão'];
     const nomes = ['Ana Paula Lima', 'Bruno Ferreira', 'Cícero Gomes', 'Daniela Rocha', 'Edson Batista', 'Fátima Nunes', 'Gilberto Santos', 'Helena Prado', 'Ivone Barros', 'José Carlos Melo', 'Kátia Moura', 'Luiz Henrique', 'Marta Campos', 'Nivaldo Reis', 'Otília Souza', 'Paulo Roberto', 'Quitéria Lins', 'Raimundo Alves', 'Sandra Vieira', 'Tereza Cristina', 'Ubiratan Dias', 'Valdete Silva'];
     const pessoas = nomes.map((nome, i) => ({
+      id: `p${i}`,
       nome,
       telefone: `8299${String(1000000 + i * 7919).slice(0, 7)}`,
       bairro: bairros[i % 4],
@@ -130,9 +143,11 @@ describe('filtro por dado', () => {
     }));
     const doc = createElement(ListaFiltrada, {
       time: 'Time Palmeira',
-      filtros: ['Título incompleto', 'Sem zona ou seção'],
+      secoes: [
+        { tipo: 'pessoas', rotulo: 'Título incompleto', pessoas: pessoas.filter((p) => p.filtros.includes(0)) },
+        { tipo: 'pessoas', rotulo: 'Sem zona ou seção', pessoas: pessoas.filter((p) => p.filtros.includes(1)) },
+      ],
       responsavel: null,
-      pessoas,
       geradaEm: '2026-09-27T12:00:00Z',
       basePorResponsavel: { [lideres[0]]: 120, [lideres[1]]: 64, [lideres[2]]: 18, [lideres[3]]: 9 },
     });
@@ -146,7 +161,7 @@ describe('filtro por dado', () => {
     const hugo = 'Hugo Humberto Pereira do Nascimento · Líder';
     const bruna = 'Bruna Costa · Líder';
     const p = (nome: string, tel: string, por: string, bairro = '') => ({
-      nome, telefone: tel, bairro, cadastradoPor: por, cadastradoEm: '2026-09-17T12:00:00Z', filtros: [0],
+      id: nome, nome, telefone: tel, bairro, cadastradoPor: por, cadastradoEm: '2026-09-17T12:00:00Z',
     });
     const pessoas = [
       p('Ana Cleide Martins da Silva', '8299247526', hugo, 'CEP 57607-200'),
@@ -166,9 +181,22 @@ describe('filtro por dado', () => {
     ]);
 
     const doc = createElement(ListaFiltrada, {
-      time: 'Time Palmeira', filtros: ['Telefone compartilhado'], responsavel: null, pessoas,
-      geradaEm: '2026-09-27T12:00:00Z', indiceDoTelefoneCompartilhado: 0,
+      time: 'Time Palmeira', responsavel: null, geradaEm: '2026-09-27T12:00:00Z',
+      secoes: [{ tipo: 'telefones', rotulo: 'Telefone compartilhado', pessoas }],
     });
+    if (process.env.PREVIA_LISTA) {
+      // O exemplo pedido: "Telefone compartilhado" e "Cadastrado mais de uma
+      // vez" juntos, cada um na sua estrutura, num PDF so.
+      const juntos = createElement(ListaFiltrada, {
+        time: 'Time Palmeira', responsavel: null, geradaEm: '2026-09-27T12:00:00Z',
+        secoes: [
+          { tipo: 'telefones', rotulo: 'Telefone compartilhado', pessoas },
+          { tipo: 'repetidos', rotulo: 'Cadastrado mais de uma vez', grupos: [HELEN] },
+        ],
+      });
+      const b = await pdf(juntos as Parameters<typeof pdf>[0]).toBuffer();
+      (await import('node:fs')).writeFileSync(process.env.PREVIA_LISTA.replace('.pdf', '-juntos.pdf'), Buffer.from(await new Response(b as unknown as ReadableStream).arrayBuffer()));
+    }
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
@@ -187,8 +215,8 @@ describe('filtro por dado', () => {
 
   it('só "Cadastrado mais de uma vez": o PDF mostra os cartões, como na tela', async () => {
     const doc = createElement(ListaFiltrada, {
-      time: 'Time Palmeira', filtros: ['Cadastrado mais de uma vez'], responsavel: null, pessoas: [],
-      geradaEm: '2026-09-27T12:00:00Z', indiceDoRepetido: 0, repetidos: [HELEN, { ...HELEN, nome: 'Maria das Dores Lima', divergencias: '', responsaveis: ['João Pedro de Jesus · Líder'], evidencias: ['Mesmo nome e telefone'], registros: HELEN.registros.map((r) => ({ ...r, nome: 'Maria das Dores Lima', cadastradoPor: 'João Pedro de Jesus · Líder' })) }],
+      time: 'Time Palmeira', responsavel: null,
+      geradaEm: '2026-09-27T12:00:00Z', secoes: [{ tipo: 'repetidos', rotulo: 'Cadastrado mais de uma vez', grupos: [HELEN, { ...HELEN, nome: 'Maria das Dores Lima', divergencias: '', responsaveis: ['João Pedro de Jesus · Líder'], evidencias: ['Mesmo nome e telefone'], registros: HELEN.registros.map((r) => ({ ...r, nome: 'Maria das Dores Lima', cadastradoPor: 'João Pedro de Jesus · Líder' })) }] }],
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
@@ -198,6 +226,7 @@ describe('filtro por dado', () => {
 
   it('lista grande: grupos que atravessam páginas saem inteiros', async () => {
     const pessoas = Array.from({ length: 400 }, (_, i) => ({
+      id: `g${i}`,
       nome: `Pessoa ${String(i).padStart(3, '0')} Lima`,
       telefone: `82999${String(i).padStart(6, '0')}`,
       bairro: `Bairro ${i % 9}`,
@@ -206,7 +235,8 @@ describe('filtro por dado', () => {
       filtros: [i % 3],
     }));
     const doc = createElement(ListaFiltrada, {
-      time: 'Time Palmeira', filtros: ['Sem título', 'Sem rua', 'Sem bairro'], responsavel: null, pessoas, geradaEm: '2026-09-27T12:00:00Z',
+      time: 'Time Palmeira', responsavel: null, geradaEm: '2026-09-27T12:00:00Z',
+      secoes: ['Sem título', 'Sem rua', 'Sem bairro'].map((rotulo, k) => ({ tipo: 'pessoas' as const, rotulo, pessoas: pessoas.filter((p) => p.filtros.includes(k)) })),
     });
     const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());

@@ -15,6 +15,7 @@ import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
 import type { GrupoRepetido } from '@/lib/domain/inconsistencias';
 import { baixarArquivo } from '@/lib/utils/download';
 import { slug } from '@/components/neo/pdf-base';
+import type { SecaoDoFiltro } from '@/components/neo/ListasPdf';
 import { formatDate } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber } from '@/lib/utils/text';
@@ -71,28 +72,32 @@ export function FiltroDeDadosCard({
     setBaixando(true);
     try {
       const { gerarPdfDaLista } = await import('@/components/neo/ListasPdf');
-      const filtros = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id));
-      const indiceDe = (id: string) => {
-        const i = filtros.findIndex((f) => f.id === id);
-        return i >= 0 ? i : null;
-      };
-      const blob = await gerarPdfDaLista({
-        time: clientName,
-        filtros: filtros.map((f) => f.rotulo),
-        responsavel,
-        geradaEm: new Date().toISOString(),
-        basePorResponsavel: basePorResponsavel(members),
-        indiceDoTelefoneCompartilhado: indiceDe('telefone-repetido'),
-        indiceDoRepetido: indiceDe('repetido'),
-        repetidos: indiceDe('repetido') !== null ? gruposRepetidos.map(grupoRepetidoParaPdf) : [],
-        pessoas: pessoas.map(({ member, filtros: seus }) => ({
+      // Uma secao por filtro marcado, na ordem da tela — cada uma com a
+      // estrutura que faz sentido para ela.
+      const secoes: SecaoDoFiltro[] = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id)).map((filtro) => {
+        if (filtro.id === 'repetido') {
+          return { tipo: 'repetidos', rotulo: filtro.rotulo, grupos: gruposRepetidos.map(grupoRepetidoParaPdf) };
+        }
+        const pessoasDoFiltro = aplicarFiltros(members, [filtro.id], contexto).map(({ member }) => ({
+          id: member.id,
           nome: member.name,
           telefone: member.phone ?? '',
           bairro: member.district ?? '',
           cadastradoPor: recruiterText(member.recruitedBy),
           cadastradoEm: member.createdAt,
-          filtros: seus.map((id) => filtros.findIndex((f) => f.id === id)).filter((i) => i >= 0),
-        })),
+        }));
+        return {
+          tipo: filtro.id === 'telefone-repetido' ? 'telefones' : 'pessoas',
+          rotulo: filtro.rotulo,
+          pessoas: pessoasDoFiltro,
+        };
+      });
+      const blob = await gerarPdfDaLista({
+        time: clientName,
+        responsavel,
+        geradaEm: new Date().toISOString(),
+        basePorResponsavel: basePorResponsavel(members),
+        secoes,
       });
       baixarArquivo(`dados-para-corrigir-${slug(clientName)}-${new Date().toISOString().slice(0, 10)}.pdf`, blob);
     } catch {
