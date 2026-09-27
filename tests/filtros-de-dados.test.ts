@@ -54,7 +54,7 @@ describe('filtro por dado', () => {
     expect(nomes).toEqual(['Ana Sem CPF']);
   });
 
-  it('telefone repetido é contado pelos números, não pelo estado do acesso', () => {
+  it('telefone compartilhado é contado pelos números, não pelo estado do acesso', () => {
     // Todos com acesso ATIVO: antes, o filtro olhava o acesso e dava zero.
     const a = pessoa({ name: 'Fábio', phone: '(82) 98888-7777', access: 'ACTIVE' });
     const b = pessoa({ name: 'Gina', phone: '82988887777', access: 'ACTIVE' });
@@ -64,7 +64,7 @@ describe('filtro por dado', () => {
     expect(fichasPorTelefone(lista).get(a.id)).toBe(3);
     const achados = aplicarFiltros(lista, ['telefone-repetido'], contextoDosFiltros(lista, []));
     expect(achados.map((p) => p.member.name)).toEqual(['Fábio', 'Gina', 'Hugo']);
-    expect(achados[0].motivos).toEqual(['telefone em 3 fichas do time']);
+    expect(achados[0].motivos).toEqual(['telefone compartilhado (3 fichas)']);
   });
 
   it('conta quantos caem em cada filtro', () => {

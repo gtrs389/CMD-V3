@@ -132,10 +132,10 @@ export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
   {
     id: 'telefone-repetido',
     grupo: 'Telefone',
-    rotulo: 'Telefone repetido no time',
+    rotulo: 'Telefone compartilhado',
     motivo: (m, c) => {
       const fichas = c.telefones.get(m.id);
-      return fichas ? `telefone em ${fichas} fichas do time` : null;
+      return fichas ? `telefone compartilhado (${fichas} fichas)` : null;
     },
   },
   {

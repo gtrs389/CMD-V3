@@ -199,7 +199,7 @@ export function InconsistenciasPanel({
         })),
         ...(visto.telefones.length
           ? [{
-              titulo: 'Telefone dividido entre pessoas',
+              titulo: 'Telefone compartilhado',
               explicacao: 'Pessoas diferentes com o mesmo número. Pode ser família — ou o número do Líder digitado no lugar.',
               gravidade: 'baixa' as const,
               pessoas: visto.telefones.flatMap((t) =>
