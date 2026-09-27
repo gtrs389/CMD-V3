@@ -54,6 +54,8 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { TierBadge } from '@/components/members/TierBadge';
 import { FiltroDeDadosCard } from './FiltroDeDadosCard';
+import { CompletarTelefonesCard } from './CompletarTelefonesCard';
+import { useSession } from '@/components/layout/SessionProvider';
 
 interface InconsistenciasPanelProps {
   /** Nome do time, para o arquivo do relatorio. */
@@ -179,6 +181,7 @@ export function InconsistenciasPanel({
 
   const toast = useToast();
   const [baixando, setBaixando] = useState(false);
+  const podeCorrigir = useSession().can('member.update');
 
   /** O quadro que esta na tela — com o recorte do responsavel —, em PDF. */
   async function baixarRelatorio() {
@@ -276,6 +279,9 @@ export function InconsistenciasPanel({
           ) : null
         }
       />
+
+      {/* Corrigir telefone e do ADMIN geral: a rota confere de novo. */}
+      {podeCorrigir ? <CompletarTelefonesCard members={doRecorte} todos={members} /> : null}
 
       <FiltroDeDadosCard
         clientName={clientName}
