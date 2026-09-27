@@ -16,8 +16,6 @@ import {
 } from 'lucide-react';
 import {
   EXEMPLO_CSV,
-  MUNICIPIO_PADRAO,
-  UF_PADRAO,
   faltasDaLinha,
   lerPlanilha,
   problemasDaLinha,
@@ -48,6 +46,15 @@ interface SpreadsheetImportModalProps {
   open: boolean;
   onClose: () => void;
   salvar: SalvarLinha;
+  /**
+   * Estado e municipio do TIME, ja preenchidos em cada linha.
+   *
+   * A planilha traz o endereco em uma coluna so e nao traz municipio: quem
+   * cadastra uma lista esta cadastrando gente do proprio time, no municipio
+   * dele. Vazio quando o time ainda nao tem estado no cadastro — ai a
+   * escolha e de quem confere.
+   */
+  enderecoPadrao: { state: string; city: string };
 }
 
 /** Resultado de cada linha depois de mandar cadastrar. */
@@ -72,7 +79,12 @@ type Situacao = { estado: 'pronta' } | { estado: 'salva' } | { estado: 'falhou';
  * na tela com o motivo, e as outras seguem. Um erro no meio da lista nao
  * pode interromper as oitenta e nove que estavam certas.
  */
-export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImportModalProps) {
+export function SpreadsheetImportModal({
+  open,
+  onClose,
+  salvar,
+  enderecoPadrao,
+}: SpreadsheetImportModalProps) {
   const toast = useToast();
   const entrada = useRef<HTMLInputElement | null>(null);
 
@@ -117,16 +129,15 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
 
     setLinhas(leitura.linhas);
     setSituacoes({});
-    // Toda planilha e de Alagoas, de Palmeira dos Indios: os dois entram
-    // prontos, e o bairro e a rua vem separados do texto da coluna
-    // Endereco. Tudo continua editavel aqui.
+    // Estado e municipio saem do proprio time; o bairro e a rua vem
+    // separados do texto da coluna Endereco. Tudo continua editavel aqui.
     setEnderecos(
       Object.fromEntries(
         leitura.linhas.map((linha) => [
           linha.id,
           {
-            state: UF_PADRAO,
-            city: MUNICIPIO_PADRAO,
+            state: enderecoPadrao.state,
+            city: enderecoPadrao.city,
             district: linha.district,
             street: linha.street,
           },
@@ -319,6 +330,24 @@ export function SpreadsheetImportModal({ open, onClose, salvar }: SpreadsheetImp
             {ignoradas.length > 0 ? (
               <p className="rounded-control bg-ink-50 px-3 py-2 text-[0.8125rem] text-ink-500">
                 Colunas não usadas: {ignoradas.join(', ')}.
+              </p>
+            ) : null}
+
+            {/* Depois de uma rodada, o que FICOU de fora dito por extenso.
+                A linha de cada pessoa ja traz o motivo, mas quem sobe uma
+                lista de cinquenta olha o total, e nao linha por linha: sem
+                isto, duas pessoas que nao entraram passam despercebidas. */}
+            {salvas > 0 && pendentes.length > 0 ? (
+              <p
+                role="status"
+                className="rounded-control border border-warning-600/40 bg-warning-50/60 px-3 py-2 text-[0.8125rem] text-warning-600"
+              >
+                <strong className="font-semibold">
+                  {salvas} {salvas === 1 ? 'entrou' : 'entraram'}.{' '}
+                  {pendentes.length}{' '}
+                  {pendentes.length === 1 ? 'continua aqui' : 'continuam aqui'}
+                </strong>{' '}
+                — o motivo está em cada linha. Corrija e clique em Cadastrar de novo.
               </p>
             ) : null}
 

@@ -67,8 +67,36 @@ export function MemberFormModal({ open, client, member, onClose }: MemberFormMod
 
   const { reset } = form;
 
+  /**
+   * Qual ficha ja foi carregada nesta abertura.
+   *
+   * NAO E DETALHE: sem esta marca, o efeito abaixo dispara de novo toda vez
+   * que `client.form` chega como um objeto NOVO — e ele chega assim a cada
+   * releitura do time, que acontece sozinha quando a aba volta a ficar
+   * visivel (`use-repository-query`) ou quando qualquer escrita avisa o
+   * painel. O efeito entao chamava `reset`, e o que a pessoa estava
+   * digitando SUMIA no meio do cadastro.
+   *
+   * Era exatamente o caminho de quem cadastra a mao: ler o dado no WhatsApp,
+   * voltar para a aba do sistema, digitar, e encontrar o campo em branco.
+   *
+   * A ficha e carregada UMA vez por abertura, entao: ao abrir, e ao trocar
+   * de pessoa. Depois disso o que manda e o que esta na tela — dado que
+   * chega do servidor nunca sobrescreve o que esta sendo digitado.
+   */
+  const fichaCarregada = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Fechou: a proxima abertura carrega de novo.
+      fichaCarregada.current = null;
+      return;
+    }
+
+    const alvo = member?.id ?? 'nova';
+    if (fichaCarregada.current === alvo) return;
+
+    fichaCarregada.current = alvo;
     reset(member ? valuesFromMember(client.form, member) : undefined);
   }, [open, member, client.form, reset]);
 

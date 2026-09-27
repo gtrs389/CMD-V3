@@ -103,4 +103,12 @@ export interface MemberInput {
   responses: FieldResponse[];
   consentAt: IsoDate | null;
   source: Member['source'];
+  /**
+   * Cadastro vindo de uma planilha.
+   *
+   * Telefone ja usado no time deixa de recusar a pessoa e passa a apenas
+   * nao criar o acesso dela: em uma lista de mutirao, perder quem divide o
+   * numero com outra pessoa e pior do que registra-la sem acesso.
+   */
+  bulkImport?: boolean;
 }

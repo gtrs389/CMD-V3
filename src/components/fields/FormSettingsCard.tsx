@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Client } from '@/lib/types';
@@ -48,7 +48,22 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
     defaultValues: toValues(client),
   });
 
+  /**
+   * O time ja carregado neste cartao.
+   *
+   * O cartao fica montado o tempo todo, e `client` chega como um objeto NOVO
+   * a cada releitura do painel — que acontece sozinha ao voltar para a aba.
+   * Sem esta marca, o `reset` abaixo rodava naquele instante e apagava o
+   * texto que o ADMIN estava escrevendo.
+   *
+   * Recarrega quando muda de TIME, que e quando o conteudo realmente e
+   * outro. Enquanto for o mesmo, o que vale e o que esta na tela.
+   */
+  const timeCarregado = useRef<string | null>(null);
+
   useEffect(() => {
+    if (timeCarregado.current === client.id) return;
+    timeCarregado.current = client.id;
     reset(toValues(client));
   }, [client, reset]);
 
@@ -68,6 +83,11 @@ export function FormSettingsCard({ client }: FormSettingsCardProps) {
           consentLabel: values.privacyConsentLabel || appConfig.privacy.defaultConsentLabel,
         },
       });
+      // O que foi salvo passa a ser o ponto de partida: o botao volta a
+      // ficar desligado ate a proxima alteracao. Antes quem fazia isso era a
+      // releitura do painel, e depender dela era o que apagava o texto de
+      // quem ainda estava escrevendo.
+      reset(values);
       toast.success('Ajustes do formulário salvos.');
     } catch {
       toast.error('Não foi possível salvar os ajustes.');

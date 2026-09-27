@@ -4,7 +4,11 @@ import { requireMemberCreation, requirePermission } from '@/lib/server/guard';
 import { badRequest, jsonOk, notFound, readJson, toErrorResponse } from '@/lib/server/http';
 import { memberCreateSchema } from '@/lib/validation/server.schema';
 import { createMember, listAllMembers, rollbackMember } from '@/lib/server/member.service';
-import { assertTeamPhoneAvailable, createMemberAccess } from '@/lib/server/user.service';
+import {
+  assertTeamPhoneAvailable,
+  createMemberAccess,
+  teamPhoneTaken,
+} from '@/lib/server/user.service';
 import { getClient } from '@/lib/server/client.service';
 import { resolveLocation } from '@/lib/server/map-location.service';
 
@@ -40,7 +44,18 @@ export async function POST(request: NextRequest) {
 
     // Telefone repetido no time interrompe antes de gravar: nada orfao e
     // criado, e o numero continua identificando uma unica pessoa.
-    await assertTeamPhoneAvailable(client.id, input.phone);
+    //
+    // Na PLANILHA a conta e outra. Ali a lista vem do mundo real, onde marido
+    // e mulher dividem um numero, e recusar a linha perde a pessoa. Entao o
+    // numero repetido para de recusar e passa a apenas nao criar o acesso:
+    // ninguem fica com credencial duplicada — o que faria o link do time
+    // recusar a entrada dos DOIS — e a pessoa entra como cadastro.
+    const semAcessoPorTelefoneRepetido =
+      input.bulkImport && (await teamPhoneTaken(client.id, input.phone));
+
+    if (!semAcessoPorTelefoneRepetido) {
+      await assertTeamPhoneAvailable(client.id, input.phone);
+    }
 
     const member = await createMember(
       { ...input, source: 'admin' },
@@ -48,12 +63,14 @@ export async function POST(request: NextRequest) {
     );
 
     try {
-      await createMemberAccess({
-        clientId: client.id,
-        memberId: member.id,
-        name: member.name,
-        phone: member.phone,
-      });
+      if (!semAcessoPorTelefoneRepetido) {
+        await createMemberAccess({
+          clientId: client.id,
+          memberId: member.id,
+          name: member.name,
+          phone: member.phone,
+        });
+      }
     } catch (error) {
       await rollbackMember(member.id);
       throw error;

@@ -401,6 +401,31 @@ async function findUserByTeamPerson(personId: string): Promise<UserColumns | nul
  * `owner` isenta a propria pessoa da conferencia: sem isso, salvar o cadastro
  * sem trocar o numero acusaria conflito com ela mesma.
  */
+/**
+ * O telefone ja identifica OUTRA pessoa ativa deste time?
+ *
+ * Mesma pergunta de `assertTeamPhoneAvailable`, sem derrubar nada. Serve ao
+ * cadastro em lote: uma familia que compartilha o mesmo numero nao pode
+ * fazer a planilha perder a segunda pessoa — ela entra, e quem nao nasce e
+ * o ACESSO dela, porque dois usuarios ativos com o mesmo numero fariam o
+ * link do time recusar a entrada dos DOIS.
+ */
+export async function teamPhoneTaken(clientId: string, phone: string): Promise<boolean> {
+  const normalized = normalizePhone(phone);
+  if (!isValidPhone(normalized)) return false;
+
+  const conflicts = await selectRows<Pick<UserColumns, 'id'>>(TABLES.users, {
+    select: 'id',
+    filters: {
+      client_id: `eq.${clientId}`,
+      phone: `eq.${normalized}`,
+      is_active: 'is.true',
+    },
+  });
+
+  return conflicts.length > 0;
+}
+
 export async function assertTeamPhoneAvailable(
   clientId: string,
   phone: string,

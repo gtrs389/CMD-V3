@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   try {
     const input = await readJson(request, surveyMemberSchema);
 
-    const { answers, ...ficha } = input;
+    const { answers, bulkImport, ...ficha } = input;
 
     // O time e o proprio da sessao: esta tela e do lider, e nao existe
     // cadastrar "no time de outro" por aqui. Perfil sem time (o ADMIN geral)
@@ -53,7 +53,12 @@ export async function POST(request: NextRequest) {
 
     // Telefone repetido no time interrompe antes de gravar: nada orfao e
     // criado, e o numero continua identificando uma unica pessoa.
-    await assertTeamPhoneAvailable(clientId, ficha.phone);
+    //
+    // Vindo de PLANILHA, nao: ali a lista e do mundo real, onde marido e
+    // mulher dividem um numero, e recusar a linha perde a pessoa. Quem
+    // responde o Formulario 2 nao recebe acesso de qualquer forma, entao
+    // aqui nao ha credencial duplicada a evitar.
+    if (!bulkImport) await assertTeamPhoneAvailable(clientId, ficha.phone);
 
     const member = await createMember(
       // Sem `responses`: pergunta do Formulario 2 nao e resposta de
