@@ -1,6 +1,6 @@
 'use client';
 
-import { PencilLine, Undo2 } from 'lucide-react';
+import { PencilLine, RotateCw, Undo2 } from 'lucide-react';
 import type { CustomField } from '@/lib/types';
 import { withCurrentValue } from '@/lib/domain/location';
 import { Input } from '@/components/ui/Input';
@@ -64,6 +64,22 @@ export function LocationField({ field, id, describedBy, invalid, disabled }: Loc
   if (!chain) return null;
 
   if (field.systemKey === 'state') {
+    // Lista fora do ar: o campo vira texto, com a UF que ja estava escrita.
+    if (chain.states.error) {
+      return (
+        <ListaIndisponivel
+          id={id}
+          value={chain.state}
+          placeholder="Sigla do estado (ex.: AL)"
+          disabled={disabled}
+          invalid={invalid}
+          describedBy={describedBy}
+          onChange={(valor) => chain.selectState(valor.toUpperCase().slice(0, 2))}
+          onRetry={chain.states.retry}
+        />
+      );
+    }
+
     const options = withCurrentValue(
       chain.states.items.map((state) => ({ value: state.uf, label: `${state.name} (${state.uf})` })),
       chain.state,
@@ -152,6 +168,24 @@ export function LocationField({ field, id, describedBy, invalid, disabled }: Loc
     );
   }
 
+  // Lista fora do ar: o campo vira texto, ja com o que estava escolhido.
+  // Uma caixa de erro no lugar do valor escondia, por exemplo, o municipio
+  // fixo da planilha — e dava a impressao de que ele tinha sumido.
+  if (step.list.error) {
+    return (
+      <ListaIndisponivel
+        id={id}
+        value={step.value}
+        placeholder={texts.manual}
+        disabled={disabled || step.blocked}
+        invalid={invalid}
+        describedBy={describedBy}
+        onChange={step.select}
+        onRetry={step.list.retry}
+      />
+    );
+  }
+
   // Somente as localidades. A saida para digitar nao entra aqui: ela e o
   // botao abaixo do campo.
   const options = withCurrentValue(
@@ -193,6 +227,63 @@ export function LocationField({ field, id, describedBy, invalid, disabled }: Loc
           <PencilLine aria-hidden="true" className="size-3.5" />
           {texts.notFound}
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * O campo quando a lista de localidades nao carregou.
+ *
+ * O valor fica A VISTA e editavel, como texto: o cadastro nunca para por
+ * causa da API, e o que ja estava escolhido nao some. Tentar a lista de
+ * novo e um link discreto embaixo, e nao o assunto principal do campo.
+ */
+function ListaIndisponivel({
+  id,
+  value,
+  placeholder,
+  disabled,
+  invalid,
+  describedBy,
+  onChange,
+  onRetry,
+}: {
+  id: string;
+  value: string;
+  placeholder: string;
+  disabled: boolean;
+  invalid: boolean;
+  describedBy?: string;
+  onChange: (valor: string) => void;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Input
+        id={id}
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        invalid={invalid}
+        aria-describedby={describedBy}
+        autoComplete="off"
+        onChange={(event) => onChange(event.target.value)}
+      />
+
+      {disabled ? null : (
+        <p className="flex flex-wrap items-center gap-x-2 text-xs text-ink-500">
+          <span>A lista não carregou — pode digitar.</span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex min-h-9 items-center gap-1.5 font-medium text-brand-700 transition-colors hover:text-brand-800"
+          >
+            <RotateCw aria-hidden="true" className="size-3.5" />
+            Tentar carregar a lista
+          </button>
+        </p>
       )}
     </div>
   );

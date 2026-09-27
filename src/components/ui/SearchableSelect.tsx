@@ -96,7 +96,9 @@ export function SearchableSelect({
   if (error) {
     return (
       <div
-        className="flex flex-col gap-2 rounded-control border border-danger-200 bg-danger-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+        // Sempre em coluna: o campo costuma estar numa grade de duas
+        // colunas, e lado a lado o texto ficava espremido atras dos botoes.
+        className="flex flex-col gap-2 rounded-control border border-danger-200 bg-danger-50 p-3"
         aria-describedby={describedBy}
       >
         <p role="alert" className="text-sm text-danger-700">
