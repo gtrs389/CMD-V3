@@ -166,9 +166,29 @@ function limpo(valor: string | undefined, limite: number): string {
   return (valor ?? '').replace(/\s+/g, ' ').trim().slice(0, limite);
 }
 
-/** Toda planilha e de Alagoas, do municipio de Palmeira dos Indios. */
-export const UF_PADRAO = 'AL';
-export const MUNICIPIO_PADRAO = 'Palmeira dos Índios';
+/**
+ * Estado e municipio que a conferencia ja traz preenchidos.
+ *
+ * Eles saem do PROPRIO TIME — `stateUf` e a primeira cidade dele (migration
+ * 038) —, e nao de um valor fixo. Era fixo em Alagoas, Palmeira dos Indios,
+ * de quando havia um time so: em qualquer outro municipio a planilha entrava
+ * com o endereco errado, e a lista de bairros, que e buscada por UF +
+ * municipio, nao achava nada.
+ *
+ * Sem estado no cadastro do time, os dois ficam VAZIOS e quem confere
+ * escolhe: melhor um campo em branco do que um municipio inventado.
+ */
+export function enderecoPadraoDoTime(time: {
+  stateUf?: string | null;
+  cities?: readonly string[] | null;
+}): { state: string; city: string } {
+  const state = (time.stateUf ?? '').trim().toUpperCase();
+  const city = (time.cities ?? []).map((nome) => nome.trim()).find(Boolean) ?? '';
+
+  // Municipio sem estado nao se encaixa na cadeia: a lista de bairros e
+  // buscada por UF + municipio.
+  return state ? { state, city } : { state: '', city: '' };
+}
 
 /**
  * Comecos que indicam LOGRADOURO: o texto todo e a rua.

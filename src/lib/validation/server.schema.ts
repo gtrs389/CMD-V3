@@ -312,6 +312,15 @@ export const memberCreateSchema = z.object({
   ...memberBase,
   // Cadastro pelo painel: o telefone pode faltar (ver `memberPhoneOpcional`).
   phone: memberPhoneOpcional.default(''),
+  /**
+   * Veio de uma planilha (cadastro em lote).
+   *
+   * Muda UMA coisa, e nao afrouxa permissao nenhuma: telefone ja usado no
+   * time deixa de recusar a pessoa e passa a apenas nao criar o acesso
+   * dela. Em uma lista de mutirao, familia que compartilha numero e comum, e
+   * perder a segunda pessoa e pior do que registra-la sem acesso.
+   */
+  bulkImport: z.boolean().default(false),
 });
 
 export const memberUpdateSchema = z
@@ -534,6 +543,8 @@ export const surveyMemberSchema = z.object({
   name: trimmed(120).min(2, 'Informe o nome completo.'),
   // Tambem e caminho de painel, e a planilha passa por ele.
   phone: memberPhoneOpcional.default(''),
+  /** Veio de uma planilha: telefone repetido nao recusa a pessoa. */
+  bulkImport: z.boolean().default(false),
   photo: photoValue.default(null),
   consentAt: z.iso.datetime().nullable().default(null),
   answers: z

@@ -24,6 +24,7 @@ import { byNewest, formatDate } from '@/lib/utils/date';
 import { baixarCsv } from '@/lib/utils/download';
 import { formatPhone, normalizePhone } from '@/lib/utils/phone';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
+import { enderecoPadraoDoTime } from '@/lib/domain/csv-import';
 import { matchesSearch } from '@/lib/utils/text';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
@@ -208,7 +209,7 @@ export function MembersPanel({
     if (addForm === 'formulario-2') {
       // Sem `answers`: a planilha traz os seis campos, e nenhuma pergunta
       // propria do Formulario 2.
-      await submitOwnSurveyAnswer({ ...ficha, answers: [] });
+      await submitOwnSurveyAnswer({ ...ficha, answers: [], bulkImport: true });
       return;
     }
 
@@ -216,6 +217,9 @@ export function MembersPanel({
       ...ficha,
       clientId: client.id,
       source: 'admin',
+      // Veio da planilha: telefone ja usado no time nao recusa a pessoa —
+      // ela entra, e o que nao nasce e o acesso dela.
+      bulkImport: true,
       // A planilha nao traz foto, pergunta do formulario nem aceite: quem
       // preenche por planilha nao esta diante do aviso de privacidade.
       photo: null,
@@ -274,6 +278,10 @@ export function MembersPanel({
       open={planilhaAberta}
       onClose={() => setPlanilhaAberta(false)}
       salvar={salvarDaPlanilha}
+      // O municipio e o do TIME: quem sobe uma lista esta cadastrando gente
+      // do proprio time. Antes era um municipio fixo, e em qualquer outro a
+      // lista de bairros — buscada por UF + municipio — nao achava nada.
+      enderecoPadrao={enderecoPadraoDoTime(client)}
     />
   ) : null;
 

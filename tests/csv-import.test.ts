@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXEMPLO_CSV,
   MODELO_SEPARADOR,
-  MUNICIPIO_PADRAO,
-  UF_PADRAO,
+  enderecoPadraoDoTime,
   lerPlanilha,
   faltasDaLinha,
   problemasDaLinha,
@@ -291,9 +290,35 @@ describe('endereço escrito em uma linha só', () => {
 });
 
 describe('estado e município', () => {
-  it('toda planilha é de Alagoas, de Palmeira dos Índios', () => {
-    expect(UF_PADRAO).toBe('AL');
-    expect(MUNICIPIO_PADRAO).toBe('Palmeira dos Índios');
+  it('saem do próprio time, e não de um valor fixo', () => {
+    // Era fixo em Alagoas, Palmeira dos Índios, de quando havia um time só:
+    // em qualquer outro município a planilha entrava com o endereço errado.
+    expect(enderecoPadraoDoTime({ stateUf: 'PE', cities: ['Caruaru', 'Bezerros'] })).toEqual({
+      state: 'PE',
+      city: 'Caruaru',
+    });
+  });
+
+  it('a sigla vai em maiúsculas e o espaço em branco não vira município', () => {
+    expect(enderecoPadraoDoTime({ stateUf: 'al', cities: ['  ', 'Maceió'] })).toEqual({
+      state: 'AL',
+      city: 'Maceió',
+    });
+  });
+
+  it('time sem estado deixa os dois em branco: não se inventa município', () => {
+    expect(enderecoPadraoDoTime({ stateUf: null, cities: ['Palmeira dos Índios'] })).toEqual({
+      state: '',
+      city: '',
+    });
+    expect(enderecoPadraoDoTime({})).toEqual({ state: '', city: '' });
+  });
+
+  it('time com estado e sem município deixa o município para quem confere', () => {
+    expect(enderecoPadraoDoTime({ stateUf: 'AL', cities: [] })).toEqual({
+      state: 'AL',
+      city: '',
+    });
   });
 });
 
