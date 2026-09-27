@@ -13,6 +13,7 @@ import {
   type AnaliseDoNeo,
 } from '@/lib/domain/neo';
 import { RelatorioDoTime, nomeDoPdf } from '@/components/neo/RelatorioPdf';
+import { analiseAutomatica } from '@/lib/domain/leitura-automatica';
 
 /**
  * O relatorio do time pelo NEO.
@@ -105,29 +106,49 @@ function time(): { client: Parameters<typeof montarDossie>[0]; members: Member[]
 }
 
 const ANALISE: AnaliseDoNeo = {
-  manchete: 'Time cresce puxado por dois Líderes, mas a base de dados precisa de faxina.',
-  resumoExecutivo:
-    'O Time Palmeira tem 45 pessoas, com 6 Líderes. João Silva e Bruna Costa respondem por 30 dos 39 cadastros feitos por Líderes.\n\nO ponto de atenção é a qualidade: 12 cadastros estão sem título, e Ana Lima foi cadastrada duas vezes, por dois Líderes diferentes.',
-  indice: { valor: 64, rotulo: 'Estável', justificativa: 'Ritmo bom, concentrado em dois Líderes, e 9% da base com dado para conferir.' },
-  destaques: [
-    { titulo: 'Dois motores', detalhe: 'João Silva (18) e Bruna Costa (12) somam 77% dos cadastros de Líderes.' },
-    { titulo: 'Território coberto', detalhe: 'Os 4 bairros principais têm pelo menos 9 pessoas cada.' },
+  manchete: 'Rede de 46 apoiadores cresce, mas 95% da base depende de três lideranças',
+  carta:
+    'A operação Time Palmeira chega a 46 apoiadores na base líquida, organizados por 6 lideranças e 1 coordenadora. O Índice de Mobilização está em 60, na faixa Estável: a rede funciona, mas ainda não tem fôlego próprio.\n\n' +
+    'O que sustenta a rede hoje é João Silva. Sozinho, ele responde por 46,3% da base trazida pelas lideranças e foi o único a manter o ritmo nesta semana. Com Bruna Costa e Carla Nunes, as três maiores lideranças concentram 95% da base.\n\n' +
+    'Essa concentração é o principal risco estratégico. Apenas 2 das 6 lideranças cadastraram nos últimos 30 dias, e o engajamento recente, em 33%, é o componente que mais segura o índice.\n\n' +
+    'A decisão mais importante agora é ampliar a rede de lideranças antes de ampliar a base: cada nova liderança ativa, no padrão atual, traz em média 10,3 apoiadores.',
+  leituraDoIndice:
+    'O índice de 60 reflete uma rede com boa qualificação eleitoral, 79% com título válido. O que mais o puxa para baixo é o engajamento recente, em 33%.',
+  conclusoes: [
+    { titulo: 'Uma liderança puxa a rede', texto: 'João Silva trouxe 19 apoiadores, 18 deles nos últimos 30 dias.', natureza: 'forca' },
+    { titulo: 'Base qualificada para o mapa eleitoral', texto: 'Todos os 47 cadastros têm zona e seção, e 79% têm título válido.', natureza: 'forca' },
+    { titulo: 'Concentração elevada', texto: 'As 3 maiores lideranças somam 95% da base; a saída de uma delas pesa na rede inteira.', natureza: 'atencao' },
+    { titulo: 'Engajamento em queda', texto: 'Só 2 das 6 lideranças cadastraram nos últimos 30 dias; a última semana caiu 14%.', natureza: 'atencao' },
+    { titulo: 'Lideranças prontas para ativar', texto: 'Elisa Ramos e Irene Campos ainda não trouxeram apoiadores.', natureza: 'oportunidade' },
   ],
-  riscos: [
-    { titulo: 'Dependência de poucos', detalhe: 'Se João Silva parar, o time perde 46% do ritmo.', gravidade: 'alta' },
-    { titulo: 'Títulos incompletos', detalhe: '8 cadastros com título de 10 dígitos.', gravidade: 'media' },
+  forcaDaRede:
+    'A ativação das lideranças está em 67%: 4 das 6 já trouxeram apoiadores, com média de 10,3 por liderança ativa. O número é sólido para uma rede nesta fase.\n\n' +
+    'O desenho, porém, é estreito. Três lideranças somam 80% da base, e duas ainda não começaram. A rede cresce na velocidade de poucas pessoas.',
+  cenario:
+    'A base saiu de zero para 47 cadastros em sete semanas. Mantido o ritmo dos últimos 30 dias, a base líquida chegaria a 75 apoiadores em 30 dias, 104 em 60 e 133 em 90. Esse cenário depende de João Silva manter o passo; com mais lideranças ativas, ele se torna conservador.',
+  liderancas: [
+    { nome: 'João Silva', leitura: 'Maior base da rede, com 19 apoiadores e 18 novos em 30 dias.', proximoPasso: 'Reconhecer o resultado e pedir a indicação de duas novas lideranças.' },
+    { nome: 'Bruna Costa', leitura: '13 apoiadores, mas nenhum cadastro nesta semana.', proximoPasso: 'Combinar uma meta curta para os próximos 7 dias.' },
+    { nome: 'Carla Nunes', leitura: '7 apoiadores e nenhum novo cadastro há mais de 30 dias.', proximoPasso: 'Reunir-se para entender a parada.' },
+    { nome: 'Elisa Ramos', leitura: 'Ainda não trouxe apoiadores.', proximoPasso: 'Acompanhar os primeiros cadastros junto com ela.' },
   ],
-  lideres: [
-    { nome: 'João Silva', perfil: 'Motor', leitura: '18 na Equipe, o maior do time.' },
-    { nome: 'Elisa Ramos', perfil: 'Parado', leitura: 'Nenhum cadastro desde que entrou.' },
+  territorio:
+    'A base está distribuída de forma equilibrada entre quatro bairros, com Jardim Brasil, São Cristóvão e Xucurus em 12 apoiadores cada. Toda a rede está na Zona 10, espalhada por 7 seções.\n\n' +
+    'A presença em uma única zona é o limite territorial mais claro: novas lideranças devem vir de outras zonas do município.',
+  integridade:
+    'A integridade da base está em 74%. Há 1 pessoa cadastrada duas vezes, por duas lideranças diferentes, o que infla o ranking das duas. Outros 6 cadastros têm título com dígitos a menos ou a mais.',
+  recomendacoes: [
+    { titulo: 'Corrigir o duplicado', acao: 'Remover a cópia de Ana Lima e manter o primeiro cadastro.', responsavel: 'Coordenação', prazo: 'Imediato', resultadoEsperado: 'O ranking volta a contar certo para as duas lideranças.' },
+    { titulo: 'Reativar lideranças paradas', acao: 'Conversar com Carla Nunes e Diego Prado.', responsavel: 'Coordenação', prazo: 'Até 7 dias', resultadoEsperado: 'Engajamento recente acima de 50%.' },
+    { titulo: 'Abrir novas frentes', acao: 'Recrutar lideranças em outras zonas eleitorais.', responsavel: 'Direção', prazo: 'Até 30 dias', resultadoEsperado: 'Menor dependência das 3 maiores lideranças.' },
+    { titulo: 'Completar os títulos', acao: 'Corrigir os 6 títulos inconsistentes e completar os 4 que faltam.', responsavel: 'Coordenação', prazo: 'Até 30 dias', resultadoEsperado: 'Qualificação eleitoral acima de 95%.' },
   ],
-  territorio: 'A equipe está bem distribuída entre Centro, Xucurus, Jardim Brasil e São Cristóvão.',
-  qualidadeDosDados: 'Há 1 cadastro repetido contado por dois Líderes e 8 títulos para conferir.',
-  planoDeAcao: [
-    { acao: 'Excluir a cópia de Ana Lima', responsavel: 'Administração do time', prazo: 'Hoje', impacto: 'O ranking volta a contar certo.' },
-    { acao: 'Conversar com Elisa Ramos', responsavel: 'Administração do time', prazo: 'Esta semana', impacto: 'Reativa um Líder parado.' },
+  decisoesDaDirecao: [
+    'Qual meta de base líquida a rede deve atingir em 90 dias?',
+    'Em quais zonas a direção quer presença antes do fim do trimestre?',
   ],
-  perguntas: ['O que falta para Elisa Ramos começar?', 'Quem confere os títulos antes de mandar a planilha?'],
+  fechamento:
+    'A rede tem base qualificada e uma liderança de alto desempenho. O próximo salto não depende de mais cadastros, mas de mais lideranças ativas.',
 };
 
 describe('dossie do time', () => {
@@ -147,6 +168,35 @@ describe('dossie do time', () => {
     expect(ana?.responsaveis).toHaveLength(2);
     expect(d.qualidade.repetidos).toHaveLength(1);
     expect(d.pessoas).toHaveLength(members.length);
+  });
+
+  it('calcula a leitura estratégica: base líquida, índice, selos e cenário', () => {
+    const { client, members } = time();
+    const d = montarDossie(client, members, new Date('2026-09-27T12:00:00Z'));
+    const e = d.estrategia;
+
+    // Ana Lima, cadastrada duas vezes, sai da base líquida.
+    expect(e.baseDeclarada).toBe(members.length);
+    expect(e.baseLiquida).toBe(members.length - 1);
+    expect(e.ativacao).toBe(67);
+    expect(e.indice.componentes.map((c) => c.peso).reduce((a, b) => a + b)).toBe(100);
+    expect(e.indice.valor).toBeGreaterThan(0);
+    expect(d.lideres[0]).toMatchObject({ nome: 'João Silva', posicao: 1, selo: 'Motor' });
+    expect(d.lideres.find((l) => l.nome === 'Elisa Ramos')?.selo).toBe('Sem Equipe');
+    expect(e.selos.reduce((soma, x) => soma + x.quantidade, 0)).toBe(d.lideres.length);
+    expect(e.projecao?.em90).toBeGreaterThan(e.baseLiquida);
+    expect(e.acumulado.at(-1)).toBe(members.length);
+  });
+
+  it('a leitura automática sai no formato do NEO, sem jargão de sistema', () => {
+    const { client, members } = time();
+    const automatica = analiseAutomatica(montarDossie(client, members));
+    expect(lerAnalise(automatica)).toEqual(automatica);
+    const texto = JSON.stringify(automatica);
+    expect(texto).not.toMatch(/painel|Time DEMO|saúde do cadastro|planilha/i);
+
+    const vazia = analiseAutomatica(montarDossie(client, []));
+    expect(lerAnalise(vazia)).not.toBeNull();
   });
 });
 
@@ -193,7 +243,7 @@ describe('a resposta do NEO', () => {
   it('recusa, texto torto ou campo faltando viram "sem análise"', () => {
     expect(textoDaResposta({ output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'não' }] }] })).toBeNull();
     expect(lerAnalise('isto não é json')).toBeNull();
-    expect(lerAnalise({ ...ANALISE, indice: { ...ANALISE.indice, valor: 250 } })).toBeNull();
+    expect(lerAnalise({ ...ANALISE, recomendacoes: [{ ...ANALISE.recomendacoes[0], prazo: 'Amanhã' }] })).toBeNull();
   });
 
   it('o serviço manda o schema strict, sem guardar a conversa, e trata a falha', async () => {
@@ -234,7 +284,7 @@ describe('o PDF', () => {
   it('sai inteiro com a análise do NEO', async () => {
     const { dossie, bytes } = await gerar(ANALISE);
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
-    expect(nomeDoPdf(dossie)).toBe('relatorio-time-palmeira-2026-09-27.pdf');
+    expect(nomeDoPdf(dossie)).toBe('relatorio-estrategico-time-palmeira-2026-09-27.pdf');
     if (process.env.PREVIA_PDF) {
       writeFileSync(process.env.PREVIA_PDF, bytes);
       writeFileSync(
@@ -249,4 +299,28 @@ describe('o PDF', () => {
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
     if (process.env.PREVIA_PDF) writeFileSync(process.env.PREVIA_PDF.replace('.pdf', '-sem-neo.pdf'), bytes);
   }, 30_000);
+});
+
+describe('o PDF de um time grande', () => {
+  it('sai inteiro com 1.200 pessoas e 40 lideranças (dezenas de páginas)', async () => {
+    // O cabecalho e o rodape repetem em toda pagina. Um estilo herdado mal
+    // resolvido crescia a cada pagina ate o PDF nao sair: so aparecia em
+    // time grande, que e justamente o que vai para a direcao.
+    const { client, members } = time();
+    const lideres = Array.from({ length: 40 }, (_, i) =>
+      pessoa({ name: `Liderança ${i + 1} Almeida`, userId: `u-g${i}`, tier: 'LIDER', recruitedBy: MARINA }),
+    );
+    const base = lideres.flatMap((l, i) =>
+      Array.from({ length: 30 }, () =>
+        pessoa({ tier: 'EQUIPE', access: 'NO_PHONE', recruitedBy: { userId: l.userId, name: l.name, role: 'EQUIPE', tier: 'LIDER', photo: null }, district: `Bairro ${i % 9}` }),
+      ),
+    );
+    const dossie = montarDossie(client, [...members, ...lideres, ...base], new Date('2026-09-27T12:00:00Z'));
+    expect(dossie.numeros.total).toBeGreaterThan(1200);
+    const props = { dossie, neo: null, neoErro: null, modelo: 'gpt-5.4-mini' };
+    const buffer = await pdf(createElement(RelatorioDoTime, props) as Parameters<typeof pdf>[0]).toBuffer();
+    const bytes = Buffer.from(await new Response(buffer as unknown as ReadableStream).arrayBuffer());
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    if (process.env.PREVIA_PDF) writeFileSync(process.env.PREVIA_PDF.replace('.pdf', '-grande.pdf'), bytes);
+  }, 120_000);
 });

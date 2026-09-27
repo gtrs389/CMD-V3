@@ -102,7 +102,9 @@ export async function analisarComONeo(
             schema: NEO_SCHEMA,
           },
         },
-        max_output_tokens: 8000,
+        // O relatorio para a direcao e longo: carta, conclusoes, liderancas,
+        // recomendacoes e fechamento.
+        max_output_tokens: 12000,
         // Nada de guardar a conversa do lado de la: o resumo e do time.
         store: false,
       }),

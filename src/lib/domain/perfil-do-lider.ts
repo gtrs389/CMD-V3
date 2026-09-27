@@ -64,6 +64,26 @@ export interface PerfilDoLider {
 
 const DIA = 86_400_000;
 
+/**
+ * O selo de um Lider, pela mesma regra em todo lugar (o painel dele e o
+ * relatorio do NEO): Motor e quem esta cadastrando agora E esta no terco de
+ * cima do ranking dos Lideres que ja trouxeram alguem.
+ */
+export function seloDoLider(x: {
+  equipe: number;
+  ultimos7: number;
+  ultimos30: number;
+  /** Posicao no ranking, 1 = quem mais trouxe. */
+  posicao: number;
+  /** Lideres que ja trouxeram alguem. */
+  ativos: number;
+}): Selo {
+  if (x.equipe === 0) return 'Sem Equipe';
+  const tercoDeCima = Math.max(1, Math.ceil(x.ativos / 3));
+  if (x.ultimos7 > 0) return x.posicao <= tercoDeCima ? 'Motor' : 'Constante';
+  return x.ultimos30 > 0 ? 'Esfriando' : 'Parado';
+}
+
 function contar(valores: string[], limite: number): Contagem[] {
   const mapa = new Map<string, Contagem>();
   for (const valor of valores) {
@@ -114,18 +134,7 @@ export function perfilDoLider(
     ? Math.max(0, Math.floor((agoraMs - new Date(ultimoCadastro).getTime()) / DIA))
     : null;
 
-  // Motor: esta cadastrando agora E esta no terco de cima do ranking.
-  const tercoDeCima = Math.max(1, Math.ceil(ativos.length / 3));
-  const selo: Selo =
-    equipe.length === 0
-      ? 'Sem Equipe'
-      : ultimos7 > 0
-        ? posicao <= tercoDeCima
-          ? 'Motor'
-          : 'Constante'
-        : ultimos30 > 0
-          ? 'Esfriando'
-          : 'Parado';
+  const selo = seloDoLider({ equipe: equipe.length, ultimos7, ultimos30, posicao, ativos: ativos.length });
 
   const semanaAtual = inicioDaSemana(agora);
   const semanas = Array.from({ length: 12 }, (_, i) => {

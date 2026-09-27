@@ -62,7 +62,7 @@ export function FiltroDeDadosCard({
   async function baixar() {
     setBaixando(true);
     try {
-      const { gerarPdfDaLista } = await import('@/components/neo/RelatorioPdf');
+      const { gerarPdfDaLista } = await import('@/components/neo/ListasPdf');
       const blob = await gerarPdfDaLista({
         time: clientName,
         filtros: FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id)).map((f) => f.rotulo),
