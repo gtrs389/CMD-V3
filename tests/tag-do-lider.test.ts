@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { TAG_MAX, normalizarTag, tagDaPessoa } from '@/lib/domain/tag-do-lider';
+import {
+  SEM_TAG,
+  TAG_MAX,
+  normalizarTag,
+  opcoesDeTag,
+  passaNoFiltroDeTag,
+  tagDaPessoa,
+} from '@/lib/domain/tag-do-lider';
 import { buscarPessoa } from '@/lib/domain/busca-de-pessoas';
 import { toMember, toRecruiter } from '@/lib/server/mappers';
 import type { MemberRow } from '@/lib/supabase/tables';
@@ -121,5 +128,42 @@ describe('o servidor', () => {
     expect(
       toRecruiter(linha({ recruited_by_role: 'CANDIDATE' }), null, null, 'ZONA NORTE')?.tag,
     ).toBeUndefined();
+  });
+});
+
+describe('o filtro pela tag', () => {
+  const MARIA: Recruiter = { ...JOAO, userId: 'u-maria', name: 'Maria Lima', tag: 'IGREJA' };
+  const lista = [
+    pessoa({ id: 'l1', tier: 'LIDER', tag: 'ZONA NORTE', recruitedBy: null }),
+    pessoa({ id: 'e1' }),
+    pessoa({ id: 'e2' }),
+    pessoa({ id: 'l2', tier: 'LIDER', tag: 'IGREJA', recruitedBy: null }),
+    pessoa({ id: 'e3', recruitedBy: MARIA }),
+    pessoa({ id: 'l3', tier: 'LIDER', tag: null, recruitedBy: null }),
+  ];
+
+  it('lista as tags da lista em ordem, com quantas pessoas, e "Sem tag" por último', () => {
+    expect(opcoesDeTag(lista)).toEqual([
+      { valor: 'IGREJA', rotulo: 'IGREJA', quantidade: 2 },
+      { valor: 'ZONA NORTE', rotulo: 'ZONA NORTE', quantidade: 3 },
+      { valor: SEM_TAG, rotulo: 'Sem tag', quantidade: 1 },
+    ]);
+  });
+
+  it('sem nenhuma tag no time, não há filtro', () => {
+    expect(opcoesDeTag([pessoa({ recruitedBy: { ...JOAO, tag: null } })])).toEqual([]);
+  });
+
+  it('a tag traz o Líder e a Equipe dele juntos', () => {
+    const ids = lista.filter((m) => passaNoFiltroDeTag(m, 'ZONA NORTE')).map((m) => m.id);
+    expect(ids).toEqual(['l1', 'e1', 'e2']);
+  });
+
+  it('"Sem tag" traz quem não mostra tag nenhuma', () => {
+    expect(lista.filter((m) => passaNoFiltroDeTag(m, SEM_TAG)).map((m) => m.id)).toEqual(['l3']);
+  });
+
+  it('"todas" deixa todo mundo passar', () => {
+    expect(lista.every((m) => passaNoFiltroDeTag(m, 'todas'))).toBe(true);
   });
 });
