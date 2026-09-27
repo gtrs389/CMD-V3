@@ -975,3 +975,80 @@ export function nomeDoPdf(dossie: Dossie): string {
     .replace(/^-|-$/g, '');
   return `relatorio-${time || 'time'}-${dossie.geradoEm.slice(0, 10)}.pdf`;
 }
+
+/* -------------------------------------------------------------------------
+   Lista filtrada (quadro de inconsistencias)
+   ------------------------------------------------------------------------- */
+
+export interface PessoaDaLista {
+  nome: string;
+  telefone: string;
+  motivos: string[];
+  cadastradoPor: string;
+  cadastradoEm: string;
+}
+
+export interface ListaFiltradaProps {
+  time: string;
+  filtros: string[];
+  responsavel: string | null;
+  pessoas: PessoaDaLista[];
+  geradaEm: string;
+}
+
+/**
+ * So quem foi filtrado, com o motivo e quem cadastrou. E a lista que se
+ * leva para a reuniao, ou se entrega ao Lider para ele corrigir.
+ */
+export function ListaFiltrada({ time, filtros, responsavel, pessoas, geradaEm }: ListaFiltradaProps) {
+  return (
+    <Document title={s(`Dados para corrigir — ${time}`)} author={s(appConfig.name)} language="pt-BR">
+      <Page size="A4" style={st.page}>
+        <View style={st.cabecalho} fixed>
+          <Text>{s(`DADOS PARA CORRIGIR · ${time.toUpperCase()}`)}</Text>
+          <Text>{s(appConfig.shortName)}</Text>
+        </View>
+
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.25 }}>{s(`${num(pessoas.length)} ${pessoas.length === 1 ? 'pessoa' : 'pessoas'} para corrigir`)}</Text>
+          <Text style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>{s(`${time} · ${dataLonga(geradaEm)}`)}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
+            {filtros.map((f) => (
+              <View key={f} style={{ marginRight: 4, marginBottom: 4 }}>
+                <Chip texto={f} cor={C.accent} fundo={C.accentSoft} />
+              </View>
+            ))}
+            {responsavel ? (
+              <View style={{ marginRight: 4, marginBottom: 4 }}>
+                <Chip texto={`Cadastrados por ${responsavel}`} cor={C.navy} fundo={C.bg} />
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        <Tabela<PessoaDaLista>
+          linhas={pessoas}
+          chave={(p) => `${p.nome}-${p.telefone}-${p.cadastradoEm}`}
+          vazio="Ninguém nesse filtro."
+          colunas={[
+            { titulo: '#', largura: '5%', celula: (_, i) => String(i + 1) },
+            { titulo: 'Pessoa', largura: '25%', celula: (p) => p.nome },
+            { titulo: 'Telefone', largura: '15%', celula: (p) => telefone(p.telefone) },
+            { titulo: 'O que corrigir', largura: '24%', celula: (p) => <Text style={{ color: C.danger }}>{s(p.motivos.join(', '))}</Text> },
+            { titulo: 'Cadastrado por', largura: '21%', celula: (p) => p.cadastradoPor },
+            { titulo: 'Em', largura: '10%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
+          ]}
+        />
+
+        <View style={st.rodape} fixed>
+          <Text>{s('Confidencial: contém dados pessoais (LGPD). Não compartilhe fora da coordenação.')}</Text>
+          <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+        </View>
+      </Page>
+    </Document>
+  );
+}
+
+export async function gerarPdfDaLista(props: ListaFiltradaProps): Promise<Blob> {
+  return pdf(<ListaFiltrada {...props} />).toBlob();
+}

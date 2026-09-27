@@ -44,6 +44,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { TierBadge } from '@/components/members/TierBadge';
+import { FiltroDeDadosCard } from './FiltroDeDadosCard';
 
 interface InconsistenciasPanelProps {
   /** Nome do time, para o arquivo do relatorio. */
@@ -133,6 +134,26 @@ export function InconsistenciasPanel({
     };
   }, [diagnostico, responsavel]);
 
+  // O filtro por dado olha as mesmas pessoas do recorte acima, e sabe quem
+  // esta em um grupo de repetidos (certo ou provavel).
+  const doRecorte = useMemo(
+    () => members.filter((member) => doResponsavel(member, responsavel)),
+    [members, responsavel],
+  );
+  const contextoDosFiltros = useMemo(
+    () => ({
+      repetidos: new Set(
+        diagnostico.repetidos
+          .filter((grupo) => grupo.certeza !== 'possivel')
+          .flatMap((grupo) => grupo.registros.map((r) => r.member.id)),
+      ),
+    }),
+    [diagnostico.repetidos],
+  );
+  const rotuloDoResponsavel = responsavel
+    ? (responsaveis.find((opcao) => opcao.key === responsavel)?.label ?? null)
+    : null;
+
   const porTipo = useMemo(() => {
     const mapa = new Map<TipoDaFicha, ProblemaDaFicha[]>();
     for (const problema of visto.problemas) {
@@ -219,6 +240,15 @@ export function InconsistenciasPanel({
             </Button>
           ) : null
         }
+      />
+
+      <FiltroDeDadosCard
+        clientName={clientName}
+        members={doRecorte}
+        responsavel={rotuloDoResponsavel}
+        contexto={contextoDosFiltros}
+        onOpenMember={onOpenMember}
+        canExport={canExport}
       />
 
       {nada ? (
