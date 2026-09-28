@@ -44,7 +44,6 @@ import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
 import { baixarArquivo } from '@/lib/utils/download';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
-import { slug } from '@/components/neo/pdf-base';
 import type { SecaoParaPdf } from '@/components/neo/ListasPdf';
 import { useToast } from '@/components/ui/Toast';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
@@ -228,7 +227,12 @@ export function InconsistenciasPanel({
         repetidos: visto.repetidos.map(grupoRepetidoParaPdf),
         secoes,
       });
-      baixarArquivo(`inconsistencias-${slug(clientName)}-${new Date().toISOString().slice(0, 10)}.pdf`, blob);
+      // inconsistência_<nome>.pdf — o nome é o do responsável escolhido, ou o do time.
+      const nome = (rotuloDoResponsavel ?? clientName)
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, '')
+        .replace(/\s+/g, '_') || 'time';
+      baixarArquivo(`inconsistência_${nome}.pdf`, blob);
       toast.success('Relatório de inconsistências baixado.');
     } catch {
       toast.error('Não foi possível montar o PDF. Tente de novo.');
