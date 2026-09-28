@@ -1,7 +1,10 @@
 'use client';
 
-import { Clock, Link2Off, WifiOff } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Link2Off, WifiOff } from 'lucide-react';
 import { usePublicInvite } from '@/hooks/use-clients';
+import { PUBLIC_EXIT_PATH } from '@/lib/domain/hosts';
+import { sendInviteDeviceSignals } from '@/lib/repositories';
 import { visibleFields } from '@/lib/validation/dynamic-form';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -9,8 +12,8 @@ import { InviteStateShell } from './InviteChrome';
 import { useInviteDeviceReport } from './use-invite-device-report';
 import { PublicFormView } from './PublicFormView';
 
-/** Mesmo texto para todos os casos de link encerrado. */
-const GONE_TEXT = 'Este link não está mais disponível. Solicite um novo link à pessoa que o enviou.';
+/** Quanto o registro do aparelho pode segurar a saida de um link encerrado. */
+const ESPERA_DO_REGISTRO_MS = 1500;
 
 /**
  * Porta de entrada do convite, desenhada em `/`.
@@ -59,7 +62,7 @@ export function PublicInviteView() {
   }
 
   if (!data || data.kind === 'gone') {
-    return <InviteExpired reason={data?.reason ?? 'expired'} />;
+    return <InviteExpired />;
   }
 
   if (data.kind === 'unavailable' || !data.invite.client.invite.active) {
@@ -80,29 +83,30 @@ export function PublicInviteView() {
 }
 
 /**
- * Link encerrado: nenhum campo do formulario e desenhado.
+ * Link encerrado — expirado, ja usado ou reservado por outra pessoa.
  *
- * Dois titulos, o mesmo texto: "Link não disponível" quando outra pessoa já
- * reservou, "Link expirado" quando venceu ou ja foi usado. Nada do estado
- * interno, da reserva, do aparelho ou de horario tecnico aparece.
+ * Nenhuma tela de "Link expirado": a pessoa segue direto para a saida que o
+ * ADMIN configurou (`/saida`, que leva ao endereco gravado em
+ * Configuracoes). Antes de sair, os dados do navegador daquele clique sao
+ * enviados — com um limite curto, para a espera nunca ser percebida.
  */
-export function InviteExpired({ reason = 'expired' }: { reason?: 'taken' | 'expired' }) {
-  // O clique existe mesmo com o link encerrado: aqui ele apenas ganha os
-  // dados do navegador. A tela nao muda e nada e dito a quem abriu.
-  useInviteDeviceReport();
+export function InviteExpired() {
+  const saiu = useRef(false);
+
+  useEffect(() => {
+    if (saiu.current) return;
+    saiu.current = true;
+    const limite = new Promise<void>((resolve) => setTimeout(resolve, ESPERA_DO_REGISTRO_MS));
+    void Promise.race([sendInviteDeviceSignals(), limite]).then(() => {
+      window.location.replace(PUBLIC_EXIT_PATH);
+    });
+  }, []);
 
   return (
     <InviteStateShell>
-      <span
-        aria-hidden="true"
-        className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-ink-100 text-ink-500"
-      >
-        <Clock className="size-6" />
+      <span className="mx-auto flex flex-col items-center gap-3 text-ink-500">
+        <Spinner className="size-6 text-brand-700" />
       </span>
-      <h1 className="text-lg font-semibold text-ink-900">
-        {reason === 'taken' ? 'Link não disponível' : 'Link expirado'}
-      </h1>
-      <p className="mt-2 text-sm text-balance text-ink-500">{GONE_TEXT}</p>
     </InviteStateShell>
   );
 }
