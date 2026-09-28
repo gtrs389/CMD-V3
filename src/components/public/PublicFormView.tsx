@@ -275,7 +275,7 @@ export function PublicFormView({ client, owner }: PublicFormViewProps) {
   }
 
   // O servidor encerrou o link: nenhum campo do formulario continua na tela.
-  if (expired) return <InviteExpired reason={expired} />;
+  if (expired) return <InviteExpired />;
 
   if (done) return <PublicSuccessScreen title="Obrigado por se cadastrar!" />;
 

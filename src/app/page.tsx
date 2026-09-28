@@ -53,9 +53,9 @@ export default async function HomePage() {
   if (publico.kind === 'state') {
     switch (publico.state) {
       case 'convite-expirado':
-        return <InviteExpired reason="expired" />;
+        return <InviteExpired />;
       case 'convite-reservado':
-        return <InviteExpired reason="taken" />;
+        return <InviteExpired />;
       case 'acesso-indisponivel':
         return <TeamAccessScreen available={false} />;
       case 'questionario-encerrado':
