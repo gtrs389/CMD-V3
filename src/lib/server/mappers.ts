@@ -6,6 +6,7 @@ import type {
   CustomField,
   FieldResponse,
   Member,
+  MemberTag,
   Recruiter,
   TeamPerson,
   TeamTier,
@@ -168,6 +169,8 @@ export interface ToMemberOptions {
   access: AccessStatus;
   /** Usuario do proprio integrante. Nulo enquanto o acesso nao existe. */
   userId: string | null;
+  /** Tags da pessoa (migration 048). */
+  tags?: MemberTag[];
 }
 
 export function toMember(row: MemberRow, options: ToMemberOptions): Member {
@@ -206,6 +209,7 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
       : null,
     access: options.access,
     userId: options.userId,
+    tags: options.tags ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

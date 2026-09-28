@@ -35,6 +35,7 @@ import {
   problemaDoTitulo,
 } from '@/lib/domain/conferencia';
 import { TierBadge } from './TierBadge';
+import { TagsDaFicha } from '@/components/tags/TagsDaFicha';
 import { TransferRecruiterModal } from './TransferRecruiterModal';
 
 interface MemberDetailModalProps {
@@ -306,7 +307,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                 <p className="truncate text-sm text-ink-500">{member.email}</p>
               ) : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <TierBadge tier={member.tier} />
+                <TierBadge tier={member.tier} tags={member.tags} />
                 <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
                   {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
                 </Badge>
@@ -342,6 +343,10 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
 
       {!somenteBasico ? (
         <>
+          {/* Tags (ex.: Coordenador Delta Operacional): a nova funcao, com a
+              origem a vista. Nada do que a pessoa fez muda. */}
+          <TagsDaFicha member={member} podeEditar={podeEditar} />
+
           <dl className="grid grid-cols-1 gap-3 rounded-control bg-ink-50 p-3 text-sm sm:grid-cols-2">
             {/* Origem do cadastro: o rotulo e o mesmo da lista. */}
             <div className="min-w-0 sm:col-span-2">

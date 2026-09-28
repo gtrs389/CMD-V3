@@ -38,6 +38,7 @@ import { badRequest, forbidden, notFound } from './http';
 import { EMPTY_CONSENT, buildConsentEvidence } from './consent';
 import { assertCanRecruit, tierOfUser } from './team-tier.service';
 import { completarTelefonesPendentes } from './telefone.service';
+import { carregarTagsDasPessoas } from './tag.service';
 import { telefoneParaGravar } from '@/lib/domain/completar-telefone';
 
 /**
@@ -242,10 +243,11 @@ function recruiterOf(row: MemberRow, context: MemberContext): Recruiter | null {
 
 async function assembleMany(rows: MemberRow[]): Promise<Member[]> {
   if (rows.length === 0) return [];
-  const [responses, photos, context] = await Promise.all([
+  const [responses, photos, context, tags] = await Promise.all([
     loadResponses(rows.map((row) => row.id)),
     signedUrls(rows.map((row) => row.photo_path)),
     loadContext(rows),
+    carregarTagsDasPessoas(rows.map((row) => row.id)),
   ]);
 
   return rows.map((row, index) =>
@@ -255,6 +257,7 @@ async function assembleMany(rows: MemberRow[]): Promise<Member[]> {
       recruitedBy: recruiterOf(row, context),
       access: context.access.get(row.id) ?? 'NO_PHONE',
       userId: context.userId.get(row.id) ?? null,
+      tags: tags.get(row.id) ?? [],
     }),
   );
 }

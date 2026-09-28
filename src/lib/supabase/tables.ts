@@ -42,7 +42,48 @@ export const TABLES = {
   demoSeeds: 'cmd_demo_seeds',
   /** Visitas do ADMIN geral ao painel de uma pessoa do time (migration 045). */
   impersonations: 'cmd_impersonations',
+  /** Catalogo de tags das pessoas do time (migration 048). */
+  tags: 'cmd_tags',
+  /** Quem tem qual tag (migration 048). */
+  memberTags: 'cmd_member_tags',
+  /** Historico das tags (migration 048). */
+  memberTagEvents: 'cmd_member_tag_events',
 } as const;
+
+export interface TagRow {
+  id: string;
+  name: string;
+  symbol: string | null;
+  color: string;
+  description: string | null;
+  created_by_user_id: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemberTagRow {
+  member_id: string;
+  tag_id: string;
+  client_id: string | null;
+  from_tier: 'LIDER' | 'EQUIPE';
+  assigned_by_user_id: string | null;
+  assigned_by_name: string | null;
+  assigned_at: string;
+}
+
+export interface MemberTagEventRow {
+  id: string;
+  member_id: string;
+  client_id: string | null;
+  tag_id: string | null;
+  tag_name: string;
+  action: 'ADDED' | 'REMOVED' | 'TAG_DELETED';
+  tier: 'LIDER' | 'EQUIPE';
+  by_user_id: string | null;
+  by_name: string;
+  created_at: string;
+}
 
 export interface UserRow {
   id: string;

@@ -725,7 +725,7 @@ function CartaoRepetido({
                 ) : (
                   <Badge tone="danger">{indice + 1}º cadastro</Badge>
                 )}
-                <TierBadge tier={member.tier} />
+                <TierBadge tier={member.tier} tags={member.tags} />
               </div>
 
               <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-ink-500 sm:grid-cols-2">
@@ -884,7 +884,7 @@ function LinhaDaPessoa({
           <span className="truncate text-sm font-medium text-ink-900 group-hover:text-brand-700">
             {member.name}
           </span>
-          <TierBadge tier={member.tier} className="px-1.5 py-0 text-[0.625rem]" />
+          <TierBadge tier={member.tier} tags={member.tags} className="px-1.5 py-0 text-[0.625rem]" />
         </span>
         <span className="block truncate text-xs">
           {children}

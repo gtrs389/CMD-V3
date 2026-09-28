@@ -1,3 +1,4 @@
+import type { MemberTag } from './tag';
 import type { IsoDate, StoredImage, Timestamped } from './common';
 import type { AccessStatus, Recruiter, TeamTier } from './user';
 
@@ -84,6 +85,11 @@ export interface Member extends Timestamped {
    * acesso nao existe.
    */
   userId: string | null;
+  /**
+   * Tags da pessoa (migration 048), como "Coordenador Delta Operacional". Sao
+   * designacoes: nivel, cadastros, link e acesso continuam os mesmos.
+   */
+  tags?: MemberTag[];
 }
 
 export interface MemberInput {

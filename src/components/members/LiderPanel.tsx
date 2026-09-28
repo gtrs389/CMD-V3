@@ -31,6 +31,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { TagChip } from './TagChip';
+import { resumoDaTag } from '@/lib/domain/tags';
 
 const TOM_DO_SELO: Record<Selo, string> = {
   Motor: 'bg-success-50 text-success-700',
@@ -114,6 +116,9 @@ export function LiderPanel({
               <span className={cn('rounded-pill px-2.5 py-1 text-xs font-semibold', TOM_DO_SELO[p.selo])} title={SELO_EXPLICACAO[p.selo]}>
                 {p.selo}
               </span>
+              {(lider.tags ?? []).map((tag) => (
+                <TagChip key={tag.id} tag={tag} title={`${tag.name} — ${resumoDaTag(tag)}`} />
+              ))}
             </div>
             <p className="mt-0.5 text-sm text-ink-500">
               {lider.phone ? formatPhone(lider.phone) : 'Sem telefone'} · Líder desde {formatLongDate(lider.createdAt)}

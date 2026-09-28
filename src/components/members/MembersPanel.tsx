@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   Pencil,
   SearchX,
+  Tags,
   Trash2,
   UserPlus,
   Users,
@@ -44,7 +45,9 @@ import { SurveyAnswerModal } from '@/components/survey/SurveyAnswerModal';
 import { SpreadsheetImportModal } from './SpreadsheetImportModal';
 import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
-import { TierBadge } from './TierBadge';
+import { TagsDaPessoa, TierBadge } from './TierBadge';
+import { GerenciarTagsModal } from '@/components/tags/GerenciarTagsModal';
+import { tagsDoTime } from '@/lib/domain/tags';
 import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
 
 interface MembersPanelProps {
@@ -151,6 +154,10 @@ function ListaDoTime({
   const [situacao, setSituacao] = useState<'todas' | 'conferir' | 'incompleto' | 'em-ordem'>(
     'todas',
   );
+  // Filtro por tag (ex.: Coordenador Delta Operacional): uma tag, "com
+  // alguma tag" ou todas.
+  const [tagFiltro, setTagFiltro] = useState<string>('todas');
+  const [tagsAbertas, setTagsAbertas] = useState(false);
   // "Ver a Equipe na lista" pedido depois da lista montada: aplicado na
   // renderizacao, comparando com o ultimo pedido visto — o filtro certo ja
   // sai na primeira pintura.
@@ -161,6 +168,7 @@ function ListaDoTime({
       setRecruiter(filtroDeResponsavel.responsavel);
       setNivel('todos');
       setSituacao('todas');
+      setTagFiltro('todas');
       setTerm('');
     }
   }
@@ -173,6 +181,8 @@ function ListaDoTime({
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
 
   const responsaveis = useMemo(() => recruiterOptions(ordered), [ordered]);
+  const tagsNoTime = useMemo(() => tagsDoTime(ordered), [ordered]);
+  const comAlgumaTag = useMemo(() => ordered.filter((m) => m.tags?.length).length, [ordered]);
 
   /**
    * A lista filtrada, e ONDE a busca achou cada pessoa.
@@ -187,6 +197,10 @@ function ListaDoTime({
     const filtered = ordered.filter((member) => {
       if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
       if (nivel !== 'todos' && member.tier !== nivel) return false;
+      if (tagFiltro === 'com-tag' && !member.tags?.length) return false;
+      if (tagFiltro !== 'todas' && tagFiltro !== 'com-tag' && !member.tags?.some((t) => t.id === tagFiltro)) {
+        return false;
+      }
       if (situacao === 'conferir' && !precisaConferir(member)) return false;
       if (situacao === 'incompleto' && !cadastroIncompleto(member)) return false;
       if (situacao === 'em-ordem' && (precisaConferir(member) || cadastroIncompleto(member))) {
@@ -202,7 +216,7 @@ function ListaDoTime({
       return true;
     });
     return { filtered, achadoEm };
-  }, [ordered, term, recruiter, nivel, situacao]);
+  }, [ordered, term, recruiter, nivel, situacao, tagFiltro]);
 
   /** Contagens de cada botao de filtro, sobre o time inteiro. */
   const contagens = useMemo(
@@ -229,6 +243,16 @@ function ListaDoTime({
           limpar: () => setSituacao('todas'),
         }
       : null,
+    tagFiltro !== 'todas'
+      ? {
+          id: 'tag',
+          rotulo:
+            tagFiltro === 'com-tag'
+              ? 'Com alguma tag'
+              : (tagsNoTime.find(({ tag }) => tag.id === tagFiltro)?.tag.name ?? 'Tag'),
+          limpar: () => setTagFiltro('todas'),
+        }
+      : null,
     recruiter !== 'todos'
       ? {
           id: 'responsavel',
@@ -243,6 +267,7 @@ function ListaDoTime({
     setNivel('todos');
     setSituacao('todas');
     setRecruiter('todos');
+    setTagFiltro('todas');
   }
 
   /** Clicar no nome: Lider abre o painel dele; os outros, a ficha. */
@@ -438,6 +463,14 @@ function ListaDoTime({
             className="lg:flex-1"
           />
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            {/* Catalogo de tags: criar, editar, apagar e aplicar a varias
+                pessoas. Decisao do ADMIN geral. */}
+            {podeEditar ? (
+              <Button variant="secondary" onClick={() => setTagsAbertas(true)}>
+                <Tags aria-hidden="true" className="size-4" />
+                Tags
+              </Button>
+            ) : null}
             {botaoExportar}
             {podeCriar ? (
               // O rotulo curto cabe na barra; o completo fica no titulo e na
@@ -490,6 +523,24 @@ function ListaDoTime({
                 {responsaveis.map((option) => (
                   <option key={option.key} value={option.key}>
                     {option.label} ({option.count})
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+            {tagsNoTime.length ? (
+              <Select
+                id="filtro-tag"
+                aria-label="Filtrar por tag"
+                value={tagFiltro}
+                onChange={(event) => setTagFiltro(event.target.value)}
+                className="lg:max-w-64"
+              >
+                <option value="todas">Tag: qualquer uma</option>
+                <option value="com-tag">Com alguma tag ({comAlgumaTag})</option>
+                {tagsNoTime.map(({ tag, pessoas }) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.symbol ? `${tag.symbol} ` : ''}
+                    {tag.name} ({pessoas})
                   </option>
                 ))}
               </Select>
@@ -576,7 +627,7 @@ function ListaDoTime({
                           />
 
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <TierBadge tier={member.tier} />
+                            <TierBadge tier={member.tier} tags={member.tags} />
                             <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
                             {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
                             {/* Cadastro que entrou pela metade — quase sempre
@@ -692,6 +743,9 @@ function ListaDoTime({
                                   Conferir
                                 </Badge>
                               ) : null}
+                              {/* As tags depois das etiquetas curtas: a linha
+                                  do nivel nao quebra por causa de um nome longo. */}
+                              <TagsDaPessoa tags={member.tags} compacto />
                             </span>
                           ) : null}
                           {/* E-mail historico: sem endereco a linha some, e
@@ -765,6 +819,10 @@ function ListaDoTime({
       ) : (
         <MemberFormModal open={formOpen} client={client} member={null} onClose={() => setFormOpen(false)} />
       )}
+
+      {podeEditar ? (
+        <GerenciarTagsModal open={tagsAbertas} onClose={() => setTagsAbertas(false)} members={ordered} />
+      ) : null}
 
       <ConfirmDialog
         open={removing !== null}

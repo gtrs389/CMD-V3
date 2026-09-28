@@ -32,6 +32,7 @@ import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
 import { TeamChart, type TeamChartPoint } from './TeamChart';
+import { QuadroDeTags } from '@/components/tags/QuadroDeTags';
 
 /** Abreviacao dos dias, na ordem devolvida por `getDay()`. */
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -274,6 +275,10 @@ export function ClientOverviewPanel({
           </div>
         ) : null}
       </div>
+
+      {/* Quem carrega cada tag (ex.: Coordenador Delta Operacional). So
+          aparece quando alguem do time tem tag. */}
+      {mostrarRanking ? <QuadroDeTags members={members} /> : null}
 
       {podeVerMapa ? (
         <MobilizationMap

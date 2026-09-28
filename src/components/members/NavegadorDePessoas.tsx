@@ -173,6 +173,14 @@ export function NavegadorDePessoas({
     () => new Map(members.filter((m) => m.userId).map((m) => [m.userId as string, m])),
     [members],
   );
+  const cadastrosPorUsuario = useMemo(() => {
+    const contagem = new Map<string, number>();
+    for (const m of members) {
+      const quem = m.recruitedBy?.userId;
+      if (quem) contagem.set(quem, (contagem.get(quem) ?? 0) + 1);
+    }
+    return contagem;
+  }, [members]);
 
   const navegador = useMemo<Navegador>(
     () => ({
@@ -184,8 +192,9 @@ export function NavegadorDePessoas({
         const m = porUsuario.get(userId);
         return m && m.tier === 'LIDER' ? m : null;
       },
+      cadastrosDoUsuario: (userId) => (userId ? (cadastrosPorUsuario.get(userId) ?? 0) : 0),
     }),
-    [empilhar, porUsuario],
+    [empilhar, porUsuario, cadastrosPorUsuario],
   );
 
   // Pessoa que sumiu da lista (excluida agora mesmo) nao e desenhada.

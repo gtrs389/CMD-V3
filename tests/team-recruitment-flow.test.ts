@@ -23,6 +23,8 @@ const db: Record<string, Row[]> = {
   cmd_invites: [],
   cmd_form_fields: [],
   cmd_member_responses: [],
+  cmd_member_tags: [],
+  cmd_tags: [],
   cmd_member_locations: [],
 };
 
