@@ -23,23 +23,45 @@ import { useToast } from '@/components/ui/Toast';
 export function TagDoLider({
   member,
   className,
+  onClick,
 }: {
   member: Pick<Member, 'tier' | 'tag' | 'recruitedBy'>;
   className?: string;
+  /** Com clique, a tag vira atalho: na lista do time, filtra por ela. */
+  onClick?: () => void;
 }) {
   const tag = tagDaPessoa(member);
   if (!tag) return null;
-  return (
-    <span
-      title={member.tier === 'LIDER' ? 'Tag do Líder' : `Tag do Líder ${member.recruitedBy?.name ?? ''}`.trim()}
-      className={cn(
-        'inline-flex max-w-full shrink-0 items-center gap-1 rounded-pill bg-accent-50 px-2 py-0.5 align-middle text-[0.6875rem] font-semibold tracking-wide whitespace-nowrap text-accent-700',
-        className,
-      )}
-    >
+  const origem =
+    member.tier === 'LIDER' ? 'Tag do Líder' : `Tag do Líder ${member.recruitedBy?.name ?? ''}`.trim();
+  const classes = cn(
+    'inline-flex max-w-full shrink-0 items-center gap-1 rounded-pill bg-accent-50 px-2 py-0.5 align-middle text-[0.6875rem] font-semibold tracking-wide whitespace-nowrap text-accent-700',
+    onClick && 'transition-colors hover:bg-accent-100',
+    className,
+  );
+  const conteudo = (
+    <>
       <Tag aria-hidden="true" className="size-3 shrink-0" />
       <span className="sr-only">Tag: </span>
       <span className="truncate">{tag}</span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={`${origem}. Clique para ver todos com esta tag.`}
+        className={classes}
+      >
+        {conteudo}
+      </button>
+    );
+  }
+  return (
+    <span title={origem} className={classes}>
+      {conteudo}
     </span>
   );
 }

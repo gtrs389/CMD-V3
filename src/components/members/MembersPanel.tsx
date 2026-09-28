@@ -27,6 +27,7 @@ import { formatPhone } from '@/lib/utils/phone';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
 import { avisoDeConferencia, precisaConferir } from '@/lib/domain/conferencia';
 import { buscarPessoa, type CampoDaBusca } from '@/lib/domain/busca-de-pessoas';
+import { opcoesDeTag, passaNoFiltroDeTag, SEM_TAG, tagDaPessoa } from '@/lib/domain/tag-do-lider';
 import { cn } from '@/lib/utils/cn';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
@@ -148,6 +149,9 @@ function ListaDoTime({
   const [recruiter, setRecruiter] = useState(filtroDeResponsavel?.responsavel ?? 'todos');
   // Filtro por nivel: Lideres, Equipe ou todos. Tambem so leitura.
   const [nivel, setNivel] = useState<'todos' | TeamTier>('todos');
+  // Filtro pela tag do Lider: o Lider e a Equipe dele juntos. Tambem so
+  // leitura.
+  const [tag, setTag] = useState('todas');
   // Filtro pela etiqueta: quem esta para conferir, incompleto ou em ordem.
   const [situacao, setSituacao] = useState<'todas' | 'conferir' | 'incompleto' | 'em-ordem'>(
     'todas',
@@ -161,6 +165,7 @@ function ListaDoTime({
     if (filtroDeResponsavel) {
       setRecruiter(filtroDeResponsavel.responsavel);
       setNivel('todos');
+      setTag('todas');
       setSituacao('todas');
       setTerm('');
     }
@@ -174,6 +179,12 @@ function ListaDoTime({
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
 
   const responsaveis = useMemo(() => recruiterOptions(ordered), [ordered]);
+  // So as tags que alguem da lista tem; sem nenhuma, o filtro nao aparece.
+  const tags = useMemo(() => opcoesDeTag(ordered), [ordered]);
+
+  // A tag escolhida sumiu (o Lider perdeu a tag): o filtro volta a "todas",
+  // em vez de deixar a lista vazia sem motivo visivel.
+  if (tag !== 'todas' && !tags.some((opcao) => opcao.valor === tag)) setTag('todas');
 
   /**
    * A lista filtrada, e ONDE a busca achou cada pessoa.
@@ -188,6 +199,7 @@ function ListaDoTime({
     const filtered = ordered.filter((member) => {
       if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
       if (nivel !== 'todos' && member.tier !== nivel) return false;
+      if (!passaNoFiltroDeTag(member, tag)) return false;
       if (situacao === 'conferir' && !precisaConferir(member)) return false;
       if (situacao === 'incompleto' && !cadastroIncompleto(member)) return false;
       if (situacao === 'em-ordem' && (precisaConferir(member) || cadastroIncompleto(member))) {
@@ -203,7 +215,7 @@ function ListaDoTime({
       return true;
     });
     return { filtered, achadoEm };
-  }, [ordered, term, recruiter, nivel, situacao]);
+  }, [ordered, term, recruiter, nivel, tag, situacao]);
 
   /** Contagens de cada botao de filtro, sobre o time inteiro. */
   const contagens = useMemo(
@@ -221,6 +233,9 @@ function ListaDoTime({
     term.trim() ? { id: 'busca', rotulo: `“${term.trim()}”`, limpar: () => setTerm('') } : null,
     nivel !== 'todos'
       ? { id: 'nivel', rotulo: nivel === 'LIDER' ? 'Líderes' : 'Equipe', limpar: () => setNivel('todos') }
+      : null,
+    tag !== 'todas'
+      ? { id: 'tag', rotulo: tag === SEM_TAG ? 'Sem tag' : `Tag ${tag}`, limpar: () => setTag('todas') }
       : null,
     situacao !== 'todas'
       ? {
@@ -242,8 +257,15 @@ function ListaDoTime({
   function limparTudo() {
     setTerm('');
     setNivel('todos');
+    setTag('todas');
     setSituacao('todas');
     setRecruiter('todos');
+  }
+
+  /** Clicar na tag de uma linha filtra a lista por ela. */
+  function filtrarPelaTag(member: Member) {
+    const daPessoa = tagDaPessoa(member);
+    if (daPessoa) setTag(daPessoa);
   }
 
   /** Clicar no nome: Lider abre o painel dele; os outros, a ficha. */
@@ -479,6 +501,22 @@ function ListaDoTime({
                 { valor: 'em-ordem', rotulo: 'Em ordem', quantidade: contagens.emOrdem, tom: 'success' },
               ]}
             />
+            {tags.length > 0 ? (
+              <Select
+                id="filtro-tag"
+                aria-label="Filtrar pela tag do Líder"
+                value={tag}
+                onChange={(event) => setTag(event.target.value)}
+                className="lg:max-w-56"
+              >
+                <option value="todas">Tag: todas</option>
+                {tags.map((opcao) => (
+                  <option key={opcao.valor} value={opcao.valor}>
+                    {opcao.rotulo} ({opcao.quantidade})
+                  </option>
+                ))}
+              </Select>
+            ) : null}
             {responsaveis.length > 1 ? (
               <Select
                 id="filtro-responsavel"
@@ -532,7 +570,7 @@ function ListaDoTime({
           title="Ninguém com esses filtros"
           description={
             term.trim()
-              ? `Nada encontrado para "${term.trim()}" — a busca olha nome, telefone, CPF, título, bairro, rua e responsável.`
+              ? `Nada encontrado para "${term.trim()}" — a busca olha nome, telefone, CPF, título, bairro, rua, responsável e tag.`
               : 'Nenhuma pessoa combina com os filtros escolhidos.'
           }
           action={
@@ -561,7 +599,7 @@ function ListaDoTime({
                         >
                           {member.name}
                         </button>
-                        <TagDoLider member={member} />
+                        <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
                       </span>
                       <AchadoEm campos={achadoEm.get(member.id)} />
                       <p className="truncate text-sm text-ink-500">
@@ -686,7 +724,7 @@ function ListaDoTime({
                             >
                               {member.name}
                             </button>
-                            <TagDoLider member={member} />
+                            <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
                           </span>
                           {!somenteBasico ? (
                             <span className="mt-1 flex flex-wrap items-center gap-1">

@@ -41,3 +41,50 @@ export function tagDaPessoa(member: Pick<Member, 'tier' | 'tag' | 'recruitedBy'>
   if (member.tier === 'LIDER') return member.tag ?? null;
   return member.recruitedBy?.tag ?? null;
 }
+
+/** Valor do filtro "sem tag". Minusculo: nenhuma tag gravada e minuscula. */
+export const SEM_TAG = '__sem-tag__';
+
+export interface OpcaoDeTag {
+  /** A tag, ou `SEM_TAG`. */
+  valor: string;
+  rotulo: string;
+  /** Quantas pessoas da lista aparecem com ela (Lider e Equipe juntos). */
+  quantidade: number;
+}
+
+/**
+ * As tags que existem na lista, para o filtro: cada uma com quantas pessoas
+ * a mostram ao lado do nome, em ordem alfabetica, e "Sem tag" por ultimo.
+ *
+ * Sai da propria lista, e nao de um cadastro de tags: so aparece tag que
+ * alguem de fato tem, e ela some sozinha quando o ultimo Lider a perde.
+ */
+export function opcoesDeTag(
+  members: Pick<Member, 'tier' | 'tag' | 'recruitedBy'>[],
+): OpcaoDeTag[] {
+  const contagem = new Map<string, number>();
+  let semTag = 0;
+  for (const member of members) {
+    const tag = tagDaPessoa(member);
+    if (tag) contagem.set(tag, (contagem.get(tag) ?? 0) + 1);
+    else semTag += 1;
+  }
+  if (contagem.size === 0) return [];
+
+  const opcoes: OpcaoDeTag[] = [...contagem]
+    .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
+    .map(([tag, quantidade]) => ({ valor: tag, rotulo: tag, quantidade }));
+  if (semTag > 0) opcoes.push({ valor: SEM_TAG, rotulo: 'Sem tag', quantidade: semTag });
+  return opcoes;
+}
+
+/** A pessoa passa pelo filtro de tag? `todas` deixa todo mundo passar. */
+export function passaNoFiltroDeTag(
+  member: Pick<Member, 'tier' | 'tag' | 'recruitedBy'>,
+  filtro: string,
+): boolean {
+  if (filtro === 'todas') return true;
+  const tag = tagDaPessoa(member);
+  return filtro === SEM_TAG ? tag === null : tag === filtro;
+}

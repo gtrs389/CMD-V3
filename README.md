@@ -222,6 +222,13 @@ nome do Líder e de **cada pessoa da Equipe dele**: na lista do time, no painel
 do Líder, na ficha e no Ranking dos Líderes. A busca da lista também acha pela
 tag.
 
+**Filtrar pela tag.** A lista do time ganha o seletor **Tag**, ao lado do
+filtro de responsável, com cada tag do time e quantas pessoas a mostram — o
+Líder e a Equipe dele juntos — e "Sem tag" por último. Clicar na tag de uma
+linha filtra a lista por ela. O seletor só aparece quando algum Líder do time
+tem tag, e as opções saem da própria lista (`opcoesDeTag`): tag que ninguém
+mais tem some sozinha.
+
 **Só o Líder guarda a tag** (coluna `tag` em `cmd_members`, migration
 `048_tag_do_lider.sql`). A Equipe não tem cópia: o servidor lê a tag do Líder
 na mesma consulta que já traz a foto e o nível dele, e ela chega em
