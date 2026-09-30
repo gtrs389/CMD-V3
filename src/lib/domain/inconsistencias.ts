@@ -159,83 +159,131 @@ function divergenciasEntre(membros: Member[]): string[] {
   }).map(({ rotulo }) => rotulo);
 }
 
+/** Do mais forte ao mais fraco: cada nivel so une o que o anterior deixou separado. */
+const NIVEIS: Certeza[] = ['certa', 'provavel', 'possivel'];
+
+const maisAntigo = (a: Member, b: Member) =>
+  a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+
 /**
- * Agrupa os cadastros que parecem ser a mesma pessoa.
+ * Agrupa os cadastros que parecem ser a mesma pessoa — POR NIVEL DE CERTEZA.
  *
- * Qualquer evidencia em comum une dois cadastros, e a uniao e transitiva: se
- * A tem o titulo de B, e B tem o nome e o telefone de C, os tres sao o mesmo
- * grupo. O grupo recebe a certeza da evidencia MAIS FORTE que ele tem.
+ *   1. "certa": mesmo titulo, mesmo CPF, ou mesmo nome e telefone. A uniao
+ *      e transitiva: se A tem o titulo de B, e B tem o nome e o telefone de
+ *      C, os tres sao o mesmo grupo.
+ *   2. "provavel": mesmo nome e mesma secao, entre cadastros que o nivel 1
+ *      deixou separados.
+ *   3. "possivel": so o mesmo nome — homonimo existe.
  *
- * "Mesmo nome" sozinho entra, como POSSIVEL: homonimo existe, e por isso a
- * tela diz "possivel", e nao "repetido". Esconder isso seria pior — e
- * exatamente o caso em que alguem precisa olhar.
+ * Um nivel fraco NUNCA engorda o grupo de um nivel forte. Tres cadastros com
+ * o mesmo titulo e um quarto que so tem o mesmo nome (outro titulo, outra
+ * secao) nao sao "quatro vezes a mesma pessoa com certeza": sao um grupo
+ * certo de tres, e um POSSIVEL repetido a parte — o quarto ao lado do
+ * cadastro original do grupo, para comparar os dois.
+ *
+ * Por isso, num nivel fraco, um grupo ja formado entra pelo seu cadastro
+ * mais antigo (o original), e nao com todas as copias de novo.
  */
 export function cadastrosRepetidos(members: readonly Member[]): GrupoRepetido[] {
   const conjuntos = new Conjuntos();
-  const porChave = new Map<string, string>();
   const chaves = new Map<string, Record<Evidencia, string>>();
-
   for (const member of members) {
-    const suas = chavesDe(member);
-    chaves.set(member.id, suas);
+    chaves.set(member.id, chavesDe(member));
     conjuntos.achar(member.id);
+  }
 
-    for (const evidencia of EVIDENCIAS) {
-      const chave = suas[evidencia];
-      if (!chave) continue;
-      const marcada = `${evidencia}:${chave}`;
-      const outro = porChave.get(marcada);
-      if (outro) conjuntos.unir(outro, member.id);
-      else porChave.set(marcada, member.id);
+  const componentes = () => {
+    const mapa = new Map<string, Member[]>();
+    for (const member of members) {
+      const raiz = conjuntos.achar(member.id);
+      const lista = mapa.get(raiz) ?? [];
+      lista.push(member);
+      mapa.set(raiz, lista);
     }
-  }
-
-  const grupos = new Map<string, Member[]>();
-  for (const member of members) {
-    const raiz = conjuntos.achar(member.id);
-    const lista = grupos.get(raiz) ?? [];
-    lista.push(member);
-    grupos.set(raiz, lista);
-  }
+    return mapa;
+  };
 
   const resultado: GrupoRepetido[] = [];
 
-  for (const membros of grupos.values()) {
-    if (membros.length < 2) continue;
+  for (const nivel of NIVEIS) {
+    const doNivel = EVIDENCIAS.filter((evidencia) => EVIDENCIA_INFO[evidencia].certeza === nivel);
 
-    // Quais evidencias de fato se repetem DENTRO do grupo.
-    const evidencias = EVIDENCIAS.filter((evidencia) => {
-      const vistos = new Set<string>();
-      for (const member of membros) {
-        const chave = chaves.get(member.id)?.[evidencia];
+    // Onde cada cadastro estava ANTES deste nivel: os pedacos que ele une.
+    const pedacoAntes = new Map(members.map((member) => [member.id, conjuntos.achar(member.id)]));
+
+    const porChave = new Map<string, string>();
+    for (const member of members) {
+      for (const evidencia of doNivel) {
+        const chave = chaves.get(member.id)![evidencia];
         if (!chave) continue;
-        if (vistos.has(chave)) return true;
-        vistos.add(chave);
+        const marcada = `${evidencia}:${chave}`;
+        const outro = porChave.get(marcada);
+        if (outro) conjuntos.unir(outro, member.id);
+        else porChave.set(marcada, member.id);
       }
-      return false;
-    });
-    if (evidencias.length === 0) continue;
-    // "Mesmo nome" sozinho so diz algo quando e TUDO o que ha. Junto de
-    // "mesmo nome e telefone", repeti-lo e ruido.
-    if (evidencias.length > 1 && evidencias.at(-1) === 'nome') {
-      const temNome = evidencias.some((e) => e === 'nome-telefone' || e === 'nome-secao');
-      if (temNome) evidencias.pop();
     }
 
-    const ordenados = [...membros].sort(
-      (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
-    );
-    const responsaveis = [...new Set(ordenados.map((m) => recruiterText(m.recruitedBy)))];
+    for (const membros of componentes().values()) {
+      const pedacos = new Map<string, Member[]>();
+      for (const member of membros) {
+        const pedaco = pedacoAntes.get(member.id)!;
+        pedacos.set(pedaco, [...(pedacos.get(pedaco) ?? []), member]);
+      }
+      if (pedacos.size < 2) continue;
 
-    resultado.push({
-      id: ordenados[0].id,
-      nome: ordenados[0].name,
-      certeza: EVIDENCIA_INFO[evidencias[0]].certeza,
-      evidencias,
-      registros: ordenados.map((member, indice) => ({ member, primeiro: indice === 0 })),
-      responsaveis,
-      divergencias: divergenciasEntre(ordenados),
-    });
+      // As evidencias deste nivel que de fato ligam pedacos DIFERENTES.
+      const ligam = doNivel.filter((evidencia) => {
+        const ondeAparece = new Map<string, Set<string>>();
+        for (const member of membros) {
+          const chave = chaves.get(member.id)![evidencia];
+          if (!chave) continue;
+          const lugares = ondeAparece.get(chave) ?? new Set<string>();
+          lugares.add(pedacoAntes.get(member.id)!);
+          ondeAparece.set(chave, lugares);
+        }
+        return [...ondeAparece.values()].some((lugares) => lugares.size > 1);
+      });
+      if (ligam.length === 0) continue;
+
+      // Cada pedaco entra pelo seu cadastro mais antigo. No nivel "certa"
+      // os pedacos sao cadastros soltos, e todos entram.
+      const registros = [...pedacos.values()]
+        .map((pedaco) => [...pedaco].sort(maisAntigo)[0])
+        .sort(maisAntigo);
+
+      // O cartao do grupo certo conta tudo o que os registros repetem entre
+      // si ("mesmo titulo · mesmo nome e mesma secao"); nos niveis fracos,
+      // so o que liga.
+      const evidencias =
+        nivel === 'certa'
+          ? EVIDENCIAS.filter((evidencia) => {
+              const vistos = new Set<string>();
+              return registros.some((member) => {
+                const chave = chaves.get(member.id)![evidencia];
+                if (!chave) return false;
+                if (vistos.has(chave)) return true;
+                vistos.add(chave);
+                return false;
+              });
+            })
+          : ligam;
+      // "Mesmo nome" sozinho so diz algo quando e TUDO o que ha. Junto de
+      // "mesmo nome e telefone" ou "e secao", repeti-lo e ruido.
+      if (evidencias.length > 1 && evidencias.at(-1) === 'nome') {
+        const temNome = evidencias.some((e) => e === 'nome-telefone' || e === 'nome-secao');
+        if (temNome) evidencias.pop();
+      }
+
+      resultado.push({
+        id: nivel === 'certa' ? registros[0].id : `${registros[0].id}:${nivel}`,
+        nome: registros[0].name,
+        certeza: nivel,
+        evidencias,
+        registros: registros.map((member, indice) => ({ member, primeiro: indice === 0 })),
+        responsaveis: [...new Set(registros.map((m) => recruiterText(m.recruitedBy)))],
+        divergencias: divergenciasEntre(registros),
+      });
+    }
   }
 
   const pesoDaCerteza: Record<Certeza, number> = { certa: 0, provavel: 1, possivel: 2 };
@@ -272,8 +320,14 @@ export function telefonesCompartilhados(
   repetidos: readonly GrupoRepetido[] = [],
 ): TelefoneCompartilhado[] {
   const grupoDe = new Map<string, string>();
+  // O original de um grupo certo tambem aparece num grupo mais fraco (ao
+  // lado do possivel repetido): os dois grupos viram uma pessoa so aqui.
   for (const grupo of repetidos) {
-    for (const registro of grupo.registros) grupoDe.set(registro.member.id, grupo.id);
+    const alvo =
+      grupo.registros.map((registro) => grupoDe.get(registro.member.id)).find(Boolean) ?? grupo.id;
+    for (const registro of grupo.registros) {
+      if (!grupoDe.has(registro.member.id)) grupoDe.set(registro.member.id, alvo);
+    }
   }
 
   const porTelefone = new Map<string, Member[]>();
