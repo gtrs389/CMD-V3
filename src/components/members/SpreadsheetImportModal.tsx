@@ -17,6 +17,7 @@ import {
 import {
   ENDERECO_FIXO,
   EXEMPLO_CSV,
+  REFERENCIA_MAX,
   conferirDaLinha,
   faltasDaLinha,
   lerPlanilha,
@@ -614,6 +615,20 @@ export function SpreadsheetImportModal({
                           <option value="SIM">SIM</option>
                           <option value="NÃO">NÃO</option>
                         </Select>
+                      </Field>
+
+                      {/* Coluna "REFERÊNCIA": quem tem, vem preenchido; quem
+                          nao tem fica em branco, sem aviso nenhum — nao e
+                          falta, e nao entra na conta de incompleto. */}
+                      <Field id={campo('referencia')} label="Referência">
+                        <Input
+                          id={campo('referencia')}
+                          value={linha.reference}
+                          maxLength={REFERENCIA_MAX}
+                          disabled={bloqueado}
+                          placeholder="Sem referência"
+                          onChange={(event) => editar(linha.id, 'reference', event.target.value)}
+                        />
                       </Field>
 
                       {/* O endereco e a mesma cadeia da ficha — Estado,

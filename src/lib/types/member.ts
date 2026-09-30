@@ -76,6 +76,8 @@ export interface Member extends Timestamped {
    * nao informado.
    */
   photoVerified?: boolean | null;
+  /** "REFERÊNCIA", da planilha (migration 051). Nulo ou ausente: nao tem. */
+  reference?: string | null;
   /**
    * Ultima troca de responsavel, quando houve (migration 027).
    *
@@ -129,4 +131,6 @@ export interface MemberInput {
   bulkImport?: boolean;
   /** "VERIFICADO POR FOTO" da planilha (migration 050). Nulo: nao informado. */
   photoVerified?: boolean | null;
+  /** "REFERÊNCIA" da planilha (migration 051). Vazio ou nulo: nao tem. */
+  reference?: string | null;
 }

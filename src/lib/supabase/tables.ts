@@ -381,6 +381,8 @@ export interface MemberRow {
   tag: string | null;
   /** "VERIFICADO POR FOTO" (migration 050). Ausente em banco sem a migration. */
   photo_verified?: boolean | null;
+  /** "REFERÊNCIA" (migration 051). Ausente em banco sem a migration. */
+  reference?: string | null;
   created_at: string;
   updated_at: string;
 }

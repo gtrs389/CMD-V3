@@ -670,8 +670,15 @@ export async function createMember(
   // enderecos antigos continuam gravados nos registros que ja os tinham.
   // "VERIFICADO POR FOTO" (migration 050) so vai quando veio SIM ou NAO: o
   // cadastro que nao informa continua saindo exatamente como sempre saiu.
-  const verificadoPorFoto =
-    typeof input.photoVerified === 'boolean' ? { photo_verified: input.photoVerified } : {};
+  //
+  // "REFERÊNCIA" (migration 051) segue a mesma regra: so vai quando veio
+  // preenchida. Quem nao tem continua saindo como sempre — sem coluna, sem
+  // alerta.
+  const referencia = (input.reference ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  const verificadoPorFoto = {
+    ...(typeof input.photoVerified === 'boolean' ? { photo_verified: input.photoVerified } : {}),
+    ...(referencia ? { reference: referencia } : {}),
+  };
 
   let row: MemberRow;
   try {
@@ -690,16 +697,18 @@ export async function createMember(
       source: input.source,
     });
   } catch (error) {
-    // Sem a coluna no banco, o SIM/NAO da planilha se perderia calado.
-    // Melhor parar e dizer o que falta.
+    // Sem a coluna no banco, o que veio da planilha se perderia calado.
+    // Melhor parar e dizer qual migration falta.
     if (
-      'photo_verified' in verificadoPorFoto &&
+      Object.keys(verificadoPorFoto).length > 0 &&
       error instanceof SupabaseRequestError &&
       error.isMissingSchema
     ) {
       await deleteImage(photo?.path ?? null);
       throw badRequest(
-        'Para gravar "VERIFICADO POR FOTO", execute antes a migration 050_verificado_por_foto.sql no Supabase.',
+        error.message.includes('reference')
+          ? 'Para gravar "REFERÊNCIA", execute antes a migration 051_referencia.sql no Supabase.'
+          : 'Para gravar "VERIFICADO POR FOTO", execute antes a migration 050_verificado_por_foto.sql no Supabase.',
       );
     }
     throw error;

@@ -138,6 +138,8 @@ function StandardFields({ member }: { member: Member }) {
       'Verificado por foto',
       member.photoVerified === true ? 'SIM' : member.photoVerified === false ? 'NÃO' : null,
     ],
+    // Quem nao tem referencia simplesmente nao mostra a linha.
+    ['Referência', member.reference?.trim() || null],
   ];
 
   const preenchidas = linhas.filter(([, valor]) => Boolean(valor));
