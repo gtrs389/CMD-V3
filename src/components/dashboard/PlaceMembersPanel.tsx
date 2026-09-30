@@ -11,6 +11,7 @@ import {
   ESTIMATED_VOTES_LABEL,
 } from '@/lib/domain/map-pin';
 import { api } from '@/lib/repositories/http/api';
+import { cn } from '@/lib/utils/cn';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
@@ -24,10 +25,16 @@ import { Skeleton } from '@/components/ui/Skeleton';
  */
 export function PlaceMembersPanel({
   place,
+  clientId,
   onOpenMember,
   onClose,
 }: {
   place: PollingPlacePin;
+  /**
+   * Time do mapa, quando o mapa e de um time. Serve para a lista trazer
+   * tambem quem vota ali e esta na planilha do Sheets do time duplicado (052).
+   */
+  clientId?: string;
   /**
    * Abre a ficha da pessoa na coluna lateral do mapa, sem sair dele. Fecha
    * esta lista junto: ela cobre a tela, e a ficha nasceria atras dela.
@@ -48,6 +55,7 @@ export function PlaceMembersPanel({
 
   const params = new URLSearchParams({ pagina: String(page), tamanho: '20' });
   if (term.trim()) params.set('busca', term.trim());
+  if (clientId) params.set('time', clientId);
   const key = `${place.locationId}?${params}#${tick}`;
 
   useEffect(() => {
@@ -222,13 +230,21 @@ function PersonRow({
   member: PlaceMember;
   onOpenMember: (memberId: string) => void;
 }) {
+  // Pessoa lida ao vivo da planilha do Sheets (052): nao existe no banco, e
+  // por isso nao tem ficha para abrir aqui. Aparece, e conta, com o selo.
+  const daPlanilha = member.memberId.startsWith('planilha-');
+  const Caixa = daPlanilha ? 'div' : 'button';
   return (
-    <button
-      type="button"
-      onClick={() => onOpenMember(member.memberId)}
+    <Caixa
+      {...(daPlanilha
+        ? {}
+        : { type: 'button' as const, onClick: () => onOpenMember(member.memberId) })}
       // Abre a ficha sobre o mapa. Sair da tela custaria a posicao, o zoom, o
       // filtro e esta propria escola aberta.
-      className="flex w-full items-center gap-3 rounded-control border border-line p-2.5 text-left transition-colors hover:bg-ink-50"
+      className={cn(
+        'flex w-full items-center gap-3 rounded-control border border-line p-2.5 text-left',
+        !daPlanilha && 'transition-colors hover:bg-ink-50',
+      )}
     >
       {member.photo ? (
         /* eslint-disable-next-line @next/next/no-img-element */
@@ -248,7 +264,10 @@ function PersonRow({
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-ink-900">{member.name}</p>
-        <p className="truncate text-xs text-ink-500">{member.clientName}</p>
+        <p className="truncate text-xs text-ink-500">
+          {member.clientName}
+          {daPlanilha ? <span className="font-semibold text-success-600"> · Da planilha</span> : null}
+        </p>
 
         {member.email ? <p className="truncate text-xs text-ink-500">{member.email}</p> : null}
         {member.phone ? (
@@ -264,6 +283,6 @@ function PersonRow({
           </p>
         ) : null}
       </div>
-    </button>
+    </Caixa>
   );
 }

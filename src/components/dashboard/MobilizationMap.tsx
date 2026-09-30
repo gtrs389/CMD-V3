@@ -499,6 +499,7 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
       {openPlace ? (
         <PlaceMembersPanel
           place={openPlace}
+          clientId={clientId}
           onOpenMember={abrirFicha}
           onClose={() => setOpenPlace(null)}
         />

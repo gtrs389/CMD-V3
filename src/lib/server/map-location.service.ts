@@ -20,6 +20,7 @@ import {
   type PollingPlacePin,
 } from '@/lib/domain/map-pin';
 import type { TseResult } from '@/lib/domain/verification';
+import type { Member } from '@/lib/types';
 import {
   TABLES,
   type ClientRow,
@@ -29,13 +30,27 @@ import {
   type MemberVerificationRow,
   type PollingPlaceRow,
 } from '@/lib/supabase/tables';
-import { deleteRows, inFilter, insertOne, selectOne, selectRows, updateRows } from '@/lib/supabase/rest';
+import {
+  deleteRows,
+  inFilter,
+  insertOne,
+  notInFilter,
+  selectOne,
+  selectRows,
+  updateRows,
+} from '@/lib/supabase/rest';
 import { signedUrls } from '@/lib/supabase/storage';
 import { decryptJson } from './crypto';
-import { withoutDemoClients } from './demo-scope';
-import { sheetVisibilityFilter } from './sheet-visibility';
+import { offBooksClientIds, withoutDemoClients } from './demo-scope';
+import { sheetEnabled, sheetVisibilityFilter } from './sheet-visibility';
 import { lookupPlace, MapLookupError } from './serpapi.service';
-import { findPollingPlace, pollingPlaceAddress } from './polling-place.service';
+import {
+  findPollingPlace,
+  pollingPlaceAddress,
+  pollingPlaceIn,
+  pollingPlacesOfZones,
+} from './polling-place.service';
+import { equipeDaPlanilha } from './sheet-live.service';
 
 /**
  * Coordenadas do integrante: moradia aproximada e local de votacao.
@@ -599,6 +614,164 @@ async function clientLinks(clientId: string): Promise<MemberLocationRow[]> {
     .slice(0, MAP_LINK_LIMIT);
 }
 
+/* -------------------------------------------------------------------------
+   Planilha do Google Sheets no mapa do time duplicado (migration 052)
+   ------------------------------------------------------------------------- */
+
+/** Uma pessoa da planilha, com a escola onde vota. */
+interface PessoaDaPlanilhaNaEscola {
+  member: Member;
+  place: PollingPlaceRow;
+  /** A mesma chave do pino da escola, para somar no pino certo. */
+  key: string;
+}
+
+/**
+ * Chave do pino de uma escola da tabela do TSE. E exatamente a chave que o
+ * mapa usa para a mesma escola quando ela veio de um cadastro do banco
+ * (`rememberPollingPlace` grava titulo e coordenada da mesma linha).
+ */
+function chaveDaEscola(place: PollingPlaceRow): string {
+  return pollingPlaceKey({
+    latitude: Number(place.latitude),
+    longitude: Number(place.longitude),
+    title: place.name,
+  });
+}
+
+/**
+ * A Equipe da planilha, cada pessoa na escola onde vota — calculado NA HORA.
+ *
+ * A planilha e lida ao vivo e nada dela e gravado; por isso o local de
+ * votacao tambem nao e: sai da zona + secao da planilha, procurado na tabela
+ * do TSE do proprio sistema (so leitura, sem consulta paga). Quem nao tem
+ * zona e secao, ou tem uma que a tabela nao conhece, conta como "local nao
+ * encontrado", como qualquer cadastro.
+ */
+async function escolasDaPlanilha(
+  clientId: string,
+): Promise<{ pessoas: PessoaDaPlanilhaNaEscola[]; semLocal: number }> {
+  const planilha = await equipeDaPlanilha(clientId);
+  if (!planilha) return { pessoas: [], semLocal: 0 };
+
+  const comSecao = planilha.membros.filter(
+    (member) => member.tier === 'EQUIPE' && member.zone && member.section,
+  );
+  if (comSecao.length === 0) return { pessoas: [], semLocal: 0 };
+
+  // Uma consulta por estado, com todas as zonas dele.
+  const porEstado = new Map<string, Member[]>();
+  for (const member of comSecao) {
+    const uf = (member.state ?? '').toUpperCase();
+    porEstado.set(uf, [...(porEstado.get(uf) ?? []), member]);
+  }
+
+  const pessoas: PessoaDaPlanilhaNaEscola[] = [];
+  let semLocal = 0;
+  for (const [uf, membros] of porEstado) {
+    const locais = await pollingPlacesOfZones(uf, membros.map((member) => member.zone));
+    for (const member of membros) {
+      const place = pollingPlaceIn(locais, member.zone, member.section);
+      if (!place || place.latitude === null || place.longitude === null) {
+        semLocal += 1;
+        continue;
+      }
+      pessoas.push({ member, place, key: chaveDaEscola(place) });
+    }
+  }
+  return { pessoas, semLocal };
+}
+
+/** Prefixo do pino de escola que so tem gente da planilha (nao ha linha no banco). */
+const ESCOLA_DA_PLANILHA = 'planilha-local:';
+
+/**
+ * Soma a Equipe da planilha nas escolas do mapa. A escola que ja tem pino
+ * (por alguem do banco) ganha as pessoas da planilha no mesmo pino; a que
+ * nao tem ganha um pino proprio.
+ */
+function somarPlanilha(
+  payload: MapOverviewPayload,
+  planilha: { pessoas: PessoaDaPlanilhaNaEscola[]; semLocal: number } | null,
+): MapOverviewPayload {
+  if (!planilha || (planilha.pessoas.length === 0 && planilha.semLocal === 0)) return payload;
+
+  const escolas = [...payload.pollingPlaces];
+  const porChave = new Map(
+    escolas.map((pin) => [
+      pollingPlaceKey({ latitude: pin.latitude, longitude: pin.longitude, title: pin.title }),
+      pin,
+    ]),
+  );
+
+  for (const { member, place, key } of planilha.pessoas) {
+    let pin = porChave.get(key);
+    if (!pin) {
+      pin = {
+        locationId: `${ESCOLA_DA_PLANILHA}${place.id}`,
+        latitude: Number(place.latitude),
+        longitude: Number(place.longitude),
+        title: place.name,
+        address: pollingPlaceAddress(place),
+        city: place.city,
+        state: place.uf,
+        imageUrl: null,
+        total: 0,
+        men: 0,
+        women: 0,
+        others: 0,
+        sections: [],
+      } satisfies PollingPlacePin;
+      porChave.set(key, pin);
+      escolas.push(pin);
+    }
+
+    pin.total += 1;
+    // A planilha nao tem genero: conta como "outros", como um cadastro sem ele.
+    pin[genderBucket(member.gender)] += 1;
+
+    const zona = member.zone?.trim() || null;
+    const secao = member.section?.trim() || null;
+    const chaveSecao = sectionKey({ zone: zona, section: secao });
+    const existente = pin.sections.find((row) => sectionKey(row) === chaveSecao);
+    if (existente) existente.total += 1;
+    else pin.sections.push({ zone: zona, section: secao, total: 1 });
+  }
+
+  return {
+    ...payload,
+    pollingPlaces: escolas,
+    totals: {
+      ...payload.totals,
+      pollingPlace: payload.totals.pollingPlace + planilha.pessoas.length,
+      notFound: payload.totals.notFound + planilha.semLocal,
+    },
+  };
+}
+
+/** As pessoas da planilha que votam na escola deste pino. */
+async function pessoasDaPlanilhaNaEscola(locationId: string, clientId: string): Promise<Member[]> {
+  const planilha = await escolasDaPlanilha(clientId);
+  if (planilha.pessoas.length === 0) return [];
+
+  if (locationId.startsWith(ESCOLA_DA_PLANILHA)) {
+    const placeId = locationId.slice(ESCOLA_DA_PLANILHA.length);
+    return planilha.pessoas.filter((row) => row.place.id === placeId).map((row) => row.member);
+  }
+
+  const local = await selectOne<Pick<MapLocationRow, 'latitude' | 'longitude' | 'title'>>(
+    TABLES.mapLocations,
+    { select: 'latitude,longitude,title', filters: { id: `eq.${locationId}` } },
+  ).catch(() => null);
+  if (!local) return [];
+  const chave = pollingPlaceKey({
+    latitude: Number(local.latitude),
+    longitude: Number(local.longitude),
+    title: local.title,
+  });
+  return planilha.pessoas.filter((row) => row.key === chave).map((row) => row.member);
+}
+
 /**
  * Monta o mapa para o painel.
  *
@@ -610,14 +783,19 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
   // quando ele e o proprio Time DEMO, que dentro da propria pagina mostra
   // tudo. Mapa GERAL: os Times DEMO ficam de fora, como em toda metrica
   // global.
-  const scopedLinks = clientId
-    ? await clientLinks(clientId)
-    : await selectRows<MemberLocationRow>(TABLES.memberLocations, {
-        select: '*',
-        filters: await withoutDemoClients(),
-        order: 'updated_at.desc',
-        limit: MAP_LINK_LIMIT,
-      });
+  const [scopedLinks, planilha] = await Promise.all([
+    clientId
+      ? clientLinks(clientId)
+      : selectRows<MemberLocationRow>(TABLES.memberLocations, {
+          select: '*',
+          filters: await withoutDemoClients(),
+          order: 'updated_at.desc',
+          limit: MAP_LINK_LIMIT,
+        }),
+    // Mapa do time duplicado com a planilha do Sheets ligada (052): a Equipe
+    // da planilha entra nas escolas, calculada na hora. Nulo no resto.
+    clientId ? escolasDaPlanilha(clientId) : Promise.resolve(null),
+  ]);
 
   const totals = { residence: 0, pollingPlace: 0, pending: 0, notFound: 0 };
   const resolved = scopedLinks.filter((link) => link.status === 'SUCCESS' && link.location_id);
@@ -630,7 +808,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
     else totals.pending += 1;
   }
 
-  if (resolved.length === 0) return { pins: [], pollingPlaces: [], totals };
+  if (resolved.length === 0) return somarPlanilha({ pins: [], pollingPlaces: [], totals }, planilha);
 
   const locationIds = [...new Set(resolved.map((link) => link.location_id as string))];
   const memberIds = [...new Set(resolved.map((link) => link.member_id))];
@@ -758,7 +936,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
     grouped.set(key, current);
   }
 
-  return { pins, pollingPlaces: [...grouped.values()], totals };
+  return somarPlanilha({ pins, pollingPlaces: [...grouped.values()], totals }, planilha);
 }
 
 /* -------------------------------------------------------------------------
@@ -779,71 +957,135 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
  */
 export async function placeMembers(
   locationId: string,
-  options: { search?: string; page?: number; pageSize?: number; clientId?: string } = {},
+  options: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+    clientId?: string;
+    /**
+     * Time cuja planilha do Sheets entra na lista (052), sem recortar o resto.
+     * E como o ADMIN geral, que ve todos os times, pede o mapa de um time.
+     */
+    sheetClientId?: string;
+  } = {},
 ): Promise<PlaceMembersPayload> {
   const page = Math.max(1, Math.trunc(options.page ?? 1));
   const pageSize = Math.min(50, Math.max(5, Math.trunc(options.pageSize ?? 20)));
 
-  const links = await selectRows<MemberLocationRow>(TABLES.memberLocations, {
-    select: 'member_id,location_id,location_kind,status',
-    filters: {
-      location_id: `eq.${locationId}`,
-      location_kind: 'eq.POLLING_PLACE',
-      status: 'eq.SUCCESS',
-      // Sem time pedido, a lista e a do mapa geral: Time DEMO fica fora.
-      ...(options.clientId ? {} : await withoutDemoClients()),
-    },
-    limit: 2000,
-  });
+  // Escola que so tem gente da planilha do Sheets (052): nao ha linha dela
+  // no banco, e a consulta abaixo nem e feita.
+  const soDaPlanilha = locationId.startsWith(ESCOLA_DA_PLANILHA);
+
+  const links = soDaPlanilha
+    ? []
+    : await selectRows<MemberLocationRow>(TABLES.memberLocations, {
+        select: 'member_id,location_id,location_kind,status',
+        filters: {
+          location_id: `eq.${locationId}`,
+          location_kind: 'eq.POLLING_PLACE',
+          status: 'eq.SUCCESS',
+          // Sem time pedido, a lista e a do mapa geral: Time DEMO e copia
+          // ficam fora — menos o time do proprio mapa, quando o ADMIN abre o
+          // mapa de um time duplicado: a escola lista quem o pino contou.
+          ...(options.clientId ? {} : await withoutOffBooksExcept(options.sheetClientId)),
+        },
+        limit: 2000,
+      });
 
   const memberIds = [...new Set(links.map((link) => link.member_id))];
-  if (memberIds.length === 0) return { items: [], total: 0, page, pageSize };
+  // ADMIN geral no mapa de um duplicado com a planilha ligada: a Equipe do
+  // banco dessa copia fica escondida aqui tambem, como na lista do time.
+  const esconderEquipeDe =
+    options.sheetClientId && (await sheetEnabled(options.sheetClientId)) ? options.sheetClientId : null;
+  const [linhasDoBanco, daPlanilha] = await Promise.all([
+    memberIds.length === 0
+      ? Promise.resolve([] as MemberRow[])
+      : selectRows<MemberRow>(TABLES.members, {
+          select: 'id,client_id,name,phone,photo_path,recruited_by_role',
+          filters: {
+            id: inFilter(memberIds),
+            ...(options.clientId ? { client_id: `eq.${options.clientId}` } : {}),
+            // Mesmo recorte da lista do time: com a planilha ligada, a Equipe
+            // do banco da copia fica escondida (052).
+            ...(options.clientId ? await sheetVisibilityFilter(options.clientId) : {}),
+          },
+          order: 'name.asc',
+        }),
+    // A Equipe da planilha que vota nesta escola, calculada na hora.
+    options.clientId || options.sheetClientId
+      ? pessoasDaPlanilhaNaEscola(locationId, (options.clientId ?? options.sheetClientId)!)
+      : Promise.resolve([]),
+  ]);
 
-  const members = await selectRows<MemberRow>(TABLES.members, {
-    select: 'id,client_id,name,phone,photo_path',
-    filters: {
-      id: inFilter(memberIds),
-      ...(options.clientId ? { client_id: `eq.${options.clientId}` } : {}),
-    },
-    order: 'name.asc',
-  });
+  const members = esconderEquipeDe
+    ? linhasDoBanco.filter(
+        (row) => !(row.client_id === esconderEquipeDe && row.recruited_by_role === 'EQUIPE'),
+      )
+    : linhasDoBanco;
+
+  type Linha = { tipo: 'banco'; row: MemberRow } | { tipo: 'planilha'; member: Member };
+  const todas: Linha[] = [
+    ...members.map((row) => ({ tipo: 'banco' as const, row })),
+    ...daPlanilha.map((member) => ({ tipo: 'planilha' as const, member })),
+  ];
+  const nomeDe = (linha: Linha) => (linha.tipo === 'banco' ? linha.row.name : linha.member.name);
+  if (daPlanilha.length > 0) todas.sort((a, b) => nomeDe(a).localeCompare(nomeDe(b), 'pt-BR'));
 
   const term = normalizeQuery(options.search ?? '');
-  const matched = term
-    ? members.filter((member) => normalizeQuery(member.name).includes(term))
-    : members;
+  const matched = term ? todas.filter((linha) => normalizeQuery(nomeDe(linha)).includes(term)) : todas;
 
   const total = matched.length;
   const slice = matched.slice((page - 1) * pageSize, page * pageSize);
   if (slice.length === 0) return { items: [], total, page, pageSize };
 
-  const clientIds = [...new Set(slice.map((member) => member.client_id))];
-  const sliceIds = slice.map((member) => member.id);
+  const doBanco = slice.flatMap((linha) => (linha.tipo === 'banco' ? [linha.row] : []));
+  const clientIds = [
+    ...new Set([...doBanco.map((member) => member.client_id), ...daPlanilha.map((member) => member.clientId)]),
+  ];
+  const sliceIds = doBanco.map((member) => member.id);
 
   const [clients, photos, verifications, emails] = await Promise.all([
     selectRows<{ id: string; name: string }>(TABLES.clients, {
       select: 'id,name',
       filters: { id: inFilter(clientIds) },
     }),
-    signedUrls(slice.map((member) => member.photo_path)),
-    selectRows<MemberVerificationRow>(TABLES.memberVerifications, {
-      select: 'member_id,tse_payload',
-      filters: { member_id: inFilter(sliceIds) },
-    }),
+    signedUrls(doBanco.map((member) => member.photo_path)),
+    sliceIds.length === 0
+      ? Promise.resolve([] as MemberVerificationRow[])
+      : selectRows<MemberVerificationRow>(TABLES.memberVerifications, {
+          select: 'member_id,tse_payload',
+          filters: { member_id: inFilter(sliceIds) },
+        }),
     memberEmails(sliceIds, clientIds),
   ]);
 
   const clientById = new Map(clients.map((client) => [client.id, client.name]));
+  const photoById = new Map(doBanco.map((member, index) => [member.id, photos[index] ?? null]));
   const tseById = new Map(
     verifications.map((row) => [row.member_id, decryptJson<TseResult>(row.tse_payload)]),
   );
 
-  const items: PlaceMember[] = slice.map((member, index) => {
+  const items: PlaceMember[] = slice.map((linha) => {
+    if (linha.tipo === 'planilha') {
+      const { member } = linha;
+      return {
+        memberId: member.id,
+        name: member.name,
+        photo: null,
+        clientId: member.clientId,
+        clientName: clientById.get(member.clientId) ?? 'Time',
+        phone: member.phone?.trim() ? member.phone : null,
+        email: null,
+        zone: member.zone,
+        section: member.section,
+      };
+    }
+    const member = linha.row;
     const eleitoral = tseById.get(member.id);
     return {
       memberId: member.id,
       name: member.name,
-      photo: photos[index] ?? null,
+      photo: photoById.get(member.id) ?? null,
       clientId: member.client_id,
       clientName: clientById.get(member.client_id) ?? 'Time',
       phone: member.phone?.trim() ? member.phone : null,
@@ -854,6 +1096,13 @@ export async function placeMembers(
   });
 
   return { items, total, page, pageSize };
+}
+
+/** O recorte do mapa geral, sem esconder o time do proprio mapa. */
+async function withoutOffBooksExcept(clientId: string | undefined): Promise<Record<string, string>> {
+  if (!clientId) return withoutDemoClients();
+  const fora = (await offBooksClientIds()).filter((id) => id !== clientId);
+  return fora.length > 0 ? { client_id: notInFilter(fora) } : {};
 }
 
 /** E-mail, quando o cliente tiver um campo desse tipo preenchido. */

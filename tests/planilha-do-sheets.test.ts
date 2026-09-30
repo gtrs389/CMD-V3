@@ -142,7 +142,17 @@ function lista(valor: string): string[] {
 
 function casa(row: Row, filtros: Record<string, string> = {}): boolean {
   return Object.entries(filtros).every(([chave, valor]) => {
-    if (chave === 'or') return true;
+    if (chave === 'or') {
+      // `(coluna.op.valor,...)`: basta uma parte valer.
+      return lista(valor).some((parte) => {
+        const [coluna, op, alvo] = parte.split('.');
+        if (op === 'is') return alvo === 'null' ? row[coluna] == null : row[coluna] === (alvo === 'true');
+        if (op === 'eq') return String(row[coluna]) === alvo;
+        if (op === 'neq') return row[coluna] != null && String(row[coluna]) !== alvo;
+        throw new Error(`or nao suportado: ${parte}`);
+      });
+    }
+    if (valor.startsWith('not.in.')) return !lista(valor).includes(String(row[chave]));
     if (valor === 'is.true') return row[chave] === true;
     if (valor === 'is.false') return row[chave] !== true;
     if (valor === 'is.null') return row[chave] == null;
@@ -182,7 +192,13 @@ vi.mock('@/lib/supabase/rest', async () => {
   };
 });
 
+vi.mock('@/lib/supabase/storage', () => ({
+  signedUrl: async () => null,
+  signedUrls: async (caminhos: unknown[]) => caminhos.map(() => null),
+}));
+
 const { lerXlsx } = await import('@/lib/server/xlsx');
+const { mapOverview, placeMembers } = await import('@/lib/server/map-location.service');
 const { chaveDoNome, idDaPlanilha, lerAbaDoSheets, planejarPlanilha } = await import(
   '@/lib/domain/planilha-do-sheets'
 );
@@ -214,6 +230,42 @@ function semear() {
     { id: 'cp-equipe', client_id: COPIA, name: 'Equipe do Banco', recruited_by_role: 'EQUIPE', recruited_by_user_id: 'u-cp-lider' },
   );
   tabela('cmd_users').push({ id: 'u-cp-lider', role: 'EQUIPE', client_id: COPIA, member_id: 'cp-lider' });
+
+  // Tabela do TSE: a escola da zona 10, secoes 147 e 150.
+  tabela('cmd_polling_places').push({
+    id: 'pp-escola',
+    uf: 'AL',
+    city: 'Arapiraca',
+    zone: 10,
+    name: 'ESCOLA ESTADUAL EXEMPLO',
+    address: 'RUA A',
+    district: 'CENTRO',
+    latitude: -9.75,
+    longitude: -36.66,
+    sections: [147, 150],
+  });
+  // O Lider do banco ja vota nela: o pino da escola existe, com 1 pessoa.
+  tabela('cmd_map_locations').push({
+    id: 'ml-escola',
+    latitude: -9.75,
+    longitude: -36.66,
+    title: 'ESCOLA ESTADUAL EXEMPLO',
+    address: 'RUA A',
+    place_id: null,
+    data_id: null,
+    image_url: null,
+  });
+  tabela('cmd_member_locations').push({
+    id: 'loc-lider',
+    client_id: COPIA,
+    member_id: 'cp-lider',
+    location_kind: 'POLLING_PLACE',
+    status: 'SUCCESS',
+    location_id: 'ml-escola',
+    updated_at: '2026-09-30T00:00:00.000Z',
+  });
+  tabela('cmd_members').find((m) => m.id === 'cp-lider')!.zone = '10';
+  tabela('cmd_members').find((m) => m.id === 'cp-lider')!.section = '147';
 
   arquivoDoGoogle = xlsx([
     {
@@ -441,5 +493,70 @@ describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
     expect(escritas).toHaveLength(1);
     expect(escritas[0]).toMatchObject({ operacao: 'update', tabela: 'cmd_clients' });
     expect((escritas[0].valores as unknown[])[1]).toEqual({ sheet_sync_enabled: true, sheet_url: LINK });
+  });
+});
+
+describe('as escolas do mapa contam a Equipe da planilha', () => {
+  it('soma no pino da escola quem está no banco e quem está na planilha — sem gravar nada', async () => {
+    const mapa = await mapOverview(COPIA);
+
+    // Lider do banco (147) + Maria (10/147) + Ana (10/150). João nao tem zona.
+    expect(mapa.pollingPlaces).toHaveLength(1);
+    const escola = mapa.pollingPlaces[0];
+    expect(escola).toMatchObject({ locationId: 'ml-escola', title: 'ESCOLA ESTADUAL EXEMPLO', total: 3 });
+    expect(escola.sections).toEqual(
+      expect.arrayContaining([
+        { zone: '10', section: '147', total: 2 },
+        { zone: '10', section: '150', total: 1 },
+      ]),
+    );
+    expect(mapa.totals.pollingPlace).toBe(3);
+    expect(escritas).toEqual([]);
+  });
+
+  it('escola que só tem gente da planilha ganha pino próprio', async () => {
+    db.set('cmd_member_locations', []);
+    const mapa = await mapOverview(COPIA);
+
+    expect(mapa.pollingPlaces).toHaveLength(1);
+    expect(mapa.pollingPlaces[0]).toMatchObject({ locationId: 'planilha-local:pp-escola', total: 2 });
+    expect(escritas).toEqual([]);
+  });
+
+  it('"Ver pessoas" da escola lista também quem está na planilha', async () => {
+    const lista = await placeMembers('ml-escola', { sheetClientId: COPIA });
+    expect(lista.items.map((pessoa) => pessoa.name)).toEqual(['Ana Rocha', 'Félix Silva Targino', 'Maria Souza']);
+    expect(lista.total).toBe(3);
+
+    const soDaPlanilha = await placeMembers('planilha-local:pp-escola', { sheetClientId: COPIA });
+    expect(soDaPlanilha.items.map((pessoa) => pessoa.name)).toEqual(['Ana Rocha', 'Maria Souza']);
+    expect(escritas).toEqual([]);
+  });
+
+  it('com a planilha ligada, a Equipe do banco da cópia não aparece em "Ver pessoas"', async () => {
+    tabela('cmd_members').find((m) => m.id === 'cp-equipe')!.zone = '10';
+    tabela('cmd_member_locations').push({
+      id: 'loc-equipe',
+      client_id: COPIA,
+      member_id: 'cp-equipe',
+      location_kind: 'POLLING_PLACE',
+      status: 'SUCCESS',
+      location_id: 'ml-escola',
+      updated_at: '2026-09-30T00:00:00.000Z',
+    });
+    const lista = await placeMembers('ml-escola', { sheetClientId: COPIA });
+    expect(lista.items.map((pessoa) => pessoa.name)).not.toContain('Equipe do Banco');
+  });
+
+  it('desligada, a escola conta só o banco', async () => {
+    tabela('cmd_clients').find((c) => c.id === COPIA)!.sheet_sync_enabled = false;
+    const mapa = await mapOverview(COPIA);
+    expect(mapa.pollingPlaces[0].total).toBe(1);
+  });
+
+  it('no time oficial, o mapa não muda', async () => {
+    const mapa = await mapOverview(OFICIAL);
+    expect(mapa.pollingPlaces).toEqual([]);
+    expect(escritas).toEqual([]);
   });
 });

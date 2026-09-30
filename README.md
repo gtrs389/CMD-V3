@@ -872,8 +872,14 @@ versão mais recente na hora.
 - As pessoas da planilha aparecem com o selo **"Da planilha"** e são só
   leitura: editar, excluir, trocar responsável, tag e "Entrar no painel" não se
   aplicam a elas. Para corrigir, corrige-se na planilha.
-- Elas não aparecem no **mapa**: o mapa vem de coordenadas gravadas por
-  pessoa, e nada da planilha é gravado.
+- **No mapa, as escolas contam a Equipe da planilha.** O local de votação de
+  cada pessoa sai da zona + seção dela, procurado na tabela do TSE do próprio
+  sistema — na hora, só leitura, sem consulta paga e sem gravar nada. A pessoa
+  soma no pino da escola (junto com quem já está no banco, no mesmo pino), nas
+  seções e em "Ver pessoas", onde aparece com "Da planilha". Quem não tem zona
+  e seção, ou tem uma que a tabela não conhece, conta como local não
+  encontrado. O pino de **casa** não existe para elas: a planilha não tem
+  endereço.
 - O cartão mostra o que a planilha tem agora: Líderes reconhecidos, os só da
   planilha, quantas pessoas e o que ficou de fora, com o motivo. Se o Google
   não responder, a lista do time continua abrindo, sem a Equipe da planilha,
