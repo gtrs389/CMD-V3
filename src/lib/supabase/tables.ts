@@ -379,6 +379,8 @@ export interface MemberRow {
    * Lider dela, lida na hora, e fica com a coluna nula.
    */
   tag: string | null;
+  /** "VERIFICADO POR FOTO" (migration 050). Ausente em banco sem a migration. */
+  photo_verified?: boolean | null;
   created_at: string;
   updated_at: string;
 }

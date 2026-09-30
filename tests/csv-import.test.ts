@@ -4,6 +4,7 @@ import {
   ENDERECO_FIXO,
   MODELO_SEPARADOR,
   lerPlanilha,
+  verificadoPorFotoParaGravar,
   conferirDaLinha,
   faltasDaLinha,
   problemasDaLinha,
@@ -23,7 +24,7 @@ const CABECALHO =
   'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral,Endereço';
 
 /** A planilha de agora: sete colunas, com bairro e rua separados. */
-const CABECALHO_NOVO = 'Nome;Telefone;Título;Zona;Seção;Bairro;Rua';
+const CABECALHO_NOVO = 'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;VERIFICADO POR FOTO';
 
 describe('leitura da planilha', () => {
   it('lê as cinco colunas, na ordem que vierem', () => {
@@ -176,6 +177,7 @@ describe('o que impede uma linha de ser cadastrada', () => {
       district: '',
       street: '',
       address: '',
+      photoVerified: '' as const,
       ...extra,
     };
   }
@@ -247,7 +249,7 @@ describe('planilha de exemplo', () => {
     expect(MODELO_SEPARADOR).toBe(';');
 
     const [cabecalho] = EXEMPLO_CSV.split(/\r?\n/);
-    expect(cabecalho.split(';')).toHaveLength(7);
+    expect(cabecalho.split(';')).toHaveLength(8);
     expect(cabecalho).toBe(CABECALHO_NOVO);
   });
 
@@ -397,5 +399,42 @@ describe('título de eleitor torto', () => {
 
     expect(linhas[0].voterId).toBe('018161400850');
     expect(problemasDaLinha(linhas[0])).toEqual([]);
+  });
+});
+
+describe('coluna VERIFICADO POR FOTO', () => {
+  it('lê SIM e NÃO escritos de qualquer jeito', () => {
+    const { linhas, ignoradas } = lerPlanilha(
+      [
+        'Nome;Telefone;VERIFICADO POR FOTO',
+        'Ana Lima;82999990001;SIM',
+        'Bia Souza;82999990002;NÃO',
+        'Caio Reis;82999990003;nao',
+        'Davi Melo;82999990004;sim',
+        'Eva Rocha;82999990005;',
+        'Fábio Luz;82999990006;talvez',
+      ].join('\n'),
+    );
+
+    expect(ignoradas).toEqual([]);
+    expect(linhas.map((l) => l.photoVerified)).toEqual(['SIM', 'NÃO', 'NÃO', 'SIM', '', '']);
+  });
+
+  it('planilha sem a coluna continua funcionando: ninguém fica como verificado', () => {
+    const { linhas } = lerPlanilha('Nome;Telefone\nAna Lima;82999990001');
+    expect(linhas[0].photoVerified).toBe('');
+  });
+
+  it('vai para o banco como SIM = true, NÃO = false e vazio = nulo', () => {
+    expect(verificadoPorFotoParaGravar('SIM')).toBe(true);
+    expect(verificadoPorFotoParaGravar('NÃO')).toBe(false);
+    expect(verificadoPorFotoParaGravar('')).toBeNull();
+  });
+
+  it('o modelo para baixar já traz a coluna', () => {
+    expect(EXEMPLO_CSV.split('\r\n')[0]).toContain('VERIFICADO POR FOTO');
+    const { linhas, ignoradas } = lerPlanilha(EXEMPLO_CSV);
+    expect(ignoradas).toEqual([]);
+    expect(linhas.map((l) => l.photoVerified)).toEqual(['SIM', 'NÃO', 'SIM']);
   });
 });

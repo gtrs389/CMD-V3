@@ -72,6 +72,11 @@ export interface Member extends Timestamped {
    */
   tag: string | null;
   /**
+   * "VERIFICADO POR FOTO", da planilha (migration 050). Nulo ou ausente:
+   * nao informado.
+   */
+  photoVerified?: boolean | null;
+  /**
    * Ultima troca de responsavel, quando houve (migration 027).
    *
    * O sistema conta quantas pessoas cada um cadastrou, e esse numero e lido
@@ -122,4 +127,6 @@ export interface MemberInput {
    * numero com outra pessoa e pior do que registra-la sem acesso.
    */
   bulkImport?: boolean;
+  /** "VERIFICADO POR FOTO" da planilha (migration 050). Nulo: nao informado. */
+  photoVerified?: boolean | null;
 }
