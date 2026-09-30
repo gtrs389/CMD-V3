@@ -33,7 +33,7 @@ import {
   type TipoDaFicha,
 } from '@/lib/domain/inconsistencias';
 import { resumoDasFaltas } from '@/lib/domain/member-completeness';
-import { recruiterOptions, recruiterText } from '@/lib/domain/recruitment';
+import { recruiterOptionsAlfabeticas, recruiterText } from '@/lib/domain/recruitment';
 import {
   contextoDosFiltros,
   nomeDoProblemaDaFicha,
@@ -123,7 +123,8 @@ export function InconsistenciasPanel({
 }: InconsistenciasPanelProps) {
   const [responsavel, setResponsavel] = useState<string | null>(null);
 
-  const responsaveis = useMemo(() => recruiterOptions(members), [members]);
+  // Em ordem alfabetica: e pelo nome que se procura o Lider na lista.
+  const responsaveis = useMemo(() => recruiterOptionsAlfabeticas(members), [members]);
 
   // O recorte vale sobre o DIAGNOSTICO: um grupo de repetidos aparece se
   // qualquer registro dele e do responsavel — e assim que se ve a mesma
