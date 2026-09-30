@@ -94,7 +94,8 @@ export function LiderPanel({
   );
 
   const { can } = useSession();
-  const podeEditarTag = can('member.update');
+  // Lider que so existe na planilha do Sheets (052) nao tem onde guardar tag.
+  const podeEditarTag = can('member.update') && !lider.fromSheet;
   const [editandoTag, setEditandoTag] = useState(false);
 
   const maiorSemana = Math.max(1, ...p.semanas.map((s) => s.quantidade));

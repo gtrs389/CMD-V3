@@ -167,13 +167,14 @@ export const FILTROS_DE_DADOS: readonly FiltroDeDado[] = [
     id: 'sem-bairro',
     grupo: 'Endereço e votação',
     rotulo: 'Sem bairro',
-    motivo: (m) => (vazio(m.district) ? 'sem bairro' : null),
+    // A planilha do Sheets (052) nao tem endereco: nao e falta de quem veio dela.
+    motivo: (m) => (!m.fromSheet && vazio(m.district) ? 'sem bairro' : null),
   },
   {
     id: 'sem-rua',
     grupo: 'Endereço e votação',
     rotulo: 'Sem rua',
-    motivo: (m) => (vazio(m.street) ? 'sem rua' : null),
+    motivo: (m) => (!m.fromSheet && vazio(m.street) ? 'sem rua' : null),
   },
   {
     id: 'repetido',

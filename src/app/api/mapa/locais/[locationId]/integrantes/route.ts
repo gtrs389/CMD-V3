@@ -33,6 +33,10 @@ export async function GET(
         pageSize: Number(params.get('tamanho') ?? '20'),
         // O recorte vem da sessao, nunca do endereco.
         clientId: user.role === 'ADMIN' ? undefined : (user.candidateId ?? undefined),
+        // O ADMIN geral ve qualquer time: no mapa de um time, o time vem junto
+        // so para somar quem esta na planilha do Sheets do duplicado (052).
+        // Nao restringe nem amplia o que ele ja via.
+        sheetClientId: user.role === 'ADMIN' ? (params.get('time') ?? undefined) : undefined,
       }),
     );
   } catch (error) {

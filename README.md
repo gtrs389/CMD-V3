@@ -843,6 +843,72 @@ sistema) e verificação ainda pendente (a cópia pagaria de novo uma consulta
 que o oficial já pagou). Líder com telefone incompleto ou repetido fica sem
 acesso na cópia, exatamente como no oficial.
 
+### Planilha do Google Sheets na cópia
+
+No menu de ações do time duplicado (**⋯** ao lado de "Editar time"), o ADMIN
+geral abre **Planilha do Google Sheets**: um interruptor e o link. Ligado, a **Equipe de
+cada Líder da cópia vem da planilha, lida ao vivo**.
+
+**Nada da planilha é gravado no Supabase.** O banco guarda só o interruptor e
+o link. Cada vez que a lista do time é aberta, a planilha é lida do Google e a
+Equipe é montada na memória do servidor — quem atualiza a planilha vê a
+mudança no sistema, sem importar nada. Para não ir ao Google a cada clique, a
+leitura é reaproveitada por até **1 minuto**; o botão **Ler agora** busca a
+versão mais recente na hora.
+
+- **Uma aba por Líder.** O nome da aba é comparado com os Líderes da cópia sem
+  diferença de maiúscula, acento ou espaço ("FELIX SILVA TARGINO" = "Félix
+  Silva Targino"). Se não bater, tenta o nome da coluna LÍDER. Se nem assim, o
+  sistema **cria o Líder**, com o nome completo da coluna LÍDER (ou o da aba,
+  quando a coluna vier vazia).
+- **Colunas, nesta ordem:** NOME, TITULO, ZONA, SEÇÃO, TELEFONE, LÍDER,
+  REFERÊNCIA, VERIFICADO POR FOTO. Com a linha de cabeçalho, a leitura vai pelo
+  nome da coluna; sem ela, pela ordem. Aba oculta e linha sem nome ficam de
+  fora; a linha do próprio Líder na aba dele não vira Equipe dele mesmo.
+- **Ligada**, a Equipe que estava no banco da cópia fica **escondida**, e a da
+  planilha aparece — na lista, no painel do Líder e no relatório. **Desligada**,
+  a cópia volta a mostrar o banco. Ligar e desligar **não apaga nada**.
+- O Líder que a planilha "cria" também só existe na tela.
+- As pessoas da planilha aparecem com o selo **"Da planilha"** e são só
+  leitura: editar, excluir, trocar responsável, tag e "Entrar no painel" não se
+  aplicam a elas. Para corrigir, corrige-se na planilha.
+- **No mapa, as escolas contam a Equipe da planilha.** O local de votação de
+  cada pessoa sai da zona + seção dela, procurado na tabela do TSE do próprio
+  sistema — na hora, só leitura, sem consulta paga e sem gravar nada. A pessoa
+  soma no pino da escola (junto com quem já está no banco, no mesmo pino), nas
+  seções e em "Ver pessoas", onde aparece com "Da planilha". Quem não tem zona
+  e seção, ou tem uma que a tabela não conhece, conta como local não
+  encontrado. O pino de **casa** não existe para elas: a planilha não tem
+  endereço.
+- O cartão mostra o que a planilha tem agora: Líderes reconhecidos, os só da
+  planilha, quantas pessoas e o que ficou de fora, com o motivo. Se o Google
+  não responder, a lista do time continua abrindo, sem a Equipe da planilha,
+  e o cartão diz por quê.
+
+**Literal, como a planilha mostra.** Número guardado com formato de exibição
+vale pelo que aparece na tela: um título digitado como número e formatado
+"0000 0000 0000" aparece como "0240 5979 1708" — e é assim que entra, com o
+zero do começo (o número cru, 24059791708, teria 11 dígitos e viraria uma
+inconsistência falsa). Nada é inventado: a planilha não tem endereço, então a
+pessoa não tem estado, município, bairro nem rua. E só se cobra dela o que a
+planilha traz — título, zona, seção e telefone; do Líder que só existe na
+planilha, nada (ela só traz o nome dele). Acesso ao painel e origem do
+cadastro também não se aplicam. O que vier errado de verdade na planilha
+continua apontado.
+
+**Como o sistema lê:** o Google exporta a planilha inteira como .xlsx por um
+endereço público, e o servidor lê todas as abas dali (`src/lib/server/xlsx.ts`,
+sem biblioteca nova). Por isso a planilha precisa estar compartilhada como
+**"Qualquer pessoa com o link" — Leitor**. O servidor só baixa de
+`docs.google.com`, montando o endereço a partir do id da planilha.
+
+**O oficial continua intocável, e o banco garante:** o interruptor só liga em
+cópia (`check`). Ler a planilha não escreve nada em tabela nenhuma — o teste
+`tests/planilha-do-sheets.test.ts` registra toda escrita que chega ao banco e
+confere que a leitura não gera nenhuma. Requer a migration
+`052_planilha_do_sheets.sql` (depois da 049, 050 e 051), que só acrescenta o
+interruptor e o link.
+
 Time DEMO não é duplicado. O sinal `is_copy` é imutável: o gatilho da
 migration recusa transformar um time oficial em cópia ou uma cópia em
 oficial.

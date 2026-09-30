@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Building2,
   Copy,
+  FileSpreadsheet,
   ShieldCheck,
   RefreshCw,
   FileText,
@@ -28,6 +29,7 @@ import { initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Menu } from '@/components/ui/Menu';
+import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs, type TabItem } from '@/components/ui/Tabs';
 import { FormsPanel } from '@/components/fields/FormsPanel';
@@ -46,6 +48,7 @@ import { BannerTagModal } from './BannerTagModal';
 import { DemoBadge } from './DemoBadge';
 import { CopyBadge } from './CopyBadge';
 import { DuplicateTeamDialog } from './DuplicateTeamDialog';
+import { SheetSyncCard } from './SheetSyncCard';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
@@ -92,6 +95,8 @@ export function ClientDetailView({
   const [deleting, setDeleting] = useState(false);
   /** Duplicar o time (migration 049): so o ADMIN geral, e nunca um Time DEMO. */
   const [duplicando, setDuplicando] = useState(false);
+  /** Planilha do Google Sheets do time duplicado (052), pelo menu de acoes. */
+  const [planilhaAberta, setPlanilhaAberta] = useState(false);
   /** Refazer os dados gerados: so aparece em Time DEMO, so para o ADMIN. */
   const [refazendo, setRefazendo] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
@@ -498,6 +503,18 @@ export function ClientDetailView({
                           },
                         ]
                       : []),
+                    // Planilha do Google Sheets: so no time duplicado, so para o
+                    // ADMIN geral (migration 052).
+                    ...(client.isCopy && user?.role === 'ADMIN'
+                      ? [
+                          {
+                            id: 'planilha',
+                            label: 'Planilha do Google Sheets',
+                            icon: <FileSpreadsheet className="size-4" />,
+                            onSelect: () => setPlanilhaAberta(true),
+                          },
+                        ]
+                      : []),
                     ...(podeExcluir
                       ? [
                           {
@@ -629,6 +646,18 @@ export function ClientDetailView({
       </NavegadorDePessoas>
 
       <BatchLinksModal open={lote} client={client} onClose={() => setLote(false)} />
+
+      {/* Montada so quando abre: cada abertura le a planilha de novo. */}
+      {planilhaAberta && client.isCopy && user?.role === 'ADMIN' ? (
+        <Modal
+          open
+          onClose={() => setPlanilhaAberta(false)}
+          title="Planilha do Google Sheets"
+          size="lg"
+        >
+          <SheetSyncCard client={client} />
+        </Modal>
+      ) : null}
 
       {user?.role === 'ADMIN' && !client.isDemo ? (
         <DuplicateTeamDialog

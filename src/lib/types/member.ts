@@ -79,6 +79,12 @@ export interface Member extends Timestamped {
   /** "REFERÊNCIA", da planilha (migration 051). Nulo ou ausente: nao tem. */
   reference?: string | null;
   /**
+   * Pessoa lida AO VIVO da planilha do Google Sheets do time duplicado
+   * (migration 052). Nao existe no banco: e so leitura na tela, e qualquer
+   * correcao e feita na propria planilha.
+   */
+  fromSheet?: boolean;
+  /**
    * Ultima troca de responsavel, quando houve (migration 027).
    *
    * O sistema conta quantas pessoas cada um cadastrou, e esse numero e lido

@@ -409,6 +409,12 @@ export function problemasDasFichas(
       problemas.push({ tipo: 'invalido', member, detalhe: invalidos.join(', ') });
     }
 
+    // Quem veio da planilha do Sheets (052) so tem o que a planilha traz, e
+    // e so leitura: acesso, endereco e origem nao se aplicam — cobrar isso
+    // seria inconsistencia falsa. O que ela traz errado (titulo, telefone)
+    // continua acima, em `dadosInvalidos`.
+    if (member.fromSheet) continue;
+
     const fora = foraDoMunicipio(member, referencia);
     if (fora) problemas.push({ tipo: 'fora-do-municipio', member, detalhe: fora });
 

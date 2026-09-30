@@ -209,7 +209,7 @@ export function parseCsv(texto: string, separador: string): string[][] {
  * O unico acerto automatico e o codigo do pais, que nao e digito a mais:
  * "5582..." e o mesmo numero escrito para fora do Brasil.
  */
-function telefoneDaPlanilha(valor: string | undefined): string {
+export function telefoneDaPlanilha(valor: string | undefined): string {
   const digitos = (valor ?? '').replace(/\D/g, '');
   if (digitos.length > 11 && !digitos.startsWith('55')) return digitos.slice(0, 15);
   return normalizePhone(digitos);

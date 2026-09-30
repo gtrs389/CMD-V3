@@ -34,6 +34,8 @@ import {
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { demoClientIds, withoutDemoClients } from './demo-scope';
+import { sheetVisibilityFilter } from './sheet-visibility';
+import { equipeDaPlanilha, type EquipeDaPlanilha } from './sheet-live.service';
 import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
@@ -411,12 +413,34 @@ export async function listAllMembers(): Promise<Member[]> {
 }
 
 export async function listMembersByClient(clientId: string): Promise<Member[]> {
-  const rows = await selectRows<MemberRow>(TABLES.members, {
-    select: '*',
-    filters: { client_id: `eq.${clientId}` },
-    order: 'created_at.desc',
+  const [rows, planilha] = await Promise.all([
+    selectRows<MemberRow>(TABLES.members, {
+      select: '*',
+      // Time duplicado com planilha do Sheets ligada (052): do banco vem so
+      // quem nao e Equipe. Em time oficial o filtro e vazio.
+      filters: { client_id: `eq.${clientId}`, ...(await sheetVisibilityFilter(clientId)) },
+      order: 'created_at.desc',
+    }),
+    equipeDaPlanilha(clientId),
+  ]);
+  const membros = await assembleMany(rows);
+  return planilha ? juntarComPlanilha(membros, planilha) : membros;
+}
+
+/**
+ * A Equipe lida AO VIVO da planilha entra depois de quem veio do banco. Ela
+ * nao existe em tabela nenhuma: e montada a cada leitura.
+ *
+ * Lider do banco sem usuario (sem telefone) ganha, SO nesta resposta, o
+ * identificador pelo qual a Equipe dele aponta para ele — a tela liga Lider
+ * e Equipe por esse identificador.
+ */
+function juntarComPlanilha(membros: Member[], planilha: EquipeDaPlanilha): Member[] {
+  const ligados = membros.map((membro) => {
+    const vinculo = planilha.vinculoDoLider.get(membro.id);
+    return vinculo && !membro.userId ? { ...membro, userId: vinculo } : membro;
   });
-  return assembleMany(rows);
+  return [...ligados, ...planilha.membros];
 }
 
 /**
@@ -429,12 +453,22 @@ export async function listMembersRecruitedBy(
   userId: string,
   clientId: string,
 ): Promise<Member[]> {
-  const rows = await selectRows<MemberRow>(TABLES.members, {
-    select: '*',
-    filters: { client_id: `eq.${clientId}`, recruited_by_user_id: `eq.${userId}` },
-    order: 'created_at.desc',
-  });
-  return assembleMany(rows);
+  const [rows, planilha] = await Promise.all([
+    selectRows<MemberRow>(TABLES.members, {
+      select: '*',
+      filters: {
+        client_id: `eq.${clientId}`,
+        recruited_by_user_id: `eq.${userId}`,
+        ...(await sheetVisibilityFilter(clientId)),
+      },
+      order: 'created_at.desc',
+    }),
+    equipeDaPlanilha(clientId),
+  ]);
+  const membros = await assembleMany(rows);
+  if (!planilha) return membros;
+  // No painel do Lider, a Equipe dele que esta na planilha, lida ao vivo.
+  return [...membros, ...planilha.membros.filter((membro) => membro.recruitedBy?.userId === userId)];
 }
 
 /**

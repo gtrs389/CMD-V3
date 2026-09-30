@@ -139,6 +139,11 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     form: toFormConfig(row, options.fields),
     isDemo: row.is_demo === true,
     isCopy: row.is_copy === true,
+    // Planilha do Google Sheets (052): so a copia tem.
+    sheetSync:
+      row.is_copy === true
+        ? { enabled: row.sheet_sync_enabled === true, url: row.sheet_url ?? null }
+        : null,
     copyOf:
       row.is_copy === true && row.copy_of_client_id
         ? { id: row.copy_of_client_id, name: row.copy_of_name ?? '' }

@@ -192,6 +192,13 @@ export interface ClientRow {
   /** Nome do time de onde a copia saiu, no momento da duplicacao. */
   copy_of_name?: string | null;
   /**
+   * Planilha do Google Sheets do time duplicado (migration 052): so o
+   * interruptor e o link. A planilha e lida ao vivo; nada dela e gravado.
+   * Ausentes em banco sem a migration.
+   */
+  sheet_sync_enabled?: boolean;
+  sheet_url?: string | null;
+  /**
    * Confirmacao de CPF e titulo pela FonteData neste time (migration 041).
    *
    * Em false nenhuma consulta e feita para os cadastros dele — nem durante o

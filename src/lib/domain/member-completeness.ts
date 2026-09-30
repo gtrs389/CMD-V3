@@ -43,11 +43,23 @@ function vazio(valor: unknown): boolean {
   return valor === null || valor === undefined || String(valor).trim() === '';
 }
 
+/**
+ * O que a planilha do Google Sheets do time duplicado traz (migration 052):
+ * NOME, TITULO, ZONA, SECAO e TELEFONE. Endereco ela nao tem — cobrar
+ * estado, municipio, bairro e rua de quem veio dela marcaria TODO MUNDO como
+ * incompleto por uma coluna que nao existe. Isso e inconsistencia falsa.
+ */
+const CAMPOS_DA_PLANILHA: readonly CampoEssencial[] = CAMPOS_ESSENCIAIS.filter((campo) =>
+  (['phone', 'voterId', 'zone', 'section'] as (keyof Member)[]).includes(campo.chave),
+);
+
 /** O que falta nesta ficha, na ordem em que aparece no cadastro. */
 export function camposFaltantes(member: Member): string[] {
-  return CAMPOS_ESSENCIAIS.filter((campo) => vazio(member[campo.chave])).map(
-    (campo) => campo.rotulo,
-  );
+  // O Lider que so existe na planilha e o NOME DA ABA: a planilha nao traz
+  // telefone, titulo nem zona dele — nao ha o que cobrar.
+  if (member.fromSheet && member.tier === 'LIDER') return [];
+  const campos = member.fromSheet ? CAMPOS_DA_PLANILHA : CAMPOS_ESSENCIAIS;
+  return campos.filter((campo) => vazio(member[campo.chave])).map((campo) => campo.rotulo);
 }
 
 export function cadastroIncompleto(member: Member): boolean {

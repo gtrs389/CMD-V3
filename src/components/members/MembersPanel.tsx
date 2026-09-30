@@ -661,13 +661,18 @@ function ListaDoTime({
                           <Eye aria-hidden="true" className="size-4" />
                           Ficha
                         </Button>
-                        {podeEditar ? (
+                        {/* Quem veio da planilha do Sheets (052) so existe na
+                            tela: corrige-se na planilha. */}
+                        {member.fromSheet ? (
+                          <Badge tone="success">Da planilha</Badge>
+                        ) : null}
+                        {podeEditar && !member.fromSheet ? (
                           <Button variant="secondary" size="sm" onClick={() => openEdit(member)}>
                             <Pencil aria-hidden="true" className="size-4" />
                             Editar
                           </Button>
                         ) : null}
-                        {podeExcluir ? (
+                        {podeExcluir && !member.fromSheet ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -784,14 +789,17 @@ function ListaDoTime({
                           icon={<Eye className="size-4" />}
                           onClick={() => verFicha(member)}
                         />
-                        {podeEditar ? (
+                        {member.fromSheet ? (
+                          <Badge tone="success">Da planilha</Badge>
+                        ) : null}
+                        {podeEditar && !member.fromSheet ? (
                           <IconButton
                             label={`Editar ${member.name}`}
                             icon={<Pencil className="size-4" />}
                             onClick={() => openEdit(member)}
                           />
                         ) : null}
-                        {podeExcluir ? (
+                        {podeExcluir && !member.fromSheet ? (
                           <IconButton
                             label={`Excluir ${member.name}`}
                             icon={<Trash2 className="size-4" />}

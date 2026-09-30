@@ -1,6 +1,6 @@
 import 'server-only';
 import { TABLES, type PollingPlaceRow } from '@/lib/supabase/tables';
-import { selectOne } from '@/lib/supabase/rest';
+import { selectOne, selectRows } from '@/lib/supabase/rest';
 
 /**
  * Local de votacao a partir da tabela do TSE (migration 042).
@@ -67,6 +67,40 @@ export async function findPollingPlace(
     // migration 042 responde direto, sem varrer a tabela.
     filters: { uf: `eq.${uf}`, zone: `eq.${zone}`, sections: `cs.{${section}}` },
   }).catch(() => null);
+}
+
+/**
+ * Todos os locais de votacao de algumas zonas de uma UF, de uma vez.
+ *
+ * Usado pela planilha do Google Sheets do time duplicado (migration 052):
+ * centenas de pessoas lidas ao vivo nao podem virar centenas de consultas.
+ * Uma consulta traz os locais das zonas envolvidas, e a secao de cada pessoa
+ * e procurada na memoria. So LEITURA: nada e gravado.
+ */
+export async function pollingPlacesOfZones(
+  uf: string | null | undefined,
+  zones: (string | number | null | undefined)[],
+): Promise<PollingPlaceRow[]> {
+  const estado = sigla(uf);
+  const zonas = [...new Set(zones.map(numero).filter((zona): zona is number => zona !== null))];
+  if (!estado || zonas.length === 0) return [];
+
+  return selectRows<PollingPlaceRow>(TABLES.pollingPlaces, {
+    select: '*',
+    filters: { uf: `eq.${estado}`, zone: `in.(${zonas.join(',')})` },
+  }).catch(() => []);
+}
+
+/** O local onde vota quem tem esta zona e secao, entre os ja lidos. */
+export function pollingPlaceIn(
+  places: PollingPlaceRow[],
+  zone: string | number | null | undefined,
+  section: string | number | null | undefined,
+): PollingPlaceRow | null {
+  const zona = numero(zone);
+  const secao = numero(section);
+  if (!zona || !secao) return null;
+  return places.find((place) => place.zone === zona && place.sections.includes(secao)) ?? null;
 }
 
 /** Endereco de uma linha, como ele aparece no popup do mapa. */
