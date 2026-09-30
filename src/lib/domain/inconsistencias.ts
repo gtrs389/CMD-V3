@@ -419,15 +419,20 @@ export function problemasDasFichas(
     if (fora) problemas.push({ tipo: 'fora-do-municipio', member, detalhe: fora });
 
     // Lider precisa entrar. Time DEMO nao da acesso a ninguem, de proposito.
-    if (member.tier === 'LIDER' && member.access !== 'ACTIVE' && member.access !== 'DEMO_NO_ACCESS') {
+    // Desativado pelo ADMIN geral e decisao, e nao falha: aparece como
+    // "Desativado" na lista e na ficha, e nao como inconsistencia.
+    if (
+      member.tier === 'LIDER' &&
+      member.access !== 'ACTIVE' &&
+      member.access !== 'DEMO_NO_ACCESS' &&
+      member.access !== 'DISABLED'
+    ) {
       const motivo =
         member.access === 'DUPLICATE_PHONE'
           ? 'telefone repetido no time'
           : member.access === 'NO_PHONE'
             ? 'sem telefone válido'
-            : member.access === 'DISABLED'
-              ? 'acesso desativado'
-              : 'acesso pendente';
+            : 'acesso pendente';
       problemas.push({ tipo: 'lider-sem-acesso', member, detalhe: motivo });
     }
 

@@ -198,6 +198,11 @@ describe('problemas de cada ficha', () => {
     expect(problemasDasFichas([equipe, demo], PALMEIRA).some((p) => p.tipo === 'lider-sem-acesso')).toBe(false);
   });
 
+  it('Líder desativado pelo ADMIN é decisão, e não inconsistência', () => {
+    const desativado = pessoa({ tier: 'LIDER', recruitedBy: MARINA, access: 'DISABLED' });
+    expect(problemasDasFichas([desativado], PALMEIRA).some((p) => p.tipo === 'lider-sem-acesso')).toBe(false);
+  });
+
   it('origem: terceiro nível, responsável removido e sem origem', () => {
     const terceiro = pessoa({ recruitedBy: { ...JOAO, tier: 'EQUIPE' } });
     const orfao = pessoa({ recruitedBy: { ...JOAO, userId: null } });

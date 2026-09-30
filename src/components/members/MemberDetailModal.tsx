@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { InspectMemberButton } from './InspectMemberButton';
+import { DesativarLiderButton } from './DesativarLiderButton';
 import { MemberDeviceSection } from './MemberDeviceSection';
 import { MemberSignupLinkSection } from './MemberSignupLinkSection';
 import { RecruitedBy } from './RecruitedBy';
@@ -342,7 +343,15 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                 {daPlanilha ? (
                   <Badge tone="success">Da planilha do Sheets</Badge>
                 ) : (
-                  <Badge tone={member.access === 'ACTIVE' ? 'success' : 'neutral'}>
+                  <Badge
+                    tone={
+                      member.access === 'ACTIVE'
+                        ? 'success'
+                        : member.access === 'DISABLED' && member.tier === 'LIDER'
+                          ? 'danger'
+                          : 'neutral'
+                    }
+                  >
                     {ACCESS_STATUS_LABELS[member.access]}
                   </Badge>
                 )}
@@ -370,8 +379,9 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                   Lida ao vivo da planilha do Google Sheets. Para corrigir, corrija na planilha.
                 </p>
               ) : member.userId?.startsWith('planilha-') ? null : (
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-start gap-2">
                   <InspectMemberButton member={member} />
+                  <DesativarLiderButton member={member} />
                 </div>
               )}
             </>

@@ -1110,6 +1110,13 @@ function SeloDaLinha({ member }: { member: Member }) {
   return (
     <span className="mt-1 flex flex-wrap items-center gap-1">
       <TierBadge tier={member.tier} className={classe} />
+      {/* Lider desativado pelo ADMIN geral: sem painel e sem link de
+          cadastro. A Equipe dele continua na lista. */}
+      {member.tier === 'LIDER' && member.access === 'DISABLED' ? (
+        <Badge tone="danger" title="Sem acesso ao painel e com o link de cadastro desligado" className={classe}>
+          Desativado
+        </Badge>
+      ) : null}
       {precisaConferir(member) ? (
         <Badge tone="danger" title={avisoDeConferencia(member)} className={classe}>
           Conferir
