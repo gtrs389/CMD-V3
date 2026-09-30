@@ -66,8 +66,17 @@ function zip(arquivos: Record<string, string>): Buffer {
 const esc = (texto: string) =>
   texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** Numero guardado cru, com o formato que a planilha usa para mostra-lo. */
+type Formatado = { n: number; fmt: string };
+type Celula = string | number | Formatado;
+
 /** Abas com linhas; texto vai para sharedStrings, numero vai como numero. */
-function xlsx(abas: { nome: string; linhas: (string | number)[][]; oculta?: boolean }[]): Buffer {
+function xlsx(abas: { nome: string; linhas: Celula[][]; oculta?: boolean }[]): Buffer {
+  const formatos: string[] = [];
+  const estilo = (fmt: string) => {
+    if (!formatos.includes(fmt)) formatos.push(fmt);
+    return formatos.indexOf(fmt) + 1; // o estilo 0 e o padrao, sem formato
+  };
   const compartilhados: string[] = [];
   const indice = (texto: string) => {
     const achado = compartilhados.indexOf(texto);
@@ -87,7 +96,9 @@ function xlsx(abas: { nome: string; linhas: (string | number)[][]; oculta?: bool
             .map((valor, c) =>
               valor === ''
                 ? ''
-                : typeof valor === 'number'
+                : typeof valor === 'object'
+                  ? `<c r="${letra(c)}${r + 1}" s="${estilo(valor.fmt)}"><v>${valor.n}</v></c>`
+                  : typeof valor === 'number'
                   ? `<c r="${letra(c)}${r + 1}"><v>${valor}</v></c>`
                   : `<c r="${letra(c)}${r + 1}" t="s"><v>${indice(valor)}</v></c>`,
             )
@@ -114,6 +125,13 @@ function xlsx(abas: { nome: string; linhas: (string | number)[][]; oculta?: bool
       .map((_, n) => `<Relationship Id="rId${n + 1}" Type="ws" Target="worksheets/sheet${n + 1}.xml"/>`)
       .join('') +
     '</Relationships>';
+  arquivos['xl/styles.xml'] =
+    '<?xml version="1.0"?><styleSheet>' +
+    `<numFmts count="${formatos.length}">` +
+    formatos.map((fmt, i) => `<numFmt numFmtId="${164 + i}" formatCode="${esc(fmt)}"/>`).join('') +
+    '</numFmts><cellXfs><xf numFmtId="0"/>' +
+    formatos.map((_, i) => `<xf numFmtId="${164 + i}" applyNumberFormat="1"/>`).join('') +
+    '</cellXfs></styleSheet>';
   arquivos['xl/sharedStrings.xml'] =
     '<?xml version="1.0"?><sst>' + compartilhados.map((t) => `<si><t>${esc(t)}</t></si>`).join('') + '</sst>';
 
@@ -197,7 +215,8 @@ vi.mock('@/lib/supabase/storage', () => ({
   signedUrls: async (caminhos: unknown[]) => caminhos.map(() => null),
 }));
 
-const { lerXlsx } = await import('@/lib/server/xlsx');
+const { aplicarFormatoDeDigitos, lerXlsx } = await import('@/lib/server/xlsx');
+const { conferirDaLinha } = await import('@/lib/domain/csv-import');
 const { mapOverview, placeMembers } = await import('@/lib/server/map-location.service');
 const { chaveDoNome, idDaPlanilha, lerAbaDoSheets, planejarPlanilha } = await import(
   '@/lib/domain/planilha-do-sheets'
@@ -558,5 +577,108 @@ describe('as escolas do mapa contam a Equipe da planilha', () => {
     const mapa = await mapOverview(OFICIAL);
     expect(mapa.pollingPlaces).toEqual([]);
     expect(escritas).toEqual([]);
+  });
+});
+
+describe('o que a planilha MOSTRA, e não o número cru', () => {
+  it('título guardado como número com formato "0000 0000 0000" não perde o zero do começo', () => {
+    // Exatamente a linha da planilha: 0240 5979 1708 | 010 | 0107
+    const arquivo = xlsx([
+      {
+        nome: 'VIVIAN',
+        linhas: [
+          CABECALHO,
+          [
+            'ADRIANA LIMA DA SILVA',
+            { n: 24059791708, fmt: '0000 0000 0000' },
+            { n: 10, fmt: '000' },
+            { n: 107, fmt: '0000' },
+            82999957261,
+            'VIVIAN BEATRIZ MONTEIRO DE LEMOS SILVA',
+            'ROBERVAL',
+            'SIM',
+          ],
+        ],
+      },
+    ]);
+
+    const [aba] = lerXlsx(arquivo);
+    expect(aba.linhas[1].slice(1, 5)).toEqual(['0240 5979 1708', '010', '0107', '82999957261']);
+
+    const pessoa = lerAbaDoSheets(aba.titulo, aba.linhas).pessoas[0];
+    expect(pessoa.voterId).toBe('024059791708');
+    expect(pessoa.voterId).toHaveLength(12);
+
+    // E nenhuma inconsistencia falsa: o titulo esta inteiro.
+    const linha = {
+      id: 'x',
+      linha: 2,
+      name: pessoa.name,
+      phone: pessoa.phone,
+      voterId: pessoa.voterId,
+      zone: pessoa.zone,
+      section: pessoa.section,
+      district: 'Centro',
+      street: 'Rua A',
+      address: '',
+      photoVerified: pessoa.photoVerified,
+      reference: pessoa.reference,
+    };
+    expect(conferirDaLinha(linha).join(' ')).not.toMatch(/título/i);
+  });
+
+  it('aplica só formatos de dígitos, como a planilha faz na tela', () => {
+    expect(aplicarFormatoDeDigitos('24059791708', '0000 0000 0000')).toBe('0240 5979 1708');
+    expect(aplicarFormatoDeDigitos('320011431716', '0000 0000 0000')).toBe('3200 1143 1716');
+    expect(aplicarFormatoDeDigitos('10', '000')).toBe('010');
+    expect(aplicarFormatoDeDigitos('225', '0000')).toBe('0225');
+    expect(aplicarFormatoDeDigitos('82999957261', '(00) 00000-0000')).toBe('(82) 99995-7261');
+    // Numero maior que o formato: nenhum digito some.
+    expect(aplicarFormatoDeDigitos('12345', '000')).toBe('12345');
+    expect(aplicarFormatoDeDigitos('7', '"Z"00')).toBe('Z07');
+  });
+
+  it('formato que não é só de dígitos não mexe no número', () => {
+    for (const fmt of ['0.00', '#,##0', '0%', 'dd/mm/yyyy', '0.00E+00', '@', 'General']) {
+      expect(aplicarFormatoDeDigitos('24059791708', fmt)).toBeNull();
+    }
+    expect(aplicarFormatoDeDigitos('12.5', '0000')).toBeNull();
+  });
+});
+
+describe('nenhuma inconsistência falsa em quem veio da planilha', () => {
+  const base = { clientId: COPIA, estado: 'AL', cidade: 'Arapiraca' };
+
+  async function diagnostico(linhas: Celula[][], titulo = 'VIVIAN BEATRIZ MONTEIRO DE LEMOS SILVA') {
+    const { diagnosticar, municipioDaOperacao } = await import('@/lib/domain/inconsistencias');
+    const [aba] = lerXlsx(xlsx([{ nome: titulo, linhas: [CABECALHO, ...linhas] }]));
+    const leitura = { em: '2026-09-30T12:00:00.000Z', abas: [lerAbaDoSheets(aba.titulo, aba.linhas)] };
+    const equipe = montarEquipe(leitura, [], base);
+    return {
+      equipe,
+      resultado: diagnosticar(equipe.membros, municipioDaOperacao({ stateUf: 'AL', cities: ['Arapiraca'] })),
+    };
+  }
+
+  it('as linhas da planilha, como estão, não acusam nada — nem no Líder que só existe nela', async () => {
+    const { equipe, resultado } = await diagnostico([
+      ['ADEILTON MOURA LIMA', { n: 32011431716, fmt: '0000 0000 0000' }, { n: 10, fmt: '000' }, { n: 225, fmt: '0000' }, 82996150230, 'VIVIAN BEATRIZ MONTEIRO DE LEMOS SILVA', 'ROBERVAL', 'NÃO'],
+      ['ADRIANA LIMA DA SILVA', { n: 24059791708, fmt: '0000 0000 0000' }, { n: 10, fmt: '000' }, { n: 107, fmt: '0000' }, 82999957261, 'VIVIAN BEATRIZ MONTEIRO DE LEMOS SILVA', 'ROBERVAL', 'SIM'],
+    ]);
+
+    expect(equipe.membros.map((m) => m.voterId)).toEqual([null, '032011431716', '024059791708']);
+    // Nada inventado: a planilha nao tem endereco, a pessoa tambem nao.
+    expect(equipe.membros[1]).toMatchObject({ state: null, city: null, district: null, street: null });
+
+    expect(resultado.incompletos.membros).toEqual([]);
+    expect(resultado.problemas).toEqual([]);
+    expect(resultado.pessoasComProblema).toBe(0);
+  });
+
+  it('o que falta DE VERDADE na planilha continua sendo apontado — e só isso', async () => {
+    const { resultado } = await diagnostico([
+      ['SEM SECAO', { n: 24059791708, fmt: '0000 0000 0000' }, 10, '', 82999957261, 'VIVIAN', '', ''],
+    ]);
+    expect(resultado.incompletos.membros.map((linha) => linha.faltas)).toEqual([['seção']]);
   });
 });

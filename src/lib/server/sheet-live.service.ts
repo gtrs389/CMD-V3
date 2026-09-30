@@ -214,6 +214,11 @@ export interface EquipeDaPlanilha {
    */
   vinculoDoLider: Map<string, string>;
   relatorio: RelatorioDaPlanilha;
+  /**
+   * UF do time: e com ela que a zona + secao da planilha acham a escola no
+   * mapa (numero de zona se repete entre estados). Nao vai para a pessoa.
+   */
+  estado: string;
 }
 
 function pessoaNaTela(
@@ -234,8 +239,10 @@ function pessoaNaTela(
     voterId: pessoa.voterId || null,
     zone: pessoa.zone || null,
     section: pessoa.section || null,
-    state: base.estado,
-    city: base.cidade,
+    // Literal: a planilha nao tem endereco, entao a pessoa tambem nao tem.
+    // Nada de preencher com o municipio do time — seria dado inventado.
+    state: null,
+    city: null,
     district: null,
     street: null,
     relationshipOptionId: null,
@@ -319,6 +326,7 @@ export function montarEquipe(
   return {
     membros,
     vinculoDoLider,
+    estado: base.estado,
     relatorio: {
       ok: true,
       em: leitura.em,
@@ -392,6 +400,7 @@ export async function equipeDaPlanilha(clientId: string): Promise<EquipeDaPlanil
     return {
       membros: [],
       vinculoDoLider: new Map(),
+      estado: cliente.state_uf ?? ENDERECO_FIXO.state,
       relatorio: {
         ok: false,
         em: new Date().toISOString(),

@@ -133,7 +133,93 @@ function numero(bruto: string): string {
   return Number.isInteger(valor) ? BigInt(Math.round(valor)).toString() : String(valor);
 }
 
-function lerAba(xml: string, compartilhados: string[]): string[][] {
+/* -------------------------------------------------------------------------
+   Formato de numero: o que a planilha MOSTRA, e nao o numero cru
+   ------------------------------------------------------------------------- */
+
+/**
+ * Formato de exibicao de cada estilo de celula (`s` na celula -> codigo).
+ *
+ * E isto que guarda os zeros a esquerda. Um titulo digitado como numero e
+ * formatado como "0000 0000 0000" aparece na planilha como "0240 5979 1708",
+ * mas o arquivo guarda o NUMERO 24059791708 — sem o zero, com 11 digitos.
+ * Lido cru, ele vira uma inconsistencia falsa ("titulo com 11 digitos").
+ */
+function lerFormatos(estilos: string | undefined): (string | null)[] {
+  if (!estilos) return [];
+
+  const codigos = new Map<string, string>();
+  for (const [tag] of estilos.matchAll(/<numFmt\b[^>]*\/?>/g)) {
+    const attrs = atributos(tag);
+    if (attrs.numFmtId && attrs.formatCode !== undefined) codigos.set(attrs.numFmtId, attrs.formatCode);
+  }
+
+  const bloco = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(estilos)?.[1] ?? '';
+  const formatos: (string | null)[] = [];
+  for (const [tag] of bloco.matchAll(/<xf\b[^>]*>/g)) {
+    const id = atributos(tag).numFmtId ?? '0';
+    // Formatos embutidos que so tem digitos: 1 = "0". O resto dos embutidos
+    // (decimal, milhar, data, porcentagem) nao muda digito nenhum.
+    formatos.push(codigos.get(id) ?? (id === '1' ? '0' : null));
+  }
+  return formatos;
+}
+
+/**
+ * Aplica um formato SO de digitos ("0000 0000 0000", "000", "(00) 00000-0000")
+ * a um inteiro, como a planilha faz na tela. Formato com qualquer outra coisa
+ * — casa decimal, milhar, porcentagem, data, notacao cientifica — devolve
+ * nulo, e vale o numero como veio.
+ */
+export function aplicarFormatoDeDigitos(inteiro: string, formato: string): string | null {
+  // So a primeira secao (a dos positivos), sem cor nem condicao ([Red], [>0]).
+  const secao = formato.split(';')[0].replace(/\[[^\]]*\]/g, '');
+
+  // Quebra em marcadores de digito e texto literal.
+  const partes: { tipo: 'zero' | 'opcional' | 'texto'; valor: string }[] = [];
+  for (let i = 0; i < secao.length; i += 1) {
+    const c = secao[i];
+    if (c === '0') partes.push({ tipo: 'zero', valor: c });
+    else if (c === '#') partes.push({ tipo: 'opcional', valor: c });
+    else if (c === '"') {
+      const fim = secao.indexOf('"', i + 1);
+      if (fim === -1) return null;
+      partes.push({ tipo: 'texto', valor: secao.slice(i + 1, fim) });
+      i = fim;
+    } else if (c === '\\') {
+      partes.push({ tipo: 'texto', valor: secao[i + 1] ?? '' });
+      i += 1;
+    } else if (' -()/+_'.includes(c)) partes.push({ tipo: 'texto', valor: c });
+    else return null; // . , % E e letras de data: nao e formato de digitos.
+  }
+  const marcadores = partes.filter((parte) => parte.tipo !== 'texto').length;
+  if (marcadores === 0 || !/^\d+$/.test(inteiro)) return null;
+
+  // Da direita para a esquerda, como a planilha: cada marcador pega um
+  // digito; o "0" sem digito vira zero, o "#" sem digito some. Digito que
+  // sobra fica todo no primeiro marcador.
+  let digitos = inteiro === '0' ? '' : inteiro;
+  const saida: string[] = [];
+  let restantes = marcadores;
+  for (let i = partes.length - 1; i >= 0; i -= 1) {
+    const parte = partes[i];
+    if (parte.tipo === 'texto') {
+      saida.unshift(parte.valor);
+      continue;
+    }
+    restantes -= 1;
+    if (restantes === 0) {
+      saida.unshift(digitos || (parte.tipo === 'zero' ? '0' : ''));
+      digitos = '';
+    } else if (digitos) {
+      saida.unshift(digitos.slice(-1));
+      digitos = digitos.slice(0, -1);
+    } else if (parte.tipo === 'zero') saida.unshift('0');
+  }
+  return saida.join('');
+}
+
+function lerAba(xml: string, compartilhados: string[], formatos: (string | null)[] = []): string[][] {
   const linhas: string[][] = [];
 
   for (const [, atributosDaLinha, conteudo] of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>/g)) {
@@ -150,7 +236,12 @@ function lerAba(xml: string, compartilhados: string[]): string[][] {
       else if (attrs.t === 'inlineStr') valor = textoDe(corpo);
       else if (attrs.t === 'b') valor = v === '1' ? 'VERDADEIRO' : 'FALSO';
       else if (attrs.t === 'str' || attrs.t === 'e') valor = decodificar(v ?? '');
-      else if (v !== undefined) valor = numero(decodificar(v));
+      else if (v !== undefined) {
+        valor = numero(decodificar(v));
+        // Numero com formato de digitos: vale o que a planilha mostra.
+        const formato = attrs.s !== undefined ? formatos[Number(attrs.s)] : null;
+        if (formato) valor = aplicarFormatoDeDigitos(valor, formato) ?? valor;
+      }
 
       while (celulas.length < coluna) celulas.push('');
       celulas[coluna] = valor.trim();
@@ -178,6 +269,7 @@ export function lerXlsx(dados: Buffer): AbaDaPlanilha[] {
       nome === 'xl/workbook.xml' ||
       nome === 'xl/_rels/workbook.xml.rels' ||
       nome === 'xl/sharedStrings.xml' ||
+      nome === 'xl/styles.xml' ||
       nome.startsWith('xl/worksheets/'),
   );
 
@@ -193,6 +285,8 @@ export function lerXlsx(dados: Buffer): AbaDaPlanilha[] {
     alvos.set(attrs.Id, alvo.replace(/\/\.\//g, '/'));
   }
 
+  const formatos = lerFormatos(arquivos.get('xl/styles.xml')?.toString('utf8'));
+
   const compartilhados: string[] = [];
   const textos = arquivos.get('xl/sharedStrings.xml')?.toString('utf8') ?? '';
   for (const [, si] of textos.matchAll(/<si>([\s\S]*?)<\/si>/g)) compartilhados.push(textoDe(si));
@@ -204,7 +298,7 @@ export function lerXlsx(dados: Buffer): AbaDaPlanilha[] {
     const caminho = attrs.id ? alvos.get(attrs.id) : undefined;
     const xml = caminho ? arquivos.get(caminho)?.toString('utf8') : undefined;
     if (!xml) continue;
-    abas.push({ titulo: (attrs.name ?? '').trim(), linhas: lerAba(xml, compartilhados) });
+    abas.push({ titulo: (attrs.name ?? '').trim(), linhas: lerAba(xml, compartilhados, formatos) });
   }
 
   return abas;

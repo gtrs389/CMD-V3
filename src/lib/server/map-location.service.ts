@@ -659,17 +659,13 @@ async function escolasDaPlanilha(
   );
   if (comSecao.length === 0) return { pessoas: [], semLocal: 0 };
 
-  // Uma consulta por estado, com todas as zonas dele.
-  const porEstado = new Map<string, Member[]>();
-  for (const member of comSecao) {
-    const uf = (member.state ?? '').toUpperCase();
-    porEstado.set(uf, [...(porEstado.get(uf) ?? []), member]);
-  }
-
+  // Uma consulta so, com todas as zonas, na UF do time: a planilha nao tem
+  // estado, e numero de zona se repete entre estados.
   const pessoas: PessoaDaPlanilhaNaEscola[] = [];
   let semLocal = 0;
-  for (const [uf, membros] of porEstado) {
-    const locais = await pollingPlacesOfZones(uf, membros.map((member) => member.zone));
+  {
+    const membros = comSecao;
+    const locais = await pollingPlacesOfZones(planilha.estado, membros.map((member) => member.zone));
     for (const member of membros) {
       const place = pollingPlaceIn(locais, member.zone, member.section);
       if (!place || place.latitude === null || place.longitude === null) {

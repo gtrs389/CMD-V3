@@ -885,6 +885,17 @@ versão mais recente na hora.
   não responder, a lista do time continua abrindo, sem a Equipe da planilha,
   e o cartão diz por quê.
 
+**Literal, como a planilha mostra.** Número guardado com formato de exibição
+vale pelo que aparece na tela: um título digitado como número e formatado
+"0000 0000 0000" aparece como "0240 5979 1708" — e é assim que entra, com o
+zero do começo (o número cru, 24059791708, teria 11 dígitos e viraria uma
+inconsistência falsa). Nada é inventado: a planilha não tem endereço, então a
+pessoa não tem estado, município, bairro nem rua. E só se cobra dela o que a
+planilha traz — título, zona, seção e telefone; do Líder que só existe na
+planilha, nada (ela só traz o nome dele). Acesso ao painel e origem do
+cadastro também não se aplicam. O que vier errado de verdade na planilha
+continua apontado.
+
 **Como o sistema lê:** o Google exporta a planilha inteira como .xlsx por um
 endereço público, e o servidor lê todas as abas dali (`src/lib/server/xlsx.ts`,
 sem biblioteca nova). Por isso a planilha precisa estar compartilhada como
