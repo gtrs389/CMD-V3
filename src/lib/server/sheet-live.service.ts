@@ -27,16 +27,17 @@ import { badRequest, notFound } from './http';
  * tabela nenhuma. Quem atualiza a planilha ve a mudanca no sistema sem
  * importar nada.
  *
- * Para nao ir ao Google a cada clique, a leitura fica guardada na memoria do
- * servidor por ate UM MINUTO (`LEITURA_VALE_MS`). "Ler agora" ignora essa
- * guarda e le na hora.
+ * SEMPRE A VERSAO ATUAL. Nenhuma leitura e reaproveitada de uma requisicao
+ * para outra: editou a planilha e atualizou a pagina, a pagina mostra a
+ * planilha editada. (Havia uma guarda de um minuto por servidor — e em
+ * producao cada rota roda no seu proprio servidor, entao a lista do time
+ * podia mostrar a planilha velha mesmo depois de "Ler agora".) So pedidos
+ * que chegam JUNTOS, no mesmo instante, dividem a mesma ida ao Google.
  *
  * Cada aba e um Lider. O Lider que a planilha "cria" (aba sem Lider com
  * aquele nome no time) tambem so existe na tela.
  */
 
-/** Por quanto tempo uma leitura da planilha e reaproveitada. */
-export const LEITURA_VALE_MS = 60_000;
 /** Tamanho maximo do arquivo baixado. Uma planilha de mutirao fica muito abaixo. */
 const LIMITE_DO_ARQUIVO = 25 * 1024 * 1024;
 
@@ -57,10 +58,9 @@ interface Leitura {
 }
 
 /* -------------------------------------------------------------------------
-   Leitura do Google, com a guarda de um minuto
+   Leitura do Google, sempre a versao atual
    ------------------------------------------------------------------------- */
 
-const guardadas = new Map<string, { quando: number; leitura: Leitura }>();
 const emAndamento = new Map<string, Promise<Leitura>>();
 
 async function baixar(id: string): Promise<Buffer> {
@@ -71,6 +71,8 @@ async function baixar(id: string): Promise<Buffer> {
     resposta = await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`, {
       redirect: 'follow',
       cache: 'no-store',
+      // Pede ao Google e a qualquer intermediario a versao de agora.
+      headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
       signal: AbortSignal.timeout(30_000),
     });
   } catch {
@@ -104,34 +106,25 @@ async function lerDoGoogle(id: string): Promise<Leitura> {
   };
 }
 
-/** A planilha, do Google ou da guarda de um minuto. */
+/**
+ * A planilha como esta no Google AGORA.
+ *
+ * Pedidos que chegam juntos (a lista e o mapa da mesma pagina) dividem a
+ * mesma ida ao Google. "Ler agora" (`naHora`) nunca pega carona numa leitura
+ * que ja estava em andamento: ela pode ter comecado antes da edicao.
+ */
 export async function lerPlanilha(url: string, opcoes: { naHora?: boolean } = {}): Promise<Leitura> {
   const id = idDaPlanilha(url);
   if (!id) throw badRequest('Link da planilha inválido.');
 
-  const guardada = guardadas.get(id);
-  if (!opcoes.naHora && guardada && Date.now() - guardada.quando < LEITURA_VALE_MS) {
-    return guardada.leitura;
-  }
-
-  // Duas telas pedindo ao mesmo tempo: uma ida ao Google so.
   const andamento = emAndamento.get(id);
-  if (andamento) return andamento;
+  if (andamento && !opcoes.naHora) return andamento;
 
-  const promessa = lerDoGoogle(id)
-    .then((leitura) => {
-      guardadas.set(id, { quando: Date.now(), leitura });
-      return leitura;
-    })
-    .finally(() => emAndamento.delete(id));
+  const promessa = lerDoGoogle(id).finally(() => {
+    if (emAndamento.get(id) === promessa) emAndamento.delete(id);
+  });
   emAndamento.set(id, promessa);
   return promessa;
-}
-
-/** Esquece a leitura guardada (link trocado, planilha desligada). */
-function esquecer(url: string | null | undefined): void {
-  const id = url ? idDaPlanilha(url) : null;
-  if (id) guardadas.delete(id);
 }
 
 /* -------------------------------------------------------------------------
@@ -173,7 +166,7 @@ export async function updateSheetSettings(
   clientId: string,
   input: { enabled: boolean; url: string },
 ): Promise<void> {
-  const atual = await requireCopy(clientId);
+  await requireCopy(clientId);
 
   const texto = input.url.trim();
   const id = texto ? idDaPlanilha(texto) : null;
@@ -190,7 +183,6 @@ export async function updateSheetSettings(
     { sheet_sync_enabled: input.enabled, sheet_url: id ? enderecoLimpo(id) : null },
     'id',
   );
-  esquecer(atual.sheet_url);
 }
 
 /* -------------------------------------------------------------------------
@@ -213,6 +205,11 @@ export interface EquipeDaPlanilha {
    * a Equipe dele usa para apontar para ele.
    */
   vinculoDoLider: Map<string, string>;
+  /**
+   * Lider do banco -> a linha dele na propria aba. O que estiver preenchido
+   * nela vale na tela (`aplicarLinhaDoLider`), sem gravar nada.
+   */
+  dadosDoLider: Map<string, PessoaDaAba>;
   relatorio: RelatorioDaPlanilha;
   /**
    * UF do time: e com ela que a zona + secao da planilha acham a escola no
@@ -286,6 +283,7 @@ export function montarEquipe(
 
   const membros: Member[] = [];
   const vinculoDoLider = new Map<string, string>();
+  const dadosDoLider = new Map<string, PessoaDaAba>();
   const lideresEncontrados: string[] = [];
   const lideresCriados: string[] = [];
   let pessoas = 0;
@@ -300,12 +298,24 @@ export function montarEquipe(
       tag = lider.tag;
       vinculo = lider.userId ?? `${PREFIXO_DA_PLANILHA}lider-${lider.memberId}`;
       if (!lider.userId) vinculoDoLider.set(lider.memberId, vinculo);
+      if (grupo.linhaDoLider) dadosDoLider.set(lider.memberId, grupo.linhaDoLider);
     } else {
       vinculo = `${PREFIXO_DA_PLANILHA}lider-${chaveDoNome(grupo.lider.name).replace(/ /g, '-')}`;
       lideresCriados.push(grupo.lider.name);
       membros.push({
         ...pessoaNaTela(
-          { name: grupo.lider.name, phone: '', voterId: '', zone: '', section: '', reference: '', photoVerified: '' },
+          // Com a linha dele na aba, o Lider mostra o que ela diz.
+          {
+            ...(grupo.linhaDoLider ?? {
+              phone: '',
+              voterId: '',
+              zone: '',
+              section: '',
+              reference: '',
+              photoVerified: '',
+            }),
+            name: grupo.lider.name,
+          },
           vinculo,
           contexto,
           { vinculo, name: grupo.lider.name, tag: null },
@@ -326,6 +336,7 @@ export function montarEquipe(
   return {
     membros,
     vinculoDoLider,
+    dadosDoLider,
     estado: base.estado,
     relatorio: {
       ok: true,
@@ -337,6 +348,26 @@ export function montarEquipe(
       abasIgnoradas: plano.abasIgnoradas,
       linhasIgnoradas: plano.linhasIgnoradas,
     },
+  };
+}
+
+/**
+ * O Lider do banco com o que a linha dele na planilha diz — SO na tela.
+ *
+ * Vale o que estiver PREENCHIDO na planilha: corrigir o titulo do Lider na
+ * aba dele corrige o titulo dele aqui. Celula vazia nao apaga o que o banco
+ * tem. Nada e gravado.
+ */
+export function aplicarLinhaDoLider(member: Member, linha: PessoaDaAba): Member {
+  const verificado = verificadoPorFotoParaGravar(linha.photoVerified);
+  return {
+    ...member,
+    phone: linha.phone || member.phone,
+    voterId: linha.voterId || member.voterId,
+    zone: linha.zone || member.zone,
+    section: linha.section || member.section,
+    reference: linha.reference || member.reference,
+    photoVerified: verificado ?? member.photoVerified,
   };
 }
 
@@ -400,6 +431,7 @@ export async function equipeDaPlanilha(clientId: string): Promise<EquipeDaPlanil
     return {
       membros: [],
       vinculoDoLider: new Map(),
+      dadosDoLider: new Map(),
       estado: cliente.state_uf ?? ENDERECO_FIXO.state,
       relatorio: {
         ok: false,
@@ -416,7 +448,7 @@ export async function equipeDaPlanilha(clientId: string): Promise<EquipeDaPlanil
   }
 }
 
-/** O que o cartão da planilha mostra. `naHora` ignora a guarda de um minuto. */
+/** O que o cartão da planilha mostra. `naHora` nao pega carona em leitura em andamento. */
 export async function statusDaPlanilha(
   clientId: string,
   opcoes: { naHora?: boolean } = {},

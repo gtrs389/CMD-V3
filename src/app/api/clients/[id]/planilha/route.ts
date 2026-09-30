@@ -10,8 +10,8 @@ import { getClient } from '@/lib/server/client.service';
  * ADMIN geral, e so em time duplicado — o servico recusa qualquer outro.
  *
  *   GET    le a planilha (ao vivo) e diz o que ela tem: Lideres reconhecidos,
- *          criados, pessoas e o que ficou de fora. `?agora=1` ignora a guarda
- *          de um minuto e vai ao Google na hora.
+ *          criados, pessoas e o que ficou de fora. `?agora=1` vai ao Google
+ *          sem pegar carona numa leitura ja em andamento.
  *   PATCH  liga/desliga e troca o link. So isso e gravado no banco.
  *
  * Nenhuma das duas grava dado da planilha: ela e lida, nunca importada.

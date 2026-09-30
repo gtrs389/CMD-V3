@@ -466,13 +466,69 @@ describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
     expect(escritas).toEqual([]);
   });
 
-  it('dentro de um minuto reaproveita a leitura; "Ler agora" vai ao Google de novo', async () => {
+  it('editou a planilha e atualizou a página: a página mostra a planilha editada, na hora', async () => {
+    const antes = (await equipeDaPlanilha(COPIA))!;
+    expect(antes.membros.find((m) => m.name === 'João Lima')?.voterId).toBeNull();
+
+    // Alguem corrige o titulo do Joao na planilha...
+    arquivoDoGoogle = xlsx([
+      {
+        nome: 'FELIX SILVA TARGINO',
+        linhas: [CABECALHO, ['João Lima', { n: 24059791708, fmt: '0000 0000 0000' }, 10, 147, '82988887777', '', '', '']],
+      },
+    ]);
+
+    // ...e a proxima leitura comum (nao "Ler agora") ja traz o titulo novo.
+    const depois = (await equipeDaPlanilha(COPIA))!;
+    expect(depois.membros.find((m) => m.name === 'João Lima')?.voterId).toBe('024059791708');
+    expect(escritas).toEqual([]);
+  });
+
+  it('nenhuma leitura é reaproveitada de uma requisição para outra; só pedidos simultâneos dividem', async () => {
     const url = 'https://docs.google.com/spreadsheets/d/1OutraPlanilhaParaOCache';
     await lerPlanilha(url);
     await lerPlanilha(url);
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
-    await lerPlanilha(url, { naHora: true });
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+
+    await Promise.all([lerPlanilha(url), lerPlanilha(url)]);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
+
+    // "Ler agora" nunca pega carona numa leitura que ja estava em andamento.
+    await Promise.all([lerPlanilha(url), lerPlanilha(url, { naHora: true })]);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(5);
+  });
+
+  it('a linha do próprio Líder na aba dele vale para os dados dele na tela', async () => {
+    arquivoDoGoogle = xlsx([
+      {
+        nome: 'FELIX SILVA TARGINO',
+        linhas: [
+          CABECALHO,
+          ['Félix Silva Targino', { n: 24059791708, fmt: '0000 0000 0000' }, 10, 147, '82911112222', '', 'Pastor', 'SIM'],
+          ['Maria Souza', '', '', '', '', '', '', ''],
+        ],
+      },
+    ]);
+    const equipe = (await equipeDaPlanilha(COPIA))!;
+
+    // Nao vira Equipe dele mesmo...
+    expect(equipe.membros.map((m) => m.name)).toEqual(['Maria Souza']);
+    // ...vira os dados dele.
+    const linha = equipe.dadosDoLider.get('cp-lider')!;
+    const { aplicarLinhaDoLider } = await import('@/lib/server/sheet-live.service');
+    const lider = aplicarLinhaDoLider(
+      { voterId: '111', zone: '1', section: '1', phone: '82900000000', reference: null, photoVerified: null } as never,
+      linha,
+    );
+    expect(lider).toMatchObject({
+      voterId: '024059791708',
+      zone: '10',
+      section: '147',
+      phone: '82911112222',
+      reference: 'Pastor',
+      photoVerified: true,
+    });
+    expect(escritas).toEqual([]);
   });
 
   it('Líder do banco sem usuário ainda liga com a Equipe dele pela tela', () => {

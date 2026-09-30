@@ -35,7 +35,7 @@ import {
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { demoClientIds, withoutDemoClients } from './demo-scope';
 import { sheetVisibilityFilter } from './sheet-visibility';
-import { equipeDaPlanilha, type EquipeDaPlanilha } from './sheet-live.service';
+import { aplicarLinhaDoLider, equipeDaPlanilha, type EquipeDaPlanilha } from './sheet-live.service';
 import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
@@ -438,7 +438,11 @@ export async function listMembersByClient(clientId: string): Promise<Member[]> {
 function juntarComPlanilha(membros: Member[], planilha: EquipeDaPlanilha): Member[] {
   const ligados = membros.map((membro) => {
     const vinculo = planilha.vinculoDoLider.get(membro.id);
-    return vinculo && !membro.userId ? { ...membro, userId: vinculo } : membro;
+    const linha = planilha.dadosDoLider.get(membro.id);
+    // A linha do Lider na aba dele vale na tela: corrigido na planilha,
+    // corrigido aqui.
+    const comPlanilha = linha ? aplicarLinhaDoLider(membro, linha) : membro;
+    return vinculo && !comPlanilha.userId ? { ...comPlanilha, userId: vinculo } : comPlanilha;
   });
   return [...ligados, ...planilha.membros];
 }

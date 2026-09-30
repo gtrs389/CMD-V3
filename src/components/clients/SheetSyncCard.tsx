@@ -36,7 +36,7 @@ export function SheetSyncCard({ client }: { client: Client }) {
   const ativa = Boolean(config?.enabled && config.url);
   const mudou = ligada !== (config?.enabled ?? false) || link.trim() !== (config?.url ?? '');
 
-  /** O que a planilha tem agora. `naHora` ignora a guarda de um minuto do servidor. */
+  /** O que a planilha tem agora. `naHora` nao pega carona em leitura ja em andamento. */
   const ler = useCallback(
     async (naHora: boolean) => {
       setLendo(true);
@@ -146,8 +146,8 @@ export function SheetSyncCard({ client }: { client: Client }) {
 
       {ativa ? (
         <p className="mt-2 text-xs text-ink-500">
-          A lista do time lê a planilha quando é aberta, com no máximo 1 minuto de atraso. “Ler
-          agora” busca a versão mais recente na hora.
+          A lista do time lê a planilha do Google toda vez que é aberta: editou a planilha,
+          atualize a página. “Ler agora” mostra aqui o resumo da versão atual.
         </p>
       ) : null}
 
