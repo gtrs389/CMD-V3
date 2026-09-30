@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Member, Recruiter } from '@/lib/types';
+import { registroParaPdf } from '@/lib/domain/repetidos-pdf';
 import {
   cadastrosIncompletos,
   cadastrosRepetidos,
@@ -196,6 +197,12 @@ describe('problemas de cada ficha', () => {
     const equipe = pessoa({ tier: 'EQUIPE', access: 'NO_PHONE' });
     const demo = pessoa({ tier: 'LIDER', recruitedBy: MARINA, access: 'DEMO_NO_ACCESS' });
     expect(problemasDasFichas([equipe, demo], PALMEIRA).some((p) => p.tipo === 'lider-sem-acesso')).toBe(false);
+  });
+
+  it('no PDF dos repetidos, o Líder desativado sai com a etiqueta — e só o Líder', () => {
+    expect(registroParaPdf(pessoa({ tier: 'LIDER', access: 'DISABLED' }), true).nivel).toBe('Líder desativado');
+    expect(registroParaPdf(pessoa({ tier: 'LIDER', access: 'ACTIVE' }), true).nivel).toBe('Líder');
+    expect(registroParaPdf(pessoa({ tier: 'EQUIPE', access: 'DISABLED' }), false).nivel).toBe('Equipe');
   });
 
   it('Líder desativado pelo ADMIN é decisão, e não inconsistência', () => {

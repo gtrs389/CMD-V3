@@ -34,7 +34,12 @@ export function registroParaPdf(member: Member, primeiro: boolean): RegistroRepe
   return {
     id: member.id,
     nome: member.name,
-    nivel: member.tier === 'LIDER' ? 'Líder' : 'Equipe',
+    nivel:
+      member.tier === 'LIDER'
+        ? member.access === 'DISABLED'
+          ? 'Líder desativado'
+          : 'Líder'
+        : 'Equipe',
     cadastradoEm: member.createdAt,
     como: member.source === 'invite' ? 'Pelo link' : 'Pelo painel',
     ondeMora: [member.district, member.street].filter(Boolean).join(' · '),

@@ -13,7 +13,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { matchesSearch } from '@/lib/utils/text';
 import { Spinner } from './Spinner';
@@ -26,9 +26,10 @@ export interface DropdownOption {
 
 export interface DropdownProps {
   id?: string;
-  value: string;
+  /** Escolha atual. No modo `multiple`, as marcadas vem de `multiple`. */
+  value?: string;
   options: DropdownOption[];
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   /** Texto da caixa enquanto nada foi escolhido. */
   placeholder?: string;
   disabled?: boolean;
@@ -38,6 +39,11 @@ export interface DropdownProps {
   invalid?: boolean;
   /** Caixa destacada: um filtro fora do padrao, visivel de longe. */
   highlighted?: boolean;
+  /**
+   * Varias escolhas de uma vez: cada clique marca ou desmarca, e a lista
+   * fica aberta. `resumo` e o texto da caixa (ex.: "3 líderes").
+   */
+  multiple?: { selected: string[]; onToggle: (value: string) => void; resumo: string };
   searchPlaceholder?: string;
   /** Abaixo deste total a busca nao aparece: a lista ja cabe na tela. */
   searchThreshold?: number;
@@ -77,7 +83,7 @@ interface Posicao {
 export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dropdown(
   {
     id,
-    value,
+    value = '',
     options,
     onChange,
     placeholder = 'Selecione',
@@ -86,6 +92,7 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
     loading = false,
     invalid = false,
     highlighted = false,
+    multiple,
     searchPlaceholder = 'Pesquisar...',
     searchThreshold = 8,
     className,
@@ -111,7 +118,11 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
   const [posicao, setPosicao] = useState<Posicao | null>(null);
 
   const bloqueado = disabled || loading;
-  const escolhida = options.find((option) => option.value === value) ?? null;
+  const estaMarcada = (option: DropdownOption) =>
+    multiple ? multiple.selected.includes(option.value) : option.value === value;
+  const escolhida = multiple
+    ? { value: '', label: multiple.resumo }
+    : (options.find((option) => option.value === value) ?? null);
   const comBusca = options.length >= searchThreshold;
 
   const filtradas = useMemo(
@@ -128,13 +139,17 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
   function abrir() {
     if (bloqueado) return;
     setTerm('');
-    setAtivo(Math.max(0, options.findIndex((option) => option.value === value)));
+    setAtivo(Math.max(0, options.findIndex(estaMarcada)));
     setOpen(true);
   }
 
   function escolher(option: DropdownOption | undefined) {
     if (!option || option.disabled) return;
-    if (option.value !== value) onChange(option.value);
+    if (multiple) {
+      multiple.onToggle(option.value);
+      return;
+    }
+    if (option.value !== value) onChange?.(option.value);
     fechar(true);
   }
 
@@ -340,6 +355,7 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
               ref={listRef}
               id={listId}
               role="listbox"
+              aria-multiselectable={multiple ? true : undefined}
               tabIndex={-1}
               aria-labelledby={ariaLabelledby}
               aria-label={ariaLabelledby ? undefined : ariaLabel}
@@ -351,7 +367,7 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
                 <li className="px-3 py-3 text-sm text-ink-500">Nenhum resultado.</li>
               ) : (
                 filtradas.map((option, indice) => {
-                  const selecionada = option.value === value;
+                  const selecionada = estaMarcada(option);
                   return (
                     <li
                       key={`${option.value}-${indice}`}
@@ -373,7 +389,18 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
                         option.disabled && 'cursor-not-allowed opacity-45',
                       )}
                     >
-                      {option.label}
+                      {multiple ? (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'mr-2.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
+                            selecionada ? 'border-accent-600 bg-accent-600 text-white' : 'border-line-strong bg-surface',
+                          )}
+                        >
+                          {selecionada ? <Check className="size-3" strokeWidth={3} /> : null}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 flex-1">{option.label}</span>
                     </li>
                   );
                 })
