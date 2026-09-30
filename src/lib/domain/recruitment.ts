@@ -66,3 +66,16 @@ export function recruiterOptions(members: Pick<Member, 'recruitedBy'>[]): Recrui
     (a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'),
   );
 }
+
+/**
+ * As mesmas opcoes, em ordem alfabetica pelo nome — para achar um Lider
+ * pelo nome numa lista longa. Quem nao tem origem conhecida fica no fim:
+ * nao e um nome.
+ */
+export function recruiterOptionsAlfabeticas(members: Pick<Member, 'recruitedBy'>[]): RecruiterOption[] {
+  return recruiterOptions(members).sort(
+    (a, b) =>
+      Number(a.key === NO_RECRUITER_KEY) - Number(b.key === NO_RECRUITER_KEY) ||
+      a.label.localeCompare(b.label, 'pt-BR', { sensitivity: 'base', numeric: true }),
+  );
+}

@@ -392,6 +392,14 @@ textarea {
   border-radius: 4px;
 }
 
+/* Lista suspensa (`Dropdown`): o foco e o proprio halo azul da caixa e da
+   busca. Sem esta excecao, o contorno geral somava um segundo anel e
+   quadrava os cantos arredondados. */
+.dropdown-foco:focus-visible {
+  outline: none;
+  border-radius: revert-layer;
+}
+
 /* ==========================================================================
    UTILITARIOS
    ========================================================================== */

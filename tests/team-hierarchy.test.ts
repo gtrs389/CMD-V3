@@ -13,6 +13,7 @@ import {
   RECRUITED_BY_LABEL,
   recruiterKey,
   recruiterOptions,
+  recruiterOptionsAlfabeticas,
   recruiterText,
   UNKNOWN_RECRUITER,
 } from '@/lib/domain/recruitment';
@@ -269,6 +270,21 @@ describe('rótulo "Cadastrado por"', () => {
     // Recrutador excluido continua agrupado pelo snapshot, nao some da lista.
     const semUsuario = recruiterKey({ recruitedBy: { ...joaoRecruiter, userId: null } });
     expect(semUsuario).toBe('nome:João Silva:EQUIPE');
+  });
+
+  it('em Inconsistências, os responsáveis vêm em ordem alfabética', () => {
+    const membros = [
+      { recruitedBy: { ...joaoRecruiter, userId: 'z', name: 'Zélia' } },
+      { recruitedBy: null },
+      { recruitedBy: marinaRecruiter },
+      { recruitedBy: joaoRecruiter },
+      { recruitedBy: joaoRecruiter },
+      { recruitedBy: { ...joaoRecruiter, userId: 'a', name: 'ana Paula' } },
+    ] as Pick<Member, 'recruitedBy'>[];
+
+    const nomes = recruiterOptionsAlfabeticas(membros).map((opcao) => opcao.label.split(' · ')[0]);
+    expect(nomes.slice(0, 4)).toEqual(['ana Paula', 'João Silva', marinaRecruiter.name, 'Zélia']);
+    expect(recruiterOptionsAlfabeticas(membros).at(-1)?.key).toBe(NO_RECRUITER_KEY);
   });
 });
 

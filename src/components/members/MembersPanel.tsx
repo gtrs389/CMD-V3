@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { SearchInput } from '@/components/ui/SearchInput';
@@ -1073,34 +1074,25 @@ function FiltroEmCaixa({
 }) {
   const ligado = valor !== padrao;
   return (
-    <label
-      htmlFor={id}
-      className={cn(
-        'flex min-w-0 flex-col gap-1 rounded-control border px-3 pt-2 pb-1.5 transition-colors',
-        ligado ? 'border-accent-500 bg-accent-50' : 'border-line bg-surface hover:border-line-strong',
-      )}
-    >
+    <div className="flex min-w-0 flex-col gap-1.5">
       <span
+        id={`${id}-rotulo`}
         className={cn(
-          'text-[0.625rem] font-semibold tracking-[0.08em] uppercase',
+          'truncate text-[0.6875rem] font-semibold tracking-[0.08em] uppercase',
           ligado ? 'text-accent-700' : 'text-ink-500',
         )}
       >
         {rotulo}
       </span>
-      <select
+      <Dropdown
         id={id}
+        aria-labelledby={`${id}-rotulo`}
         value={valor}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-sm font-medium text-ink-900 outline-none focus-visible:ring-0"
-      >
-        {opcoes.map((opcao) => (
-          <option key={opcao.valor} value={opcao.valor}>
-            {opcao.rotulo}
-          </option>
-        ))}
-      </select>
-    </label>
+        highlighted={ligado}
+        onChange={onChange}
+        options={opcoes.map((opcao) => ({ value: opcao.valor, label: opcao.rotulo }))}
+      />
+    </div>
   );
 }
 
