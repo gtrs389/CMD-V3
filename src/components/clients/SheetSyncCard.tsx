@@ -14,7 +14,9 @@ import { Switch } from '@/components/ui/Switch';
 import { useToast } from '@/components/ui/Toast';
 
 /**
- * Planilha do Google Sheets do time duplicado (migration 052).
+ * Planilha do Google Sheets do time duplicado (migration 052). Mora numa
+ * janela aberta pelo menu de acoes do time ("⋯" > "Planilha do Google
+ * Sheets"), e nao na visao geral: e configuracao do time, e nao conteudo.
  *
  * A planilha e LIDA AO VIVO, nunca importada: o banco guarda so o
  * interruptor e o link. Ligada, a Equipe de cada Lider desta copia e a que
@@ -87,16 +89,13 @@ export function SheetSyncCard({ client }: { client: Client }) {
   if (!config) return null;
 
   return (
-    <section
-      aria-labelledby="planilha-do-sheets"
-      className="mb-3 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5"
-    >
+    <section aria-label="Planilha do Google Sheets">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 id="planilha-do-sheets" className="flex items-center gap-2 text-base font-semibold text-ink-900">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
             <FileSpreadsheet aria-hidden="true" className="size-4 text-success-600" />
-            Planilha do Google Sheets
-          </h2>
+            Equipe dos Líderes lida da planilha
+          </p>
           <p className="mt-1 max-w-2xl text-[0.8125rem] leading-relaxed text-ink-500">
             Ligada, a Equipe de cada Líder desta cópia é <strong>lida ao vivo da planilha</strong> —{' '}
             <strong>uma aba por Líder</strong>, reconhecido pelo nome da aba. Nada da planilha é

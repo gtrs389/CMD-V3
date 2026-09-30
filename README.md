@@ -845,8 +845,8 @@ acesso na cópia, exatamente como no oficial.
 
 ### Planilha do Google Sheets na cópia
 
-Na aba **Visão geral** do time duplicado, o ADMIN geral encontra o cartão
-**Planilha do Google Sheets**: um interruptor e o link. Ligado, a **Equipe de
+No menu de ações do time duplicado (**⋯** ao lado de "Editar time"), o ADMIN
+geral abre **Planilha do Google Sheets**: um interruptor e o link. Ligado, a **Equipe de
 cada Líder da cópia vem da planilha, lida ao vivo**.
 
 **Nada da planilha é gravado no Supabase.** O banco guarda só o interruptor e
