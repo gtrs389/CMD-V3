@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -29,6 +29,7 @@ import { problemaDoTelefone, problemaDoTitulo } from '@/lib/domain/conferencia';
 import { digitosDoTelefone, maskPhone } from '@/lib/utils/phone';
 import { baixarCsv } from '@/lib/utils/download';
 import { cn } from '@/lib/utils/cn';
+import { holdDataChanged } from '@/lib/repositories';
 import { Button } from '@/components/ui/Button';
 import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields';
 import { Badge } from '@/components/ui/Badge';
@@ -181,29 +182,37 @@ export function SpreadsheetImportModal({
     let gravadas = 0;
     let falhas = 0;
 
-    // Uma de cada vez, de proposito: o servidor confere telefone repetido
-    // contra o que JA esta no time, e duas gravacoes ao mesmo tempo poderiam
-    // passar duas pessoas com o mesmo numero.
-    for (const linha of prontas) {
-      try {
-        await salvar({ ...linha, ...(enderecos[linha.id] ?? SEM_ENDERECO) });
-        gravadas += 1;
-        setSituacoes((atual) => ({ ...atual, [linha.id]: { estado: 'salva' } }));
-      } catch (falha) {
-        falhas += 1;
-        setSituacoes((atual) => ({
-          ...atual,
-          [linha.id]: {
-            estado: 'falhou',
-            motivo:
-              falha instanceof Error && falha.message ? falha.message : 'Não foi possível cadastrar.',
-          },
-        }));
-      }
-      setProgresso((valor) => valor + 1);
-    }
+    // As telas abertas recarregam UMA vez, no fim, e nao a cada pessoa: com
+    // centenas de linhas, recarregar a lista inteira do time a cada gravacao
+    // empilhava consultas no servidor enquanto ele ainda gravava.
+    const soltar = holdDataChanged();
 
-    setSalvando(false);
+    try {
+      // Uma de cada vez, de proposito: o servidor confere telefone repetido
+      // contra o que JA esta no time, e duas gravacoes ao mesmo tempo poderiam
+      // passar duas pessoas com o mesmo numero.
+      for (const linha of prontas) {
+        try {
+          await salvar({ ...linha, ...(enderecos[linha.id] ?? SEM_ENDERECO) });
+          gravadas += 1;
+          setSituacoes((atual) => ({ ...atual, [linha.id]: { estado: 'salva' } }));
+        } catch (falha) {
+          falhas += 1;
+          setSituacoes((atual) => ({
+            ...atual,
+            [linha.id]: {
+              estado: 'falhou',
+              motivo:
+                falha instanceof Error && falha.message ? falha.message : 'Não foi possível cadastrar.',
+            },
+          }));
+        }
+        setProgresso((valor) => valor + 1);
+      }
+    } finally {
+      soltar();
+      setSalvando(false);
+    }
 
     if (gravadas > 0) {
       toast.success(
@@ -218,6 +227,18 @@ export function SpreadsheetImportModal({
       );
     }
   }
+
+  // Fechar a aba no meio interromperia o lote: quem ja foi gravado fica, o
+  // resto nao entra. O navegador pergunta antes.
+  useEffect(() => {
+    if (!salvando) return;
+    const segurar = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', segurar);
+    return () => window.removeEventListener('beforeunload', segurar);
+  }, [salvando]);
 
   function fechar() {
     if (salvando) return;

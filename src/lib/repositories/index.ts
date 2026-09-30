@@ -39,4 +39,4 @@ export {
   type PublicSurveyOutcome,
   type SurveySubmissionInput,
 } from './http/survey';
-export { subscribeToData, notifyDataChanged } from './events';
+export { subscribeToData, notifyDataChanged, holdDataChanged } from './events';
