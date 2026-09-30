@@ -10,8 +10,11 @@ import {
   Copy,
   FileText,
   Link2,
+  ShieldCheck,
   Trophy,
   TrendingUp,
+  UserCheck,
+  Users,
   UsersRound,
 } from 'lucide-react';
 import type { Client, FieldOption, Member } from '@/lib/types';
@@ -138,6 +141,28 @@ export function ClientOverviewPanel({
   const restantes = total - stats.recentes.length;
 
   /**
+   * A estrutura do time em tres numeros: quem administra, os Lideres e os
+   * Liderados (a Equipe dos Lideres). Sai da MESMA lista da pagina — no time
+   * duplicado com a planilha do Sheets ligada, ja com a Equipe lida dela.
+   */
+  const estrutura = useMemo(() => {
+    const lideres = members.filter((member) => member.tier === 'LIDER');
+    const liderados = members.length - lideres.length;
+    const comEquipe = new Set(
+      members
+        .filter((member) => member.tier === 'EQUIPE' && member.recruitedBy?.userId)
+        .map((member) => member.recruitedBy!.userId as string),
+    );
+    return {
+      administradores: client.people.length,
+      lideres: lideres.length,
+      lideresComEquipe: lideres.filter((lider) => lider.userId && comEquipe.has(lider.userId)).length,
+      liderados,
+      media: lideres.length > 0 ? Math.round((liderados / lideres.length) * 10) / 10 : 0,
+    };
+  }, [members, client.people.length]);
+
+  /**
    * Ranking dos Lideres.
    *
    * As linhas sao os LIDERES deste time — todos eles, inclusive quem ainda
@@ -184,6 +209,51 @@ export function ClientOverviewPanel({
 
   return (
     <div className="space-y-3">
+      {/* Estrutura do time. Quem e da Equipe ve so a propria lista: para
+          ele estes totais nao seriam os do time, e nao aparecem. */}
+      {mostrarRanking ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard
+            icon={<ShieldCheck aria-hidden="true" className="size-[1.125rem]" />}
+            tone="brand"
+            label="Administradores"
+            value={estrutura.administradores}
+            hint={
+              estrutura.administradores === 1
+                ? 'administra o time e cadastra os Líderes'
+                : 'administram o time e cadastram os Líderes'
+            }
+            onOpen={() => onOpenTab('equipe')}
+          />
+          <StatCard
+            icon={<UserCheck aria-hidden="true" className="size-[1.125rem]" />}
+            tone="accent"
+            label="Líderes"
+            value={estrutura.lideres}
+            hint={
+              estrutura.lideres === 0
+                ? 'nenhum Líder ainda'
+                : `${formatNumber(estrutura.lideresComEquipe)} com Equipe · ${formatNumber(
+                    estrutura.lideres - estrutura.lideresComEquipe,
+                  )} sem ninguém ainda`
+            }
+            onOpen={() => onOpenTab('equipe')}
+          />
+          <StatCard
+            icon={<Users aria-hidden="true" className="size-[1.125rem]" />}
+            tone="success"
+            label="Liderados"
+            value={estrutura.liderados}
+            hint={
+              estrutura.lideres === 0
+                ? 'a Equipe dos Líderes'
+                : `média de ${formatNumber(estrutura.media)} por Líder`
+            }
+            onOpen={() => onOpenTab('equipe')}
+          />
+        </div>
+      ) : null}
+
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <TeamCard
           total={total}
@@ -397,7 +467,7 @@ function StatCard({
   onOpen,
 }: {
   icon: React.ReactNode;
-  tone: 'accent' | 'success';
+  tone: 'accent' | 'success' | 'brand';
   label: string;
   value: number;
   badge?: string;
@@ -416,7 +486,9 @@ function StatCard({
         className={
           tone === 'accent'
             ? 'flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-50 text-accent-600'
-            : 'flex size-9 shrink-0 items-center justify-center rounded-control bg-success-50 text-success-600'
+            : tone === 'brand'
+              ? 'flex size-9 shrink-0 items-center justify-center rounded-control bg-brand-50 text-brand-700'
+              : 'flex size-9 shrink-0 items-center justify-center rounded-control bg-success-50 text-success-600'
         }
       >
         {icon}
