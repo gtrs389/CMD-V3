@@ -631,6 +631,15 @@ export const demoAccessSchema = z.object({ enabled: z.boolean() });
  * Duplicar um time (migration 049). O nome e opcional: vazio, a copia se
  * chama "<nome do oficial> (duplicado)".
  */
+/**
+ * Planilha do Google Sheets do time duplicado (migration 052): o
+ * interruptor e o link. O link e conferido e limpo no servidor.
+ */
+export const sheetSettingsSchema = z.object({
+  enabled: z.boolean(),
+  url: z.string().trim().max(500).default(''),
+});
+
 export const teamDuplicateSchema = z.object({
   name: trimmed(120).optional().default(''),
 });

@@ -843,6 +843,43 @@ sistema) e verificação ainda pendente (a cópia pagaria de novo uma consulta
 que o oficial já pagou). Líder com telefone incompleto ou repetido fica sem
 acesso na cópia, exatamente como no oficial.
 
+### Planilha do Google Sheets na cópia
+
+Na aba **Visão geral** do time duplicado, o ADMIN geral encontra o cartão
+**Planilha do Google Sheets**: um interruptor e o link. Ligado, a **Equipe de
+cada Líder da cópia vem da planilha**.
+
+- **Uma aba por Líder.** O nome da aba é comparado com os Líderes da cópia sem
+  diferença de maiúscula, acento ou espaço ("FELIX SILVA TARGINO" = "Félix
+  Silva Targino"). Se não bater, tenta o nome da coluna LÍDER. Se nem assim, o
+  sistema **cria o Líder**, com o nome completo da coluna LÍDER (ou o da aba,
+  quando a coluna vier vazia).
+- **Colunas, nesta ordem:** NOME, TITULO, ZONA, SEÇÃO, TELEFONE, LÍDER,
+  REFERÊNCIA, VERIFICADO POR FOTO. Com a linha de cabeçalho, a leitura vai pelo
+  nome da coluna; sem ela, pela ordem. Aba oculta e linha sem nome ficam de
+  fora; a linha do próprio Líder na aba dele não vira Equipe dele mesmo.
+- **Ligada**, a Equipe que estava no banco da cópia fica **escondida**, e a da
+  planilha aparece — na lista, no painel do Líder, no mapa e no relatório.
+  **Desligada**, o que veio da planilha some e a cópia volta a ser o que era.
+  Ligar e desligar **não apaga nada**.
+- Cada leitura é uma fotografia completa: o que veio da leitura anterior sai e
+  o que está na planilha agora entra. Ela acontece ao ligar, no botão **Ler
+  agora**, e sozinha ao abrir o time quando a última passou de 5 minutos. O
+  cartão mostra os Líderes reconhecidos, os criados, quantas pessoas entraram
+  e o que ficou de fora, com o motivo.
+
+**Como o sistema lê:** o Google exporta a planilha inteira como .xlsx por um
+endereço público, e o servidor lê todas as abas dali (`src/lib/server/xlsx.ts`,
+sem biblioteca nova). Por isso a planilha precisa estar compartilhada como
+**"Qualquer pessoa com o link" — Leitor**. O servidor só baixa de
+`docs.google.com`, montando o endereço a partir do id da planilha.
+
+**O oficial continua intocável, e o banco garante:** o interruptor só liga em
+cópia (`check`), e uma linha vinda da planilha só entra em cópia (gatilho). A
+leitura apaga somente as linhas `from_sheet` da própria cópia. Conferido em
+`tests/planilha-do-sheets.test.ts`. Requer a migration
+`052_planilha_do_sheets.sql` (depois da 049, 050 e 051).
+
 Time DEMO não é duplicado. O sinal `is_copy` é imutável: o gatilho da
 migration recusa transformar um time oficial em cópia ou uma cópia em
 oficial.

@@ -219,6 +219,9 @@ export async function duplicateTeam(
         'is_copy',
         'copy_of_client_id',
         'copy_of_name',
+        // Trava de uma leitura da planilha do Sheets em andamento (052): e da
+        // copia de origem, e nao desta.
+        'sheet_sync_lock_at',
       ]),
       name: copyName(origem.name, input.name),
       is_copy: true,

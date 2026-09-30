@@ -46,6 +46,7 @@ import { BannerTagModal } from './BannerTagModal';
 import { DemoBadge } from './DemoBadge';
 import { CopyBadge } from './CopyBadge';
 import { DuplicateTeamDialog } from './DuplicateTeamDialog';
+import { SheetSyncCard } from './SheetSyncCard';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
@@ -578,6 +579,10 @@ export function ClientDetailView({
               </span>
             </button>
           ) : null}
+
+          {/* Planilha do Google Sheets: so no time duplicado, so para o ADMIN
+              geral (migration 052). */}
+          {client.isCopy && user?.role === 'ADMIN' ? <SheetSyncCard client={client} /> : null}
 
           <ClientOverviewPanel
             client={client}

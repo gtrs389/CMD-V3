@@ -33,6 +33,7 @@ import { deleteRows, inFilter, insertOne, selectOne, selectRows, updateRows } fr
 import { signedUrls } from '@/lib/supabase/storage';
 import { decryptJson } from './crypto';
 import { withoutDemoClients } from './demo-scope';
+import { sheetVisibilityFilter } from './sheet-visibility';
 import { lookupPlace, MapLookupError } from './serpapi.service';
 import { findPollingPlace, pollingPlaceAddress } from './polling-place.service';
 
@@ -575,7 +576,9 @@ async function clientLinks(clientId: string): Promise<MemberLocationRow[]> {
     // O filtro do PostgREST precisa do operador: sem o `eq.` o banco recusa a
     // consulta e o mapa do time nao abre.
     select: 'id',
-    filters: { client_id: `eq.${clientId}` },
+    // Mesmo recorte da lista do time: no duplicado com planilha do Sheets
+    // (052), o mapa mostra quem a lista mostra.
+    filters: { client_id: `eq.${clientId}`, ...(await sheetVisibilityFilter(clientId)) },
   });
 
   if (clientMembers.length === 0) return [];

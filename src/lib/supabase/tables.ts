@@ -192,6 +192,15 @@ export interface ClientRow {
   /** Nome do time de onde a copia saiu, no momento da duplicacao. */
   copy_of_name?: string | null;
   /**
+   * Planilha do Google Sheets do time duplicado (migration 052). Ausentes em
+   * banco sem a migration.
+   */
+  sheet_sync_enabled?: boolean;
+  sheet_url?: string | null;
+  sheet_synced_at?: string | null;
+  sheet_sync_report?: unknown;
+  sheet_sync_lock_at?: string | null;
+  /**
    * Confirmacao de CPF e titulo pela FonteData neste time (migration 041).
    *
    * Em false nenhuma consulta e feita para os cadastros dele — nem durante o
@@ -383,6 +392,8 @@ export interface MemberRow {
   photo_verified?: boolean | null;
   /** "REFERÊNCIA" (migration 051). Ausente em banco sem a migration. */
   reference?: string | null;
+  /** Veio da planilha do Google Sheets do time duplicado (migration 052). */
+  from_sheet?: boolean;
   created_at: string;
   updated_at: string;
 }

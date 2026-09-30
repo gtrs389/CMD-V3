@@ -34,6 +34,7 @@ import {
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { demoClientIds, withoutDemoClients } from './demo-scope';
+import { sheetVisibilityFilter } from './sheet-visibility';
 import { createPendingLocation, invalidateLocation } from './map-location.service';
 import { toMember, toRecruiter } from './mappers';
 import { badRequest, forbidden, notFound } from './http';
@@ -413,7 +414,9 @@ export async function listAllMembers(): Promise<Member[]> {
 export async function listMembersByClient(clientId: string): Promise<Member[]> {
   const rows = await selectRows<MemberRow>(TABLES.members, {
     select: '*',
-    filters: { client_id: `eq.${clientId}` },
+    // Time duplicado com planilha do Sheets (052): quem aparece depende do
+    // interruptor. Em time oficial o filtro e vazio.
+    filters: { client_id: `eq.${clientId}`, ...(await sheetVisibilityFilter(clientId)) },
     order: 'created_at.desc',
   });
   return assembleMany(rows);
@@ -431,7 +434,11 @@ export async function listMembersRecruitedBy(
 ): Promise<Member[]> {
   const rows = await selectRows<MemberRow>(TABLES.members, {
     select: '*',
-    filters: { client_id: `eq.${clientId}`, recruited_by_user_id: `eq.${userId}` },
+    filters: {
+      client_id: `eq.${clientId}`,
+      recruited_by_user_id: `eq.${userId}`,
+      ...(await sheetVisibilityFilter(clientId)),
+    },
     order: 'created_at.desc',
   });
   return assembleMany(rows);
