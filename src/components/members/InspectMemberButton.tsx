@@ -40,6 +40,9 @@ export function InspectMemberButton({ member }: InspectMemberButtonProps) {
   const [confirmando, setConfirmando] = useState(false);
 
   if (!can('session.impersonate') || member.access === 'DEMO_NO_ACCESS') return null;
+  // Lider desativado de proposito: o botao "Reativar Lider", ao lado, e o
+  // unico caminho de volta. Entrar no painel nao religa por tabela.
+  if (member.tier === 'LIDER' && member.access === 'DISABLED') return null;
 
   // Sem celular que sirva de entrada: nao ha painel para liberar. Em vez de
   // sumir, o botao diz o que falta e leva a correcao.

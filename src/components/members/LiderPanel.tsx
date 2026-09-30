@@ -123,6 +123,14 @@ export function LiderPanel({
               <span className={cn('rounded-pill px-2.5 py-1 text-xs font-semibold', TOM_DO_SELO[p.selo])} title={SELO_EXPLICACAO[p.selo]}>
                 {p.selo}
               </span>
+              {lider.access === 'DISABLED' && !lider.fromSheet ? (
+                <span
+                  className="rounded-pill bg-danger-50 px-2.5 py-1 text-xs font-semibold text-danger-700"
+                  title="Sem acesso ao painel e com o link de cadastro desligado"
+                >
+                  Desativado
+                </span>
+              ) : null}
             </div>
             <p className="mt-0.5 text-sm text-ink-500">
               {lider.phone ? formatPhone(lider.phone) : 'Sem telefone'} · Líder desde {formatLongDate(lider.createdAt)}

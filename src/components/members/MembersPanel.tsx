@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import {
   BarChart3,
+  Check,
   Download,
   Eye,
   FileSpreadsheet,
@@ -15,11 +16,7 @@ import {
 } from 'lucide-react';
 import type { Client, Member, TeamTier } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
-import {
-  RECRUITED_BY_LABEL,
-  recruiterKey,
-  recruiterOptions,
-} from '@/lib/domain/recruitment';
+import { recruiterKey, recruiterOptions } from '@/lib/domain/recruitment';
 import { montarCsvDaEquipe, nomeDoArquivo } from '@/lib/domain/csv-export';
 import { byNewest, formatDate } from '@/lib/utils/date';
 import { baixarCsv } from '@/lib/utils/download';
@@ -29,7 +26,6 @@ import { avisoDeConferencia, precisaConferir } from '@/lib/domain/conferencia';
 import { buscarPessoa, type CampoDaBusca } from '@/lib/domain/busca-de-pessoas';
 import { opcoesDeTag, passaNoFiltroDeTag, SEM_TAG, tagDaPessoa } from '@/lib/domain/tag-do-lider';
 import { cn } from '@/lib/utils/cn';
-import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -49,6 +45,22 @@ import { TierBadge } from './TierBadge';
 import { TagDoLider } from './TagDoLider';
 import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
 import { verificadoPorFotoParaGravar } from '@/lib/domain/csv-import';
+import {
+  SEM_REFERENCIA,
+  SEM_ZONA,
+  contarFotos,
+  opcoesDeReferencia,
+  opcoesDeZona,
+  passaNaFoto,
+  passaNaOrigem,
+  passaNaReferencia,
+  passaNaZona,
+  situacaoDaFoto,
+  tituloLegivel,
+  type FiltroDeFoto,
+  type FiltroDeOrigem,
+} from '@/lib/domain/filtros-da-equipe';
+import { problemaDoTitulo } from '@/lib/domain/conferencia';
 
 interface MembersPanelProps {
   client: Client;
@@ -157,6 +169,12 @@ function ListaDoTime({
   const [situacao, setSituacao] = useState<'todas' | 'conferir' | 'incompleto' | 'em-ordem'>(
     'todas',
   );
+  // Filtros dos dados da planilha: REFERÊNCIA, VERIFICADO POR FOTO, zona e
+  // de onde a pessoa veio (planilha do Sheets ou sistema).
+  const [referencia, setReferencia] = useState('todas');
+  const [foto, setFoto] = useState<FiltroDeFoto>('todos');
+  const [zona, setZona] = useState('todas');
+  const [origem, setOrigem] = useState<FiltroDeOrigem>('todas');
   // "Ver a Equipe na lista" pedido depois da lista montada: aplicado na
   // renderizacao, comparando com o ultimo pedido visto — o filtro certo ja
   // sai na primeira pintura.
@@ -168,6 +186,10 @@ function ListaDoTime({
       setNivel('todos');
       setTag('todas');
       setSituacao('todas');
+      setReferencia('todas');
+      setFoto('todos');
+      setZona('todas');
+      setOrigem('todas');
       setTerm('');
     }
   }
@@ -186,6 +208,14 @@ function ListaDoTime({
   // A tag escolhida sumiu (o Lider perdeu a tag): o filtro volta a "todas",
   // em vez de deixar a lista vazia sem motivo visivel.
   if (tag !== 'todas' && !tags.some((opcao) => opcao.valor === tag)) setTag('todas');
+
+  const referencias = useMemo(() => opcoesDeReferencia(ordered), [ordered]);
+  const zonas = useMemo(() => opcoesDeZona(ordered), [ordered]);
+  const fotos = useMemo(() => contarFotos(ordered), [ordered]);
+  const daPlanilha = useMemo(() => ordered.filter((m) => m.fromSheet).length, [ordered]);
+  // A opcao escolhida sumiu da lista (a planilha mudou): volta a "todas".
+  if (referencia !== 'todas' && !referencias.some((o) => o.valor === referencia)) setReferencia('todas');
+  if (zona !== 'todas' && !zonas.some((o) => o.valor === zona)) setZona('todas');
 
   /**
    * A lista filtrada, e ONDE a busca achou cada pessoa.
@@ -206,6 +236,10 @@ function ListaDoTime({
       if (situacao === 'em-ordem' && (precisaConferir(member) || cadastroIncompleto(member))) {
         return false;
       }
+      if (!passaNaReferencia(member, referencia)) return false;
+      if (!passaNaFoto(member, foto)) return false;
+      if (!passaNaZona(member, zona)) return false;
+      if (!passaNaOrigem(member, origem)) return false;
 
       const resultado = buscarPessoa(member, term);
       if (!resultado.achou) return false;
@@ -216,7 +250,7 @@ function ListaDoTime({
       return true;
     });
     return { filtered, achadoEm };
-  }, [ordered, term, recruiter, nivel, tag, situacao]);
+  }, [ordered, term, recruiter, nivel, tag, situacao, referencia, foto, zona, origem]);
 
   /** Contagens de cada botao de filtro, sobre o time inteiro. */
   const contagens = useMemo(
@@ -246,6 +280,37 @@ function ListaDoTime({
           limpar: () => setSituacao('todas'),
         }
       : null,
+    referencia !== 'todas'
+      ? {
+          id: 'referencia',
+          rotulo:
+            referencia === SEM_REFERENCIA
+              ? 'Sem referência'
+              : `Ref. ${referencias.find((o) => o.valor === referencia)?.rotulo ?? ''}`,
+          limpar: () => setReferencia('todas'),
+        }
+      : null,
+    foto !== 'todos'
+      ? {
+          id: 'foto',
+          rotulo: foto === 'sim' ? 'Verificado por foto' : foto === 'nao' ? 'Não verificado por foto' : 'Foto não informada',
+          limpar: () => setFoto('todos'),
+        }
+      : null,
+    zona !== 'todas'
+      ? {
+          id: 'zona',
+          rotulo: zona === SEM_ZONA ? 'Sem zona' : `Zona ${zona}`,
+          limpar: () => setZona('todas'),
+        }
+      : null,
+    origem !== 'todas'
+      ? {
+          id: 'origem',
+          rotulo: origem === 'planilha' ? 'Da planilha' : 'Do sistema',
+          limpar: () => setOrigem('todas'),
+        }
+      : null,
     recruiter !== 'todos'
       ? {
           id: 'responsavel',
@@ -261,6 +326,10 @@ function ListaDoTime({
     setTag('todas');
     setSituacao('todas');
     setRecruiter('todos');
+    setReferencia('todas');
+    setFoto('todos');
+    setZona('todas');
+    setOrigem('todas');
   }
 
   /** Clicar na tag de uma linha filtra a lista por ela. */
@@ -486,60 +555,130 @@ function ListaDoTime({
         {/* Na pagina do Lider a lista inteira e a Equipe dele, e ele ve so
             o basico: os filtros sao de quem ve o time todo. */}
         {!somenteBasico ? (
-          <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
-            <Segmentos
-              rotulo="Nível"
-              valor={nivel}
-              onChange={(v) => setNivel(v as 'todos' | TeamTier)}
-              opcoes={[
-                { valor: 'todos', rotulo: 'Todos', quantidade: ordered.length },
-                { valor: 'LIDER', rotulo: 'Líderes', quantidade: contagens.lideres },
-                { valor: 'EQUIPE', rotulo: 'Equipe', quantidade: contagens.equipe },
-              ]}
-            />
-            <Segmentos
-              rotulo="Situação"
-              valor={situacao}
-              onChange={(v) => setSituacao(v as typeof situacao)}
-              opcoes={[
-                { valor: 'todas', rotulo: 'Todas' },
-                { valor: 'conferir', rotulo: 'Para conferir', quantidade: contagens.conferir, tom: 'danger' },
-                { valor: 'incompleto', rotulo: 'Incompletos', quantidade: contagens.incompleto, tom: 'warning' },
-                { valor: 'em-ordem', rotulo: 'Em ordem', quantidade: contagens.emOrdem, tom: 'success' },
-              ]}
-            />
-            {tags.length > 0 ? (
-              <Select
-                id="filtro-tag"
-                aria-label="Filtrar pela tag do Líder"
-                value={tag}
-                onChange={(event) => setTag(event.target.value)}
-                className="lg:max-w-56"
-              >
-                <option value="todas">Tag: todas</option>
-                {tags.map((opcao) => (
-                  <option key={opcao.valor} value={opcao.valor}>
-                    {opcao.rotulo} ({opcao.quantidade})
-                  </option>
-                ))}
-              </Select>
-            ) : null}
-            {responsaveis.length > 1 ? (
-              <Select
-                id="filtro-responsavel"
-                aria-label={`Filtrar por ${RECRUITED_BY_LABEL.toLowerCase()}`}
-                value={recruiter}
-                onChange={(event) => setRecruiter(event.target.value)}
-                className="lg:max-w-64"
-              >
-                <option value="todos">{RECRUITED_BY_LABEL}: qualquer um</option>
-                {responsaveis.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label} ({option.count})
-                  </option>
-                ))}
-              </Select>
-            ) : null}
+          <div className="space-y-3">
+            {/* Os dois recortes que mais se usa, sempre a vista. */}
+            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
+              <Segmentos
+                rotulo="Nível"
+                valor={nivel}
+                onChange={(v) => setNivel(v as 'todos' | TeamTier)}
+                opcoes={[
+                  { valor: 'todos', rotulo: 'Todos', quantidade: ordered.length },
+                  { valor: 'LIDER', rotulo: 'Líderes', quantidade: contagens.lideres },
+                  { valor: 'EQUIPE', rotulo: 'Liderados', quantidade: contagens.equipe },
+                ]}
+              />
+              <Segmentos
+                rotulo="Situação"
+                valor={situacao}
+                onChange={(v) => setSituacao(v as typeof situacao)}
+                opcoes={[
+                  { valor: 'todas', rotulo: 'Todas' },
+                  { valor: 'conferir', rotulo: 'Para conferir', quantidade: contagens.conferir, tom: 'danger' },
+                  { valor: 'incompleto', rotulo: 'Incompletos', quantidade: contagens.incompleto, tom: 'warning' },
+                  { valor: 'em-ordem', rotulo: 'Em ordem', quantidade: contagens.emOrdem, tom: 'success' },
+                ]}
+              />
+            </div>
+
+            {/* O resto dos recortes em grade, cada um com o nome em cima e a
+                contagem em cada opcao. So aparece o filtro que tem o que
+                filtrar. */}
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+              {responsaveis.length > 1 ? (
+                <FiltroEmCaixa
+                  id="filtro-responsavel"
+                  rotulo="Líder / quem cadastrou"
+                  valor={recruiter}
+                  padrao="todos"
+                  onChange={setRecruiter}
+                  opcoes={[
+                    { valor: 'todos', rotulo: 'Qualquer um' },
+                    ...responsaveis.map((option) => ({
+                      valor: option.key,
+                      rotulo: `${option.label} (${option.count})`,
+                    })),
+                  ]}
+                />
+              ) : null}
+              {referencias.length > 0 ? (
+                <FiltroEmCaixa
+                  id="filtro-referencia"
+                  rotulo="Referência"
+                  valor={referencia}
+                  padrao="todas"
+                  onChange={setReferencia}
+                  opcoes={[
+                    { valor: 'todas', rotulo: 'Todas' },
+                    ...referencias.map((opcao) => ({
+                      valor: opcao.valor,
+                      rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                    })),
+                  ]}
+                />
+              ) : null}
+              {fotos.sim + fotos.nao > 0 ? (
+                <FiltroEmCaixa
+                  id="filtro-foto"
+                  rotulo="Verificado por foto"
+                  valor={foto}
+                  padrao="todos"
+                  onChange={(v) => setFoto(v as FiltroDeFoto)}
+                  opcoes={[
+                    { valor: 'todos', rotulo: 'Todos' },
+                    { valor: 'sim', rotulo: `Sim (${fotos.sim})` },
+                    { valor: 'nao', rotulo: `Não (${fotos.nao})` },
+                    ...(fotos.sem > 0 ? [{ valor: 'sem', rotulo: `Não informado (${fotos.sem})` }] : []),
+                  ]}
+                />
+              ) : null}
+              {zonas.length > 1 ? (
+                <FiltroEmCaixa
+                  id="filtro-zona"
+                  rotulo="Zona eleitoral"
+                  valor={zona}
+                  padrao="todas"
+                  onChange={setZona}
+                  opcoes={[
+                    { valor: 'todas', rotulo: 'Todas' },
+                    ...zonas.map((opcao) => ({
+                      valor: opcao.valor,
+                      rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                    })),
+                  ]}
+                />
+              ) : null}
+              {tags.length > 0 ? (
+                <FiltroEmCaixa
+                  id="filtro-tag"
+                  rotulo="Tag do Líder"
+                  valor={tag}
+                  padrao="todas"
+                  onChange={setTag}
+                  opcoes={[
+                    { valor: 'todas', rotulo: 'Todas' },
+                    ...tags.map((opcao) => ({
+                      valor: opcao.valor,
+                      rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                    })),
+                  ]}
+                />
+              ) : null}
+              {daPlanilha > 0 ? (
+                <FiltroEmCaixa
+                  id="filtro-origem"
+                  rotulo="Origem"
+                  valor={origem}
+                  padrao="todas"
+                  onChange={(v) => setOrigem(v as FiltroDeOrigem)}
+                  opcoes={[
+                    { valor: 'todas', rotulo: 'Todas' },
+                    { valor: 'planilha', rotulo: `Da planilha (${daPlanilha})` },
+                    { valor: 'sistema', rotulo: `Do sistema (${ordered.length - daPlanilha})` },
+                  ]}
+                />
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -593,97 +732,94 @@ function ListaDoTime({
             {filtered.map((member) => (
               <li key={member.id}>
                 <Card>
-                  <CardBody className="flex items-start gap-3">
-                    <Avatar name={member.name} src={member.photo} size="md" />
-                    <div className="min-w-0 flex-1">
-                      {/* A tag do Lider fica ao lado do nome: no proprio
-                          Lider e em cada pessoa da Equipe dele. */}
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => abrir(member)}
-                          className="block min-w-0 truncate text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
-                        >
-                          {member.name}
-                        </button>
-                        <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
-                      </span>
-                      <AchadoEm campos={achadoEm.get(member.id)} />
-                      <p className="truncate text-sm text-ink-500">
-                        {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
-                      </p>
-                      {member.email ? (
-                        <p className="truncate text-xs text-ink-500">{member.email}</p>
-                      ) : null}
-
-                      {!somenteBasico ? (
-                        <>
-                          {/* No celular a origem fica na propria coluna do cartao:
-                              nada de rolagem horizontal. */}
-                          <RecruitedBy
-                            recruiter={member.recruitedBy}
-                            withLabel
-                            className="mt-1.5"
-                          />
-
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            <TierBadge tier={member.tier} />
-                            <Badge tone="neutral">{formatDate(member.createdAt)}</Badge>
-                            {member.source === 'invite' ? <Badge tone="brand">Via link</Badge> : null}
-                            {/* Cadastro que entrou pela metade — quase sempre
-                                de planilha. A etiqueta e calculada da propria
-                                ficha: completou, ela some. */}
-                            {cadastroIncompleto(member) ? (
-                              <Badge tone="warning" title={avisoDeFaltas(member)}>
-                                Dados incompletos
-                              </Badge>
-                            ) : null}
-                            {/* Preenchido, mas errado: CPF que nao fecha,
-                                titulo com digito a menos. Entrou assim mesmo,
-                                e a etiqueta diz o que conferir. */}
-                            {precisaConferir(member) ? (
-                              <Badge tone="danger" title={avisoDeConferencia(member)}>
-                                Conferir dados
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {member.tier === 'LIDER' && !somenteBasico ? (
-                          <Button size="sm" onClick={() => verPainel(member)}>
-                            <BarChart3 aria-hidden="true" className="size-4" />
-                            Painel do Líder
-                          </Button>
-                        ) : null}
-                        <Button variant="secondary" size="sm" onClick={() => verFicha(member)}>
-                          <Eye aria-hidden="true" className="size-4" />
-                          Ficha
-                        </Button>
-                        {/* Quem veio da planilha do Sheets (052) so existe na
-                            tela: corrige-se na planilha. */}
-                        {member.fromSheet ? (
-                          <Badge tone="success">Da planilha</Badge>
-                        ) : null}
-                        {podeEditar && !member.fromSheet ? (
-                          <Button variant="secondary" size="sm" onClick={() => openEdit(member)}>
-                            <Pencil aria-hidden="true" className="size-4" />
-                            Editar
-                          </Button>
-                        ) : null}
-                        {podeExcluir && !member.fromSheet ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-danger-600 hover:bg-danger-50"
-                            onClick={() => setRemoving(member)}
+                  <CardBody className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Avatar name={member.name} src={member.photo} size="md" />
+                      <div className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => abrir(member)}
+                            className="block min-w-0 truncate text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
                           >
-                            <Trash2 aria-hidden="true" className="size-4" />
-                            Excluir
-                          </Button>
-                        ) : null}
+                            {member.name}
+                          </button>
+                          <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
+                        </span>
+                        {!somenteBasico ? <SeloDaLinha member={member} /> : null}
+                        <AchadoEm campos={achadoEm.get(member.id)} />
+                        <p className="mt-1 truncate text-sm text-ink-500 tabular-nums">
+                          {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
+                        </p>
+                        {member.email ? <p className="truncate text-xs text-ink-500">{member.email}</p> : null}
                       </div>
+                    </div>
+
+                    {!somenteBasico ? (
+                      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-control bg-ink-50 p-2.5 text-xs">
+                        <div className="min-w-0">
+                          <dt className="text-ink-500">Título</dt>
+                          <dd className="mt-0.5">
+                            <TituloDaLinha voterId={member.voterId} />
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-ink-500">Zona · Seção</dt>
+                          <dd className="mt-0.5 font-medium text-ink-900 tabular-nums">
+                            {member.zone || member.section ? `${member.zone ?? '–'} · ${member.section ?? '–'}` : <Vazio />}
+                          </dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-ink-500">Referência</dt>
+                          <dd className="mt-0.5 truncate font-medium text-ink-900">{member.reference || <Vazio />}</dd>
+                        </div>
+                        <div className="min-w-0">
+                          <dt className="text-ink-500">Verificado por foto</dt>
+                          <dd className="mt-0.5">
+                            <FotoDaLinha member={member} comTexto />
+                          </dd>
+                        </div>
+                        <div className="col-span-2 min-w-0">
+                          <dt className="text-ink-500">Líder</dt>
+                          <dd className="mt-0.5">
+                            {member.fromSheet && member.tier === 'LIDER' ? (
+                              <span className="text-ink-700">Aba da planilha</span>
+                            ) : (
+                              <RecruitedBy recruiter={member.recruitedBy} />
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : null}
+
+                    <div className="flex flex-wrap gap-2">
+                      {member.tier === 'LIDER' && !somenteBasico ? (
+                        <Button size="sm" onClick={() => verPainel(member)}>
+                          <BarChart3 aria-hidden="true" className="size-4" />
+                          Painel do Líder
+                        </Button>
+                      ) : null}
+                      <Button variant="secondary" size="sm" onClick={() => verFicha(member)}>
+                        <Eye aria-hidden="true" className="size-4" />
+                        Ficha
+                      </Button>
+                      {podeEditar && !member.fromSheet ? (
+                        <Button variant="secondary" size="sm" onClick={() => openEdit(member)}>
+                          <Pencil aria-hidden="true" className="size-4" />
+                          Editar
+                        </Button>
+                      ) : null}
+                      {podeExcluir && !member.fromSheet ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-danger-600 hover:bg-danger-50"
+                          onClick={() => setRemoving(member)}
+                        >
+                          <Trash2 aria-hidden="true" className="size-4" />
+                          Excluir
+                        </Button>
+                      ) : null}
                     </div>
                   </CardBody>
                 </Card>
@@ -695,88 +831,111 @@ function ListaDoTime({
           <Card className="hidden overflow-hidden lg:block">
             <table className="w-full table-fixed border-collapse text-left text-sm">
               <caption className="sr-only">Integrantes da equipe de {client.name}</caption>
-              <thead className="bg-ink-50 text-xs tracking-wide text-ink-500 uppercase">
-                <tr>
-                  <th scope="col" className={somenteBasico ? 'w-[52%] px-4 py-3 font-medium' : 'w-[28%] px-4 py-3 font-medium'}>
-                    Integrante
-                  </th>
-                  <th scope="col" className={somenteBasico ? 'w-[32%] px-4 py-3 font-medium' : 'w-[18%] px-4 py-3 font-medium'}>
-                    Telefone
-                  </th>
-                  {!somenteBasico ? (
-                    <>
-                      <th scope="col" className="w-[24%] px-4 py-3 font-medium">
-                        {RECRUITED_BY_LABEL}
-                      </th>
-                      <th scope="col" className="w-[14%] px-4 py-3 font-medium">
-                        Cadastro
-                      </th>
-                    </>
-                  ) : null}
-                  <th scope="col" className="w-[16%] px-4 py-3 text-right font-medium">
-                    Ações
-                  </th>
-                </tr>
+              <thead className="border-b border-line bg-ink-50 text-[0.6875rem] tracking-[0.06em] text-ink-500 uppercase">
+                {somenteBasico ? (
+                  <tr>
+                    <th scope="col" className="w-[52%] px-4 py-3 font-semibold">Integrante</th>
+                    <th scope="col" className="w-[32%] px-4 py-3 font-semibold">Telefone</th>
+                    <th scope="col" className="w-[16%] px-4 py-3 text-right font-semibold">Ações</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th scope="col" className="w-[23%] px-4 py-3 font-semibold">Integrante</th>
+                    <th scope="col" className="w-[13%] px-3 py-3 font-semibold">Título</th>
+                    <th scope="col" className="w-[9%] px-3 py-3 font-semibold whitespace-nowrap">Zona/Seção</th>
+                    <th scope="col" className="w-[12%] px-3 py-3 font-semibold">Telefone</th>
+                    <th scope="col" className="w-[15%] px-3 py-3 font-semibold">Líder</th>
+                    <th scope="col" className="w-[12%] px-3 py-3 font-semibold">Referência</th>
+                    <th scope="col" className="w-[5%] px-2 py-3 text-center font-semibold" title="Verificado por foto">
+                      Foto
+                    </th>
+                    <th scope="col" className="w-[11%] px-4 py-3 text-right font-semibold">Ações</th>
+                  </tr>
+                )}
               </thead>
               <tbody className="divide-y divide-line">
                 {filtered.map((member) => (
-                  <tr key={member.id} className="transition-colors hover:bg-ink-50">
+                  <tr key={member.id} className="group transition-colors hover:bg-ink-50/70">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar name={member.name} src={member.photo} size="sm" />
                         <span className="min-w-0">
-                          {/* O nome em uma linha so, inteiro; as etiquetas
-                              embaixo — lado a lado elas cortavam o nome. */}
                           <span className="flex min-w-0 items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => abrir(member)}
-                              className="block min-w-0 truncate text-left font-medium text-ink-900 hover:text-brand-700 hover:underline"
+                              className="block min-w-0 truncate text-left font-semibold text-ink-900 hover:text-brand-700 hover:underline"
                               title={member.tier === 'LIDER' && !somenteBasico ? 'Abrir o painel do Líder' : 'Abrir a ficha'}
                             >
                               {member.name}
                             </button>
                             <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
                           </span>
-                          {!somenteBasico ? (
-                            <span className="mt-1 flex flex-wrap items-center gap-1">
-                              <TierBadge tier={member.tier} className="px-2 py-0.5 text-[0.6875rem]" />
-                              {cadastroIncompleto(member) ? (
-                                <Badge tone="warning" title={avisoDeFaltas(member)} className="px-2 py-0.5 text-[0.6875rem]">
-                                  Incompleto
-                                </Badge>
-                              ) : null}
-                              {precisaConferir(member) ? (
-                                <Badge tone="danger" title={avisoDeConferencia(member)} className="px-2 py-0.5 text-[0.6875rem]">
-                                  Conferir
-                                </Badge>
-                              ) : null}
-                            </span>
-                          ) : null}
-                          {/* E-mail historico: sem endereco a linha some, e
-                              nenhum cadastro novo tem um. */}
+                          {!somenteBasico ? <SeloDaLinha member={member} /> : null}
                           {!somenteBasico && member.email ? (
-                            <span className="block truncate text-xs text-ink-500">
-                              {member.email}
-                            </span>
+                            <span className="block truncate text-xs text-ink-500">{member.email}</span>
                           ) : null}
                           <AchadoEm campos={achadoEm.get(member.id)} />
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-ink-700 tabular-nums">
-                      {member.phone ? formatPhone(member.phone) : '--'}
+                    {!somenteBasico ? (
+                      <>
+                        <td className="px-3 py-3">
+                          <TituloDaLinha voterId={member.voterId} />
+                        </td>
+                        <td className="px-3 py-3 text-ink-700 tabular-nums">
+                          {member.zone || member.section ? (
+                            <span className="whitespace-nowrap">
+                              {member.zone ?? '–'}
+                              <span className="px-1 text-ink-400">·</span>
+                              {member.section ?? '–'}
+                            </span>
+                          ) : (
+                            <Vazio />
+                          )}
+                        </td>
+                      </>
+                    ) : null}
+                    <td className={cn('py-3 text-ink-700 tabular-nums', somenteBasico ? 'px-4' : 'px-3')}>
+                      {member.phone ? <span className="whitespace-nowrap">{formatPhone(member.phone)}</span> : <Vazio />}
                     </td>
                     {!somenteBasico ? (
                       <>
-                        <td className="px-4 py-3">
-                          <RecruitedBy recruiter={member.recruitedBy} />
+                        <td className="px-3 py-3">
+                          {member.fromSheet && member.tier === 'LIDER' ? (
+                            <span className="flex items-center gap-1.5 text-xs text-ink-500">
+                              <FileSpreadsheet aria-hidden="true" className="size-3.5 shrink-0 text-success-600" />
+                              Aba da planilha
+                            </span>
+                          ) : (
+                            <RecruitedBy recruiter={member.recruitedBy} />
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-ink-500">{formatDate(member.createdAt)}</td>
+                        <td className="px-3 py-3">
+                          {member.reference ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const opcao = referencias.find((o) => o.rotulo.toLowerCase() === member.reference!.trim().toLowerCase());
+                                if (opcao) setReferencia(opcao.valor);
+                              }}
+                              title={`Filtrar pela referência ${member.reference}`}
+                              className="block max-w-full truncate rounded-pill bg-ink-100 px-2 py-0.5 text-left text-xs font-medium text-ink-700 transition-colors hover:bg-accent-50 hover:text-accent-700"
+                            >
+                              {member.reference}
+                            </button>
+                          ) : (
+                            <Vazio />
+                          )}
+                        </td>
+                        <td className="px-2 py-3 text-center">
+                          <FotoDaLinha member={member} />
+                        </td>
                       </>
                     ) : null}
                     <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex justify-end gap-0.5">
                         {member.tier === 'LIDER' && !somenteBasico ? (
                           <IconButton
                             label={`Painel do Líder ${member.name}`}
@@ -789,9 +948,6 @@ function ListaDoTime({
                           icon={<Eye className="size-4" />}
                           onClick={() => verFicha(member)}
                         />
-                        {member.fromSheet ? (
-                          <Badge tone="success">Da planilha</Badge>
-                        ) : null}
                         {podeEditar && !member.fromSheet ? (
                           <IconButton
                             label={`Editar ${member.name}`}
@@ -892,5 +1048,153 @@ function Segmentos({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Um filtro de lista: o nome em cima, a escolha embaixo. Ligado (fora do
+ * padrao), a caixa fica destacada — da para ver de longe o que esta
+ * recortando a lista.
+ */
+function FiltroEmCaixa({
+  id,
+  rotulo,
+  valor,
+  padrao,
+  onChange,
+  opcoes,
+}: {
+  id: string;
+  rotulo: string;
+  valor: string;
+  padrao: string;
+  onChange: (valor: string) => void;
+  opcoes: { valor: string; rotulo: string }[];
+}) {
+  const ligado = valor !== padrao;
+  return (
+    <label
+      htmlFor={id}
+      className={cn(
+        'flex min-w-0 flex-col gap-1 rounded-control border px-3 pt-2 pb-1.5 transition-colors',
+        ligado ? 'border-accent-500 bg-accent-50' : 'border-line bg-surface hover:border-line-strong',
+      )}
+    >
+      <span
+        className={cn(
+          'text-[0.625rem] font-semibold tracking-[0.08em] uppercase',
+          ligado ? 'text-accent-700' : 'text-ink-500',
+        )}
+      >
+        {rotulo}
+      </span>
+      <select
+        id={id}
+        value={valor}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-sm font-medium text-ink-900 outline-none focus-visible:ring-0"
+      >
+        {opcoes.map((opcao) => (
+          <option key={opcao.valor} value={opcao.valor}>
+            {opcao.rotulo}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Etiquetas de uma linha: nivel, situacao e de onde a pessoa veio. */
+function SeloDaLinha({ member }: { member: Member }) {
+  const classe = 'px-2 py-0.5 text-[0.6875rem]';
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1">
+      <TierBadge tier={member.tier} className={classe} />
+      {/* Lider desativado pelo ADMIN geral: sem painel e sem link de
+          cadastro. A Equipe dele continua na lista. */}
+      {member.tier === 'LIDER' && member.access === 'DISABLED' ? (
+        <Badge tone="danger" title="Sem acesso ao painel e com o link de cadastro desligado" className={classe}>
+          Desativado
+        </Badge>
+      ) : null}
+      {precisaConferir(member) ? (
+        <Badge tone="danger" title={avisoDeConferencia(member)} className={classe}>
+          Conferir
+        </Badge>
+      ) : null}
+      {cadastroIncompleto(member) ? (
+        <Badge tone="warning" title={avisoDeFaltas(member)} className={classe}>
+          Incompleto
+        </Badge>
+      ) : null}
+      {member.fromSheet ? (
+        <span
+          title="Lida ao vivo da planilha do Google Sheets. Para corrigir, corrija na planilha."
+          className="inline-flex items-center gap-1 rounded-pill bg-success-50 px-2 py-0.5 text-[0.6875rem] font-medium text-success-700"
+        >
+          <FileSpreadsheet aria-hidden="true" className="size-3" />
+          Planilha
+        </span>
+      ) : (
+        <span className="text-[0.6875rem] text-ink-400 tabular-nums" title="Data do cadastro">
+          {formatDate(member.createdAt)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** O titulo como se le no papel; com problema, em vermelho e com o motivo. */
+function TituloDaLinha({ voterId }: { voterId: string | null }) {
+  const legivel = tituloLegivel(voterId);
+  if (!legivel) return <Vazio />;
+  const problema = problemaDoTitulo(voterId);
+  return (
+    <span
+      title={problema ?? undefined}
+      className={cn(
+        'whitespace-nowrap tabular-nums',
+        problema ? 'font-semibold text-danger-600' : 'text-ink-700',
+      )}
+    >
+      {legivel}
+    </span>
+  );
+}
+
+/** VERIFICADO POR FOTO: um sinal so, que se le de relance. */
+function FotoDaLinha({ member, comTexto = false }: { member: Member; comTexto?: boolean }) {
+  const situacao = situacaoDaFoto(member);
+  if (situacao === 'sem') return <Vazio />;
+  const sim = situacao === 'sim';
+  return (
+    <span
+      title={sim ? 'Verificado por foto' : 'Não verificado por foto'}
+      className="inline-flex items-center gap-1.5 font-medium"
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'flex size-5 items-center justify-center rounded-full',
+          sim ? 'bg-success-50 text-success-600' : 'bg-danger-50 text-danger-600',
+        )}
+      >
+        {sim ? <Check className="size-3" strokeWidth={3} /> : <X className="size-3" strokeWidth={3} />}
+      </span>
+      {comTexto ? (
+        <span className={sim ? 'text-success-700' : 'text-danger-600'}>{sim ? 'Sim' : 'Não'}</span>
+      ) : (
+        <span className="sr-only">{sim ? 'Sim' : 'Não'}</span>
+      )}
+    </span>
+  );
+}
+
+/** Campo sem valor: um traco discreto, e nao um buraco na linha. */
+function Vazio() {
+  return (
+    <span className="text-ink-400" aria-label="não informado">
+      —
+    </span>
   );
 }

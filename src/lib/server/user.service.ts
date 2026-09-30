@@ -663,9 +663,11 @@ export async function syncMemberAccess(
   if (phone !== undefined) {
     const valido = phone.length >= 10 ? phone : null;
     if (valido !== user.phone) changes.phone = valido;
-    // Telefone valido devolve o acesso a quem estava bloqueado por
-    // duplicidade ou por falta de numero.
-    if (valido && !user.is_active) changes.is_active = true;
+    // Telefone valido e NOVO devolve o acesso a quem estava bloqueado por
+    // duplicidade ou por falta de numero. Editar a ficha sem mexer no
+    // telefone nao religa ninguem: um Lider desativado de proposito continua
+    // desativado.
+    if (valido && valido !== user.phone && !user.is_active) changes.is_active = true;
   }
 
   if (Object.keys(changes).length === 0) return;

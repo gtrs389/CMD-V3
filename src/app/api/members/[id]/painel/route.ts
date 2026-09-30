@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { requireMemberAccess } from '@/lib/server/guard';
-import { jsonOk, notFound, toErrorResponse } from '@/lib/server/http';
+import { badRequest, jsonOk, notFound, toErrorResponse } from '@/lib/server/http';
 import { grantImpersonation } from '@/lib/server/impersonation.service';
 import { getMember } from '@/lib/server/member.service';
 import { panelLink } from '@/lib/server/public-origin';
@@ -25,6 +25,11 @@ export async function POST(request: NextRequest, ctx: RouteContext<'/api/members
 
     const member = await getMember(id);
     if (!member) throw notFound('Integrante não encontrado.');
+    // Lider desativado de proposito: entrar no painel nao pode religa-lo por
+    // tabela. Reativar e um clique a parte, na ficha.
+    if (member.tier === 'LIDER' && member.access === 'DISABLED') {
+      throw badRequest('Líder desativado. Reative o Líder na ficha para entrar no painel.');
+    }
 
     const userId = await prepararPainelDoIntegrante(member);
     const grant = await grantImpersonation(admin, userId);

@@ -29,6 +29,7 @@ export type CampoDaBusca =
   | 'zona/seção'
   | 'responsável'
   | 'tag'
+  | 'referência'
   | 'e-mail';
 
 export interface ResultadoDaBusca {
@@ -48,6 +49,7 @@ const ORDEM: CampoDaBusca[] = [
   'zona/seção',
   'responsável',
   'tag',
+  'referência',
   'e-mail',
 ];
 
@@ -78,6 +80,8 @@ export function buscarPessoa(member: Member, termo: string): ResultadoDaBusca {
     ['responsável', normalizeSearch(recruiterText(member.recruitedBy))],
     // A tag do Lider acha o Lider e a Equipe inteira dele.
     ['tag', normalizeSearch(tagDaPessoa(member))],
+    // "ROBERVAL", "Irma do pastor": a referencia da planilha tambem acha.
+    ['referência', normalizeSearch(member.reference)],
     ['e-mail', normalizeSearch(member.email)],
   ];
   const numeros: [CampoDaBusca, string][] = [
