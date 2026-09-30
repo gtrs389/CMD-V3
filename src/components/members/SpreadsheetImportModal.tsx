@@ -34,6 +34,7 @@ import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields
 import { Badge } from '@/components/ui/Badge';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 
@@ -515,6 +516,21 @@ export function SpreadsheetImportModal({
                             editar(linha.id, 'section', maskSection(event.target.value))
                           }
                         />
+                      </Field>
+
+                      {/* Coluna "VERIFICADO POR FOTO" da planilha: SIM, NÃO,
+                          ou em branco quando a planilha nao informou. */}
+                      <Field id={campo('foto')} label="Verificado por foto">
+                        <Select
+                          id={campo('foto')}
+                          value={linha.photoVerified}
+                          disabled={bloqueado}
+                          onChange={(event) => editar(linha.id, 'photoVerified', event.target.value)}
+                        >
+                          <option value="">Não informado</option>
+                          <option value="SIM">SIM</option>
+                          <option value="NÃO">NÃO</option>
+                        </Select>
                       </Field>
 
                       {/* O endereco e a mesma cadeia da ficha — Estado,

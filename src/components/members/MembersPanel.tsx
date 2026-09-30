@@ -48,6 +48,7 @@ import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
 import { TagDoLider } from './TagDoLider';
 import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
+import { verificadoPorFotoParaGravar } from '@/lib/domain/csv-import';
 
 interface MembersPanelProps {
   client: Client;
@@ -307,6 +308,7 @@ function ListaDoTime({
     city: string;
     district: string;
     street: string;
+    photoVerified: string;
   }) => {
     const ficha = {
       name: pessoa.name.trim(),
@@ -319,6 +321,8 @@ function ListaDoTime({
       city: pessoa.city || null,
       district: pessoa.district || null,
       street: pessoa.street || null,
+      // "VERIFICADO POR FOTO": SIM = true, NÃO = false, em branco = nulo.
+      photoVerified: verificadoPorFotoParaGravar(pessoa.photoVerified),
     };
 
     if (addForm === 'formulario-2') {

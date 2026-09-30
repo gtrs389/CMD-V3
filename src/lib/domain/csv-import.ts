@@ -49,6 +49,28 @@ export interface LinhaImportada {
   street: string;
   /** A coluna Endereco da planilha antiga, como veio. Vazio na nova. */
   address: string;
+  /** Coluna "VERIFICADO POR FOTO": 'SIM', 'NÃO' ou vazio (nao informado). */
+  photoVerified: VerificadoPorFoto;
+}
+
+export type VerificadoPorFoto = 'SIM' | 'NÃO' | '';
+
+/**
+ * "VERIFICADO POR FOTO" como veio escrito: SIM, Sim, S, X, NÃO, Nao, N...
+ * Qualquer outra coisa conta como nao informado — nunca como um SIM.
+ */
+export function lerVerificadoPorFoto(texto: string): VerificadoPorFoto {
+  const valor = chave(texto);
+  if (['sim', 's', 'x', 'yes', 'y', 'verdadeiro', 'true', '1'].includes(valor)) return 'SIM';
+  if (['nao', 'n', 'no', 'falso', 'false', '0'].includes(valor)) return 'NÃO';
+  return '';
+}
+
+/** O valor que vai para o banco: SIM = true, NÃO = false, vazio = nulo. */
+export function verificadoPorFotoParaGravar(valor: VerificadoPorFoto | string): boolean | null {
+  if (valor === 'SIM') return true;
+  if (valor === 'NÃO') return false;
+  return null;
 }
 
 export interface LeituraDaPlanilha {
@@ -77,7 +99,15 @@ function chave(texto: string): string {
  * "Endereco" a mais e so mais uma coluna ignorada.
  */
 const COLUNAS: Record<
-  'name' | 'phone' | 'voterId' | 'zone' | 'section' | 'district' | 'street' | 'address',
+  | 'name'
+  | 'phone'
+  | 'voterId'
+  | 'zone'
+  | 'section'
+  | 'district'
+  | 'street'
+  | 'address'
+  | 'photoVerified',
   string[]
 > = {
   name: ['nome completo', 'nome', 'nome do integrante', 'integrante'],
@@ -88,6 +118,7 @@ const COLUNAS: Record<
   district: ['bairro', 'localidade', 'comunidade'],
   street: ['rua', 'logradouro', 'avenida'],
   address: ['endereco', 'endereco completo'],
+  photoVerified: ['verificado por foto', 'verificado foto', 'verificacao por foto'],
 };
 
 /**
@@ -341,6 +372,7 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
             street: limpo(valor(bruta, 'street'), 120),
             address: '',
           }),
+      photoVerified: lerVerificadoPorFoto(valor(bruta, 'photoVerified')),
     });
   }
 
@@ -412,8 +444,8 @@ export function faltasDaLinha(linha: LinhaImportada): string[] {
 export const MODELO_SEPARADOR = ';';
 
 export const EXEMPLO_CSV = [
-  'Nome;Telefone;Título;Zona;Seção;Bairro;Rua',
-  'Maria da Silva Souza;82999990001;100000002720;10;147;Jardim Brasil;Rua Brasil Novo, Nº 269',
-  'João Pedro Alves;82988887777;;10;146;Conjunto Brivaldo Medeiros;QJ Nº 11',
-  'Ana Beatriz Lima;82996013641;;10;326;Aldeia;Fazenda Canto',
+  'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;VERIFICADO POR FOTO',
+  'Maria da Silva Souza;82999990001;100000002720;10;147;Jardim Brasil;Rua Brasil Novo, Nº 269;SIM',
+  'João Pedro Alves;82988887777;;10;146;Conjunto Brivaldo Medeiros;QJ Nº 11;NÃO',
+  'Ana Beatriz Lima;82996013641;;10;326;Aldeia;Fazenda Canto;SIM',
 ].join('\r\n');

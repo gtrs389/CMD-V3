@@ -1059,6 +1059,21 @@ O botão **Baixar modelo** entrega o arquivo já no formato novo.
 
 ---
 
+### Coluna VERIFICADO POR FOTO
+
+A planilha aceita a coluna **VERIFICADO POR FOTO**, com `SIM` ou `NÃO` por
+pessoa (maiúscula, minúscula ou sem acento, tanto faz). Em branco, ou qualquer
+outro valor, conta como "não informado" — nunca como SIM. Na conferência, cada
+linha mostra o valor e deixa trocar antes de cadastrar; a ficha da pessoa
+mostra "Verificado por foto: SIM/NÃO". Vale pelos dois caminhos da planilha
+(página do time e painel do Líder). O modelo para baixar já traz a coluna.
+
+Grava em `cmd_members.photo_verified` (`true`, `false` ou nulo) e requer a
+migration `050_verificado_por_foto.sql`. Sem ela, a linha com SIM/NÃO é
+recusada com o nome da migration a executar, em vez de perder o valor calada.
+
+---
+
 ## Estrutura
 
 ```

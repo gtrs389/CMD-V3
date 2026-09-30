@@ -133,6 +133,11 @@ function StandardFields({ member }: { member: Member }) {
     ['Município / Cidade', member.city],
     ['Bairro', member.district],
     ['Rua', member.street],
+    // Coluna da planilha (migration 050). Sem informacao, a linha nao aparece.
+    [
+      'Verificado por foto',
+      member.photoVerified === true ? 'SIM' : member.photoVerified === false ? 'NÃO' : null,
+    ],
   ];
 
   const preenchidas = linhas.filter(([, valor]) => Boolean(valor));

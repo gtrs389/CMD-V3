@@ -29,6 +29,7 @@ import {
   insertRows,
   selectOne,
   selectRows,
+  SupabaseRequestError,
   updateRows,
 } from '@/lib/supabase/rest';
 import { deleteImage, isDataUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
@@ -667,19 +668,42 @@ export async function createMember(
 
   // O e-mail saiu do cadastro: o integrante nasce sem endereco. Os
   // enderecos antigos continuam gravados nos registros que ja os tinham.
-  const row = await insertOne<MemberRow>(TABLES.members, {
-    client_id: input.clientId,
-    name: input.name.trim(),
-    // Inteiro, como veio: digito a mais ganha a etiqueta, e nao um corte.
-    phone: digitosDoTelefone(input.phone),
-    photo_path: photo?.path ?? null,
-    photo_mime: photo?.mime ?? null,
-    photo_size: photo?.size ?? null,
-    ...standardColumns(input),
-    ...consent,
-    ...recruiterColumns(recruitedBy),
-    source: input.source,
-  });
+  // "VERIFICADO POR FOTO" (migration 050) so vai quando veio SIM ou NAO: o
+  // cadastro que nao informa continua saindo exatamente como sempre saiu.
+  const verificadoPorFoto =
+    typeof input.photoVerified === 'boolean' ? { photo_verified: input.photoVerified } : {};
+
+  let row: MemberRow;
+  try {
+    row = await insertOne<MemberRow>(TABLES.members, {
+      client_id: input.clientId,
+      name: input.name.trim(),
+      // Inteiro, como veio: digito a mais ganha a etiqueta, e nao um corte.
+      phone: digitosDoTelefone(input.phone),
+      photo_path: photo?.path ?? null,
+      photo_mime: photo?.mime ?? null,
+      photo_size: photo?.size ?? null,
+      ...standardColumns(input),
+      ...consent,
+      ...recruiterColumns(recruitedBy),
+      ...verificadoPorFoto,
+      source: input.source,
+    });
+  } catch (error) {
+    // Sem a coluna no banco, o SIM/NAO da planilha se perderia calado.
+    // Melhor parar e dizer o que falta.
+    if (
+      'photo_verified' in verificadoPorFoto &&
+      error instanceof SupabaseRequestError &&
+      error.isMissingSchema
+    ) {
+      await deleteImage(photo?.path ?? null);
+      throw badRequest(
+        'Para gravar "VERIFICADO POR FOTO", execute antes a migration 050_verificado_por_foto.sql no Supabase.',
+      );
+    }
+    throw error;
+  }
 
   await writeResponses(row.id, input.clientId, input.responses ?? []);
 

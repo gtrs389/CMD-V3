@@ -303,6 +303,8 @@ export const memberCreateSchema = z.object({
    * perder a segunda pessoa e pior do que registra-la sem acesso.
    */
   bulkImport: z.boolean().default(false),
+  /** "VERIFICADO POR FOTO" da planilha (migration 050). Nulo: nao informado. */
+  photoVerified: z.boolean().nullable().default(null),
 });
 
 export const memberUpdateSchema = z
@@ -527,6 +529,8 @@ export const surveyMemberSchema = z.object({
   phone: memberPhoneOpcional.default(''),
   /** Veio de uma planilha: telefone repetido nao recusa a pessoa. */
   bulkImport: z.boolean().default(false),
+  /** "VERIFICADO POR FOTO" da planilha (migration 050). Nulo: nao informado. */
+  photoVerified: z.boolean().nullable().default(null),
   photo: photoValue.default(null),
   consentAt: z.iso.datetime().nullable().default(null),
   answers: z

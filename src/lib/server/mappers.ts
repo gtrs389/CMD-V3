@@ -203,6 +203,7 @@ export function toMember(row: MemberRow, options: ToMemberOptions): Member {
     tier: tierOf(row.recruited_by_role),
     // So o Lider tem tag propria; a da Equipe vem do Lider, em `recruitedBy`.
     tag: tierOf(row.recruited_by_role) === 'LIDER' ? (row.tag ?? null) : null,
+    photoVerified: typeof row.photo_verified === 'boolean' ? row.photo_verified : null,
     // Troca de responsavel (migration 027). Sem instante gravado, o cadastro
     // continua com quem o recebeu.
     recruiterChange: row.recruiter_changed_at
