@@ -17,6 +17,7 @@ import {
   Phone,
   ShieldAlert,
   UserX,
+  X,
 } from 'lucide-react';
 import type { Member } from '@/lib/types';
 import {
@@ -51,7 +52,7 @@ import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { cn } from '@/lib/utils/cn';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { TierBadge } from '@/components/members/TierBadge';
 import { FiltroDeDadosCard } from './FiltroDeDadosCard';
 
@@ -98,6 +99,39 @@ const CAIXA_DO_TOM = {
   success: 'bg-success-50 text-success-700',
 } as const;
 
+/** O diagnostico recortado pelos responsaveis marcados (nenhum = todos). */
+function recorteDe(diagnostico: Diagnostico, chaves: string[]) {
+  const filtra = (member: Member) =>
+    chaves.length === 0 || chaves.some((chave) => doResponsavel(member, chave));
+  const repetidos = diagnostico.repetidos.filter((grupo) =>
+    grupo.registros.some((registro) => filtra(registro.member)),
+  );
+  const problemas = diagnostico.problemas.filter((p) => filtra(p.member));
+  const porTipo = new Map<TipoDaFicha, ProblemaDaFicha[]>();
+  for (const problema of problemas) {
+    porTipo.set(problema.tipo, [...(porTipo.get(problema.tipo) ?? []), problema]);
+  }
+  return {
+    filtra,
+    repetidos,
+    certos: repetidos.filter((grupo) => grupo.certeza !== 'possivel'),
+    possiveis: repetidos.filter((grupo) => grupo.certeza === 'possivel'),
+    telefones: diagnostico.telefones.filter((t) => t.membros.some(filtra)),
+    incompletos: diagnostico.incompletos.membros.filter((item) => filtra(item.member)),
+    problemas,
+    porTipo,
+  };
+}
+
+function semNada(recorte: ReturnType<typeof recorteDe>): boolean {
+  return (
+    recorte.repetidos.length === 0 &&
+    recorte.incompletos.length === 0 &&
+    recorte.problemas.length === 0 &&
+    recorte.telefones.length === 0
+  );
+}
+
 /**
  * Quadro de inconsistencias do time.
  *
@@ -121,129 +155,141 @@ export function InconsistenciasPanel({
   onOpenMember,
   canExport,
 }: InconsistenciasPanelProps) {
-  const [responsavel, setResponsavel] = useState<string | null>(null);
+  // Varios responsaveis de uma vez: a tela mostra a soma deles, e o PDF sai
+  // separado, um por responsavel. Nenhum marcado = o time todo.
+  const [selecionados, setSelecionados] = useState<string[]>([]);
 
   // Em ordem alfabetica: e pelo nome que se procura o Lider na lista.
   const responsaveis = useMemo(() => recruiterOptionsAlfabeticas(members), [members]);
+  const rotuloDe = (chave: string) => responsaveis.find((opcao) => opcao.key === chave)?.label ?? '';
 
   // O recorte vale sobre o DIAGNOSTICO: um grupo de repetidos aparece se
   // qualquer registro dele e do responsavel — e assim que se ve a mesma
   // pessoa cadastrada por dois Lideres.
-  const visto = useMemo(() => {
-    const filtra = (member: Member) => doResponsavel(member, responsavel);
-    const repetidos = diagnostico.repetidos.filter((grupo) =>
-      grupo.registros.some((registro) => filtra(registro.member)),
-    );
-    return {
-      repetidos,
-      certos: repetidos.filter((grupo) => grupo.certeza !== 'possivel'),
-      possiveis: repetidos.filter((grupo) => grupo.certeza === 'possivel'),
-      telefones: diagnostico.telefones.filter((t) => t.membros.some(filtra)),
-      incompletos: diagnostico.incompletos.membros.filter((item) => filtra(item.member)),
-      problemas: diagnostico.problemas.filter((p) => filtra(p.member)),
-    };
-  }, [diagnostico, responsavel]);
+  const visto = useMemo(() => recorteDe(diagnostico, selecionados), [diagnostico, selecionados]);
+  const { porTipo } = visto;
 
   // O filtro por dado olha as mesmas pessoas do recorte acima, e sabe quem
   // esta em um grupo de repetidos (certo ou provavel).
-  const doRecorte = useMemo(
-    () => members.filter((member) => doResponsavel(member, responsavel)),
-    [members, responsavel],
-  );
+  const doRecorte = useMemo(() => members.filter(visto.filtra), [members, visto]);
   const contexto = useMemo(
     () => contextoDosFiltros(members, diagnostico.repetidos),
     [members, diagnostico.repetidos],
   );
-  const rotuloDoResponsavel = responsavel
-    ? (responsaveis.find((opcao) => opcao.key === responsavel)?.label ?? null)
+  const rotuloDoResponsavel = selecionados.length
+    ? selecionados.map(rotuloDe).filter(Boolean).join(', ')
     : null;
 
   const cadastrosRepetidos = visto.certos.reduce((soma, grupo) => soma + grupo.registros.length, 0);
   const copiasRepetidas = cadastrosRepetidos - visto.certos.length;
 
-  const porTipo = useMemo(() => {
-    const mapa = new Map<TipoDaFicha, ProblemaDaFicha[]>();
-    for (const problema of visto.problemas) {
-      mapa.set(problema.tipo, [...(mapa.get(problema.tipo) ?? []), problema]);
-    }
-    return mapa;
-  }, [visto.problemas]);
-
   const graves = TIPOS.filter((tipo) => TIPO_INFO[tipo].gravidade !== 'baixa' && porTipo.has(tipo));
   const avisos = TIPOS.filter((tipo) => TIPO_INFO[tipo].gravidade === 'baixa' && porTipo.has(tipo));
 
-  const nada =
-    visto.repetidos.length === 0 &&
-    visto.incompletos.length === 0 &&
-    visto.problemas.length === 0 &&
-    visto.telefones.length === 0;
+  const nada = semNada(visto);
 
   const toast = useToast();
-  const [baixando, setBaixando] = useState(false);
+  const [baixando, setBaixando] = useState<string | null>(null);
 
-  /** O quadro que esta na tela — com o recorte do responsavel —, em PDF. */
+  /** O PDF de um recorte: o time todo, um responsavel, ou a soma de varios. */
+  async function montarPdf(chaves: string[]): Promise<Blob> {
+    const recorte = recorteDe(diagnostico, chaves);
+    const { gerarPdfDasInconsistencias } = await import('@/components/neo/ListasPdf');
+    const pessoa = (member: Member, detalhe: string) => ({
+      nome: member.name,
+      telefone: member.phone ?? '',
+      detalhe,
+      cadastradoPor: recruiterText(member.recruitedBy),
+    });
+    const secoes: SecaoParaPdf[] = [
+      ...(recorte.incompletos.length
+        ? [{
+            titulo: 'Cadastros com dado faltando',
+            explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.',
+            gravidade: 'media' as const,
+            pessoas: recorte.incompletos.map(({ member, faltas }) => pessoa(member, nomesDasFaltas(faltas))),
+          }]
+        : []),
+      ...TIPOS.filter((tipo) => recorte.porTipo.has(tipo)).map((tipo) => ({
+        titulo: TIPO_INFO[tipo].titulo,
+        explicacao: TIPO_INFO[tipo].explicacao,
+        gravidade: TIPO_INFO[tipo].gravidade,
+        pessoas: (recorte.porTipo.get(tipo) ?? []).map((p) => pessoa(p.member, nomeDoProblemaDaFicha(p.tipo, p.detalhe))),
+      })),
+      ...(recorte.telefones.length
+        ? [{
+            titulo: 'Telefone compartilhado',
+            explicacao: 'Pessoas diferentes com o mesmo número. Pode ser família — ou o número do Líder digitado no lugar.',
+            gravidade: 'baixa' as const,
+            pessoas: recorte.telefones.flatMap((t) =>
+              t.membros.map((member) => pessoa(member, 'Número compartilhado')),
+            ),
+          }]
+        : []),
+    ];
+    return gerarPdfDasInconsistencias({
+      time: clientName,
+      responsavel: chaves.length ? chaves.map(rotuloDe).filter(Boolean).join(', ') : null,
+      geradoEm: new Date().toISOString(),
+      total: members.filter(recorte.filtra).length,
+      pessoasComProblema: diagnostico.pessoasComProblema,
+      saude: diagnostico.saude,
+      basePorResponsavel: basePorResponsavel(members),
+      repetidos: recorte.repetidos.map(grupoRepetidoParaPdf),
+      secoes,
+    });
+  }
+
+  // inconsistência_vivian.pdf — o primeiro nome do responsável (ou do time),
+  // com o sobrenome quando outro tem o mesmo primeiro nome.
+  const nomeDoArquivo = (rotulo: string) =>
+    nomeDoPdfDeInconsistencia(rotulo, responsaveis.map((opcao) => opcao.label));
+
+  /**
+   * O quadro que esta na tela, em PDF. Com varios responsaveis marcados, sai
+   * UM PDF POR RESPONSAVEL, cada um so com o que e dele — sem precisar
+   * escolher um de cada vez. Quem nao tem nada a corrigir nao gera arquivo.
+   */
   async function baixarRelatorio() {
-    setBaixando(true);
     try {
-      const { gerarPdfDasInconsistencias } = await import('@/components/neo/ListasPdf');
-      const pessoa = (member: Member, detalhe: string) => ({
-        nome: member.name,
-        telefone: member.phone ?? '',
-        detalhe,
-        cadastradoPor: recruiterText(member.recruitedBy),
-      });
-      const secoes: SecaoParaPdf[] = [
-        ...(visto.incompletos.length
-          ? [{
-              titulo: 'Cadastros com dado faltando',
-              explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.',
-              gravidade: 'media' as const,
-              pessoas: visto.incompletos.map(({ member, faltas }) => pessoa(member, nomesDasFaltas(faltas))),
-            }]
-          : []),
-        ...TIPOS.filter((tipo) => porTipo.has(tipo)).map((tipo) => ({
-          titulo: TIPO_INFO[tipo].titulo,
-          explicacao: TIPO_INFO[tipo].explicacao,
-          gravidade: TIPO_INFO[tipo].gravidade,
-          pessoas: (porTipo.get(tipo) ?? []).map((p) => pessoa(p.member, nomeDoProblemaDaFicha(p.tipo, p.detalhe))),
-        })),
-        ...(visto.telefones.length
-          ? [{
-              titulo: 'Telefone compartilhado',
-              explicacao: 'Pessoas diferentes com o mesmo número. Pode ser família — ou o número do Líder digitado no lugar.',
-              gravidade: 'baixa' as const,
-              pessoas: visto.telefones.flatMap((t) =>
-                t.membros.map((member) => pessoa(member, 'Número compartilhado')),
-              ),
-            }]
-          : []),
-      ];
-      const blob = await gerarPdfDasInconsistencias({
-        time: clientName,
-        responsavel: rotuloDoResponsavel,
-        geradoEm: new Date().toISOString(),
-        total: doRecorte.length,
-        pessoasComProblema: diagnostico.pessoasComProblema,
-        saude: diagnostico.saude,
-        basePorResponsavel: basePorResponsavel(members),
-        repetidos: visto.repetidos.map(grupoRepetidoParaPdf),
-        secoes,
-      });
-      // inconsistência_vivian.pdf — o primeiro nome do responsável escolhido
-      // (ou do time), com o sobrenome quando outro tem o mesmo primeiro nome.
-      baixarArquivo(
-        nomeDoPdfDeInconsistencia(
-          rotuloDoResponsavel ?? clientName,
-          responsaveis.map((opcao) => opcao.label),
-        ),
-        blob,
+      if (selecionados.length <= 1) {
+        setBaixando('Montando o PDF...');
+        const blob = await montarPdf(selecionados);
+        baixarArquivo(nomeDoArquivo(rotuloDoResponsavel ?? clientName), blob);
+        toast.success('Relatório de inconsistências baixado.');
+        return;
+      }
+
+      const limpos: string[] = [];
+      let baixados = 0;
+      for (const [indice, chave] of selecionados.entries()) {
+        setBaixando(`Montando ${indice + 1} de ${selecionados.length}...`);
+        if (semNada(recorteDe(diagnostico, [chave]))) {
+          limpos.push(rotuloDe(chave).split(' · ')[0]);
+          continue;
+        }
+        const blob = await montarPdf([chave]);
+        baixarArquivo(nomeDoArquivo(rotuloDe(chave)), blob);
+        baixados += 1;
+        // Um respiro entre os arquivos: o navegador baixa todos, em ordem.
+        await new Promise((pronto) => setTimeout(pronto, 400));
+      }
+      toast.success(
+        `${baixados} ${pluralize(baixados, 'PDF baixado', 'PDFs baixados')}, um por responsável.` +
+          (limpos.length ? ` Sem inconsistências: ${limpos.join(', ')}.` : ''),
       );
-      toast.success('Relatório de inconsistências baixado.');
     } catch {
       toast.error('Não foi possível montar o PDF. Tente de novo.');
     } finally {
-      setBaixando(false);
+      setBaixando(null);
     }
+  }
+
+  function alternar(chave: string) {
+    if (!chave) return setSelecionados([]);
+    setSelecionados((atuais) =>
+      atuais.includes(chave) ? atuais.filter((item) => item !== chave) : [...atuais, chave],
+    );
   }
 
   return (
@@ -260,27 +306,60 @@ export function InconsistenciasPanel({
         }
         filtro={
           responsaveis.length > 1 ? (
-            <Select
-              id="inconsistencias-responsavel"
-              aria-label="Ver as inconsistências de um responsável"
-              value={responsavel ?? ''}
-              onChange={(event) => setResponsavel(event.target.value || null)}
-              className="sm:max-w-64"
-            >
-              <option value="">Todos os responsáveis</option>
-              {responsaveis.map((opcao) => (
-                <option key={opcao.key} value={opcao.key}>
-                  {opcao.label} ({opcao.count})
-                </option>
-              ))}
-            </Select>
+            <div className="flex min-w-0 flex-col gap-2 sm:max-w-md sm:flex-1">
+              <Dropdown
+                id="inconsistencias-responsavel"
+                aria-label="Ver as inconsistências de um ou mais responsáveis"
+                highlighted={selecionados.length > 0}
+                className="sm:max-w-72"
+                multiple={{
+                  selected: selecionados.length ? selecionados : [''],
+                  onToggle: alternar,
+                  resumo:
+                    selecionados.length === 0
+                      ? 'Todos os responsáveis'
+                      : selecionados.length === 1
+                        ? rotuloDe(selecionados[0])
+                        : `${selecionados.length} responsáveis selecionados`,
+                }}
+                options={[
+                  { value: '', label: 'Todos os responsáveis' },
+                  ...responsaveis.map((opcao) => ({
+                    value: opcao.key,
+                    label: `${opcao.label} (${opcao.count})`,
+                  })),
+                ]}
+              />
+              {selecionados.length > 1 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {selecionados.map((chave) => (
+                    <button
+                      key={chave}
+                      type="button"
+                      onClick={() => alternar(chave)}
+                      aria-label={`Tirar ${rotuloDe(chave)} da seleção`}
+                      className="inline-flex max-w-full items-center gap-1 rounded-pill bg-accent-50 py-1 pr-1.5 pl-2.5 text-xs font-semibold text-accent-700 transition-colors hover:bg-accent-100"
+                    >
+                      <span className="truncate">{rotuloDe(chave).split(' · ')[0]}</span>
+                      <X aria-hidden="true" className="size-3.5 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : null
         }
         exportar={
           canExport && !nada ? (
-            <Button variant="secondary" onClick={baixarRelatorio} loading={baixando} className="shrink-0 whitespace-nowrap">
+            <Button
+              variant="secondary"
+              onClick={baixarRelatorio}
+              loading={baixando !== null}
+              className="shrink-0 self-start whitespace-nowrap"
+            >
               <Download aria-hidden="true" className="size-4" />
-              {baixando ? 'Montando o PDF...' : 'Baixar PDF'}
+              {baixando ??
+                (selecionados.length > 1 ? `Baixar ${selecionados.length} PDFs (um por líder)` : 'Baixar PDF')}
             </Button>
           ) : null
         }
@@ -302,7 +381,7 @@ export function InconsistenciasPanel({
             <CheckCircle2 aria-hidden="true" className="size-6" />
           </span>
           <p className="text-base font-semibold text-ink-900">
-            {responsavel ? 'Nada fora do lugar nos cadastros deste responsável.' : 'Cadastro limpo.'}
+            {selecionados.length ? 'Nada fora do lugar nos cadastros selecionados.' : 'Cadastro limpo.'}
           </p>
           <p className="mt-1 max-w-sm text-sm text-ink-500">
             Ninguém repetido, nada faltando, nenhum número que não fecha. Quando aparecer
@@ -348,7 +427,7 @@ export function InconsistenciasPanel({
           <Incompletos
             diagnostico={diagnostico}
             itens={visto.incompletos}
-            filtrado={responsavel !== null}
+            filtrado={selecionados.length > 0}
             onOpenMember={onOpenMember}
           />
         </Secao>
@@ -735,6 +814,7 @@ function CartaoRepetido({
                   <Badge tone="danger">{indice + 1}º cadastro</Badge>
                 )}
                 <TierBadge tier={member.tier} />
+                <LiderDesativado member={member} />
               </div>
 
               <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-ink-500 sm:grid-cols-2">
@@ -894,6 +974,7 @@ function LinhaDaPessoa({
             {member.name}
           </span>
           <TierBadge tier={member.tier} className="px-1.5 py-0 text-[0.625rem]" />
+          <LiderDesativado member={member} className="px-1.5 py-0 text-[0.625rem]" />
         </span>
         <span className="block truncate text-xs">
           {children}
@@ -957,5 +1038,20 @@ function ListaQueCresce<T>({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Lider desativado pelo ADMIN geral. A pessoa continua aparecendo aqui — o
+ * cadastro dela segue valendo para as contas —, mas com a etiqueta, para
+ * ninguem confundir com um Lider ativo. So em Lider: na Equipe nao existe
+ * "desativado".
+ */
+function LiderDesativado({ member, className }: { member: Member; className?: string }) {
+  if (member.tier !== 'LIDER' || member.access !== 'DISABLED') return null;
+  return (
+    <Badge tone="danger" className={cn('whitespace-nowrap', className)}>
+      Líder desativado
+    </Badge>
   );
 }

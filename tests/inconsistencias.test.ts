@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Member, Recruiter } from '@/lib/types';
+import { registroParaPdf } from '@/lib/domain/repetidos-pdf';
 import {
   cadastrosIncompletos,
   cadastrosRepetidos,
@@ -136,6 +137,44 @@ describe('cadastros repetidos', () => {
     expect(grupo.divergencias).not.toContain('telefone');
   });
 
+  it('3 com o mesmo título e 1 só com o mesmo nome: grupo certo de 3, e o quarto à parte como possível', () => {
+    const titulo = '012345678901';
+    const mila = pessoa({ name: 'MARIA APARECIDA DA SILVA', voterId: titulo, zone: '10', section: '127', createdAt: '2026-09-30T14:18:01.000Z' });
+    const adalberto = pessoa({ name: 'MARIA APARECIDA DA SILVA', voterId: titulo, zone: '10', section: '127', phone: '', createdAt: '2026-09-30T14:18:02.000Z' });
+    const carlos = pessoa({ name: 'MARIA APARECIDA DA SILVA', voterId: '098765432109', zone: '10', section: '138', phone: '', createdAt: '2026-09-30T14:18:03.000Z' });
+    const guruba = pessoa({ name: 'MARIA APARECIDA DA SILVA', voterId: titulo, zone: '10', section: '127', phone: '', createdAt: '2026-09-30T14:18:04.000Z' });
+
+    const grupos = cadastrosRepetidos([mila, adalberto, carlos, guruba]);
+    expect(grupos).toHaveLength(2);
+
+    const [certo, possivel] = grupos;
+    expect(certo.certeza).toBe('certa');
+    expect(certo.registros.map((r) => r.member.id)).toEqual([mila.id, adalberto.id, guruba.id]);
+    // O homonimo nao suja o grupo certo: nada de "discordam em titulo".
+    expect(certo.divergencias).not.toContain('título');
+
+    expect(possivel.certeza).toBe('possivel');
+    expect(possivel.evidencias).toEqual(['nome']);
+    // Ao lado do ORIGINAL do grupo certo, para comparar — e so ele.
+    expect(possivel.registros.map((r) => r.member.id)).toEqual([mila.id, carlos.id]);
+
+    // Nas contas, sobram 2 copias (as do titulo); o homonimo nao e copia.
+    const d = diagnosticar([mila, adalberto, carlos, guruba], PALMEIRA);
+    expect(d.excedentes).toBe(2);
+  });
+
+  it('mesmo nome e seção entre cadastros sem título em comum: provável, separado do grupo certo', () => {
+    const a = pessoa({ name: 'Joana Lima', voterId: '100000002720', zone: '10', section: '50' });
+    const b = pessoa({ name: 'Joana Lima', voterId: '100000002720', zone: '10', section: '50' });
+    const c = pessoa({ name: 'Joana Lima', voterId: null, zone: '10', section: '50' });
+
+    const grupos = cadastrosRepetidos([a, b, c]);
+    expect(grupos.map((g) => [g.certeza, g.registros.length])).toEqual([
+      ['certa', 2],
+      ['provavel', 2],
+    ]);
+  });
+
   it('gente diferente não vira grupo', () => {
     expect(cadastrosRepetidos([pessoa(), pessoa(), pessoa()])).toEqual([]);
   });
@@ -196,6 +235,12 @@ describe('problemas de cada ficha', () => {
     const equipe = pessoa({ tier: 'EQUIPE', access: 'NO_PHONE' });
     const demo = pessoa({ tier: 'LIDER', recruitedBy: MARINA, access: 'DEMO_NO_ACCESS' });
     expect(problemasDasFichas([equipe, demo], PALMEIRA).some((p) => p.tipo === 'lider-sem-acesso')).toBe(false);
+  });
+
+  it('no PDF dos repetidos, o Líder desativado sai com a etiqueta — e só o Líder', () => {
+    expect(registroParaPdf(pessoa({ tier: 'LIDER', access: 'DISABLED' }), true).nivel).toBe('Líder desativado');
+    expect(registroParaPdf(pessoa({ tier: 'LIDER', access: 'ACTIVE' }), true).nivel).toBe('Líder');
+    expect(registroParaPdf(pessoa({ tier: 'EQUIPE', access: 'DISABLED' }), false).nivel).toBe('Equipe');
   });
 
   it('Líder desativado pelo ADMIN é decisão, e não inconsistência', () => {

@@ -649,7 +649,12 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
                     fundo={r.primeiro ? C.successSoft : C.dangerSoft}
                   />
                   <View style={{ width: 4 }} />
-                  <Chip texto={r.nivel} cor={C.ink2} fundo={C.navySoft} />
+                  {/* Lider desativado em vermelho, como na tela. */}
+                  <Chip
+                    texto={r.nivel}
+                    cor={r.nivel === 'Líder desativado' ? C.danger : C.ink2}
+                    fundo={r.nivel === 'Líder desativado' ? C.dangerSoft : C.navySoft}
+                  />
                 </View>
                 <View style={{ flexDirection: 'row' }}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
