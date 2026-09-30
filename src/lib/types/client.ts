@@ -126,6 +126,16 @@ export interface Client extends Timestamped {
    */
   isDemo: boolean;
   /**
+   * Time duplicado (migration 049).
+   *
+   * Copia de um time oficial — administradores, Lideres, formularios e
+   * configuracoes —, feita para ensaiar e mostrar. Fica FORA de toda metrica
+   * global, como o DEMO, e nada feito nela alcanca o oficial.
+   */
+  isCopy: boolean;
+  /** De qual time a copia saiu. Nulo em time que nao e copia. */
+  copyOf: { id: string; name: string } | null;
+  /**
    * Estado do time, pela sigla da UF (migration 038).
    *
    * Nulo nos times criados antes dela: o cadastro de time NOVO exige, e um

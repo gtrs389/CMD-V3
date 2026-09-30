@@ -61,6 +61,8 @@ function clienteComFormulario(): Client {
     id: 'cli-a',
     name: 'Candidata',
     isDemo: false,
+    isCopy: false,
+    copyOf: null,
     email: 'candidata@exemplo.test',
     photo: null,
     notes: '',

@@ -138,6 +138,11 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     },
     form: toFormConfig(row, options.fields),
     isDemo: row.is_demo === true,
+    isCopy: row.is_copy === true,
+    copyOf:
+      row.is_copy === true && row.copy_of_client_id
+        ? { id: row.copy_of_client_id, name: row.copy_of_name ?? '' }
+        : null,
     // Time real nunca tem acesso desligado: a coluna existe para o DEMO, e o
     // `check` da migration 036 garante o resto.
     demoAccessEnabled: row.demo_access_enabled !== false,

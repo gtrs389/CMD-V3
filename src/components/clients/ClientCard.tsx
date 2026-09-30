@@ -8,6 +8,7 @@ import { formatLastActivity } from '@/lib/utils/date';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { DemoBadge } from './DemoBadge';
+import { CopyBadge } from './CopyBadge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Menu } from '@/components/ui/Menu';
 
@@ -64,6 +65,10 @@ export function ClientCard({ client, index = 0, onEdit, onDelete }: ClientCardPr
             {/* Time de demonstracao: o selo evita que um numero de
                 apresentacao seja lido como numero da operacao. */}
             {client.isDemo ? <DemoBadge className="mt-1" /> : null}
+            {/* Copia de um time oficial (049): fora da Visao geral. */}
+            {client.isCopy ? (
+              <CopyBadge className="mt-1" sourceName={client.copyOf?.name} />
+            ) : null}
           </div>
 
           <span

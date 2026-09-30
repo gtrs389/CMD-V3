@@ -102,6 +102,43 @@ export async function uploadImage(prefix: string, dataUrl: string): Promise<Stor
   return { path, mime: image.mime, size: image.size };
 }
 
+/**
+ * Copia um arquivo do bucket para um caminho NOVO, dentro do mesmo prefixo.
+ *
+ * Usado pela duplicacao de time: a copia nunca aponta para o arquivo do
+ * oficial. Se apontasse, trocar ou apagar a foto na copia apagaria a do
+ * oficial junto — e excluir a copia levaria as fotos dele.
+ *
+ * Falha devolve `null`: quem copia segue SEM a foto, e nunca com o caminho
+ * do original.
+ */
+export async function copyImage(path: string | null): Promise<string | null> {
+  if (!path) return null;
+  const { url } = supabaseEnv();
+
+  const barra = path.lastIndexOf('/');
+  const pasta = barra >= 0 ? path.slice(0, barra) : 'copias';
+  const ponto = path.lastIndexOf('.');
+  const extensao = ponto > barra ? path.slice(ponto + 1) : 'bin';
+  const destino = `${pasta}/${crypto.randomUUID()}.${extensao}`;
+
+  const headers = authHeaders();
+  headers.set('Content-Type', 'application/json');
+
+  const response = await fetch(`${url}/storage/v1/object/copy`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ bucketId: MEDIA_BUCKET, sourceKey: path, destinationKey: destino }),
+    cache: 'no-store',
+  }).catch(() => null);
+
+  if (!response || !response.ok) {
+    console.warn('[storage] Não foi possível copiar o arquivo:', path);
+    return null;
+  }
+  return destino;
+}
+
 /** Remove um arquivo. Falhas sao registradas e ignoradas: nunca travam o fluxo. */
 export async function deleteImage(path: string | null): Promise<void> {
   if (!path) return;

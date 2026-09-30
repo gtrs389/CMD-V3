@@ -122,6 +122,9 @@ export function createLocalClientRepository(
         name: input.name.trim(),
         // Time DEMO nasce somente pelo servico proprio, no servidor.
         isDemo: false,
+        // Copia tambem so nasce no servidor (`duplicateTeam`).
+        isCopy: false,
+        copyOf: null,
         // Legado: o cadastro nao pede mais e-mail do time.
         email: null,
         photo: input.photo ?? null,

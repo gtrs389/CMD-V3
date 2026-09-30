@@ -1,6 +1,6 @@
 import 'server-only';
 import { TABLES, type ClientRow } from '@/lib/supabase/tables';
-import { notInFilter, selectRows } from '@/lib/supabase/rest';
+import { notInFilter, selectRows, SupabaseRequestError } from '@/lib/supabase/rest';
 
 /**
  * O recorte que mantem os Times DEMO fora dos numeros reais.
@@ -40,12 +40,36 @@ export async function isDemoClient(clientId: string | null | undefined): Promise
 }
 
 /**
- * Filtro pronto para uma consulta que tem `client_id`.
+ * Times fora dos numeros reais: os Times DEMO e os times DUPLICADOS
+ * (migration 049).
  *
- * Devolve `{}` quando nao ha Time DEMO: a consulta sai exatamente como
+ * A copia de um time serve para ensaiar e mostrar — com os mesmos Lideres
+ * do oficial. Somada a Visao geral, ela contaria cada Lider duas vezes.
+ *
+ * Banco ainda sem a migration 049: a coluna `is_copy` nao existe, e portanto
+ * nenhuma copia existe. Vale a lista do DEMO, e nada quebra.
+ */
+export async function offBooksClientIds(): Promise<string[]> {
+  try {
+    const rows = await selectRows<Pick<ClientRow, 'id'>>(TABLES.clients, {
+      select: 'id',
+      filters: { or: '(is_demo.is.true,is_copy.is.true)' },
+    });
+    return rows.map((row) => row.id);
+  } catch (error) {
+    if (error instanceof SupabaseRequestError && error.isMissingSchema) return demoClientIds();
+    throw error;
+  }
+}
+
+/**
+ * Filtro pronto para uma consulta que tem `client_id`: tira os Times DEMO e
+ * os times duplicados.
+ *
+ * Devolve `{}` quando nao ha nenhum dos dois: a consulta sai exatamente como
  * sempre foi.
  */
 export async function withoutDemoClients(): Promise<Record<string, string>> {
-  const demo = await demoClientIds();
-  return demo.length > 0 ? { client_id: notInFilter(demo) } : {};
+  const fora = await offBooksClientIds();
+  return fora.length > 0 ? { client_id: notInFilter(fora) } : {};
 }

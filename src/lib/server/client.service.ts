@@ -170,24 +170,44 @@ async function assemble(row: ClientRow, inviteToken?: string | null): Promise<Cl
 
 export interface ListClientOptions {
   /**
-   * Inclui os Times DEMO na lista.
+   * Inclui os Times DEMO e os times duplicados na lista.
    *
    * A pagina "Times" do ADMIN geral pede `true`: ele precisa ver o time de
-   * demonstracao, com o selo, para abrir e apresentar. Todo o resto do
-   * sistema usa o padrao — sem DEMO —, porque e de numero da operacao real
-   * que as outras telas tratam.
+   * demonstracao e a copia, com o selo, para abrir e apresentar. Todo o resto
+   * do sistema usa o padrao — sem DEMO e sem copia —, porque e de numero da
+   * operacao real que as outras telas tratam.
    */
   includeDemo?: boolean;
+}
+
+/** Somente os times oficiais: nem DEMO, nem copia (migration 049). */
+async function selectRealClientRows(): Promise<ClientRow[]> {
+  try {
+    return await selectRows<ClientRow>(TABLES.clients, {
+      select: CLIENT_COLUMNS,
+      filters: { is_demo: 'is.false', is_copy: 'is.false' },
+      order: 'created_at.desc',
+    });
+  } catch (error) {
+    // Banco sem a migration 049: nao existe copia, e o filtro do DEMO basta.
+    if (!(error instanceof SupabaseRequestError && error.isMissingSchema)) throw error;
+    return selectRows<ClientRow>(TABLES.clients, {
+      select: CLIENT_COLUMNS,
+      filters: { is_demo: 'is.false' },
+      order: 'created_at.desc',
+    });
+  }
 }
 
 export async function listClientSummaries(
   options: ListClientOptions = {},
 ): Promise<ClientSummary[]> {
-  const rows = await selectRows<ClientRow>(TABLES.clients, {
-    select: CLIENT_COLUMNS,
-    filters: options.includeDemo ? {} : { is_demo: 'is.false' },
-    order: 'created_at.desc',
-  });
+  const rows = options.includeDemo
+    ? await selectRows<ClientRow>(TABLES.clients, {
+        select: CLIENT_COLUMNS,
+        order: 'created_at.desc',
+      })
+    : await selectRealClientRows();
   if (rows.length === 0) return [];
 
   const ids = rows.map((row) => row.id);

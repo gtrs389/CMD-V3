@@ -183,6 +183,15 @@ export interface ClientRow {
    */
   demo_access_enabled: boolean;
   /**
+   * Time duplicado (migration 049). Imutavel, e fora de toda metrica global,
+   * como o DEMO. Ausente em banco sem a migration: nenhum time e copia.
+   */
+  is_copy?: boolean;
+  /** Time de onde a copia saiu. Informativo: nao e chave estrangeira. */
+  copy_of_client_id?: string | null;
+  /** Nome do time de onde a copia saiu, no momento da duplicacao. */
+  copy_of_name?: string | null;
+  /**
    * Confirmacao de CPF e titulo pela FonteData neste time (migration 041).
    *
    * Em false nenhuma consulta e feita para os cadastros dele — nem durante o
