@@ -271,6 +271,7 @@ geral), e ela recusa tag em quem é da Equipe. A regra vive em
 | `/api/clients/demo` | ADMIN geral | Cria um Time DEMO completo |
 | `/api/clients/demo/:id/dados` | ADMIN geral | Refaz os dados gerados de um Time DEMO |
 | `/api/clients/demo/:id/acesso` | ADMIN geral | Liga e desliga o acesso de um Time DEMO |
+| `/api/clients/[id]/duplicar` | ADMIN geral | Duplica um time (administradores, Líderes, formulários e configurações) |
 | `/api/configuracoes/chaves/[id]` | ADMIN geral | Revoga uma chave da API |
 | `/api/configuracoes/chaves/[id]/atividade` | ADMIN geral | Ações registradas de uma chave |
 | `/api/v1/links` | Chave da API | Gera e lista o link do administrador vinculado |
@@ -805,6 +806,49 @@ um cadastro de verdade.
 
 Requer as migrations `033_time_demo.sql`, `034_time_demo_alagoas.sql`,
 `035_banner_do_time.sql` e `036_acesso_do_time_demo.sql`.
+
+---
+
+## Time duplicado
+
+O ADMIN geral abre a página de um time e, no menu de ações, escolhe **Duplicar
+time**. Serve para mostrar, na prática, a diferença entre a informação que os
+Líderes mandam certa e a que mandam errada: na cópia, a planilha dos Líderes
+sobe normalmente, e o oficial fica intacto ao lado.
+
+| Vai para a cópia | Fica só no oficial |
+| --- | --- |
+| Configurações do time (textos, privacidade, recrutamento, confirmação de dados, banner, estado e municípios) | A **Equipe** de cada Líder |
+| Formulário 1 e Formulário 2 | Links já gerados e histórico de links |
+| Administradores do time, com acesso próprio na cópia | Respostas do questionário que chegaram por link |
+| **Líderes**, com respostas, tag, confirmação, verificação já concluída, pontos do mapa e acesso próprio na cópia | Aparelhos, sessões e visitas de inspeção |
+
+**O oficial nunca é tocado.** A duplicação só LÊ o oficial. Toda linha
+escrita é nova e leva o `client_id` da cópia; nenhuma chave estrangeira aponta
+da cópia para o oficial (`copy_of_client_id` é só informativo). As fotos são
+**copiadas para arquivos próprios** no Storage: se a cópia reaproveitasse o
+caminho do oficial, trocar a foto na cópia — ou excluir a cópia — apagaria o
+arquivo do oficial. Falha no meio desfaz só a cópia. Tudo isso é conferido em
+`tests/time-duplicado.test.ts`, que fotografa o oficial antes e compara
+depois.
+
+**Fora da Visão geral.** A cópia tem os mesmos Líderes do oficial; somada aos
+números, contaria cada um duas vezes. Por isso ela entra no mesmo recorte do
+Time DEMO (`demo-scope.ts`): fora do total de times e integrantes, gráficos,
+mapa geral, rankings e da API `/api/v1`. Em **Times** ela aparece com o selo
+**Duplicado**, e a página dela diz de qual time veio.
+
+**O que não é copiado por segurança:** o e-mail dos Líderes (é único no
+sistema) e verificação ainda pendente (a cópia pagaria de novo uma consulta
+que o oficial já pagou). Líder com telefone incompleto ou repetido fica sem
+acesso na cópia, exatamente como no oficial.
+
+Time DEMO não é duplicado. O sinal `is_copy` é imutável: o gatilho da
+migration recusa transformar um time oficial em cópia ou uma cópia em
+oficial.
+
+Requer a migration `049_time_duplicado.sql`. Sem ela, o botão responde com o
+nome da migration a executar, e o resto do sistema continua funcionando.
 
 ---
 

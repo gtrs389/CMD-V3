@@ -138,10 +138,12 @@ vi.mock('@/lib/supabase/rest', () => ({
       return Object.values(db.members).filter((row) => match(row, filters));
     }
     if (table === 'cmd_clients') {
-      // O mapa geral pergunta antes quais times sao DEMO, para deixa-los de
-      // fora. O time deste cenario e real: a pergunta volta vazia, e a
-      // consulta segue sem nenhum recorte.
-      if (filters.is_demo === 'is.true') return [];
+      // O mapa geral pergunta antes quais times sao DEMO ou duplicados
+      // (migration 049), para deixa-los de fora. O time deste cenario e
+      // real: a pergunta volta vazia, e a consulta segue sem nenhum recorte.
+      if (filters.is_demo === 'is.true' || filters.or === '(is_demo.is.true,is_copy.is.true)') {
+        return [];
+      }
       return [
         {
           id: 'cli-1',

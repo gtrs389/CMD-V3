@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
+  Copy,
   ShieldCheck,
   RefreshCw,
   FileText,
@@ -43,6 +44,8 @@ import { InconsistenciasPanel } from './InconsistenciasPanel';
 import { NeoRelatorioModal } from '@/components/neo/NeoRelatorioModal';
 import { BannerTagModal } from './BannerTagModal';
 import { DemoBadge } from './DemoBadge';
+import { CopyBadge } from './CopyBadge';
+import { DuplicateTeamDialog } from './DuplicateTeamDialog';
 import { ClientFormModal } from './ClientFormModal';
 import { ClientOverviewPanel } from './ClientOverviewPanel';
 import { DeleteClientDialog } from './DeleteClientDialog';
@@ -87,6 +90,8 @@ export function ClientDetailView({
   const [banner, setBanner] = useState(false);
   const [recrutadores, setRecrutadores] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** Duplicar o time (migration 049): so o ADMIN geral, e nunca um Time DEMO. */
+  const [duplicando, setDuplicando] = useState(false);
   /** Refazer os dados gerados: so aparece em Time DEMO, so para o ADMIN. */
   const [refazendo, setRefazendo] = useState(false);
   const [invite, setInvite] = useState(initialInvite);
@@ -301,7 +306,28 @@ export function ClientDetailView({
                   apresentando — a tela e a mesma de um time real, sem selo
                   aparecendo no meio da demonstracao. */}
               {client.isDemo && user?.role === 'ADMIN' ? <DemoBadge /> : null}
+              {/* A copia se anuncia para o ADMIN geral, que e quem a usa para
+                  mostrar o certo e o errado ao lado do oficial. */}
+              {client.isCopy && user?.role === 'ADMIN' ? (
+                <CopyBadge sourceName={client.copyOf?.name} />
+              ) : null}
             </div>
+
+            {client.isCopy && client.copyOf && user?.role === 'ADMIN' ? (
+              <p className="mt-1 flex items-center gap-1.5 text-[0.8125rem] text-ink-500">
+                <Copy aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  Cópia de{' '}
+                  <Link
+                    href={`/candidatos/${client.copyOf.id}`}
+                    className="font-medium text-accent-600 hover:underline"
+                  >
+                    {client.copyOf.name || 'time oficial'}
+                  </Link>
+                  {' · fora da Visão geral'}
+                </span>
+              </p>
+            ) : null}
 
             {/* De onde o time e (038). Cadastrar sem nunca mostrar seria
                 guardar dado que ninguem confere — e o estado errado so
@@ -462,6 +488,16 @@ export function ClientDetailView({
                           },
                         ]
                       : []),
+                    ...(!client.isDemo && user?.role === 'ADMIN'
+                      ? [
+                          {
+                            id: 'duplicar',
+                            label: 'Duplicar time',
+                            icon: <Copy className="size-4" />,
+                            onSelect: () => setDuplicando(true),
+                          },
+                        ]
+                      : []),
                     ...(podeExcluir
                       ? [
                           {
@@ -593,6 +629,14 @@ export function ClientDetailView({
       </NavegadorDePessoas>
 
       <BatchLinksModal open={lote} client={client} onClose={() => setLote(false)} />
+
+      {user?.role === 'ADMIN' && !client.isDemo ? (
+        <DuplicateTeamDialog
+          open={duplicando}
+          client={client}
+          onClose={() => setDuplicando(false)}
+        />
+      ) : null}
 
       {/* Montado so quando abre: cada abertura comeca do zero, e o relatorio
           anterior nao fica guardado na memoria da pagina. */}

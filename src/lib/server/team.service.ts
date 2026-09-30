@@ -99,6 +99,8 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       // O recorte do integrante nao decide nada sobre metrica global: o
       // sinal acompanha o time a que ele pertence.
       isDemo: client.is_demo === true,
+      isCopy: client.is_copy === true,
+      copyOf: null,
       email: member.email ?? session.email,
       photo,
       notes: '',

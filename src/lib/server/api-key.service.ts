@@ -26,6 +26,7 @@ import {
   updateRows,
 } from '@/lib/supabase/rest';
 import { badRequest, notFound } from './http';
+import { offBooksClientIds } from './demo-scope';
 
 /**
  * Chaves da API de links de cadastro.
@@ -104,7 +105,7 @@ export async function listApiKeys(): Promise<ApiKeySummary[]> {
  * Serve apenas a tela de Configuracoes: e a lista dos dois seletores.
  */
 export async function listBindableTeams(): Promise<BindableTeam[]> {
-  const [teams, admins] = await Promise.all([
+  const [teams, admins, foraDosNumeros] = await Promise.all([
     selectRows<Pick<ClientRow, 'id' | 'name'>>(TABLES.clients, {
       select: 'id,name',
       // Time DEMO nao recebe chave: a API publica trata da operacao real, e
@@ -120,9 +121,13 @@ export async function listBindableTeams(): Promise<BindableTeam[]> {
       order: 'name.asc',
       limit: 2000,
     }),
+    // Time duplicado tambem nao recebe chave (migration 049): e ensaio, e
+    // fica fora dos dados reais como o DEMO.
+    offBooksClientIds(),
   ]);
 
-  return teams.map((team) => ({
+  const fora = new Set(foraDosNumeros);
+  return teams.filter((team) => !fora.has(team.id)).map((team) => ({
     id: team.id,
     name: team.name,
     admins: admins
@@ -173,6 +178,9 @@ export async function createApiKey(
   // existente pode passar a apontar para um Time DEMO depois.
   if (team.is_demo) {
     throw badRequest('Time DEMO não recebe chave da API: ele fica fora dos dados reais.');
+  }
+  if ((await offBooksClientIds()).includes(team.id)) {
+    throw badRequest('Time duplicado não recebe chave da API: ele fica fora dos dados reais.');
   }
 
   const owner = await selectOne<Pick<UserRow, 'id' | 'name' | 'role' | 'client_id' | 'is_active'>>(

@@ -620,6 +620,14 @@ export const apiKeyCreateSchema = z.object({
 export const demoAccessSchema = z.object({ enabled: z.boolean() });
 
 /**
+ * Duplicar um time (migration 049). O nome e opcional: vazio, a copia se
+ * chama "<nome do oficial> (duplicado)".
+ */
+export const teamDuplicateSchema = z.object({
+  name: trimmed(120).optional().default(''),
+});
+
+/**
  * Quantidade de links de um lote (migration 043).
  *
  * Sem teto de produto: quem pede e o painel do ADMIN, e nao cabe ao sistema

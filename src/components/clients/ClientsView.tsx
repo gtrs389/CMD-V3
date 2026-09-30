@@ -107,7 +107,8 @@ export function ClientsView() {
    */
   const totals = useMemo(() => {
     const monthStart = startOfMonthIso();
-    const reais = clients.filter((client) => !client.isDemo);
+    // Nem DEMO, nem copia (049): os dois ficam fora dos numeros reais.
+    const reais = clients.filter((client) => !client.isDemo && !client.isCopy);
 
     return {
       clients: reais.length,
