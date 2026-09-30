@@ -66,6 +66,8 @@
 
   /* Semanticas */
   --color-success-50: #e8f3ec;
+  /* Verde sobre o azul-marinho (tela da planilha subindo): contraste AA sobre navy-900. */
+  --color-success-400: #4ade80;
   --color-success-600: #166534;
   --color-success-700: #0f4a26;
   --color-danger-50: #fcedec;
@@ -259,6 +261,88 @@
   animation: bloqueio-leitura 4.5s linear infinite;
 }
 .bloqueio-falha { animation: bloqueio-falha 7s steps(1, end) infinite; }
+
+/* ==========================================================================
+   PLANILHA SUBINDO
+   ==========================================================================
+   A tela do cadastro em lote. Mesma regra das telas acima: o REPOUSO e o
+   estado base de cada elemento. Com "menos movimento" as animacoes correm
+   ate o fim num piscar, e o que fica e o ultimo quadro — por isso o que so
+   existe em movimento (a linha voando, o confete, a onda de chegada) nasce
+   `opacity: 0` na propria classe e termina invisivel. Numeros, anel e lista
+   nunca dependem de movimento para serem lidos. Tudo e transform e opacity:
+   nada repinta a tela a cada quadro. */
+
+/* A faixa de leitura desce a planilha, linha por linha. */
+@keyframes planilha-leitura {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(var(--leitura-curso, 72px)); opacity: 0; }
+}
+
+/* Uma pessoa sai da planilha e cai dentro do anel, em arco. */
+@keyframes planilha-voo {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) scale(0.6); }
+  15% { opacity: 1; transform: translate3d(18px, -18px, 0) scale(1); }
+  70% { opacity: 1; transform: translate3d(calc(var(--voo-distancia, 170px) * 0.8), -26px, 0) scale(0.9); }
+  100% { opacity: 0; transform: translate3d(var(--voo-distancia, 170px), 0, 0) scale(0.35); }
+}
+
+/* A onda que o anel solta quando alguem chega. */
+@keyframes planilha-chegada {
+  0% { opacity: 0.7; transform: scale(0.82); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+/* O brilho de fundo respira. */
+@keyframes planilha-respiro {
+  0%, 100% { opacity: 0.45; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* Os pontos em orbita do anel. */
+@keyframes planilha-orbita {
+  to { transform: rotate(360deg); }
+}
+
+/* Confete: cada pedaco sai do centro no proprio angulo e cai girando. */
+@keyframes planilha-confete {
+  0% { opacity: 1; transform: rotate(var(--confete-angulo)) translateY(0) rotate(0deg) scale(1); }
+  70% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--confete-angulo)) translateY(calc(var(--confete-distancia) * -1))
+      rotate(var(--confete-giro)) scale(0.6);
+  }
+}
+
+/* O numero grande "estala" a cada pessoa gravada. */
+@keyframes planilha-batida {
+  0% { transform: scale(1.12); }
+  100% { transform: none; }
+}
+
+.planilha-leitura {
+  opacity: 0;
+  animation: planilha-leitura 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.planilha-voo {
+  opacity: 0;
+  animation: planilha-voo 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.planilha-chegada {
+  opacity: 0;
+  /* Sem atraso: a onda sai no instante em que o servidor confirma a gravacao. */
+  animation: planilha-chegada 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.planilha-respiro { animation: planilha-respiro 3.6s ease-in-out infinite; }
+.planilha-orbita { animation: planilha-orbita var(--orbita-duracao, 6s) linear infinite; }
+.planilha-confete {
+  opacity: 0;
+  animation: planilha-confete 1.5s cubic-bezier(0.16, 1, 0.3, 1) var(--confete-atraso, 0ms) both;
+}
+.planilha-batida { animation: planilha-batida 360ms cubic-bezier(0.34, 1.56, 0.64, 1); }
 
 /* ==========================================================================
    BASE

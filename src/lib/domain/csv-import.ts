@@ -51,7 +51,15 @@ export interface LinhaImportada {
   address: string;
   /** Coluna "VERIFICADO POR FOTO": 'SIM', 'NÃO' ou vazio (nao informado). */
   photoVerified: VerificadoPorFoto;
+  /**
+   * Coluna "REFERÊNCIA", como veio. Vazio quando a pessoa nao tem — e vazio
+   * nao e falta: nenhuma etiqueta de incompleto nasce por causa dela.
+   */
+  reference: string;
 }
+
+/** Tamanho maximo da REFERÊNCIA, igual ao `check` da migration 051. */
+export const REFERENCIA_MAX = 200;
 
 export type VerificadoPorFoto = 'SIM' | 'NÃO' | '';
 
@@ -107,7 +115,8 @@ const COLUNAS: Record<
   | 'district'
   | 'street'
   | 'address'
-  | 'photoVerified',
+  | 'photoVerified'
+  | 'reference',
   string[]
 > = {
   name: ['nome completo', 'nome', 'nome do integrante', 'integrante'],
@@ -119,6 +128,7 @@ const COLUNAS: Record<
   street: ['rua', 'logradouro', 'avenida'],
   address: ['endereco', 'endereco completo'],
   photoVerified: ['verificado por foto', 'verificado foto', 'verificacao por foto'],
+  reference: ['referencia', 'ponto de referencia', 'ref'],
 };
 
 /**
@@ -373,6 +383,7 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
             address: '',
           }),
       photoVerified: lerVerificadoPorFoto(valor(bruta, 'photoVerified')),
+      reference: limpo(valor(bruta, 'reference'), REFERENCIA_MAX),
     });
   }
 
@@ -444,8 +455,8 @@ export function faltasDaLinha(linha: LinhaImportada): string[] {
 export const MODELO_SEPARADOR = ';';
 
 export const EXEMPLO_CSV = [
-  'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;VERIFICADO POR FOTO',
-  'Maria da Silva Souza;82999990001;100000002720;10;147;Jardim Brasil;Rua Brasil Novo, Nº 269;SIM',
-  'João Pedro Alves;82988887777;;10;146;Conjunto Brivaldo Medeiros;QJ Nº 11;NÃO',
-  'Ana Beatriz Lima;82996013641;;10;326;Aldeia;Fazenda Canto;SIM',
+  'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;VERIFICADO POR FOTO;REFERÊNCIA',
+  'Maria da Silva Souza;82999990001;100000002720;10;147;Jardim Brasil;Rua Brasil Novo, Nº 269;SIM;Irmã do Pastor Carlos',
+  'João Pedro Alves;82988887777;;10;146;Conjunto Brivaldo Medeiros;QJ Nº 11;NÃO;',
+  'Ana Beatriz Lima;82996013641;;10;326;Aldeia;Fazenda Canto;SIM;Vizinha da escola',
 ].join('\r\n');

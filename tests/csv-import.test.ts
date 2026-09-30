@@ -24,7 +24,7 @@ const CABECALHO =
   'Nome completo,Telefone,Título de eleitor,Zona eleitoral,Seção eleitoral,Endereço';
 
 /** A planilha de agora: sete colunas, com bairro e rua separados. */
-const CABECALHO_NOVO = 'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;VERIFICADO POR FOTO';
+const CABECALHO_NOVO = 'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;VERIFICADO POR FOTO;REFERÊNCIA';
 
 describe('leitura da planilha', () => {
   it('lê as cinco colunas, na ordem que vierem', () => {
@@ -178,6 +178,7 @@ describe('o que impede uma linha de ser cadastrada', () => {
       street: '',
       address: '',
       photoVerified: '' as const,
+      reference: '',
       ...extra,
     };
   }
@@ -249,7 +250,7 @@ describe('planilha de exemplo', () => {
     expect(MODELO_SEPARADOR).toBe(';');
 
     const [cabecalho] = EXEMPLO_CSV.split(/\r?\n/);
-    expect(cabecalho.split(';')).toHaveLength(8);
+    expect(cabecalho.split(';')).toHaveLength(9);
     expect(cabecalho).toBe(CABECALHO_NOVO);
   });
 
@@ -399,6 +400,36 @@ describe('título de eleitor torto', () => {
 
     expect(linhas[0].voterId).toBe('018161400850');
     expect(problemasDaLinha(linhas[0])).toEqual([]);
+  });
+});
+
+describe('coluna REFERÊNCIA', () => {
+  it('quem tem vem preenchido; quem não tem fica em branco, sem alerta nenhum', () => {
+    const { linhas, ignoradas } = lerPlanilha(
+      [
+        'Nome;Telefone;Título;Zona;Seção;Bairro;Rua;REFERÊNCIA',
+        'Ana Lima;82999990001;100000002720;10;147;Centro;Rua A;  Irmã   do Pastor  ',
+        'Bia Souza;82999990002;100000002720;10;147;Centro;Rua B;',
+      ].join('\n'),
+    );
+
+    expect(ignoradas).toEqual([]);
+    expect(linhas.map((l) => l.reference)).toEqual(['Irmã do Pastor', '']);
+    // Sem referência não é falta, nem dado para conferir.
+    expect(faltasDaLinha(linhas[1])).toEqual([]);
+    expect(conferirDaLinha(linhas[1])).toEqual(conferirDaLinha(linhas[0]));
+  });
+
+  it('aceita o cabeçalho escrito de outro jeito', () => {
+    for (const cabecalho of ['Referencia', 'referência', 'Ponto de referência', 'REF']) {
+      const { linhas } = lerPlanilha(`Nome;${cabecalho}\nAna Lima;Vizinha da escola`);
+      expect(linhas[0].reference).toBe('Vizinha da escola');
+    }
+  });
+
+  it('planilha sem a coluna continua funcionando', () => {
+    const { linhas } = lerPlanilha('Nome;Telefone\nAna Lima;82999990001');
+    expect(linhas[0].reference).toBe('');
   });
 });
 

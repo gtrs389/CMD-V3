@@ -17,6 +17,7 @@ import {
 import {
   ENDERECO_FIXO,
   EXEMPLO_CSV,
+  REFERENCIA_MAX,
   conferirDaLinha,
   faltasDaLinha,
   lerPlanilha,
@@ -32,6 +33,7 @@ import { cn } from '@/lib/utils/cn';
 import { holdDataChanged } from '@/lib/repositories';
 import { Button } from '@/components/ui/Button';
 import { ImportAddressFields, type EnderecoDaLinha } from './ImportAddressFields';
+import { ImportLaunchStage, type ResultadoRecente } from './ImportLaunchStage';
 import { Badge } from '@/components/ui/Badge';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -96,6 +98,19 @@ export function SpreadsheetImportModal({
   const [arquivo, setArquivo] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [progresso, setProgresso] = useState(0);
+  /**
+   * O lote em andamento (ou o que acabou de terminar), para a tela de envio.
+   * Nulo: a tela mostra a lista para conferir.
+   */
+  const [lote, setLote] = useState<{
+    total: number;
+    gravadas: number;
+    falhas: number;
+    inicio: number;
+    fim: number | null;
+    atual: { id: string; nome: string } | null;
+    recentes: ResultadoRecente[];
+  } | null>(null);
 
   const pendentes = linhas.filter((linha) => situacoes[linha.id]?.estado !== 'salva');
   // "Pronta" quer dizer que ENTRA, e nao que esta completa: dado faltando
@@ -112,6 +127,7 @@ export function SpreadsheetImportModal({
     setIgnoradas([]);
     setArquivo(null);
     setProgresso(0);
+    setLote(null);
   }
 
   async function escolher(file: File) {
@@ -182,6 +198,33 @@ export function SpreadsheetImportModal({
     let gravadas = 0;
     let falhas = 0;
 
+    // A fila e fotografada AGORA: `prontas` encolhe enquanto as linhas viram
+    // "salva", e o total da tela de envio nao pode encolher junto.
+    const fila = prontas;
+    setLote({
+      total: fila.length,
+      gravadas: 0,
+      falhas: 0,
+      inicio: Date.now(),
+      fim: null,
+      atual: null,
+      recentes: [],
+    });
+    const registrar = (linha: LinhaImportada, ok: boolean) =>
+      setLote((atual) =>
+        atual
+          ? {
+              ...atual,
+              gravadas: atual.gravadas + (ok ? 1 : 0),
+              falhas: atual.falhas + (ok ? 0 : 1),
+              recentes: [
+                { id: linha.id, nome: linha.name.trim() || 'Sem nome', ok },
+                ...atual.recentes,
+              ].slice(0, 6),
+            }
+          : atual,
+      );
+
     // As telas abertas recarregam UMA vez, no fim, e nao a cada pessoa: com
     // centenas de linhas, recarregar a lista inteira do time a cada gravacao
     // empilhava consultas no servidor enquanto ele ainda gravava.
@@ -191,13 +234,18 @@ export function SpreadsheetImportModal({
       // Uma de cada vez, de proposito: o servidor confere telefone repetido
       // contra o que JA esta no time, e duas gravacoes ao mesmo tempo poderiam
       // passar duas pessoas com o mesmo numero.
-      for (const linha of prontas) {
+      for (const linha of fila) {
+        setLote((atual) =>
+          atual ? { ...atual, atual: { id: linha.id, nome: linha.name.trim() || 'Sem nome' } } : atual,
+        );
         try {
           await salvar({ ...linha, ...(enderecos[linha.id] ?? SEM_ENDERECO) });
           gravadas += 1;
+          registrar(linha, true);
           setSituacoes((atual) => ({ ...atual, [linha.id]: { estado: 'salva' } }));
         } catch (falha) {
           falhas += 1;
+          registrar(linha, false);
           setSituacoes((atual) => ({
             ...atual,
             [linha.id]: {
@@ -212,6 +260,7 @@ export function SpreadsheetImportModal({
     } finally {
       soltar();
       setSalvando(false);
+      setLote((atual) => (atual ? { ...atual, atual: null, fim: Date.now() } : atual));
     }
 
     if (gravadas > 0) {
@@ -263,7 +312,7 @@ export function SpreadsheetImportModal({
             )}
           >
             {salvando
-              ? `Cadastrando ${progresso} de ${prontas.length}...`
+              ? `Cadastrando ${progresso} de ${lote?.total ?? prontas.length}...`
               : linhas.length === 0
                 ? 'Nenhuma planilha carregada.'
                 : `${prontas.length} ${prontas.length === 1 ? 'pronta' : 'prontas'} para cadastrar` +
@@ -291,6 +340,20 @@ export function SpreadsheetImportModal({
         </>
       }
     >
+      {lote ? (
+        <ImportLaunchStage
+          key={lote.inicio}
+          total={lote.total}
+          feitas={lote.gravadas + lote.falhas}
+          gravadas={lote.gravadas}
+          falhas={lote.falhas}
+          atual={lote.atual}
+          recentes={lote.recentes}
+          inicio={lote.inicio}
+          fim={lote.fim}
+          onVerLista={() => setLote(null)}
+        />
+      ) : (
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -554,6 +617,20 @@ export function SpreadsheetImportModal({
                         </Select>
                       </Field>
 
+                      {/* Coluna "REFERÊNCIA": quem tem, vem preenchido; quem
+                          nao tem fica em branco, sem aviso nenhum — nao e
+                          falta, e nao entra na conta de incompleto. */}
+                      <Field id={campo('referencia')} label="Referência">
+                        <Input
+                          id={campo('referencia')}
+                          value={linha.reference}
+                          maxLength={REFERENCIA_MAX}
+                          disabled={bloqueado}
+                          placeholder="Sem referência"
+                          onChange={(event) => editar(linha.id, 'reference', event.target.value)}
+                        />
+                      </Field>
+
                       {/* O endereco e a mesma cadeia da ficha — Estado,
                           Municipio, Bairro, Rua. Estado e municipio chegam
                           fixos e travados; bairro e rua, da planilha. */}
@@ -590,6 +667,7 @@ export function SpreadsheetImportModal({
           </>
         )}
       </div>
+      )}
     </Modal>
   );
 }

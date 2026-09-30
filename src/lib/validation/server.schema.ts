@@ -305,6 +305,8 @@ export const memberCreateSchema = z.object({
   bulkImport: z.boolean().default(false),
   /** "VERIFICADO POR FOTO" da planilha (migration 050). Nulo: nao informado. */
   photoVerified: z.boolean().nullable().default(null),
+  /** "REFERÊNCIA" da planilha (migration 051). Vazio: a pessoa nao tem. */
+  reference: z.string().trim().max(200).nullable().default(null),
 });
 
 export const memberUpdateSchema = z
@@ -531,6 +533,8 @@ export const surveyMemberSchema = z.object({
   bulkImport: z.boolean().default(false),
   /** "VERIFICADO POR FOTO" da planilha (migration 050). Nulo: nao informado. */
   photoVerified: z.boolean().nullable().default(null),
+  /** "REFERÊNCIA" da planilha (migration 051). Vazio: a pessoa nao tem. */
+  reference: z.string().trim().max(200).nullable().default(null),
   photo: photoValue.default(null),
   consentAt: z.iso.datetime().nullable().default(null),
   answers: z

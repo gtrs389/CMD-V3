@@ -1072,6 +1072,18 @@ Grava em `cmd_members.photo_verified` (`true`, `false` ou nulo) e requer a
 migration `050_verificado_por_foto.sql`. Sem ela, a linha com SIM/NÃO é
 recusada com o nome da migration a executar, em vez de perder o valor calada.
 
+### Coluna REFERÊNCIA
+
+A planilha também aceita a coluna **REFERÊNCIA** (ou "Referencia", "Ponto de
+referência", "Ref"), texto livre de até 200 caracteres. Quem tem, entra com
+ela preenchida; quem não tem fica em branco **sem aviso nenhum** — não é
+falta, não conta como incompleto e não pede conferência. Na conferência ela
+aparece editável, e na ficha da pessoa só aparece quando existe.
+
+Grava em `cmd_members.reference` e requer a migration `051_referencia.sql`.
+Sem ela, a linha que traz referência é recusada com o nome da migration a
+executar; a que não traz entra normalmente.
+
 ---
 
 ## Estrutura
