@@ -42,6 +42,7 @@ import {
 import { basePorResponsavel } from '@/lib/domain/por-responsavel';
 import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
 import { baixarArquivo } from '@/lib/utils/download';
+import { nomeDoPdfDeInconsistencia } from '@/lib/domain/nome-do-pdf';
 import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import type { SecaoParaPdf } from '@/components/neo/ListasPdf';
@@ -227,12 +228,15 @@ export function InconsistenciasPanel({
         repetidos: visto.repetidos.map(grupoRepetidoParaPdf),
         secoes,
       });
-      // inconsistência_<nome>.pdf — o nome é o do responsável escolhido, ou o do time.
-      const nome = (rotuloDoResponsavel ?? clientName)
-        .trim()
-        .replace(/[\\/:*?"<>|]+/g, '')
-        .replace(/\s+/g, '_') || 'time';
-      baixarArquivo(`inconsistência_${nome}.pdf`, blob);
+      // inconsistência_vivian.pdf — o primeiro nome do responsável escolhido
+      // (ou do time), com o sobrenome quando outro tem o mesmo primeiro nome.
+      baixarArquivo(
+        nomeDoPdfDeInconsistencia(
+          rotuloDoResponsavel ?? clientName,
+          responsaveis.map((opcao) => opcao.label),
+        ),
+        blob,
+      );
       toast.success('Relatório de inconsistências baixado.');
     } catch {
       toast.error('Não foi possível montar o PDF. Tente de novo.');
