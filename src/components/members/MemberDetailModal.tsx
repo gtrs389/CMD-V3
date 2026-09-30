@@ -193,9 +193,11 @@ export function MemberDetailModal({
   onOpenLider,
 }: MemberDetailModalProps) {
   const { can } = useSession();
-  const podeEditar = can('member.update');
 
   if (!member) return null;
+  // Pessoa da planilha do Sheets (052): so existe na tela. Corrige-se na
+  // planilha, nunca aqui.
+  const podeEditar = can('member.update') && !member.fromSheet;
 
   return (
     <Modal
@@ -269,11 +271,14 @@ function ResponsavelDaFicha({ member }: { member: Member }) {
 export function MemberSheetBody({ client, member }: { client: Client; member: Member }) {
   // Dados enriquecidos e sinais do aparelho sao exclusivos do ADMIN.
   const { can, user } = useSession();
-  const podeEditar = can('member.update');
+  // Pessoa da planilha do Sheets (052): so leitura. Ela nao existe no banco,
+  // entao editar, trocar responsavel, tag, painel e aparelho nao se aplicam.
+  const daPlanilha = member.fromSheet === true;
+  const podeEditar = can('member.update') && !daPlanilha;
   const [transferindo, setTransferindo] = useState(false);
   const [editandoTag, setEditandoTag] = useState(false);
   const navegador = useNavegador();
-  const podeVerAparelho = can('device.view');
+  const podeVerAparelho = can('device.view') && !daPlanilha;
   // O integrante da equipe ve apenas nome, foto e telefone: o resto da
   // ficha (CPF, endereco, e-mail, respostas, origem) fica so com o ADMIN.
   const somenteBasico = user?.role === 'EQUIPE';
@@ -334,9 +339,13 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                 <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
                   {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
                 </Badge>
-                <Badge tone={member.access === 'ACTIVE' ? 'success' : 'neutral'}>
-                  {ACCESS_STATUS_LABELS[member.access]}
-                </Badge>
+                {daPlanilha ? (
+                  <Badge tone="success">Da planilha do Sheets</Badge>
+                ) : (
+                  <Badge tone={member.access === 'ACTIVE' ? 'success' : 'neutral'}>
+                    {ACCESS_STATUS_LABELS[member.access]}
+                  </Badge>
+                )}
                 {member.consentAt ? <Badge tone="success">Consentimento registrado</Badge> : null}
                 {/* O que falta aparece por extenso logo abaixo: aqui a
                     etiqueta so avisa que falta alguma coisa. */}
@@ -356,9 +365,15 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
               {/* Entrar no painel desta pessoa: exclusivo do ADMIN geral, e
                   a rota confere de novo. O botao some sozinho para quem nao
                   pode e para quem ainda nao tem acesso. */}
-              <div className="mt-3">
-                <InspectMemberButton member={member} />
-              </div>
+              {daPlanilha ? (
+                <p className="mt-3 rounded-control bg-success-50 px-3 py-2 text-[0.8125rem] text-ink-700">
+                  Lida ao vivo da planilha do Google Sheets. Para corrigir, corrija na planilha.
+                </p>
+              ) : member.userId?.startsWith('planilha-') ? null : (
+                <div className="mt-3">
+                  <InspectMemberButton member={member} />
+                </div>
+              )}
             </>
           ) : null}
         </div>

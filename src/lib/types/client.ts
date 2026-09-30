@@ -1,7 +1,6 @@
 import type { IsoDate, StoredImage, Timestamped } from './common';
 import type { ClientFormConfig } from './form-field';
 import type { Invite } from './invite';
-import type { RelatorioDaPlanilha } from '@/lib/domain/planilha-do-sheets';
 
 /**
  * Pessoa do time: registro interno do ADMIN, sem relacao com integrantes
@@ -137,15 +136,11 @@ export interface Client extends Timestamped {
   /** De qual time a copia saiu. Nulo em time que nao e copia. */
   copyOf: { id: string; name: string } | null;
   /**
-   * Planilha do Google Sheets (migration 052). So existe em time duplicado;
-   * nulo em qualquer outro.
+   * Planilha do Google Sheets (migration 052): o interruptor e o link. So
+   * existe em time duplicado; nulo em qualquer outro. A planilha e lida ao
+   * vivo — nada dela vem daqui.
    */
-  sheetSync?: {
-    enabled: boolean;
-    url: string | null;
-    syncedAt: string | null;
-    report: RelatorioDaPlanilha | null;
-  } | null;
+  sheetSync?: { enabled: boolean; url: string | null } | null;
   /**
    * Estado do time, pela sigla da UF (migration 038).
    *

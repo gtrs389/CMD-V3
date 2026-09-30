@@ -12,7 +12,6 @@ import type {
 } from '@/lib/types';
 import type { InviteState } from '@/lib/domain/invite-expiration';
 import { tierOf } from '@/lib/domain/team-tier';
-import type { RelatorioDaPlanilha } from '@/lib/domain/planilha-do-sheets';
 import type {
   ClientRow,
   FormFieldRow,
@@ -143,12 +142,7 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     // Planilha do Google Sheets (052): so a copia tem.
     sheetSync:
       row.is_copy === true
-        ? {
-            enabled: row.sheet_sync_enabled === true,
-            url: row.sheet_url ?? null,
-            syncedAt: row.sheet_synced_at ?? null,
-            report: (row.sheet_sync_report as RelatorioDaPlanilha | null | undefined) ?? null,
-          }
+        ? { enabled: row.sheet_sync_enabled === true, url: row.sheet_url ?? null }
         : null,
     copyOf:
       row.is_copy === true && row.copy_of_client_id

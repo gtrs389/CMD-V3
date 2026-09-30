@@ -132,7 +132,6 @@ const tabela = (nome: string) => {
   if (!db.has(nome)) db.set(nome, []);
   return db.get(nome)!;
 };
-let seq = 0;
 
 function lista(valor: string): string[] {
   return valor
@@ -143,7 +142,7 @@ function lista(valor: string): string[] {
 
 function casa(row: Row, filtros: Record<string, string> = {}): boolean {
   return Object.entries(filtros).every(([chave, valor]) => {
-    if (chave === 'or') return true; // so a trava de leitura usa `or` aqui
+    if (chave === 'or') return true;
     if (valor === 'is.true') return row[chave] === true;
     if (valor === 'is.false') return row[chave] !== true;
     if (valor === 'is.null') return row[chave] == null;
@@ -153,36 +152,33 @@ function casa(row: Row, filtros: Record<string, string> = {}): boolean {
   });
 }
 
+/** Toda escrita que chegar ao banco. A leitura da planilha nao pode gerar nenhuma. */
+const escritas: { operacao: string; tabela: string; valores?: unknown }[] = [];
+
 vi.mock('@/lib/supabase/rest', async () => {
   const real = await vi.importActual<typeof import('@/lib/supabase/rest')>('@/lib/supabase/rest');
   const selecionar = (t: string, o: { filters?: Record<string, string> } = {}) =>
     tabela(t).filter((row) => casa(row, o.filters)).map((row) => ({ ...row }));
-  const inserir = (t: string, valores: Row[]) => {
-    const gravadas = valores.map((v) => ({ id: v.id ?? `${t}-${++seq}`, ...v }));
-    tabela(t).push(...gravadas);
-    return gravadas.map((row) => ({ ...row }));
+  const registrar = (operacao: string) => async (t: string, ...resto: unknown[]) => {
+    escritas.push({ operacao, tabela: t, valores: resto });
+    if (operacao === 'update') {
+      const [filtros, valores] = resto as [Record<string, string>, Row];
+      const alvo = tabela(t).filter((row) => casa(row, filtros));
+      for (const row of alvo) Object.assign(row, valores);
+      return alvo.map((row) => ({ ...row }));
+    }
+    return [];
   };
   return {
     ...real,
     selectRows: async (t: string, o: { filters?: Record<string, string> }) => selecionar(t, o),
     selectOne: async (t: string, o: { filters?: Record<string, string> }) => selecionar(t, o)[0] ?? null,
-    insertRowsInChunks: async (t: string, v: Row[]) => inserir(t, v),
-    updateRows: async (t: string, f: Record<string, string>, v: Row) => {
-      const alvo = tabela(t).filter((row) => casa(row, f));
-      for (const row of alvo) Object.assign(row, v);
-      return alvo.map((row) => ({ ...row }));
-    },
-    deleteRows: async (t: string, f: Record<string, string>) => {
-      const saem = tabela(t).filter((row) => casa(row, f));
-      db.set(t, tabela(t).filter((row) => !saem.includes(row)));
-      // Cascata do banco: usuario e vinculo de mapa do integrante apagado.
-      const ids = new Set(saem.map((row) => row.id));
-      if (t === 'cmd_members') {
-        db.set('cmd_users', tabela('cmd_users').filter((u) => !ids.has(u.member_id)));
-        db.set('cmd_member_locations', tabela('cmd_member_locations').filter((l) => !ids.has(l.member_id)));
-      }
-      return saem;
-    },
+    insertRows: registrar('insert'),
+    insertRowsInChunks: registrar('insert'),
+    insertOne: registrar('insert'),
+    updateRows: registrar('update'),
+    deleteRows: registrar('delete'),
+    callFunction: registrar('rpc'),
   };
 });
 
@@ -191,7 +187,9 @@ const { chaveDoNome, idDaPlanilha, lerAbaDoSheets, planejarPlanilha } = await im
   '@/lib/domain/planilha-do-sheets'
 );
 const { sheetVisibilityFilter } = await import('@/lib/server/sheet-visibility');
-const { syncSheet, updateSheetSettings } = await import('@/lib/server/sheet-sync.service');
+const { equipeDaPlanilha, lerPlanilha, montarEquipe, statusDaPlanilha, updateSheetSettings } = await import(
+  '@/lib/server/sheet-live.service'
+);
 
 const OFICIAL = 'time-oficial';
 const COPIA = 'time-copia';
@@ -201,19 +199,19 @@ let arquivoDoGoogle: Buffer;
 
 function semear() {
   db.clear();
-  seq = 0;
+  escritas.length = 0;
   tabela('cmd_clients').push(
     { id: OFICIAL, is_copy: false, sheet_sync_enabled: false, sheet_url: null, state_uf: 'AL', cities: [] },
-    { id: COPIA, is_copy: true, sheet_sync_enabled: true, sheet_url: LINK, state_uf: 'AL', cities: ['Arapiraca'], sheet_sync_lock_at: null },
+    { id: COPIA, is_copy: true, sheet_sync_enabled: true, sheet_url: LINK, state_uf: 'AL', cities: ['Arapiraca'] },
   );
   tabela('cmd_users').push({ id: 'admin-geral', role: 'ADMIN', client_id: null, member_id: null });
   // Oficial: um Lider e a Equipe dele. Nada disto pode mudar.
   tabela('cmd_members').push(
-    { id: 'of-lider', client_id: OFICIAL, name: 'Félix Silva Targino', recruited_by_role: 'CANDIDATE', from_sheet: false },
-    { id: 'of-equipe', client_id: OFICIAL, name: 'Equipe do Oficial', recruited_by_role: 'EQUIPE', from_sheet: false },
+    { id: 'of-lider', client_id: OFICIAL, name: 'Félix Silva Targino', recruited_by_role: 'CANDIDATE' },
+    { id: 'of-equipe', client_id: OFICIAL, name: 'Equipe do Oficial', recruited_by_role: 'EQUIPE' },
     // Copia: o mesmo Lider (copiado) e uma Equipe que estava no banco.
-    { id: 'cp-lider', client_id: COPIA, name: 'Félix Silva Targino', recruited_by_role: 'CANDIDATE', from_sheet: false },
-    { id: 'cp-equipe', client_id: COPIA, name: 'Equipe do Banco', recruited_by_role: 'EQUIPE', recruited_by_user_id: 'u-cp-lider', from_sheet: false },
+    { id: 'cp-lider', client_id: COPIA, name: 'Félix Silva Targino', recruited_by_role: 'CANDIDATE' },
+    { id: 'cp-equipe', client_id: COPIA, name: 'Equipe do Banco', recruited_by_role: 'EQUIPE', recruited_by_user_id: 'u-cp-lider' },
   );
   tabela('cmd_users').push({ id: 'u-cp-lider', role: 'EQUIPE', client_id: COPIA, member_id: 'cp-lider' });
 
@@ -327,43 +325,36 @@ describe('Líder de cada aba', () => {
   });
 });
 
-describe('quem aparece na cópia', () => {
+describe('quem do banco aparece na cópia', () => {
   it('no time oficial, nada muda', async () => {
     expect(await sheetVisibilityFilter(OFICIAL)).toEqual({});
   });
 
-  it('ligada: Líderes e o que veio da planilha; a Equipe do banco some', async () => {
+  it('ligada: do banco só os Líderes; a Equipe do banco fica escondida', async () => {
     expect(await sheetVisibilityFilter(COPIA)).toEqual({
-      or: '(from_sheet.is.true,recruited_by_role.is.null,recruited_by_role.neq.EQUIPE)',
+      or: '(recruited_by_role.is.null,recruited_by_role.neq.EQUIPE)',
     });
   });
 
-  it('desligada: o que veio da planilha some, e a cópia volta a ser o que era', async () => {
+  it('desligada: a cópia mostra o banco, como sempre', async () => {
     tabela('cmd_clients').find((c) => c.id === COPIA)!.sheet_sync_enabled = false;
-    expect(await sheetVisibilityFilter(COPIA)).toEqual({ from_sheet: 'is.false' });
+    expect(await sheetVisibilityFilter(COPIA)).toEqual({});
   });
 });
 
-describe('leitura da planilha', () => {
-  const admin = { id: 'admin-geral', name: 'Admin Geral' };
-  const doOficial = () => structuredClone(tabela('cmd_members').filter((m) => m.client_id === OFICIAL));
+describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
+  it('ler a planilha não escreve nada no banco — nem pessoa, nem Líder, nem resumo', async () => {
+    const equipe = await equipeDaPlanilha(COPIA);
+    await statusDaPlanilha(COPIA, { naHora: true });
 
-  it('o time oficial sai EXATAMENTE como entrou', async () => {
-    const antes = doOficial();
-    await syncSheet(COPIA, admin);
-    await syncSheet(COPIA, admin);
-    expect(doOficial()).toEqual(antes);
+    expect(equipe?.membros.length).toBeGreaterThan(0);
+    expect(escritas).toEqual([]);
   });
 
-  it('time oficial é recusado: nem ligar, nem ler', async () => {
-    await expect(updateSheetSettings(OFICIAL, { enabled: true, url: LINK })).rejects.toThrow('time duplicado');
-    await expect(syncSheet(OFICIAL, admin)).rejects.toThrow('time duplicado');
-  });
+  it('monta a Equipe de cada Líder na memória, e o Líder que só existe na planilha', async () => {
+    const equipe = (await equipeDaPlanilha(COPIA))!;
 
-  it('põe a Equipe da planilha em cada Líder, e cria o Líder que faltava', async () => {
-    const relatorio = await syncSheet(COPIA, admin);
-
-    expect(relatorio).toMatchObject({
+    expect(equipe.relatorio).toMatchObject({
       ok: true,
       abas: 2,
       lideresEncontrados: ['Félix Silva Targino'],
@@ -371,45 +362,84 @@ describe('leitura da planilha', () => {
       pessoas: 3,
     });
 
-    const daPlanilha = tabela('cmd_members').filter((m) => m.client_id === COPIA && m.from_sheet);
-    const felix = daPlanilha.filter((m) => m.recruited_by_user_id === 'u-cp-lider');
+    const felix = equipe.membros.filter((m) => m.recruitedBy?.userId === 'u-cp-lider');
     expect(felix.map((m) => m.name)).toEqual(['Maria Souza', 'João Lima']);
     expect(felix[0]).toMatchObject({
-      voter_id: '100000002720',
+      voterId: '100000002720',
       zone: '10',
       section: '147',
       phone: '82999990001',
       reference: 'Irmã do pastor',
-      photo_verified: true,
-      recruited_by_role: 'EQUIPE',
+      photoVerified: true,
+      tier: 'EQUIPE',
+      fromSheet: true,
     });
 
-    const adalberto = daPlanilha.find((m) => m.name === 'Adalberto Souza Lima')!;
-    expect(adalberto.recruited_by_role).toBe('ADMIN');
-    const usuario = tabela('cmd_users').find((u) => u.member_id === adalberto.id)!;
-    expect(usuario.phone).toBeNull();
-    expect(daPlanilha.find((m) => m.name === 'Ana Rocha')!.recruited_by_user_id).toBe(usuario.id);
+    const adalberto = equipe.membros.find((m) => m.name === 'Adalberto Souza Lima')!;
+    expect(adalberto).toMatchObject({ tier: 'LIDER', fromSheet: true });
+    expect(adalberto.id.startsWith('planilha-')).toBe(true);
+    const ana = equipe.membros.find((m) => m.name === 'Ana Rocha')!;
+    expect(ana.recruitedBy?.userId).toBe(adalberto.userId);
   });
 
-  it('ler de novo troca a fotografia, sem duplicar, e não apaga o que estava no banco da cópia', async () => {
-    await syncSheet(COPIA, admin);
-    await syncSheet(COPIA, admin);
+  it('mudou a planilha, mudou a tela — sem importar nada', async () => {
+    await equipeDaPlanilha(COPIA);
+    arquivoDoGoogle = xlsx([
+      { nome: 'Félix Silva Targino', linhas: [CABECALHO, ['Pessoa Nova', '', '', '', '', '', '', '']] },
+    ]);
 
-    const daCopia = tabela('cmd_members').filter((m) => m.client_id === COPIA);
-    expect(daCopia.filter((m) => m.from_sheet)).toHaveLength(4); // 3 pessoas + Adalberto
-    expect(daCopia.find((m) => m.id === 'cp-equipe')).toBeTruthy();
-    expect(daCopia.find((m) => m.id === 'cp-lider')).toBeTruthy();
+    const depois = await statusDaPlanilha(COPIA, { naHora: true });
+    expect(depois.pessoas).toBe(1);
+    const equipe = (await equipeDaPlanilha(COPIA))!;
+    expect(equipe.membros.map((m) => m.name)).toEqual(['Pessoa Nova']);
+    expect(escritas).toEqual([]);
   });
 
-  it('planilha fechada: a cópia continua como estava e o motivo fica registrado', async () => {
-    await syncSheet(COPIA, admin);
-    const antes = structuredClone(tabela('cmd_members'));
+  it('dentro de um minuto reaproveita a leitura; "Ler agora" vai ao Google de novo', async () => {
+    const url = 'https://docs.google.com/spreadsheets/d/1OutraPlanilhaParaOCache';
+    await lerPlanilha(url);
+    await lerPlanilha(url);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    await lerPlanilha(url, { naHora: true });
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  });
+
+  it('Líder do banco sem usuário ainda liga com a Equipe dele pela tela', () => {
+    const leitura = { em: '2026-09-30T12:00:00.000Z', abas: [lerAbaDoSheets('Bia', [CABECALHO, ['Caio', '', '', '', '', '', '', '']])] };
+    const equipe = montarEquipe(leitura, [{ memberId: 'm-bia', name: 'Bia', userId: null, tag: 'NORTE' }], {
+      clientId: COPIA,
+      estado: 'AL',
+      cidade: 'Arapiraca',
+    });
+    const vinculo = equipe.vinculoDoLider.get('m-bia')!;
+    expect(vinculo.startsWith('planilha-')).toBe(true);
+    expect(equipe.membros[0].recruitedBy).toMatchObject({ userId: vinculo, name: 'Bia', tag: 'NORTE' });
+  });
+
+  it('planilha fechada: a lista do time continua abrindo, e o motivo aparece no cartão', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } })));
+    const url = 'https://docs.google.com/spreadsheets/d/1PlanilhaFechadaNoGoogle';
+    tabela('cmd_clients').find((c) => c.id === COPIA)!.sheet_url = url;
 
-    await expect(syncSheet(COPIA, admin)).rejects.toThrow('Qualquer pessoa com o link');
-    expect(tabela('cmd_members')).toEqual(antes);
-    const copia = tabela('cmd_clients').find((c) => c.id === COPIA)!;
-    expect((copia.sheet_sync_report as { ok: boolean }).ok).toBe(false);
-    expect(copia.sheet_sync_lock_at).toBeNull();
+    const equipe = await equipeDaPlanilha(COPIA);
+    expect(equipe?.membros).toEqual([]);
+    const status = await statusDaPlanilha(COPIA, { naHora: true });
+    expect(status.ok).toBe(false);
+    expect(status.erro).toContain('Qualquer pessoa com o link');
+    expect(escritas).toEqual([]);
+  });
+
+  it('no time oficial não há planilha: nem ler, nem ligar', async () => {
+    expect(await equipeDaPlanilha(OFICIAL)).toBeNull();
+    await expect(statusDaPlanilha(OFICIAL)).rejects.toThrow('time duplicado');
+    await expect(updateSheetSettings(OFICIAL, { enabled: true, url: LINK })).rejects.toThrow('time duplicado');
+    expect(escritas).toEqual([]);
+  });
+
+  it('o banco guarda só o interruptor e o link, já limpo', async () => {
+    await updateSheetSettings(COPIA, { enabled: true, url: `${LINK}/edit#gid=0` });
+    expect(escritas).toHaveLength(1);
+    expect(escritas[0]).toMatchObject({ operacao: 'update', tabela: 'cmd_clients' });
+    expect((escritas[0].valores as unknown[])[1]).toEqual({ sheet_sync_enabled: true, sheet_url: LINK });
   });
 });

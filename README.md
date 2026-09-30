@@ -847,7 +847,14 @@ acesso na cópia, exatamente como no oficial.
 
 Na aba **Visão geral** do time duplicado, o ADMIN geral encontra o cartão
 **Planilha do Google Sheets**: um interruptor e o link. Ligado, a **Equipe de
-cada Líder da cópia vem da planilha**.
+cada Líder da cópia vem da planilha, lida ao vivo**.
+
+**Nada da planilha é gravado no Supabase.** O banco guarda só o interruptor e
+o link. Cada vez que a lista do time é aberta, a planilha é lida do Google e a
+Equipe é montada na memória do servidor — quem atualiza a planilha vê a
+mudança no sistema, sem importar nada. Para não ir ao Google a cada clique, a
+leitura é reaproveitada por até **1 minuto**; o botão **Ler agora** busca a
+versão mais recente na hora.
 
 - **Uma aba por Líder.** O nome da aba é comparado com os Líderes da cópia sem
   diferença de maiúscula, acento ou espaço ("FELIX SILVA TARGINO" = "Félix
@@ -859,14 +866,18 @@ cada Líder da cópia vem da planilha**.
   nome da coluna; sem ela, pela ordem. Aba oculta e linha sem nome ficam de
   fora; a linha do próprio Líder na aba dele não vira Equipe dele mesmo.
 - **Ligada**, a Equipe que estava no banco da cópia fica **escondida**, e a da
-  planilha aparece — na lista, no painel do Líder, no mapa e no relatório.
-  **Desligada**, o que veio da planilha some e a cópia volta a ser o que era.
-  Ligar e desligar **não apaga nada**.
-- Cada leitura é uma fotografia completa: o que veio da leitura anterior sai e
-  o que está na planilha agora entra. Ela acontece ao ligar, no botão **Ler
-  agora**, e sozinha ao abrir o time quando a última passou de 5 minutos. O
-  cartão mostra os Líderes reconhecidos, os criados, quantas pessoas entraram
-  e o que ficou de fora, com o motivo.
+  planilha aparece — na lista, no painel do Líder e no relatório. **Desligada**,
+  a cópia volta a mostrar o banco. Ligar e desligar **não apaga nada**.
+- O Líder que a planilha "cria" também só existe na tela.
+- As pessoas da planilha aparecem com o selo **"Da planilha"** e são só
+  leitura: editar, excluir, trocar responsável, tag e "Entrar no painel" não se
+  aplicam a elas. Para corrigir, corrige-se na planilha.
+- Elas não aparecem no **mapa**: o mapa vem de coordenadas gravadas por
+  pessoa, e nada da planilha é gravado.
+- O cartão mostra o que a planilha tem agora: Líderes reconhecidos, os só da
+  planilha, quantas pessoas e o que ficou de fora, com o motivo. Se o Google
+  não responder, a lista do time continua abrindo, sem a Equipe da planilha,
+  e o cartão diz por quê.
 
 **Como o sistema lê:** o Google exporta a planilha inteira como .xlsx por um
 endereço público, e o servidor lê todas as abas dali (`src/lib/server/xlsx.ts`,
@@ -875,10 +886,11 @@ sem biblioteca nova). Por isso a planilha precisa estar compartilhada como
 `docs.google.com`, montando o endereço a partir do id da planilha.
 
 **O oficial continua intocável, e o banco garante:** o interruptor só liga em
-cópia (`check`), e uma linha vinda da planilha só entra em cópia (gatilho). A
-leitura apaga somente as linhas `from_sheet` da própria cópia. Conferido em
-`tests/planilha-do-sheets.test.ts`. Requer a migration
-`052_planilha_do_sheets.sql` (depois da 049, 050 e 051).
+cópia (`check`). Ler a planilha não escreve nada em tabela nenhuma — o teste
+`tests/planilha-do-sheets.test.ts` registra toda escrita que chega ao banco e
+confere que a leitura não gera nenhuma. Requer a migration
+`052_planilha_do_sheets.sql` (depois da 049, 050 e 051), que só acrescenta o
+interruptor e o link.
 
 Time DEMO não é duplicado. O sinal `is_copy` é imutável: o gatilho da
 migration recusa transformar um time oficial em cópia ou uma cópia em
