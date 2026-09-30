@@ -181,6 +181,12 @@ export interface GrupoDoLider {
   /** Abas que caíram neste Lider (normalmente uma). */
   abas: string[];
   pessoas: PessoaDaAba[];
+  /**
+   * A linha do PROPRIO Lider na aba dele, quando existe. Nao vira Equipe
+   * dele mesmo — vira os dados dele: corrigir o Lider na planilha corrige o
+   * Lider na tela.
+   */
+  linhaDoLider?: PessoaDaAba;
 }
 
 export interface PlanoDaPlanilha {
@@ -193,7 +199,7 @@ export interface PlanoDaPlanilha {
  * Decide o Lider de cada aba e junta as pessoas.
  *
  * Duas abas do mesmo Lider viram um grupo so. A linha em que o proprio
- * Lider aparece na aba dele nao vira Equipe dele mesmo.
+ * Lider aparece na aba dele nao vira Equipe dele mesmo: vira os dados dele.
  */
 export function planejarPlanilha(abas: AbaLida[], lideres: LiderDoTime[]): PlanoDaPlanilha {
   const porChave = new Map<string, LiderDoTime>();
@@ -235,7 +241,10 @@ export function planejarPlanilha(abas: AbaLida[], lideres: LiderDoTime[]): Plano
 
     const chaveDoLider = chaveDoNome(lider.name);
     for (const pessoa of aba.pessoas) {
-      if (chaveDoNome(pessoa.name) === chaveDoLider) continue;
+      if (chaveDoNome(pessoa.name) === chaveDoLider) {
+        grupo.linhaDoLider ??= pessoa;
+        continue;
+      }
       grupo.pessoas.push(pessoa);
     }
     grupos.set(chaveDoGrupo, grupo);

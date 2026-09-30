@@ -852,9 +852,13 @@ cada Líder da cópia vem da planilha, lida ao vivo**.
 **Nada da planilha é gravado no Supabase.** O banco guarda só o interruptor e
 o link. Cada vez que a lista do time é aberta, a planilha é lida do Google e a
 Equipe é montada na memória do servidor — quem atualiza a planilha vê a
-mudança no sistema, sem importar nada. Para não ir ao Google a cada clique, a
-leitura é reaproveitada por até **1 minuto**; o botão **Ler agora** busca a
-versão mais recente na hora.
+mudança no sistema, sem importar nada. **Sempre a versão atual:** nenhuma
+leitura é reaproveitada de uma requisição para outra; editou a planilha e
+atualizou a página, a página mostra a planilha editada. Só pedidos que chegam
+juntos (a lista e o mapa da mesma página) dividem a mesma ida ao Google.
+A linha do próprio Líder na aba dele vale para os dados dele na tela: o que
+estiver preenchido ali (título, zona, seção, telefone, referência, verificado
+por foto) aparece no lugar do que o banco da cópia tem.
 
 - **Uma aba por Líder.** O nome da aba é comparado com os Líderes da cópia sem
   diferença de maiúscula, acento ou espaço ("FELIX SILVA TARGINO" = "Félix
