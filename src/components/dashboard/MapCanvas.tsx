@@ -391,7 +391,7 @@ function PlaceImage({ place }: { place: PollingPlacePin }) {
         src={place.imageUrl}
         alt={place.title ?? 'Local de votação'}
         onError={() => setQuebrada(true)}
-        className="h-24 w-full rounded-control border border-line object-cover"
+        className="h-20 w-full rounded-control border border-line object-cover"
       />
     );
   }
@@ -399,7 +399,7 @@ function PlaceImage({ place }: { place: PollingPlacePin }) {
   return (
     <span
       aria-hidden="true"
-      className="flex h-24 w-full items-center justify-center rounded-control border border-line bg-ink-50 text-ink-400"
+      className="flex h-14 w-full items-center justify-center rounded-control border border-line bg-ink-50 text-ink-400"
     >
       <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6">
         <path d="M4 20h16M5 20V10M19 20V10M12 3l9 7H3zM9 20v-6h6v6" />
@@ -434,7 +434,7 @@ function PlaceVotes({ place }: { place: PollingPlacePin }) {
         ))}
       </dl>
 
-      <PlaceSections place={place} compact />
+      <PlaceSections place={place} compact limite={4} />
 
       <p className="mt-1 text-[0.625rem] text-ink-500 italic">{ESTIMATED_VOTES_HINT}</p>
     </section>
@@ -468,7 +468,9 @@ function PlaceMarker({
 
   return (
     <Marker ref={onReady} position={[place.latitude, place.longitude]} icon={icon}>
-      <Popup>
+      {/* Balao com teto de altura: escola com muitas secoes rola por dentro,
+          em vez de cobrir o mapa (principalmente em tela cheia). */}
+      <Popup maxHeight={420} minWidth={240}>
         <div className="map-popup w-56 space-y-1.5">
           <PlaceImage place={place} />
 

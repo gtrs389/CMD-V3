@@ -15,12 +15,17 @@ import { formatNumber } from '@/lib/utils/text';
 export function PlaceSections({
   place,
   compact = false,
+  limite,
 }: {
   place: PollingPlacePin;
   compact?: boolean;
+  /** Mostra so as N secoes com mais votos; o resto vira "e mais N". */
+  limite?: number;
 }) {
-  const linhas = sectionVotes(place);
-  if (linhas.length === 0) return null;
+  const todas = sectionVotes(place);
+  if (todas.length === 0) return null;
+  const linhas = limite ? [...todas].sort((a, b) => b.total - a.total).slice(0, limite) : todas;
+  const resto = todas.length - linhas.length;
 
   return (
     <div className={compact ? 'mt-2' : 'mt-3'}>
@@ -40,6 +45,11 @@ export function PlaceSections({
           </div>
         ))}
       </dl>
+      {resto > 0 ? (
+        <p className="mt-0.5 text-[0.6875rem] text-ink-500">
+          e mais {formatNumber(resto)} {resto === 1 ? 'seção' : 'seções'} — todas no PDF
+        </p>
+      ) : null}
     </div>
   );
 }

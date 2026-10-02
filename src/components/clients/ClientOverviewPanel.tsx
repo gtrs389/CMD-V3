@@ -300,10 +300,12 @@ export function ClientOverviewPanel({
   return (
     <div className="space-y-4">
       {/* 1. O MAPA, em destaque: e a leitura que a operacao abre primeiro.
-          So opacidade na entrada — um transform num ancestral prenderia a
-          tela cheia do mapa (position: fixed) dentro do cartao. */}
+          SEM animacao de entrada no envoltorio: qualquer animacao ali (ate
+          so de opacidade) cria um contexto de empilhamento, e a TELA CHEIA
+          do mapa (position: fixed) ficava por baixo da barra lateral e dos
+          cartoes da pagina. A entrada animada fica nos pinos e nos numeros. */}
       {podeVerMapa ? (
-        <div className="animate-fade-in">
+        <div>
           <MobilizationMap
             clientId={client.id}
             clientName={client.name}
