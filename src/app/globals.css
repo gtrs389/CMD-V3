@@ -474,6 +474,149 @@ textarea {
 }
 
 /* ==========================================================================
+   MAPA: pinos que caem ao aparecer, sobem no mouse, Lider que pulsa
+   ========================================================================== */
+
+/* A queda acontece na RAIZ do pino (uma vez); o realce do mouse, no CORPO.
+   Separados porque a animacao, terminada, prenderia o transform da raiz. */
+.cmd-pin-entra {
+  animation: cmd-pin-cai 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--cmd-atraso, 0ms);
+  transform-origin: 50% 100%;
+}
+@keyframes cmd-pin-cai {
+  0% { opacity: 0; transform: translate3d(0, -34px, 0) scale(0.55); }
+  55% { opacity: 1; transform: translate3d(0, 4px, 0) scale(1.06, 0.94); }
+  75% { transform: translate3d(0, -3px, 0) scale(0.98, 1.02); }
+  100% { opacity: 1; transform: none; }
+}
+
+.cmd-pin-corpo {
+  transform-origin: 50% 100%;
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 220ms ease;
+}
+.leaflet-marker-icon:hover .cmd-pin-corpo,
+.leaflet-marker-icon:focus-visible .cmd-pin-corpo {
+  transform: translate3d(0, -6px, 0) scale(1.14);
+  filter: drop-shadow(0 10px 12px rgb(16 24 40 / 0.35)) !important;
+}
+
+/* O Lider: um anel dourado respira em volta do pino. */
+.cmd-pin-lider::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 9999px;
+  border: 2px solid #e0a426;
+  animation: cmd-pulso 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+@keyframes cmd-pulso {
+  0% { opacity: 0.85; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+
+/* Grupo de pinos: o numero dentro de um anel que respira. */
+.cmd-cluster {
+  position: relative;
+  display: block;
+  animation: cmd-cluster-entra 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.cmd-cluster::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: var(--cmd-cor);
+  opacity: 0.18;
+  animation: cmd-respiro 2.6s ease-in-out infinite;
+}
+.cmd-cluster-corpo {
+  position: relative;
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.leaflet-marker-icon:hover .cmd-cluster-corpo {
+  transform: scale(1.12);
+}
+@keyframes cmd-cluster-entra {
+  0% { opacity: 0; transform: scale(0.3); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes cmd-respiro {
+  0%, 100% { transform: scale(0.92); opacity: 0.12; }
+  50% { transform: scale(1.12); opacity: 0.26; }
+}
+
+/* O balao do mapa abre com um pulo curto, de baixo para cima. No CONTEUDO:
+   o Leaflet posiciona o `.leaflet-popup` com transform, e animar ali o tiraria
+   do lugar. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip-container {
+  animation: cmd-balao 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: 50% 100%;
+}
+@keyframes cmd-balao {
+  0% { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.92); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* Carregando o mapa: o radar varre, os pontos acendem. */
+@keyframes cmd-radar {
+  to { transform: rotate(360deg); }
+}
+@keyframes cmd-ponto-acende {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  20%, 70% { opacity: 1; transform: scale(1); }
+}
+@keyframes cmd-onda {
+  0% { opacity: 0.5; transform: scale(0.3); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+
+/* Numeros e barras que crescem ao aparecer. */
+@keyframes cmd-barra-cresce {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes cmd-coluna-cresce {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.cmd-barra {
+  transform-origin: left center;
+  animation: cmd-barra-cresce 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--cmd-atraso, 0ms);
+}
+.cmd-revela {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: cmd-barra-cresce 1100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cmd-ponto {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cmd-ponto-surge 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: var(--cmd-atraso, 0ms);
+  transition: r 160ms ease;
+}
+.cmd-ponto:hover {
+  r: 5;
+}
+@keyframes cmd-ponto-surge {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: none; }
+}
+.cmd-coluna {
+  transform-origin: 50% 100%;
+  animation: cmd-coluna-cresce 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--cmd-atraso, 0ms);
+}
+
+/* ==========================================================================
    ACESSIBILIDADE: respeita a preferencia por menos movimento
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {

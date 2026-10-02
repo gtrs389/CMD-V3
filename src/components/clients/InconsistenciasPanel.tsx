@@ -26,8 +26,8 @@ import {
   CERTEZA_ROTULO,
   TIPO_INFO,
   TIPOS,
-  doResponsavel,
   entraNasInconsistencias,
+  motivosDosRegistros,
   EVIDENCIA_INFO,
   type Certeza,
   type Diagnostico,
@@ -38,17 +38,10 @@ import {
 } from '@/lib/domain/inconsistencias';
 import { resumoDasFaltas } from '@/lib/domain/member-completeness';
 import { recruiterOptionsAlfabeticas, recruiterText } from '@/lib/domain/recruitment';
-import {
-  contextoDosFiltros,
-  nomeDoProblemaDaFicha,
-  nomesDasFaltas,
-} from '@/lib/domain/filtros-de-dados';
-import { basePorResponsavel } from '@/lib/domain/por-responsavel';
-import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
+import { contextoDosFiltros } from '@/lib/domain/filtros-de-dados';
 import { baixarArquivo } from '@/lib/utils/download';
 import { nomeDoPdfDeInconsistencia } from '@/lib/domain/nome-do-pdf';
 import { formatPhone } from '@/lib/utils/phone';
-import type { SecaoParaPdf } from '@/components/neo/ListasPdf';
 import { useToast } from '@/components/ui/Toast';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { cn } from '@/lib/utils/cn';
@@ -57,6 +50,7 @@ import { Button } from '@/components/ui/Button';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { TierBadge } from '@/components/members/TierBadge';
 import { FiltroDeDadosCard } from './FiltroDeDadosCard';
+import { montarPdfDeInconsistencias, recorteDe, semNada } from './pdf-de-inconsistencias';
 import { VerificacoesModal } from './VerificacoesModal';
 
 interface InconsistenciasPanelProps {
@@ -119,39 +113,6 @@ const CAIXA_DO_TOM = {
   neutral: 'bg-ink-100 text-ink-700',
   success: 'bg-success-50 text-success-700',
 } as const;
-
-/** O diagnostico recortado pelos responsaveis marcados (nenhum = todos). */
-function recorteDe(diagnostico: Diagnostico, chaves: string[]) {
-  const filtra = (member: Member) =>
-    chaves.length === 0 || chaves.some((chave) => doResponsavel(member, chave));
-  const repetidos = diagnostico.repetidos.filter((grupo) =>
-    grupo.registros.some((registro) => filtra(registro.member)),
-  );
-  const problemas = diagnostico.problemas.filter((p) => filtra(p.member));
-  const porTipo = new Map<TipoDaFicha, ProblemaDaFicha[]>();
-  for (const problema of problemas) {
-    porTipo.set(problema.tipo, [...(porTipo.get(problema.tipo) ?? []), problema]);
-  }
-  return {
-    filtra,
-    repetidos,
-    certos: repetidos.filter((grupo) => grupo.certeza !== 'possivel'),
-    possiveis: repetidos.filter((grupo) => grupo.certeza === 'possivel'),
-    telefones: diagnostico.telefones.filter((t) => t.membros.some(filtra)),
-    incompletos: diagnostico.incompletos.membros.filter((item) => filtra(item.member)),
-    problemas,
-    porTipo,
-  };
-}
-
-function semNada(recorte: ReturnType<typeof recorteDe>): boolean {
-  return (
-    recorte.repetidos.length === 0 &&
-    recorte.incompletos.length === 0 &&
-    recorte.problemas.length === 0 &&
-    recorte.telefones.length === 0
-  );
-}
 
 /**
  * Quadro de inconsistencias do time.
@@ -221,52 +182,8 @@ export function InconsistenciasPanel({
   const [baixando, setBaixando] = useState<string | null>(null);
 
   /** O PDF de um recorte: o time todo, um responsavel, ou a soma de varios. */
-  async function montarPdf(chaves: string[]): Promise<Blob> {
-    const recorte = recorteDe(diagnostico, chaves);
-    const { gerarPdfDasInconsistencias } = await import('@/components/neo/ListasPdf');
-    const pessoa = (member: Member, detalhe: string) => ({
-      nome: member.name,
-      telefone: member.phone ?? '',
-      detalhe,
-      cadastradoPor: recruiterText(member.recruitedBy),
-    });
-    const secoes: SecaoParaPdf[] = [
-      ...(recorte.incompletos.length
-        ? [{
-            titulo: 'Cadastros com dado faltando',
-            explicacao: 'Entraram com buraco — quase sempre de uma lista importada ou de um cadastro às pressas.',
-            gravidade: 'media' as const,
-            pessoas: recorte.incompletos.map(({ member, faltas }) => pessoa(member, nomesDasFaltas(faltas))),
-          }]
-        : []),
-      ...TIPOS.filter((tipo) => recorte.porTipo.has(tipo)).map((tipo) => ({
-        titulo: TIPO_INFO[tipo].titulo,
-        explicacao: TIPO_INFO[tipo].explicacao,
-        gravidade: TIPO_INFO[tipo].gravidade,
-        pessoas: (recorte.porTipo.get(tipo) ?? []).map((p) => pessoa(p.member, nomeDoProblemaDaFicha(p.tipo, p.detalhe))),
-      })),
-      ...(recorte.telefones.length
-        ? [{
-            titulo: 'Telefone compartilhado',
-            explicacao: 'Pessoas diferentes com o mesmo número. Pode ser família — ou o número do Líder digitado no lugar.',
-            gravidade: 'baixa' as const,
-            pessoas: recorte.telefones.flatMap((t) =>
-              t.membros.map((member) => pessoa(member, 'Número compartilhado')),
-            ),
-          }]
-        : []),
-    ];
-    return gerarPdfDasInconsistencias({
-      time: clientName,
-      responsavel: chaves.length ? chaves.map(rotuloDe).filter(Boolean).join(', ') : null,
-      geradoEm: new Date().toISOString(),
-      total: members.filter(recorte.filtra).length,
-      pessoasComProblema: diagnostico.pessoasComProblema,
-      saude: diagnostico.saude,
-      basePorResponsavel: basePorResponsavel(members),
-      repetidos: recorte.repetidos.map(grupoRepetidoParaPdf),
-      secoes,
-    });
+  function montarPdf(chaves: string[]): Promise<Blob> {
+    return montarPdfDeInconsistencias({ clientName, members, diagnostico, chaves, rotuloDe });
   }
 
   // inconsistência_vivian.pdf — o primeiro nome do responsável (ou do time),
@@ -793,6 +710,7 @@ function CartaoRepetido({
   onOpenMember: (id: string) => void;
 }) {
   const tom = TOM_DA_CERTEZA[grupo.certeza];
+  const motivos = motivosDosRegistros(grupo);
   // A mesma pessoa repetida pelo MESMO responsavel conta uma vez (so no
   // grupo certo): o cartao diz isso, para ninguem achar que o ranking inflou.
   const mesmoResponsavel =
@@ -900,6 +818,19 @@ function CartaoRepetido({
                 )}
                 <TierBadge tier={member.tier} />
                 <LiderDesativado member={member} />
+                {/* O motivo DESTE registro: o que ele repete de outro do grupo. */}
+                {(motivos.get(member.id) ?? []).map((evidencia) => (
+                  <span
+                    key={evidencia}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-control border px-2 py-0.5 text-[0.6875rem] font-semibold',
+                      CHIP_DO_MOTIVO[tom],
+                    )}
+                  >
+                    <Fingerprint aria-hidden="true" className="size-3 shrink-0" />
+                    {EVIDENCIA_INFO[evidencia].rotulo}
+                  </span>
+                ))}
               </div>
 
               {/* So o que serve para decidir qual fica: quem cadastrou, o

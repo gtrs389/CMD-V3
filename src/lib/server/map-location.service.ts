@@ -1,3 +1,4 @@
+import { tierOf } from '@/lib/domain/team-tier';
 import { recruiterText } from '@/lib/domain/recruitment';
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
@@ -830,7 +831,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
       filters: { id: inFilter(locationIds) },
     }),
     selectRows<MemberRow>(TABLES.members, {
-      select: 'id,client_id,name,phone,gender,photo_path,street,district,city,state,zone,section',
+      select: 'id,client_id,name,phone,gender,photo_path,street,district,city,state,zone,section,recruited_by_role',
       filters: { id: inFilter(memberIds) },
     }),
   ]);
@@ -891,6 +892,9 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
         // Somente para o ADMIN autenticado, que e quem alcanca esta rota.
         phone: member.phone?.trim() ? member.phone : null,
         email: emails.get(member.id) ?? null,
+        // Pino de Lider abre as acoes dele no mapa (Equipe, inconsistencias,
+        // PDFs).
+        tier: tierOf(member.recruited_by_role),
       });
       continue;
     }

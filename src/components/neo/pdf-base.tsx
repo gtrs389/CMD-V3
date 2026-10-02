@@ -552,6 +552,8 @@ export interface RegistroRepetidoPdf {
   telefone: string;
   votaEm: string;
   primeiro: boolean;
+  /** O que ESTE registro repete de outro do grupo. */
+  motivos?: string[];
 }
 
 export interface GrupoRepetidoPdf {
@@ -653,6 +655,12 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
                     cor={r.nivel === 'Líder desativado' ? C.danger : C.ink2}
                     fundo={r.nivel === 'Líder desativado' ? C.dangerSoft : C.navySoft}
                   />
+                  {/* O motivo deste registro, com a cor da certeza do grupo. */}
+                  {(r.motivos ?? []).map((motivo) => (
+                    <View key={motivo} style={{ marginLeft: 4, borderWidth: 0.7, borderColor: tom.cor, backgroundColor: C.white, borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1.5 }}>
+                      <Text style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: tom.cor }}>{s(motivo)}</Text>
+                    </View>
+                  ))}
                 </View>
                 {/* No PDF so o que serve para decidir: quem cadastrou, o
                     telefone e onde vota. */}

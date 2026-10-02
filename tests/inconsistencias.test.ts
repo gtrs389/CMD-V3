@@ -7,6 +7,7 @@ import {
   chaveDoNome,
   contandoUmaVez,
   diagnosticar,
+  motivosDosRegistros,
   doResponsavel,
   municipioDaOperacao,
   problemasDasFichas,
@@ -383,6 +384,22 @@ describe('mesma pessoa, mesmo Líder: conta uma vez', () => {
     const a = pessoa({ voterId: '100000002720', recruitedBy: JOAO });
     const b = pessoa({ voterId: '100000002720', recruitedBy: BRUNA });
     expect(contandoUmaVez([a, b])).toHaveLength(2);
+  });
+});
+
+describe('motivo de cada registro', () => {
+  it('cada linha diz o que ELA repete: o Cezar só o título, as Mayaras título e nome e seção', () => {
+    const titulo = '100000002720';
+    const mayara = pessoa({ name: 'MAYARA JACKLANNE DA SILVA FIGUEIREDO', voterId: titulo, section: '68', createdAt: '2026-09-30T10:00:00.000Z' });
+    const mayara2 = pessoa({ name: 'MAYARA JACKLANNE DE SILVA FIGUEIREDO', voterId: titulo, section: '68', createdAt: '2026-09-30T10:01:00.000Z' });
+    const cezar = pessoa({ name: 'CEZAR AMARO DA SILVA', voterId: titulo, section: '68', createdAt: '2026-09-30T10:02:00.000Z' });
+
+    const [grupo] = cadastrosRepetidos([mayara, mayara2, cezar]);
+    const motivos = motivosDosRegistros(grupo);
+    // Cezar so repete o titulo (o nome e outro): e o que a linha dele diz.
+    expect(motivos.get(cezar.id)).toEqual(['titulo']);
+    expect(motivos.get(mayara2.id)).toEqual(['titulo', 'nome-secao']);
+    expect(motivos.get(mayara.id)).toEqual(['titulo', 'nome-secao']);
   });
 });
 

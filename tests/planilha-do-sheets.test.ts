@@ -219,7 +219,7 @@ vi.mock('@/lib/supabase/storage', () => ({
 const { aplicarFormatoDeDigitos, lerXlsx } = await import('@/lib/server/xlsx');
 const { conferirDaLinha } = await import('@/lib/domain/csv-import');
 const { mapOverview, placeMembers } = await import('@/lib/server/map-location.service');
-const { chaveDoNome, idDaPlanilha, lerAbaDoSheets, planejarPlanilha } = await import(
+const { chaveDoNome, dataDeCadastroDaPlanilha, idDaPlanilha, lerAbaDoSheets, planejarPlanilha } = await import(
   '@/lib/domain/planilha-do-sheets'
 );
 const { sheetVisibilityFilter } = await import('@/lib/server/sheet-visibility');
@@ -769,3 +769,40 @@ describe('nenhuma inconsistência falsa em quem veio da planilha', () => {
     expect(resultado.incompletos.membros.map((linha) => linha.faltas)).toEqual([['seção']]);
   });
 });
+
+describe('coluna DATA DE CADASTRO', () => {
+  const dia = (iso: string) =>
+    new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Maceio' });
+
+  it('lê a data como vier: célula de data, dd/mm/aaaa, com hora, ISO', () => {
+    expect(dia(dataDeCadastroDaPlanilha('01/10/2026'))).toBe('01/10/2026');
+    expect(dia(dataDeCadastroDaPlanilha('1/10/26'))).toBe('01/10/2026');
+    expect(dataDeCadastroDaPlanilha('01/10/2026 14:30')).toBe('2026-10-01T17:30:00.000Z');
+    expect(dia(dataDeCadastroDaPlanilha('2026-10-01'))).toBe('01/10/2026');
+    // Celula de data do Google: numero de serie (46296 = 01/10/2026).
+    expect(dia(dataDeCadastroDaPlanilha('46296'))).toBe('01/10/2026');
+    expect(dataDeCadastroDaPlanilha('46296.5')).toBe('2026-10-01T15:00:00.000Z');
+  });
+
+  it('o que não é data fica vazio — nunca inventado', () => {
+    for (const texto of ['', 'ontem', '31/02/2026', '45', '99/99/9999', '01/10/1890']) {
+      expect(dataDeCadastroDaPlanilha(texto)).toBe('');
+    }
+  });
+
+  it('a pessoa da aba ganha a data; sem a coluna, fica marcada sem data', () => {
+    const comData = lerAbaDoSheets('Bia', [[...CABECALHO, 'DATA DE CADASTRO'], ['Caio', '', '', '', '', '', '', '', '15/09/2026']]);
+    const semData = lerAbaDoSheets('Bia', [CABECALHO, ['Duda', '', '', '', '', '', '', '']]);
+    const base = { clientId: COPIA, estado: 'AL', cidade: 'Arapiraca' };
+    const lideres = [{ memberId: 'm-bia', name: 'Bia', userId: 'u-bia', tag: null }];
+
+    const [caio] = montarEquipe({ em: '2026-10-02T12:00:00.000Z', abas: [comData] }, lideres, base).membros;
+    expect(dia(caio.createdAt)).toBe('15/09/2026');
+    expect(caio.semDataDeCadastro).toBeUndefined();
+
+    const [duda] = montarEquipe({ em: '2026-10-02T12:00:00.000Z', abas: [semData] }, lideres, base).membros;
+    expect(duda.semDataDeCadastro).toBe(true);
+    expect(escritas).toEqual([]);
+  });
+});
+

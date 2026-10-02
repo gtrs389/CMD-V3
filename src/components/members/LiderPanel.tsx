@@ -133,7 +133,8 @@ export function LiderPanel({
               ) : null}
             </div>
             <p className="mt-0.5 text-sm text-ink-500">
-              {lider.phone ? formatPhone(lider.phone) : 'Sem telefone'} · Líder desde {formatLongDate(lider.createdAt)}
+              {lider.phone ? formatPhone(lider.phone) : 'Sem telefone'}
+              {lider.semDataDeCadastro ? null : ` · Líder desde ${formatLongDate(lider.createdAt)}`}
             </p>
             <p className="text-xs text-ink-500">
               Trazido por {recruiterText(lider.recruitedBy)} ·{' '}
@@ -312,7 +313,8 @@ export function LiderPanel({
                       <span className="min-w-0 flex-1">
                         <NomeComTag member={m} nomeClassName="text-sm font-medium text-ink-900" />
                         <span className="block truncate text-xs text-ink-500">
-                          {m.phone ? formatPhone(m.phone) : 'sem telefone'} · {formatDate(m.createdAt)}
+                          {m.phone ? formatPhone(m.phone) : 'sem telefone'}
+                          {m.semDataDeCadastro ? '' : ` · ${formatDate(m.createdAt)}`}
                           {m.district ? ` · ${m.district}` : ''}
                         </span>
                       </span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { Maximize2, MapPin as MapPinIcon, RefreshCw, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import {
@@ -17,15 +17,17 @@ import { MapFiltersBar } from './MapFiltersBar';
 import { MapRanking } from './MapRanking';
 import { MemberSheetPanel } from './MemberSheetPanel';
 import { PlaceMembersPanel } from './PlaceMembersPanel';
+import { MapaCarregando } from './MapaCarregando';
+import { baixarPdfDaEscola } from './pdf-do-mapa';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useSession } from '@/components/layout/SessionProvider';
 import { Spinner } from '@/components/ui/Spinner';
+import { Contador } from '@/components/ui/Contador';
 
 /**
  * Mapa da mobilizacao.
@@ -38,7 +40,7 @@ const MapCanvas = dynamic(() => import('./MapCanvas'), {
   // O pacote do mapa e pesado e chega depois do resto da pagina. Um retangulo
   // cinza no lugar nao diz nada: quem esperava nao sabia se o mapa estava
   // vindo ou se a tela tinha falhado.
-  loading: () => <LoadingScreen fill label="Carregando o mapa" />,
+  loading: () => <MapaCarregando texto="Carregando o mapa" />,
 });
 
 interface MobilizationMapProps {
@@ -52,6 +54,15 @@ interface MobilizationMapProps {
    * que e todo de Alagoas, abrir em Alagoas.
    */
   fallbackCenter?: { latitude: number; longitude: number };
+  /** Nome do time, no PDF da escola. */
+  clientName?: string;
+  /** Acoes do Lider no balao do pino dele (Equipe, inconsistencias, PDFs). */
+  renderLiderActions?: (memberId: string) => ReactNode;
+  /**
+   * O mapa e o destaque da pagina (Visao geral do time): mais alto, com o
+   * cabecalho em azul-marinho.
+   */
+  destaque?: boolean;
 }
 
 /**
@@ -72,7 +83,13 @@ interface MobilizationMapProps {
  * guarda o proprio lugar — entao o Leaflet nunca e remontado: posicao, zoom,
  * balao aberto e filtro sobrevivem a entrada e a saida.
  */
-export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapProps = {}) {
+export function MobilizationMap({
+  clientId,
+  fallbackCenter,
+  clientName,
+  renderLiderActions,
+  destaque = false,
+}: MobilizationMapProps = {}) {
   const { can } = useSession();
   // Decide em qual dos dois lugares a ficha nasce: ao lado do mapa ou abaixo
   // dele. Sem isso, as duas copias existiriam e buscariam o integrante duas
@@ -278,6 +295,32 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
     </dl>
   ) : null;
 
+  /** No destaque, a contagem vira quatro numeros grandes que correm ate o valor. */
+  const contagemDestaque = totals ? (
+    <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {[
+        { rotulo: 'Votos no filtro', valor: selection.votes, forte: true },
+        { rotulo: 'Pessoas no mapa', valor: selection.pins.length },
+        { rotulo: 'Locais de votação', valor: selection.placeCount },
+        { rotulo: 'Sem localização', valor: pendentes },
+      ].map((item, i) => (
+        <div
+          key={item.rotulo}
+          className={cn(
+            'animate-fade-up rounded-control border px-3 py-2 transition-transform duration-200 hover:-translate-y-0.5',
+            item.forte ? 'border-white/20 bg-white/15' : 'border-white/10 bg-white/5',
+          )}
+          style={{ animationDelay: `${120 + i * 70}ms` }}
+        >
+          <dt className="truncate text-[0.6875rem] font-medium tracking-wide text-white/70 uppercase">{item.rotulo}</dt>
+          <dd className={cn('font-semibold text-white', item.forte ? 'text-2xl' : 'text-xl')}>
+            <Contador valor={item.valor} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  ) : null;
+
   return (
     <section
       aria-label="Mapa da mobilização"
@@ -290,9 +333,64 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
     >
       {/* Cabecalho do CARTAO. Em tela cheia ele nao existe: o que ele
           carregava passa a flutuar sobre o proprio mapa. */}
+      {!fullscreen && destaque ? (
+        // Destaque: faixa azul-marinho com o titulo grande e os quatro numeros
+        // do recorte, que correm ate o valor.
+        <div className="relative overflow-hidden rounded-t-card bg-gradient-to-br from-navy-900 via-navy-800 to-brand-800 p-4 text-white sm:p-5">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-accent-500/20 blur-3xl"
+          />
+          <div className="relative flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.14em] text-white/70 uppercase">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-success-400 opacity-75" />
+                  <span className="relative inline-flex size-2 rounded-full bg-success-400" />
+                </span>
+                Ao vivo
+              </p>
+              <h2 className="mt-1 flex items-center gap-2 text-xl font-semibold sm:text-2xl">
+                <MapPinIcon aria-hidden="true" className="size-5 text-accent-400" />
+                Mapa da mobilização
+              </h2>
+              <p className="mt-0.5 text-sm text-white/70">
+                Onde está cada pessoa e cada voto. Clique num Líder para ver a Equipe dele e baixar os PDFs.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {rankingDisponivel ? (
+                <button
+                  type="button"
+                  aria-pressed={showRanking}
+                  onClick={() => setShowRanking((atual) => !atual)}
+                  className={cn(
+                    'inline-flex min-h-10 items-center gap-1.5 rounded-pill border px-3.5 text-xs font-semibold transition-all duration-200',
+                    showRanking
+                      ? 'border-white/40 bg-white/20 text-white'
+                      : 'border-white/20 bg-transparent text-white/80 hover:bg-white/10',
+                  )}
+                >
+                  <Trophy aria-hidden="true" className="size-3.5" />
+                  Ranking
+                </button>
+              ) : null}
+              {podeLocalizar && pendentes > 0 ? (
+                <Button variant="secondary" onClick={localizar} disabled={resolving}>
+                  {resolving ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
+                  Localizar pendentes
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <div className="relative mt-4">{contagemDestaque}</div>
+        </div>
+      ) : null}
+
       {!fullscreen ? (
         <header className="flex shrink-0 flex-col gap-3 border-b border-line p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          {/* No destaque, titulo, ranking e "localizar" ja estao na faixa azul. */}
+          <div className={cn('flex flex-wrap items-start justify-between gap-3', destaque && 'hidden')}>
             <div className="min-w-0">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
                 <MapPinIcon aria-hidden="true" className="size-4 text-brand-700" />
@@ -303,8 +401,8 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {podeLocalizar && pendentes > 0 ? (
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {podeLocalizar && pendentes > 0 && !destaque ? (
                 <Button variant="secondary" onClick={localizar} disabled={resolving}>
                   {resolving ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                   Localizar cadastros pendentes
@@ -332,7 +430,7 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
 
           <MapFiltersBar query={query} onChange={setQuery} options={options} dense />
 
-          {contagem}
+          {destaque ? null : contagem}
         </header>
       ) : null}
 
@@ -341,7 +439,9 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
           'flex w-full flex-col lg:flex-row',
           fullscreen
             ? 'absolute inset-0'
-            : 'h-[360px] overflow-hidden sm:h-[420px] lg:h-[520px]',
+            : destaque
+              ? 'h-[440px] overflow-hidden sm:h-[540px] lg:h-[660px]'
+              : 'h-[360px] overflow-hidden sm:h-[420px] lg:h-[520px]',
         )}
       >
         <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -349,7 +449,7 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
             // Esta e a espera longa: o mapa le os integrantes, os vinculos e
             // as coordenadas de todos eles. Uma palavra basta — a lista do
             // que esta sendo lido nao ajuda quem espera.
-            <LoadingScreen fill label="Carregando" />
+            <MapaCarregando />
           ) : error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
               <p className="text-sm text-ink-500">Não foi possível carregar o mapa.</p>
@@ -364,7 +464,9 @@ export function MobilizationMap({ clientId, fallbackCenter }: MobilizationMapPro
                 pins={selection.pins}
                 places={selection.places}
                 onOpenPlace={setOpenPlace}
+                onDownloadPlace={(place) => baixarPdfDaEscola(place, clientName ?? 'Mapa da mobilização', clientId)}
                 onOpenMember={abrirFicha}
+                renderLiderActions={renderLiderActions}
                 focusPlace={focusPlace}
                 fallbackCenter={fallbackCenter}
                 resizeKey={`${fullscreen ? 'full' : 'card'}:${

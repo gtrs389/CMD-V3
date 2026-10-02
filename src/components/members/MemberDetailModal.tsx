@@ -8,7 +8,7 @@ import { ACCESS_STATUS_LABELS } from '@/lib/types';
 import { avisoDeFaltas, cadastroIncompleto } from '@/lib/domain/member-completeness';
 import { RECRUITED_BY_LABEL } from '@/lib/domain/recruitment';
 import { formatResponse, sortedFields } from '@/lib/validation/dynamic-form';
-import { formatDateTime } from '@/lib/utils/date';
+import { formatDate, formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import { formatCpf, formatVoterId, genderLabel } from '@/lib/utils/documents';
 import {
@@ -421,13 +421,20 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
             <div className="min-w-0">
               <dt className="text-xs text-ink-500">Cadastrado em</dt>
               <dd className="font-medium break-words text-ink-900">
-                {formatDateTime(member.createdAt)}
+                {/* Da planilha vem so o DIA ("DATA DE CADASTRO"): sem hora
+                    inventada. Sem a coluna preenchida, sem data. */}
+                {member.semDataDeCadastro
+                  ? '—'
+                  : member.fromSheet
+                    ? formatDate(member.createdAt)
+                    : formatDateTime(member.createdAt)}
               </dd>
             </div>
             <div className="min-w-0">
               <dt className="text-xs text-ink-500">Última atualização</dt>
               <dd className="font-medium break-words text-ink-900">
-                {formatDateTime(member.updatedAt)}
+                {/* Lida ao vivo: nao ha "ultima atualizacao" guardada. */}
+                {member.fromSheet ? '—' : formatDateTime(member.updatedAt)}
               </dd>
             </div>
           </dl>

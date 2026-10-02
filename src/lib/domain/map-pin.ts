@@ -28,6 +28,8 @@ export interface MapPin {
   /** Somente quando cadastrados. Ausentes nao viram linha vazia na tela. */
   phone: string | null;
   email: string | null;
+  /** Lider ou Equipe. O pino de Lider abre as acoes do Lider no mapa. */
+  tier?: 'LIDER' | 'EQUIPE';
 }
 
 /**

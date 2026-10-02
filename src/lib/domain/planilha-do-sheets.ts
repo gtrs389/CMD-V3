@@ -27,6 +27,7 @@ export const COLUNAS_DO_SHEETS = [
   'LÍDER',
   'REFERÊNCIA',
   'VERIFICADO POR FOTO',
+  'DATA DE CADASTRO',
 ] as const;
 
 type Campo =
@@ -37,10 +38,21 @@ type Campo =
   | 'phone'
   | 'leader'
   | 'reference'
-  | 'photoVerified';
+  | 'photoVerified'
+  | 'registeredAt';
 
 /** Posicao de cada coluna quando a planilha nao tem cabecalho. */
-const ORDEM: Campo[] = ['name', 'voterId', 'zone', 'section', 'phone', 'leader', 'reference', 'photoVerified'];
+const ORDEM: Campo[] = [
+  'name',
+  'voterId',
+  'zone',
+  'section',
+  'phone',
+  'leader',
+  'reference',
+  'photoVerified',
+  'registeredAt',
+];
 
 const CABECALHOS: Record<Campo, string[]> = {
   name: ['nome', 'nome completo'],
@@ -51,6 +63,7 @@ const CABECALHOS: Record<Campo, string[]> = {
   leader: ['lider', 'nome do lider'],
   reference: ['referencia', 'ponto de referencia'],
   photoVerified: ['verificado por foto', 'verificado foto'],
+  registeredAt: ['data de cadastro', 'data do cadastro', 'data cadastro', 'cadastrado em', 'data'],
 };
 
 /** Sem acento, minusculo, um espaco so: e assim que dois nomes sao comparados. */
@@ -92,6 +105,8 @@ export interface PessoaDaAba {
   section: string;
   reference: string;
   photoVerified: VerificadoPorFoto;
+  /** "DATA DE CADASTRO" da linha, em ISO. Vazio: a planilha nao trouxe. */
+  registeredAt: string;
 }
 
 export interface AbaLida {
@@ -101,6 +116,64 @@ export interface AbaLida {
   pessoas: PessoaDaAba[];
   /** Linhas com algo escrito, mas sem nome de gente. */
   ignoradas: number;
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Data e hora de Brasilia (UTC-3) em ISO, ou vazio quando nao e uma data de verdade. */
+function emBrasilia(ano: number, mes: number, dia: number, hora = 12, minuto = 0): string {
+  if (ano < 2000 || ano > 2100 || hora > 23 || minuto > 59) return '';
+  // 31/02 nao existe: o calendario "rolaria" para marco, e a data e recusada.
+  const conferida = new Date(Date.UTC(ano, mes - 1, dia));
+  if (conferida.getUTCMonth() !== mes - 1 || conferida.getUTCDate() !== dia) return '';
+  return new Date(`${ano}-${pad(mes)}-${pad(dia)}T${pad(hora)}:${pad(minuto)}:00-03:00`).toISOString();
+}
+
+/**
+ * A coluna "DATA DE CADASTRO", do jeito que ela vier:
+ *
+ *   - celula de DATA do Google (chega como numero de serie: 45931, ou
+ *     45931.6 com hora);
+ *   - texto "01/10/2026", "1/10/26", "01/10/2026 14:30", "01-10-2026";
+ *   - texto ISO "2026-10-01".
+ *
+ * Sem hora, vale meio-dia: a data nunca "vira" de dia por fuso. A hora e a
+ * de Brasilia. O que nao for data plausivel fica vazio — nunca inventado.
+ */
+export function dataDeCadastroDaPlanilha(bruto: string): string {
+  const texto = (bruto ?? '').trim();
+  if (!texto) return '';
+
+  // Numero de serie do Google/Excel: dias desde 30/12/1899.
+  if (/^\d{5}(\.\d+)?$/.test(texto)) {
+    const serie = Number(texto);
+    const dias = Math.floor(serie);
+    const minutos = Math.round((serie - dias) * 24 * 60);
+    const base = new Date(Date.UTC(1899, 11, 30) + dias * 86_400_000);
+    const temHora = serie !== dias;
+    return emBrasilia(
+      base.getUTCFullYear(),
+      base.getUTCMonth() + 1,
+      base.getUTCDate(),
+      temHora ? Math.floor(minutos / 60) % 24 : 12,
+      temHora ? minutos % 60 : 0,
+    );
+  }
+
+  const iso = texto.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)(?:[ T](\d{1,2}):(\d{2}))?/);
+  if (iso) {
+    const [, a, m, d, h, mi] = iso;
+    return emBrasilia(Number(a), Number(m), Number(d), h ? Number(h) : 12, mi ? Number(mi) : 0);
+  }
+
+  const br = texto.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?!\d)(?:\s+(\d{1,2})[:h](\d{2}))?/);
+  if (br) {
+    const [, d, m, a, h, mi] = br;
+    const ano = a.length === 2 ? 2000 + Number(a) : Number(a);
+    return emBrasilia(ano, Number(m), Number(d), h ? Number(h) : 12, mi ? Number(mi) : 0);
+  }
+
+  return '';
 }
 
 /** Uma aba bruta (linhas de texto) vira Lider + pessoas. */
@@ -156,6 +229,7 @@ export function lerAbaDoSheets(titulo: string, linhas: string[][]): AbaLida {
       section: normalizeSection(celula('section')),
       reference: limpo(celula('reference'), REFERENCIA_MAX),
       photoVerified: lerVerificadoPorFoto(celula('photoVerified')),
+      registeredAt: dataDeCadastroDaPlanilha(celula('registeredAt')),
     });
   }
 
