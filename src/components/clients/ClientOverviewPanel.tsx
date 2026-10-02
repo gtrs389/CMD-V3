@@ -300,10 +300,12 @@ export function ClientOverviewPanel({
   return (
     <div className="space-y-4">
       {/* 1. O MAPA, em destaque: e a leitura que a operacao abre primeiro.
-          So opacidade na entrada — um transform num ancestral prenderia a
-          tela cheia do mapa (position: fixed) dentro do cartao. */}
+          SEM animacao de entrada no envoltorio: qualquer animacao ali (ate
+          so de opacidade) cria um contexto de empilhamento, e a TELA CHEIA
+          do mapa (position: fixed) ficava por baixo da barra lateral e dos
+          cartoes da pagina. A entrada animada fica nos pinos e nos numeros. */}
       {podeVerMapa ? (
-        <div className="animate-fade-in">
+        <div>
           <MobilizationMap
             clientId={client.id}
             clientName={client.name}
@@ -348,12 +350,17 @@ export function ClientOverviewPanel({
         </Reveal>
 
         {mostrarRanking ? (
-          <Reveal delay={90} className="flex flex-col">
-            <RankingCard
-              rows={ranking}
-              currentUserId={user?.id ?? null}
-              onOpen={navegador ? (id) => navegador.abrirLider(id) : undefined}
-            />
+          // No desktop o ranking acompanha a altura do cartao da equipe e rola
+          // por dentro: sem isso, o cartao azul esticava ate a lista e ficava
+          // com um vao vazio embaixo.
+          <Reveal delay={90} className="flex min-h-80 flex-col lg:relative lg:min-h-0">
+            <div className="flex flex-1 flex-col lg:absolute lg:inset-0">
+              <RankingCard
+                rows={ranking}
+                currentUserId={user?.id ?? null}
+                onOpen={navegador ? (id) => navegador.abrirLider(id) : undefined}
+              />
+            </div>
           </Reveal>
         ) : null}
       </div>
@@ -909,7 +916,7 @@ function RankingCard({
           Nenhum Líder cadastrado ainda. Compartilhe o link de cadastro para começar.
         </p>
       ) : (
-        <ul className="scrollbar-slim max-h-80 flex-1 divide-y divide-line overflow-y-auto px-4">
+        <ul className="scrollbar-slim max-h-80 min-h-0 flex-1 divide-y divide-line overflow-y-auto px-4 lg:max-h-none">
           {rows.map((row, index) => (
             <li key={row.key}>
               <button

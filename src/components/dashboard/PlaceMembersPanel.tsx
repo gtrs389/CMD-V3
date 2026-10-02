@@ -86,7 +86,7 @@ export function PlaceMembersPanel({
   );
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-end justify-end sm:items-stretch">
+    <div className="fixed inset-0 z-[1300] flex items-end justify-end sm:items-stretch">
       <button
         type="button"
         aria-label="Fechar"
