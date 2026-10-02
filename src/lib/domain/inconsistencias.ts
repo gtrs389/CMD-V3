@@ -1,6 +1,6 @@
 import type { Member } from '@/lib/types';
-import { formatCpf, formatVoterId, normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
-import { digitosDoTelefone, formatPhone, normalizePhone } from '@/lib/utils/phone';
+import { normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
+import { digitosDoTelefone, normalizePhone } from '@/lib/utils/phone';
 import { dadosParaConferir } from './conferencia';
 import { normalizeSearch } from '@/lib/utils/text';
 import { camposFaltantes } from './member-completeness';
@@ -294,52 +294,6 @@ export function cadastrosRepetidos(members: readonly Member[]): GrupoRepetido[] 
       b.registros.length - a.registros.length ||
       a.nome.localeCompare(b.nome, 'pt-BR'),
   );
-}
-
-/** O que se repete no grupo, com o VALOR: "Mesmo título de eleitor · 0245 0597 9170". */
-export interface Igualdade {
-  evidencia: Evidencia;
-  rotulo: string;
-  /** O dado repetido, formatado. Vazio quando nao da para apontar um so. */
-  valor: string;
-}
-
-function exibir(evidencia: Evidencia, member: Member): string {
-  switch (evidencia) {
-    case 'titulo':
-      return formatVoterId(member.voterId ?? '');
-    case 'cpf':
-      return formatCpf(member.cpf ?? '');
-    case 'nome-telefone':
-      return formatPhone(member.phone ?? '');
-    case 'nome-secao':
-      return `Zona ${member.zone?.trim()} · Seção ${member.section?.trim()}`;
-    case 'nome':
-      return member.name.trim();
-  }
-}
-
-/**
- * Por que o grupo e a mesma pessoa, com o dado que se repete — e isso que a
- * tela e o PDF destacam no cartao, e nao so "mesmo titulo" escondido em
- * letra miuda.
- */
-export function oQueSeRepete(grupo: GrupoRepetido): Igualdade[] {
-  return grupo.evidencias.map((evidencia) => {
-    const vistos = new Map<string, Member>();
-    let valor = '';
-    for (const { member } of grupo.registros) {
-      const chave = chavesDe(member)[evidencia];
-      if (!chave) continue;
-      const outro = vistos.get(chave);
-      if (outro) {
-        valor = exibir(evidencia, outro);
-        break;
-      }
-      vistos.set(chave, member);
-    }
-    return { evidencia, rotulo: EVIDENCIA_INFO[evidencia].rotulo, valor };
-  });
 }
 
 /**

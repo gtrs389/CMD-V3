@@ -28,7 +28,7 @@ import {
   TIPOS,
   doResponsavel,
   entraNasInconsistencias,
-  oQueSeRepete,
+  EVIDENCIA_INFO,
   type Certeza,
   type Diagnostico,
   type Gravidade,
@@ -47,7 +47,6 @@ import { basePorResponsavel } from '@/lib/domain/por-responsavel';
 import { grupoRepetidoParaPdf } from '@/lib/domain/repetidos-pdf';
 import { baixarArquivo } from '@/lib/utils/download';
 import { nomeDoPdfDeInconsistencia } from '@/lib/domain/nome-do-pdf';
-import { formatDateTime } from '@/lib/utils/date';
 import { formatPhone } from '@/lib/utils/phone';
 import type { SecaoParaPdf } from '@/components/neo/ListasPdf';
 import { useToast } from '@/components/ui/Toast';
@@ -826,15 +825,15 @@ function CartaoRepetido({
         </Badge>
       </header>
 
-      {/* POR QUE e a mesma pessoa, com o dado repetido a vista: e a primeira
+      {/* POR QUE e a mesma pessoa, em destaque (sem mostrar o dado): e a primeira
           coisa que se le no cartao, e nao uma linha miuda abaixo do nome. */}
       <div className={cn('flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5', FUNDO_DO_MOTIVO[tom])}>
         <span className="text-[0.6875rem] font-semibold tracking-[0.08em] text-ink-500 uppercase">
           Por que é a mesma pessoa
         </span>
-        {oQueSeRepete(grupo).map((igual) => (
+        {grupo.evidencias.map((evidencia) => (
           <span
-            key={igual.evidencia}
+            key={evidencia}
             className={cn(
               'inline-flex max-w-full items-center gap-1.5 rounded-control border px-2.5 py-1 text-sm font-semibold',
               CHIP_DO_MOTIVO[tom],
@@ -842,8 +841,7 @@ function CartaoRepetido({
           >
             <Fingerprint aria-hidden="true" className="size-4 shrink-0" />
             <span className="truncate">
-              {igual.rotulo}
-              {igual.valor ? <span className="font-bold tabular-nums">: {igual.valor}</span> : null}
+              {EVIDENCIA_INFO[evidencia].rotulo}
             </span>
           </span>
         ))}
@@ -913,14 +911,11 @@ function CartaoRepetido({
                 <LiderDesativado member={member} />
               </div>
 
-              <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-ink-500 sm:grid-cols-2">
-                <Dado rotulo="Quando">{formatDateTime(member.createdAt)}</Dado>
+              {/* So o que serve para decidir qual fica: quem cadastrou, o
+                  telefone e onde vota. */}
+              <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-ink-500 sm:grid-cols-3">
                 <Dado rotulo="Por">{recruiterText(member.recruitedBy)}</Dado>
-                <Dado rotulo="Como">{member.source === 'invite' ? 'Pelo link' : 'Pelo painel'}</Dado>
                 <Dado rotulo="Telefone">{member.phone ? formatPhone(member.phone) : '—'}</Dado>
-                <Dado rotulo="Onde mora">
-                  {[member.district, member.street].filter(Boolean).join(' · ') || '—'}
-                </Dado>
                 <Dado rotulo="Vota em">
                   {member.zone || member.section
                     ? `Zona ${member.zone || '?'} · Seção ${member.section || '?'}`

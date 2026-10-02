@@ -548,10 +548,6 @@ export interface RegistroRepetidoPdf {
   nome: string;
   /** "Líder" ou "Equipe". */
   nivel: string;
-  cadastradoEm: string;
-  /** "Pelo link" ou "Pelo painel". */
-  como: string;
-  ondeMora: string;
   cadastradoPor: string;
   telefone: string;
   votaEm: string;
@@ -608,7 +604,7 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
         <Chip texto={grupo.certeza} cor={tom.cor} fundo={tom.fundo} />
       </View>
 
-      {/* Por que e a mesma pessoa, com o dado repetido, em destaque. */}
+      {/* Por que e a mesma pessoa, em destaque (sem mostrar o dado). */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', backgroundColor: tom.fundo, paddingHorizontal: 9, paddingVertical: 6, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
         <Text style={{ fontSize: 6.6, fontFamily: 'Helvetica-Bold', color: C.muted, letterSpacing: 0.6, marginRight: 6 }}>
           {s('POR QUE É A MESMA PESSOA')}
@@ -665,8 +661,7 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
                   />
                 </View>
                 {/* No PDF so o que serve para decidir: quem cadastrou, o
-                    telefone e onde vota. Quando, como e onde mora ficam na
-                    tela. */}
+                    telefone e onde vota. */}
                 <View style={{ flexDirection: 'row' }}>
                   <View style={{ flex: 1.3, paddingRight: 8 }}>
                     <Dado rotulo="Por" valor={r.cadastradoPor} />
