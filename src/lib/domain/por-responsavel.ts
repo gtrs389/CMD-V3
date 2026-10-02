@@ -1,3 +1,4 @@
+import { contandoUmaVez } from './inconsistencias';
 import type { Member } from '@/lib/types';
 import { normalizePhone } from '@/lib/utils/phone';
 import { normalizeSearch } from '@/lib/utils/text';
@@ -79,7 +80,8 @@ export function barrasPorResponsavel<T extends { cadastradoPor: string }>(
  */
 export function basePorResponsavel(members: readonly Member[]): Record<string, number> {
   const base: Record<string, number> = {};
-  for (const member of members) {
+  // A mesma pessoa cadastrada duas vezes pelo mesmo responsavel conta uma.
+  for (const member of contandoUmaVez(members)) {
     const quem = recruiterText(member.recruitedBy);
     base[quem] = (base[quem] ?? 0) + 1;
   }

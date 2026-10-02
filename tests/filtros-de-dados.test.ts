@@ -227,7 +227,7 @@ describe('filtro por dado', () => {
     const b = pessoa({ name: 'Helen Karolaynne Luciana da Silva', cpf: null, voterId: '100000002720', district: 'Vila Nova', street: 'Rua Maria Tenório Cavalcante, nº 132', zone: '10', section: '66', phone: '82996082322', createdAt: '2026-09-27T16:34:00Z', recruitedBy: { userId: 'u2', name: 'Josefa Maria Araujo dos Santos', role: 'EQUIPE', tier: 'LIDER', photo: null } });
     const [grupo] = cadastrosRepetidos([a, b]);
     const pdfGrupo = grupoRepetidoParaPdf(grupo);
-    expect(pdfGrupo).toMatchObject({ certeza: 'Repetido com certeza', evidencias: ['Mesmo título de eleitor'], divergencias: 'telefone e bairro' });
+    expect(pdfGrupo).toMatchObject({ certeza: 'Repetido com certeza', evidencias: ['Mesmo título de eleitor: 1000 0000 2720'], divergencias: 'telefone e bairro' });
     expect(pdfGrupo.registros[0]).toMatchObject({ primeiro: true, nivel: 'Equipe', como: 'Pelo painel', ondeMora: 'Conjunto Edval Gaia', votaEm: 'Zona 10 · Seção 66' });
     expect(pdfGrupo.registros[1]).toMatchObject({ primeiro: false, como: 'Pelo link', ondeMora: 'Vila Nova · Rua Maria Tenório Cavalcante, nº 132' });
   });

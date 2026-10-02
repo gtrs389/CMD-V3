@@ -577,8 +577,6 @@ const TOM_DA_CERTEZA = {
 };
 
 
-const dataEHora = (iso: string) =>
-  new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
@@ -605,11 +603,21 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.ink }}>{s(grupo.nome)}</Text>
-          <Text style={{ fontSize: 7.6, color: C.muted, marginTop: 1 }}>
-            {s(`${grupo.registros.length} registros · ${grupo.evidencias.join(' · ')}`)}
-          </Text>
+          <Text style={{ fontSize: 7.6, color: C.muted, marginTop: 1 }}>{s(`${grupo.registros.length} registros`)}</Text>
         </View>
         <Chip texto={grupo.certeza} cor={tom.cor} fundo={tom.fundo} />
+      </View>
+
+      {/* Por que e a mesma pessoa, com o dado repetido, em destaque. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', backgroundColor: tom.fundo, paddingHorizontal: 9, paddingVertical: 6, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
+        <Text style={{ fontSize: 6.6, fontFamily: 'Helvetica-Bold', color: C.muted, letterSpacing: 0.6, marginRight: 6 }}>
+          {s('POR QUE É A MESMA PESSOA')}
+        </Text>
+        {grupo.evidencias.map((evidencia, i) => (
+          <View key={i} style={{ borderWidth: 0.7, borderColor: tom.cor, backgroundColor: C.white, borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2.5, marginRight: 4, marginVertical: 1 }}>
+            <Text style={{ fontSize: 8.4, fontFamily: 'Helvetica-Bold', color: tom.cor }}>{s(evidencia)}</Text>
+          </View>
+        ))}
       </View>
 
       {avisos ? (
@@ -656,15 +664,17 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
                     fundo={r.nivel === 'Líder desativado' ? C.dangerSoft : C.navySoft}
                   />
                 </View>
+                {/* No PDF so o que serve para decidir: quem cadastrou, o
+                    telefone e onde vota. Quando, como e onde mora ficam na
+                    tela. */}
                 <View style={{ flexDirection: 'row' }}>
+                  <View style={{ flex: 1.3, paddingRight: 8 }}>
+                    <Dado rotulo="Por" valor={r.cadastradoPor} />
+                  </View>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Dado rotulo="Quando" valor={dataEHora(r.cadastradoEm)} />
-                    <Dado rotulo="Como" valor={r.como} />
-                    <Dado rotulo="Onde mora" valor={r.ondeMora} />
+                    <Dado rotulo="Telefone" valor={telefone(r.telefone)} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Dado rotulo="Por" valor={r.cadastradoPor} />
-                    <Dado rotulo="Telefone" valor={telefone(r.telefone)} />
                     <Dado rotulo="Vota em" valor={r.votaEm} />
                   </View>
                 </View>

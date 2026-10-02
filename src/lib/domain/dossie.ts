@@ -9,6 +9,7 @@ import { grupoRepetidoParaPdf, type GrupoRepetidoParaPdf } from './repetidos-pdf
 import {
   TIPO_INFO,
   TIPOS,
+  contandoUmaVez,
   diagnosticar,
   municipioDaOperacao,
   type TipoDaFicha,
@@ -257,11 +258,14 @@ export function montarDossie(
     Client,
     'name' | 'stateUf' | 'cities' | 'isDemo' | 'createdAt' | 'verificationEnabled' | 'people'
   > & Partial<Pick<Client, 'inconsistenciasDesligadas'>>,
-  members: readonly Member[],
+  todos: readonly Member[],
   agora: Date = new Date(),
 ): Dossie {
   const referencia = municipioDaOperacao({ stateUf: client.stateUf, cities: client.cities });
-  const diagnostico = diagnosticar(members, referencia, client.inconsistenciasDesligadas ?? []);
+  const diagnostico = diagnosticar(todos, referencia, client.inconsistenciasDesligadas ?? []);
+  // Para CONTAR: a mesma pessoa cadastrada duas vezes pelo mesmo Lider conta
+  // uma vez — no total, na Equipe de cada Lider e no ranking.
+  const members = contandoUmaVez(todos);
 
   const ts = (m: Member) => new Date(m.createdAt).getTime();
   const hoje0 = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate()).getTime();

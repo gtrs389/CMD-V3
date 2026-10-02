@@ -1,5 +1,6 @@
 'use client';
 
+import { contandoUmaVez } from '@/lib/domain/inconsistencias';
 import { useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -76,7 +77,7 @@ function startOfDay(date: Date): number {
  */
 export function ClientOverviewPanel({
   client,
-  members,
+  members: todos,
   onOpenTab,
   onOpenForm,
   showInviteCard = true,
@@ -84,6 +85,9 @@ export function ClientOverviewPanel({
 }: ClientOverviewPanelProps) {
   // Instante fixo do render: mantem os recortes de tempo coerentes entre si.
   const [now] = useState(() => new Date());
+  // Para CONTAR: a mesma pessoa cadastrada duas vezes pelo mesmo Lider conta
+  // uma vez — no total, nos Liderados e no ranking.
+  const members = useMemo(() => contandoUmaVez(todos), [todos]);
 
   // Perfil somente leitura apenas consulta: os atalhos mudam de rotulo.
   const { can, user } = useSession();

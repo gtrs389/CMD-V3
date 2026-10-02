@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   FileWarning,
+  Fingerprint,
   GitBranch,
   KeyRound,
   Link2,
@@ -23,11 +24,11 @@ import {
 import type { Member } from '@/lib/types';
 import {
   CERTEZA_ROTULO,
-  EVIDENCIA_INFO,
   TIPO_INFO,
   TIPOS,
   doResponsavel,
   entraNasInconsistencias,
+  oQueSeRepete,
   type Certeza,
   type Diagnostico,
   type Gravidade,
@@ -100,6 +101,18 @@ const ICONE_DO_TIPO: Record<TipoDaFicha, ReactNode> = {
   'responsavel-removido': <UserX className="size-4" />,
   'sem-origem': <Link2 className="size-4" />,
 };
+
+const FUNDO_DO_MOTIVO = {
+  danger: 'bg-danger-50/50',
+  warning: 'bg-warning-50/50',
+  neutral: 'bg-ink-50/40',
+} as const;
+
+const CHIP_DO_MOTIVO = {
+  danger: 'border-danger-200 bg-surface text-danger-700',
+  warning: 'border-warning-600/30 bg-surface text-warning-600',
+  neutral: 'border-line-strong bg-surface text-ink-700',
+} as const;
 
 const CAIXA_DO_TOM = {
   danger: 'bg-danger-50 text-danger-700',
@@ -781,6 +794,19 @@ function CartaoRepetido({
   onOpenMember: (id: string) => void;
 }) {
   const tom = TOM_DA_CERTEZA[grupo.certeza];
+  // A mesma pessoa repetida pelo MESMO responsavel conta uma vez (so no
+  // grupo certo): o cartao diz isso, para ninguem achar que o ranking inflou.
+  const mesmoResponsavel =
+    grupo.certeza === 'certa'
+      ? (() => {
+          const vezes = new Map<string, number>();
+          for (const { member } of grupo.registros) {
+            const quem = recruiterText(member.recruitedBy);
+            vezes.set(quem, (vezes.get(quem) ?? 0) + 1);
+          }
+          return [...vezes.entries()].filter(([, n]) => n > 1).map(([quem]) => quem).join(' e ');
+        })()
+      : '';
 
   return (
     <article className="rounded-control border border-line">
@@ -793,18 +819,45 @@ function CartaoRepetido({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold break-words text-ink-900">{grupo.nome}</p>
-          <p className="text-xs text-ink-500">
-            {grupo.registros.length} registros ·{' '}
-            {grupo.evidencias.map((evidencia) => EVIDENCIA_INFO[evidencia].rotulo).join(' · ')}
-          </p>
+          <p className="text-xs text-ink-500">{grupo.registros.length} registros</p>
         </div>
         <Badge tone={tom} className="shrink-0">
           {CERTEZA_ROTULO[grupo.certeza]}
         </Badge>
       </header>
 
-      {grupo.responsaveis.length > 1 || grupo.divergencias.length > 0 ? (
+      {/* POR QUE e a mesma pessoa, com o dado repetido a vista: e a primeira
+          coisa que se le no cartao, e nao uma linha miuda abaixo do nome. */}
+      <div className={cn('flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5', FUNDO_DO_MOTIVO[tom])}>
+        <span className="text-[0.6875rem] font-semibold tracking-[0.08em] text-ink-500 uppercase">
+          Por que é a mesma pessoa
+        </span>
+        {oQueSeRepete(grupo).map((igual) => (
+          <span
+            key={igual.evidencia}
+            className={cn(
+              'inline-flex max-w-full items-center gap-1.5 rounded-control border px-2.5 py-1 text-sm font-semibold',
+              CHIP_DO_MOTIVO[tom],
+            )}
+          >
+            <Fingerprint aria-hidden="true" className="size-4 shrink-0" />
+            <span className="truncate">
+              {igual.rotulo}
+              {igual.valor ? <span className="font-bold tabular-nums">: {igual.valor}</span> : null}
+            </span>
+          </span>
+        ))}
+      </div>
+
+      {grupo.responsaveis.length > 1 || grupo.divergencias.length > 0 || mesmoResponsavel ? (
         <div className="space-y-1 border-b border-line px-3 py-2 text-xs">
+          {mesmoResponsavel ? (
+            <p className="text-ink-700">
+              Cadastrado mais de uma vez por{' '}
+              <strong className="font-semibold text-ink-900">{mesmoResponsavel}</strong>:{' '}
+              <strong className="font-semibold text-ink-900">conta uma vez só</strong> para ele.
+            </p>
+          ) : null}
           {grupo.responsaveis.length > 1 ? (
             <p className="flex items-start gap-1.5 text-warning-600">
               <AlertTriangle aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
