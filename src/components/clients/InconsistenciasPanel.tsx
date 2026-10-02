@@ -27,6 +27,7 @@ import {
   TIPO_INFO,
   TIPOS,
   doResponsavel,
+  entraNasInconsistencias,
   type Certeza,
   type Diagnostico,
   type Gravidade,
@@ -158,7 +159,7 @@ function semNada(recorte: ReturnType<typeof recorteDe>): boolean {
  */
 export function InconsistenciasPanel({
   clientName,
-  members,
+  members: todos,
   diagnostico,
   onOpenMember,
   canExport,
@@ -168,6 +169,9 @@ export function InconsistenciasPanel({
   onConfigChanged,
 }: InconsistenciasPanelProps) {
   const [configurando, setConfigurando] = useState(false);
+  // O Lider que so e o nome de uma aba nao entra no quadro (nem na base dos
+  // percentuais): nao tem cadastro para conferir.
+  const members = useMemo(() => todos.filter(entraNasInconsistencias), [todos]);
   // Varios responsaveis de uma vez: a tela mostra a soma deles, e o PDF sai
   // separado, um por responsavel. Nenhum marcado = o time todo.
   const [selecionados, setSelecionados] = useState<string[]>([]);
@@ -218,7 +222,7 @@ export function InconsistenciasPanel({
       ...(recorte.incompletos.length
         ? [{
             titulo: 'Cadastros com dado faltando',
-            explicacao: 'Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas.',
+            explicacao: 'Entraram com buraco — quase sempre de uma lista importada ou de um cadastro às pressas.',
             gravidade: 'media' as const,
             pessoas: recorte.incompletos.map(({ member, faltas }) => pessoa(member, nomesDasFaltas(faltas))),
           }]
@@ -461,7 +465,7 @@ export function InconsistenciasPanel({
           tom="warning"
           titulo="Cadastros incompletos"
           quantidade={visto.incompletos.length}
-          descricao="Entraram com buraco — quase sempre da planilha ou de um cadastro às pressas. A etiqueta some da ficha assim que o dado é preenchido."
+          descricao="Entraram com buraco — quase sempre de uma lista importada ou de um cadastro às pressas. A etiqueta some da ficha assim que o dado é preenchido."
         >
           <Incompletos
             diagnostico={diagnostico}

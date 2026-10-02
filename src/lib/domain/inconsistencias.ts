@@ -617,15 +617,28 @@ export interface Diagnostico {
 }
 
 /**
+ * Quem entra no quadro de Inconsistencias.
+ *
+ * O Lider que so existe como o NOME DE UMA ABA (o time lido ao vivo, 052)
+ * nao tem cadastro: nao tem titulo, telefone nem quem o cadastrou para
+ * conferir. Cobrar isso dele e inconsistencia falsa — ele fica fora do
+ * quadro, dos filtros por dado e do PDF. A Equipe dele entra normalmente.
+ */
+export function entraNasInconsistencias(member: Member): boolean {
+  return !(member.fromSheet && member.tier === 'LIDER');
+}
+
+/**
  * `desligadas`: as verificacoes que o ADMIN geral desligou neste time
  * (migration 053). Somem de tudo — secoes, contagens e nota de saude —, como
  * se nao existissem.
  */
 export function diagnosticar(
-  members: readonly Member[],
+  todos: readonly Member[],
   referencia: MunicipioDaOperacao,
   desligadas: readonly string[] = [],
 ): Diagnostico {
+  const members = todos.filter(entraNasInconsistencias);
   const fora = new Set(desligadas);
   const todosOsRepetidos = cadastrosRepetidos(members);
   const repetidos = todosOsRepetidos.filter((grupo) =>

@@ -1,3 +1,4 @@
+import { recruiterText } from '@/lib/domain/recruitment';
 import { deflateRawSync } from 'node:zlib';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -555,6 +556,16 @@ describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
     );
     expect([...equipe.lideresForaDaPlanilha]).toEqual(['m-duda']);
     expect(escritas).toEqual([]);
+  });
+
+  it('Líder que só existe como aba: cadastrado pela Administração do time, sem falar em planilha', () => {
+    const leitura = { em: '2026-09-30T12:00:00.000Z', abas: [lerAbaDoSheets('ADALBERTO', [CABECALHO, ['Caio', '', '', '', '', '', '', '']])] };
+    const equipe = montarEquipe(leitura, [], { clientId: COPIA, estado: 'AL', cidade: 'Arapiraca' });
+    const lider = equipe.membros.find((m) => m.tier === 'LIDER')!;
+    const texto = recruiterText(lider.recruitedBy);
+    expect(texto).toBe('Administração do time');
+    expect(texto.toLowerCase()).not.toContain('planilha');
+    expect(texto).not.toContain('acesso removido');
   });
 
   it('planilha fechada: a lista do time continua abrindo, e o motivo aparece no cartão', async () => {

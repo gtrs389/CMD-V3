@@ -28,7 +28,13 @@ export const REVOKED_SUFFIX = '(acesso removido)';
 export function recruiterText(recruiter: Recruiter | null | undefined): string {
   if (!recruiter) return UNKNOWN_RECRUITER;
 
-  const base = `${recruiter.name} · ${roleShortLabel(recruiter.role, recruiter.tier)}`;
+  // Sem nome (o Lider que o sistema monta para o time): so o papel.
+  const papel = roleShortLabel(recruiter.role, recruiter.tier);
+  const base = recruiter.name.trim()
+    ? `${recruiter.name} · ${papel}`
+    : recruiter.role === 'ADMIN'
+      ? 'Administração do time'
+      : papel;
   return recruiter.userId ? base : `${base} ${REVOKED_SUFFIX}`;
 }
 
