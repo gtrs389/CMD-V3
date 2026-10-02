@@ -556,6 +556,10 @@ describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
     );
     expect([...equipe.lideresForaDaPlanilha]).toEqual(['m-duda']);
     expect(escritas).toEqual([]);
+    // Pessoa de Lider COM conta: o id nunca e "<id do usuario>-0", que iria
+    // ao banco como se fosse cadastro (ficha com "formato invalido").
+    expect(equipe.membros.every((m) => m.id.startsWith('planilha-'))).toBe(true);
+    expect(equipe.membros[0].recruitedBy?.userId).toBe('u-bia');
   });
 
   it('Líder que só existe como aba: cadastrado pela Administração do time, sem falar em planilha', () => {

@@ -337,8 +337,14 @@ export function montarEquipe(
       });
     }
 
+    // O id da pessoa SEMPRE comeca com o prefixo de tela: o vinculo de um
+    // Lider com conta e o id real do usuario, e "<uuid>-3" ia parar no banco
+    // como se fosse um cadastro (a ficha abria com "formato invalido").
+    const raiz = vinculo.startsWith(PREFIXO_DA_PLANILHA) ? vinculo.slice(PREFIXO_DA_PLANILHA.length) : vinculo;
     grupo.pessoas.forEach((pessoa, i) => {
-      membros.push(pessoaNaTela(pessoa, `${vinculo}-${i}`, contexto, { vinculo, name: grupo.lider.name, tag }));
+      membros.push(
+        pessoaNaTela(pessoa, `${PREFIXO_DA_PLANILHA}pessoa-${raiz}-${i}`, contexto, { vinculo, name: grupo.lider.name, tag }),
+      );
     });
     pessoas += grupo.pessoas.length;
   }

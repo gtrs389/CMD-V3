@@ -33,6 +33,7 @@ import {
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { daysAgoIso, startOfMonthIso } from '@/lib/utils/date';
 import { toClient } from './mappers';
+import { equipeDaPlanilha } from './sheet-live.service';
 import { verificacoesValidas } from '@/lib/domain/verificacoes-de-inconsistencia';
 import {
   ensurePersonalInvite,
@@ -216,10 +217,10 @@ export async function listClientSummaries(
     loadFields(ids),
     loadInvites(ids),
     signedUrls(rows.map((row) => row.photo_path)),
-    selectRows<Pick<MemberRow, 'id' | 'client_id' | 'name' | 'photo_path' | 'created_at'>>(
+    selectRows<Pick<MemberRow, 'id' | 'client_id' | 'name' | 'photo_path' | 'created_at' | 'recruited_by_role'>>(
       TABLES.members,
       {
-        select: 'id,client_id,name,photo_path,created_at',
+        select: 'id,client_id,name,photo_path,created_at,recruited_by_role',
         filters: { client_id: inFilter(ids) },
         order: 'created_at.desc',
       },
@@ -264,6 +265,32 @@ export async function listClientSummaries(
     if (current.recent.length < RECENT_MEMBERS) current.recent.push(member);
     counts.set(member.client_id, current);
   }
+
+  // Time duplicado com a planilha do Sheets ligada (052): o cartao conta o
+  // MESMO que a lista do time mostra — do banco, so quem nao e Equipe (sem os
+  // Lideres que nao tem aba), mais a Equipe lida AO VIVO da planilha. Sem
+  // isso, o cartao mostrava so o banco, e o time parecia bem menor.
+  const comPlanilha = rows.filter((row) => row.is_copy && row.sheet_sync_enabled && row.sheet_url);
+  const leituras = await Promise.all(comPlanilha.map((row) => equipeDaPlanilha(row.id).catch(() => null)));
+  comPlanilha.forEach((row, indice) => {
+    const planilha = leituras[indice];
+    if (!planilha) return;
+    const doBanco = members.filter(
+      (member) =>
+        member.client_id === row.id &&
+        member.recruited_by_role !== 'EQUIPE' &&
+        !planilha.lideresForaDaPlanilha.has(member.id),
+    );
+    // Quem vem da planilha nao tem data de cadastro: entra no total, e nao
+    // em "este mes", "ultimos 7 dias" ou "ultimo cadastro".
+    counts.set(row.id, {
+      total: doBanco.length + planilha.membros.length,
+      month: doBanco.filter((member) => member.created_at >= monthStart).length,
+      week: doBanco.filter((member) => member.created_at >= weekStart).length,
+      last: doBanco[0]?.created_at ?? null,
+      recent: doBanco.slice(0, RECENT_MEMBERS),
+    });
+  });
 
   // Uma unica assinatura para todas as fotos exibidas na pilha dos cartoes.
   const recentRows = [...counts.values()].flatMap((aggregate) => aggregate.recent);

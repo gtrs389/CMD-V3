@@ -231,7 +231,8 @@ function PersonRow({
   onOpenMember: (memberId: string) => void;
 }) {
   // Pessoa lida ao vivo da planilha do Sheets (052): nao existe no banco, e
-  // por isso nao tem ficha para abrir aqui. Aparece, e conta, com o selo.
+  // por isso nao tem ficha para abrir aqui. Aparece e conta, com quem a
+  // cadastrou na linha.
   const daPlanilha = member.memberId.startsWith('planilha-');
   const Caixa = daPlanilha ? 'div' : 'button';
   return (
@@ -279,6 +280,12 @@ function PersonRow({
         {member.zone || member.section ? (
           <p className="text-xs text-ink-500">
             Zona {member.zone ?? '--'} · Seção {member.section ?? '--'}
+          </p>
+        ) : null}
+
+        {member.cadastradoPor ? (
+          <p className="truncate text-xs text-ink-500">
+            Cadastrado por <span className="font-medium text-ink-700">{member.cadastradoPor}</span>
           </p>
         ) : null}
       </div>

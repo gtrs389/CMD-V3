@@ -75,6 +75,7 @@ interface Posicao {
  *
  * A lista abre num portal, em posicao fixa sobre a tela: dentro de um modal
  * com rolagem ela nunca e cortada, e abre para cima quando nao cabe embaixo.
+ * Fica acima ate do mapa (o Leaflet usa camadas de 400 a 1000).
  *
  * Teclado: setas navegam, Enter escolhe, Esc fecha (sem fechar o modal por
  * baixo), e a busca aceita digitar direto. No toque, a busca nao puxa o
@@ -307,7 +308,7 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
           <div
             ref={panelRef}
             className={cn(
-              'fixed z-[70] flex animate-scale-in flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 shadow-overlay',
+              'fixed z-[1200] flex animate-scale-in flex-col overflow-hidden rounded-xl border border-line bg-surface p-2 shadow-overlay',
               posicao.bottom !== undefined ? 'origin-bottom' : 'origin-top',
             )}
             style={{

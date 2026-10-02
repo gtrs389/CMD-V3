@@ -1,3 +1,4 @@
+import { recruiterText } from '@/lib/domain/recruitment';
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import {
@@ -1011,7 +1012,7 @@ export async function placeMembers(
     memberIds.length === 0
       ? Promise.resolve([] as MemberRow[])
       : selectRows<MemberRow>(TABLES.members, {
-          select: 'id,client_id,name,phone,photo_path,recruited_by_role',
+          select: 'id,client_id,name,phone,photo_path,recruited_by_role,recruited_by_user_id,recruited_by_name',
           filters: {
             id: inFilter(memberIds),
             ...(options.clientId ? { client_id: `eq.${options.clientId}` } : {}),
@@ -1092,6 +1093,7 @@ export async function placeMembers(
         email: null,
         zone: member.zone,
         section: member.section,
+        cadastradoPor: member.recruitedBy ? recruiterText(member.recruitedBy) : null,
       };
     }
     const member = linha.row;
@@ -1106,6 +1108,17 @@ export async function placeMembers(
       email: emails.get(member.id) ?? null,
       zone: eleitoral?.zona ?? null,
       section: eleitoral?.secao ?? null,
+      // Do snapshot gravado no cadastro: quem cadastra pelo link pessoal e
+      // Lider (perfil EQUIPE no nivel de Lider).
+      cadastradoPor: member.recruited_by_name
+        ? recruiterText({
+            userId: member.recruited_by_user_id,
+            name: member.recruited_by_name,
+            role: member.recruited_by_role ?? 'ADMIN',
+            tier: member.recruited_by_role === 'EQUIPE' ? 'LIDER' : null,
+            photo: null,
+          })
+        : null,
     };
   });
 

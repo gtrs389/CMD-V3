@@ -847,7 +847,7 @@ function CartaoRepetido({
         ))}
       </div>
 
-      {grupo.responsaveis.length > 1 || grupo.divergencias.length > 0 || mesmoResponsavel ? (
+      {grupo.responsaveis.length > 1 || mesmoResponsavel ? (
         <div className="space-y-1 border-b border-line px-3 py-2 text-xs">
           {mesmoResponsavel ? (
             <p className="text-ink-700">
@@ -863,15 +863,6 @@ function CartaoRepetido({
                 Conta para {grupo.responsaveis.length} responsáveis no ranking:{' '}
                 <strong className="font-semibold">{grupo.responsaveis.join(' e ')}</strong>.
               </span>
-            </p>
-          ) : null}
-          {grupo.divergencias.length > 0 ? (
-            <p className="text-ink-500">
-              Os registros discordam em{' '}
-              <strong className="font-semibold text-ink-700">
-                {resumoDasFaltas(grupo.divergencias, grupo.divergencias.length)}
-              </strong>
-              : confira qual está certo antes de excluir a cópia.
             </p>
           ) : null}
         </div>
