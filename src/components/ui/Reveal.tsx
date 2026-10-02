@@ -45,7 +45,17 @@ export function Reveal({ children, className, delay = 0, as: Tag = 'div' }: Reve
     );
 
     observer.observe(node);
-    return () => observer.disconnect();
+    // Rede de seguranca: se o observador nao disparar (impressao, captura da
+    // pagina inteira, aba em segundo plano), o conteudo aparece mesmo assim.
+    // Um bloco invisivel ocupando lugar e pior do que uma animacao perdida.
+    const garantia = window.setTimeout(() => {
+      node.dataset.reveal = 'visible';
+      observer.disconnect();
+    }, 1500);
+    return () => {
+      window.clearTimeout(garantia);
+      observer.disconnect();
+    };
   }, []);
 
   return (
