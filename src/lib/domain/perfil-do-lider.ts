@@ -111,7 +111,8 @@ export function perfilDoLider(
 ): PerfilDoLider {
   // A mesma pessoa cadastrada duas vezes por este Lider conta uma vez.
   const members = contandoUmaVez(todos);
-  const t = (m: Member) => new Date(m.createdAt).getTime();
+  // Sem "DATA DE CADASTRO" na planilha: fora de todo recorte por periodo.
+  const t = (m: Member) => (m.semDataDeCadastro ? -Infinity : new Date(m.createdAt).getTime());
   const equipeDe = (id: string | null) =>
     id ? members.filter((m) => m.recruitedBy?.userId === id) : [];
 
@@ -132,7 +133,7 @@ export function perfilDoLider(
   const somaDeLideres = tamanhos.reduce((soma, x) => soma + x.equipe, 0);
   const ativos = tamanhos.filter((x) => x.equipe > 0);
 
-  const ultimoCadastro = equipe[0]?.createdAt ?? null;
+  const ultimoCadastro = equipe.find((m) => !m.semDataDeCadastro)?.createdAt ?? null;
   const diasSemCadastrar = ultimoCadastro
     ? Math.max(0, Math.floor((agoraMs - new Date(ultimoCadastro).getTime()) / DIA))
     : null;

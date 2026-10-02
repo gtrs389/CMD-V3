@@ -270,8 +270,11 @@ function pessoaNaTela(
     recruiterChange: null,
     access: 'PENDING',
     userId: null,
-    createdAt: base.em,
-    updatedAt: base.em,
+    // "DATA DE CADASTRO" da planilha. Sem ela, o instante da leitura — e a
+    // marca de que nao ha data (nao aparece, nao conta em "hoje"/"este mes").
+    createdAt: pessoa.registeredAt || base.em,
+    updatedAt: pessoa.registeredAt || base.em,
+    ...(pessoa.registeredAt ? {} : { semDataDeCadastro: true }),
   };
 }
 
@@ -320,6 +323,7 @@ export function montarEquipe(
               section: '',
               reference: '',
               photoVerified: '',
+              registeredAt: '',
             }),
             name: grupo.lider.name,
           },

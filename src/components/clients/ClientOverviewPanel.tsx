@@ -118,6 +118,8 @@ export function ClientOverviewPanel({
     let anteriores7 = 0;
 
     for (const member of members) {
+      // Da planilha sem "DATA DE CADASTRO": conta no total, nunca em "hoje".
+      if (member.semDataDeCadastro) continue;
       const created = new Date(member.createdAt).getTime();
       if (Number.isNaN(created)) continue;
 
@@ -136,7 +138,7 @@ export function ClientOverviewPanel({
     const variacao =
       anteriores7 === 0 ? (ultimos7 > 0 ? 100 : 0) : Math.round(((ultimos7 - anteriores7) / anteriores7) * 100);
 
-    const recentes = [...members].sort(byNewest).slice(0, RECENT_LIMIT);
+    const recentes = members.filter((member) => !member.semDataDeCadastro).sort(byNewest).slice(0, RECENT_LIMIT);
 
     return { hoje, mes, ultimos7, variacao, serie, recentes, ultimo: recentes[0] ?? null };
   }, [members, now]);

@@ -85,6 +85,12 @@ export interface Member extends Timestamped {
    */
   fromSheet?: boolean;
   /**
+   * Veio da planilha SEM "DATA DE CADASTRO". `createdAt` entao e so o
+   * instante da leitura: nao aparece como data, e nao conta em "hoje",
+   * "este mes" nem "ultimos 7 dias".
+   */
+  semDataDeCadastro?: boolean;
+  /**
    * Ultima troca de responsavel, quando houve (migration 027).
    *
    * O sistema conta quantas pessoas cada um cadastrou, e esse numero e lido

@@ -1080,8 +1080,9 @@ function SeloDaLinha({ member }: { member: Member }) {
           Incompleto
         </Badge>
       ) : null}
-      {/* Quem e lido ao vivo nao tem data de cadastro: nao mostra nenhuma. */}
-      {member.fromSheet ? null : (
+      {/* Da planilha, so com a "DATA DE CADASTRO" preenchida: sem ela nao ha
+          data para mostrar. */}
+      {member.semDataDeCadastro ? null : (
         <span className="text-[0.6875rem] text-ink-400 tabular-nums" title="Data do cadastro">
           {formatDate(member.createdAt)}
         </span>

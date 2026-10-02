@@ -281,13 +281,18 @@ export async function listClientSummaries(
         member.recruited_by_role !== 'EQUIPE' &&
         !planilha.lideresForaDaPlanilha.has(member.id),
     );
-    // Quem vem da planilha nao tem data de cadastro: entra no total, e nao
-    // em "este mes", "ultimos 7 dias" ou "ultimo cadastro".
+    // Da planilha, a data e a "DATA DE CADASTRO" de cada linha. Quem nao tem
+    // entra no total, e nao em "este mes", "ultimos 7 dias" ou "ultimo".
+    const datas = [
+      ...doBanco.map((member) => member.created_at),
+      ...planilha.membros.filter((member) => !member.semDataDeCadastro).map((member) => member.createdAt),
+    ];
+    const ultimo = datas.reduce<string | null>((maior, data) => (!maior || data > maior ? data : maior), null);
     counts.set(row.id, {
       total: doBanco.length + planilha.membros.length,
-      month: doBanco.filter((member) => member.created_at >= monthStart).length,
-      week: doBanco.filter((member) => member.created_at >= weekStart).length,
-      last: doBanco[0]?.created_at ?? null,
+      month: datas.filter((data) => data >= monthStart).length,
+      week: datas.filter((data) => data >= weekStart).length,
+      last: ultimo,
       recent: doBanco.slice(0, RECENT_MEMBERS),
     });
   });

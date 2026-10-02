@@ -267,7 +267,9 @@ export function montarDossie(
   // uma vez — no total, na Equipe de cada Lider e no ranking.
   const members = contandoUmaVez(todos);
 
-  const ts = (m: Member) => new Date(m.createdAt).getTime();
+  // Sem "DATA DE CADASTRO" na planilha nao ha data: fica fora de todo recorte
+  // por periodo (conta no total, nunca em "ultimos 7 dias").
+  const ts = (m: Member) => (m.semDataDeCadastro ? -Infinity : new Date(m.createdAt).getTime());
   const hoje0 = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate()).getTime();
   const dentro = (dias: number) => members.filter((m) => ts(m) > agora.getTime() - dias * DIA);
   const ultimos7 = dentro(7).length;
@@ -296,7 +298,7 @@ export function montarDossie(
     .map((l) => {
       const equipe = l.userId ? (porResponsavel.get(l.userId) ?? []) : [];
       const ultimo = equipe.reduce<string | null>(
-        (maior, m) => (!maior || m.createdAt > maior ? m.createdAt : maior),
+        (maior, m) => (m.semDataDeCadastro ? maior : !maior || m.createdAt > maior ? m.createdAt : maior),
         null,
       );
       return {
