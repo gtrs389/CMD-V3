@@ -1,6 +1,6 @@
 import type { Member } from '@/lib/types';
-import { normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
-import { digitosDoTelefone, normalizePhone } from '@/lib/utils/phone';
+import { formatCpf, formatVoterId, normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
+import { digitosDoTelefone, formatPhone, normalizePhone } from '@/lib/utils/phone';
 import { dadosParaConferir } from './conferencia';
 import { normalizeSearch } from '@/lib/utils/text';
 import { camposFaltantes } from './member-completeness';
@@ -294,6 +294,82 @@ export function cadastrosRepetidos(members: readonly Member[]): GrupoRepetido[] 
       b.registros.length - a.registros.length ||
       a.nome.localeCompare(b.nome, 'pt-BR'),
   );
+}
+
+/** O que se repete no grupo, com o VALOR: "Mesmo título de eleitor · 0245 0597 9170". */
+export interface Igualdade {
+  evidencia: Evidencia;
+  rotulo: string;
+  /** O dado repetido, formatado. Vazio quando nao da para apontar um so. */
+  valor: string;
+}
+
+function exibir(evidencia: Evidencia, member: Member): string {
+  switch (evidencia) {
+    case 'titulo':
+      return formatVoterId(member.voterId ?? '');
+    case 'cpf':
+      return formatCpf(member.cpf ?? '');
+    case 'nome-telefone':
+      return formatPhone(member.phone ?? '');
+    case 'nome-secao':
+      return `Zona ${member.zone?.trim()} · Seção ${member.section?.trim()}`;
+    case 'nome':
+      return member.name.trim();
+  }
+}
+
+/**
+ * Por que o grupo e a mesma pessoa, com o dado que se repete — e isso que a
+ * tela e o PDF destacam no cartao, e nao so "mesmo titulo" escondido em
+ * letra miuda.
+ */
+export function oQueSeRepete(grupo: GrupoRepetido): Igualdade[] {
+  return grupo.evidencias.map((evidencia) => {
+    const vistos = new Map<string, Member>();
+    let valor = '';
+    for (const { member } of grupo.registros) {
+      const chave = chavesDe(member)[evidencia];
+      if (!chave) continue;
+      const outro = vistos.get(chave);
+      if (outro) {
+        valor = exibir(evidencia, outro);
+        break;
+      }
+      vistos.set(chave, member);
+    }
+    return { evidencia, rotulo: EVIDENCIA_INFO[evidencia].rotulo, valor };
+  });
+}
+
+/**
+ * A mesma pessoa cadastrada mais de uma vez PELO MESMO responsavel conta
+ * UMA vez: o primeiro cadastro conta, as copias dele nao — nas contagens do
+ * time, do Lider e do ranking.
+ *
+ * So vale para "repetido com certeza" (mesmo titulo, CPF, ou nome e
+ * telefone). Entre responsaveis DIFERENTES nada e descontado aqui: ai e
+ * disputa, e quem decide de quem e a pessoa e o ADMIN, no quadro.
+ */
+export function copiasNoMesmoResponsavel(members: readonly Member[]): Set<string> {
+  const copias = new Set<string>();
+  for (const grupo of cadastrosRepetidos(members)) {
+    if (grupo.certeza !== 'certa') continue;
+    const responsaveis = new Set<string>();
+    // Os registros vem do mais antigo para o mais novo: o primeiro fica.
+    for (const { member } of grupo.registros) {
+      const chave = recruiterKey(member);
+      if (responsaveis.has(chave)) copias.add(member.id);
+      else responsaveis.add(chave);
+    }
+  }
+  return copias;
+}
+
+/** A lista para CONTAR: sem as copias feitas pelo mesmo responsavel. */
+export function contandoUmaVez<T extends Member>(members: readonly T[]): T[] {
+  const copias = copiasNoMesmoResponsavel(members);
+  return copias.size ? members.filter((member) => !copias.has(member.id)) : [...members];
 }
 
 /* -------------------------------------------------------------------------

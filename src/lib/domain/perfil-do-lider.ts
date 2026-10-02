@@ -1,3 +1,4 @@
+import { contandoUmaVez } from './inconsistencias';
 import type { Member } from '@/lib/types';
 import { normalizeSearch } from '@/lib/utils/text';
 import { camposFaltantes } from './member-completeness';
@@ -104,10 +105,12 @@ function inicioDaSemana(data: Date): number {
 
 export function perfilDoLider(
   lider: Member,
-  members: readonly Member[],
+  todos: readonly Member[],
   repetidos: readonly GrupoRepetido[] = [],
   agora: Date = new Date(),
 ): PerfilDoLider {
+  // A mesma pessoa cadastrada duas vezes por este Lider conta uma vez.
+  const members = contandoUmaVez(todos);
   const t = (m: Member) => new Date(m.createdAt).getTime();
   const equipeDe = (id: string | null) =>
     id ? members.filter((m) => m.recruitedBy?.userId === id) : [];

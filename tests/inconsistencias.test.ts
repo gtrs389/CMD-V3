@@ -5,7 +5,9 @@ import {
   cadastrosIncompletos,
   cadastrosRepetidos,
   chaveDoNome,
+  contandoUmaVez,
   diagnosticar,
+  oQueSeRepete,
   doResponsavel,
   municipioDaOperacao,
   problemasDasFichas,
@@ -365,6 +367,32 @@ describe('Líder que só existe como aba (time lido ao vivo)', () => {
     expect(ids).not.toContain(lider.id);
     expect(d.incompletos.membros.map((i) => i.member.id)).toEqual([daEquipe.id]);
     expect(d.total).toBe(1);
+  });
+});
+
+describe('mesma pessoa, mesmo Líder: conta uma vez', () => {
+  const ALEX: Recruiter = { userId: 'u-alex', name: 'Alex Araujo', role: 'EQUIPE', tier: 'LIDER', photo: null };
+
+  it('duas fichas com o mesmo título pelo mesmo Líder: só a primeira conta', () => {
+    const a = pessoa({ name: 'ALISSON ARAÚJO DOS SANTOS', voterId: '100000002720', recruitedBy: ALEX, createdAt: '2026-10-01T21:33:00.000Z' });
+    const b = pessoa({ name: 'DÁRIO PATRICK DA SILVA', voterId: '100000002720', recruitedBy: ALEX, createdAt: '2026-10-01T21:34:00.000Z' });
+    const outra = pessoa({ recruitedBy: ALEX });
+    expect(contandoUmaVez([a, b, outra]).map((m) => m.id)).toEqual([a.id, outra.id]);
+  });
+
+  it('Líderes diferentes: cada um conta a sua (é disputa, e fica no quadro)', () => {
+    const a = pessoa({ voterId: '100000002720', recruitedBy: JOAO });
+    const b = pessoa({ voterId: '100000002720', recruitedBy: BRUNA });
+    expect(contandoUmaVez([a, b])).toHaveLength(2);
+  });
+
+  it('o cartão diz o dado repetido: o número do título', () => {
+    const a = pessoa({ voterId: '100000002720' });
+    const b = pessoa({ voterId: '100000002720' });
+    const [grupo] = cadastrosRepetidos([a, b]);
+    const [igual] = oQueSeRepete(grupo);
+    expect(igual.rotulo).toBe('Mesmo título de eleitor');
+    expect(igual.valor.replace(/\D/g, '')).toBe('100000002720');
   });
 });
 

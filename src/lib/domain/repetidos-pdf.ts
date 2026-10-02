@@ -1,5 +1,5 @@
 import type { Member } from '@/lib/types';
-import { CERTEZA_ROTULO, EVIDENCIA_INFO, type GrupoRepetido } from './inconsistencias';
+import { CERTEZA_ROTULO, oQueSeRepete, type GrupoRepetido } from './inconsistencias';
 import { resumoDasFaltas } from './member-completeness';
 import { recruiterText } from './recruitment';
 
@@ -55,7 +55,8 @@ export function grupoRepetidoParaPdf(grupo: GrupoRepetido): GrupoRepetidoParaPdf
     nome: grupo.nome,
     certeza: CERTEZA_ROTULO[grupo.certeza],
     nivel: grupo.certeza,
-    evidencias: grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo),
+    // Com o dado repetido: "Mesmo título de eleitor: 0245 0597 9170".
+    evidencias: oQueSeRepete(grupo).map((igual) => (igual.valor ? `${igual.rotulo}: ${igual.valor}` : igual.rotulo)),
     divergencias: grupo.divergencias.length ? resumoDasFaltas(grupo.divergencias, grupo.divergencias.length) : '',
     responsaveis: grupo.responsaveis,
     registros: grupo.registros.map((r) => registroParaPdf(r.member, r.primeiro)),
