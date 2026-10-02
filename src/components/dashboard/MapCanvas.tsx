@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -16,6 +16,7 @@ import {
 } from '@/lib/domain/map-pin';
 import { tileUrlFrom } from '@/lib/domain/map-tile';
 import { formatPhone } from '@/lib/utils/phone';
+import { BotaoDePdf } from './BotaoDePdf';
 import { PlaceSections } from './PlaceSections';
 import { formatNumber } from '@/lib/utils/text';
 import { initials } from '@/lib/utils/text';
@@ -73,16 +74,45 @@ const PLACE_GLYPH =
  * foto removida — o pino cai na reserva que ja esta montada embaixo dela:
  * iniciais na pessoa, predio na escola.
  */
+/** Dourado do Lider: o anel e o selo de estrela do pino dele. */
+const LIDER_COLOR = '#e0a426';
+
+/**
+ * Quem ja apareceu no mapa nesta sessao. So a PRIMEIRA aparicao cai com a
+ * animacao: trocar o zoom refaz os grupos, e cada pino caindo de novo a cada
+ * scroll cansaria.
+ */
+const JA_APARECERAM = new Set<string>();
+let ordemDeEntrada = 0;
+
+/** Atraso escalonado da queda dos pinos (0 = sem animacao). */
+function atrasoDeEntrada(chave: string): number | null {
+  if (JA_APARECERAM.has(chave)) return null;
+  JA_APARECERAM.add(chave);
+  ordemDeEntrada += 1;
+  return Math.min(ordemDeEntrada * 22, 700);
+}
+
 function pinElement(
   kind: MapPin['locationKind'],
   src: string | null,
   label: string | null,
+  opcoes: { lider?: boolean; atraso?: number | null } = {},
 ): HTMLElement {
-  const color = COLORS[kind];
+  const color = opcoes.lider ? LIDER_COLOR : COLORS[kind];
 
+  // Raiz: a queda (uma vez). Corpo: o realce do mouse. Separados porque a
+  // animacao, terminada, prenderia o `transform` e o hover nao subiria.
   const root = document.createElement('span');
-  root.style.cssText = `position:relative;display:block;width:${PIN_SIZE}px;` +
-    `height:${PIN_SIZE + PIN_TIP}px;filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))`;
+  root.className = opcoes.atraso != null ? 'cmd-pin cmd-pin-entra' : 'cmd-pin';
+  if (opcoes.atraso != null) root.style.setProperty('--cmd-atraso', `${opcoes.atraso}ms`);
+  root.style.cssText += `;position:relative;display:block;width:${PIN_SIZE}px;` +
+    `height:${PIN_SIZE + PIN_TIP}px`;
+
+  const corpo = document.createElement('span');
+  corpo.className = opcoes.lider ? 'cmd-pin-corpo cmd-pin-lider' : 'cmd-pin-corpo';
+  corpo.style.cssText = `position:relative;display:block;width:100%;height:100%;` +
+    `filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))`;
 
   const frame = document.createElement('span');
   frame.style.cssText =
@@ -115,7 +145,21 @@ function pinElement(
     `border-left:6px solid transparent;border-right:6px solid transparent;` +
     `border-top:${PIN_TIP}px solid ${color}`;
 
-  root.append(frame, tip);
+  corpo.append(frame, tip);
+
+  // Selo do Lider: uma estrela dourada no canto do pino.
+  if (opcoes.lider) {
+    const selo = document.createElement('span');
+    selo.style.cssText =
+      `position:absolute;right:-5px;top:-5px;display:flex;width:18px;height:18px;align-items:center;` +
+      `justify-content:center;border-radius:9999px;background:${LIDER_COLOR};border:2px solid #fff;` +
+      'box-shadow:0 1px 3px rgb(16 24 40 / 0.35)';
+    selo.innerHTML =
+      '<svg viewBox="0 0 24 24" width="10" height="10" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/></svg>';
+    corpo.append(selo);
+  }
+
+  root.append(corpo);
   return root;
 }
 
@@ -124,6 +168,7 @@ function markerIcon(
   src: string | null,
   /** Iniciais da pessoa. Nulo na escola: la a reserva e o predio. */
   label: string | null = null,
+  opcoes: { lider?: boolean; atraso?: number | null } = {},
 ): L.DivIcon {
   return L.divIcon({
     className: '',
@@ -131,7 +176,7 @@ function markerIcon(
     // A ponta encosta na coordenada; o balao abre logo acima do pino.
     iconAnchor: [PIN_SIZE / 2, PIN_SIZE + PIN_TIP],
     popupAnchor: [0, -(PIN_SIZE + PIN_TIP - 2)],
-    html: pinElement(kind, src, label),
+    html: pinElement(kind, src, label, opcoes),
   });
 }
 
@@ -139,15 +184,19 @@ function clusterIcon(total: number, kinds: MapPin['locationKind'][]): L.DivIcon 
   const color = kinds.includes('RESIDENCE') ? COLORS.RESIDENCE : COLORS.POLLING_PLACE;
   const size = total > 99 ? 48 : total > 9 ? 42 : 36;
 
+  // `total` e um numero e `color` uma constante deste modulo: nenhum dado de
+  // fora entra nesta marcacao. O anel respira em volta do grupo.
   return L.divIcon({
     className: '',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     html: `
-      <span style="display:flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;
-                   border-radius:9999px;background:${color};color:#fff;font-weight:600;font-size:13px;
-                   border:3px solid rgb(255 255 255 / 0.85);box-shadow:0 2px 6px rgb(16 24 40 / 0.3)">
-        ${total}
+      <span class="cmd-cluster" style="--cmd-cor:${color};width:${size}px;height:${size}px">
+        <span class="cmd-cluster-corpo" style="display:flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;
+                     border-radius:9999px;background:${color};color:#fff;font-weight:700;font-size:13px;
+                     border:3px solid rgb(255 255 255 / 0.85);box-shadow:0 2px 6px rgb(16 24 40 / 0.3)">
+          ${total}
+        </span>
       </span>`,
   });
 }
@@ -218,7 +267,16 @@ function PinPhoto({ pin }: { pin: MapPin }) {
 }
 
 /** Cartao da pessoa. Telefone e e-mail so aparecem quando existem. */
-function PinDetails({ pin, onOpenMember }: { pin: MapPin; onOpenMember: (memberId: string) => void }) {
+function PinDetails({
+  pin,
+  onOpenMember,
+  extra,
+}: {
+  pin: MapPin;
+  onOpenMember: (memberId: string) => void;
+  /** Acoes do Lider, quando o pino e de Lider. */
+  extra?: ReactNode;
+}) {
   const local = [pin.place, pin.district].filter(Boolean).join(' - ');
   const municipio = [pin.city, pin.state].filter(Boolean).join('/');
 
@@ -250,6 +308,7 @@ function PinDetails({ pin, onOpenMember }: { pin: MapPin; onOpenMember: (memberI
         >
           Ver ficha completa
         </button>
+        {extra}
       </div>
     </div>
   );
@@ -258,28 +317,38 @@ function PinDetails({ pin, onOpenMember }: { pin: MapPin; onOpenMember: (memberI
 function ClusterMarker({
   cluster,
   onOpenMember,
+  renderLider,
 }: {
   cluster: PinCluster;
   onOpenMember: (memberId: string) => void;
+  renderLider?: (memberId: string) => ReactNode;
 }) {
   const map = useMap();
   const single = cluster.pins.length === 1 ? cluster.pins[0] : null;
+  const lider = single?.tier === 'LIDER';
 
   // Sozinha, a pessoa aparece pela propria foto; agrupadas, vale a contagem.
   // O icone e guardado para a foto nao ser buscada de novo a cada desenho.
   const icon = useMemo(
     () =>
       single
-        ? markerIcon(single.locationKind, single.memberPhoto, initials(single.memberName))
+        ? markerIcon(single.locationKind, single.memberPhoto, initials(single.memberName), {
+            lider: single.tier === 'LIDER',
+            atraso: atrasoDeEntrada(`${single.memberId}:${single.locationKind}`),
+          })
         : clusterIcon(cluster.pins.length, cluster.pins.map((pin) => pin.locationKind)),
     [cluster.pins, single],
   );
 
   if (single) {
     return (
-      <Marker position={[single.latitude, single.longitude]} icon={icon}>
-        <Popup>
-          <PinDetails pin={single} onOpenMember={onOpenMember} />
+      <Marker position={[single.latitude, single.longitude]} icon={icon} zIndexOffset={lider ? 500 : 0}>
+        <Popup minWidth={lider ? 290 : 240}>
+          <PinDetails
+            pin={single}
+            onOpenMember={onOpenMember}
+            extra={lider && renderLider ? renderLider(single.memberId) : null}
+          />
         </Popup>
       </Marker>
     );
@@ -381,15 +450,21 @@ function PlaceVotes({ place }: { place: PollingPlacePin }) {
 function PlaceMarker({
   place,
   onOpen,
+  onDownload,
   onReady,
 }: {
   place: PollingPlacePin;
   onOpen: (place: PollingPlacePin) => void;
+  /** Baixa o PDF da escola (arquivo de verdade). */
+  onDownload?: (place: PollingPlacePin) => Promise<void>;
   /** Entrega o marcador ao mapa, para o ranking conseguir abri-lo. */
   onReady?: (marker: L.Marker | null) => void;
 }) {
   // A fachada da escola no lugar do desenho; sem foto, fica o predio.
-  const icon = useMemo(() => markerIcon('POLLING_PLACE', place.imageUrl), [place.imageUrl]);
+  const icon = useMemo(
+    () => markerIcon('POLLING_PLACE', place.imageUrl, null, { atraso: atrasoDeEntrada(`local:${place.locationId}`) }),
+    [place.imageUrl, place.locationId],
+  );
 
   return (
     <Marker ref={onReady} position={[place.latitude, place.longitude]} icon={icon}>
@@ -407,13 +482,16 @@ function PlaceMarker({
 
           <PlaceVotes place={place} />
 
-          <button
-            type="button"
-            onClick={() => onOpen(place)}
-            className="inline-flex min-h-9 w-full items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
-          >
-            Ver pessoas
-          </button>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={() => onOpen(place)}
+              className="inline-flex min-h-9 flex-1 items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
+            >
+              Ver pessoas
+            </button>
+            {onDownload ? <BotaoDePdf onClick={() => onDownload(place)} rotulo="PDF" titulo="Baixar o PDF desta escola" /> : null}
+          </div>
         </div>
       </Popup>
     </Marker>
@@ -439,7 +517,9 @@ export default function MapCanvas({
   pins,
   places = [],
   onOpenPlace,
+  onDownloadPlace,
   onOpenMember,
+  renderLiderActions,
   focusPlace = null,
   resizeKey,
   fallbackCenter,
@@ -447,6 +527,10 @@ export default function MapCanvas({
   pins: MapPin[];
   places?: PollingPlacePin[];
   onOpenPlace?: (place: PollingPlacePin) => void;
+  /** Baixa o PDF da escola. Sem ele, o botao nao aparece. */
+  onDownloadPlace?: (place: PollingPlacePin) => Promise<void>;
+  /** Acoes do Lider no balao do pino dele (Equipe, inconsistencias, PDFs). */
+  renderLiderActions?: (memberId: string) => ReactNode;
   /** Abre a ficha da pessoa sobre o mapa, sem sair dele. */
   onOpenMember?: (memberId: string) => void;
   /** Leva o mapa ate um local e abre o balao dele. */
@@ -505,6 +589,7 @@ export default function MapCanvas({
           key={cluster.id}
           cluster={cluster}
           onOpenMember={onOpenMember ?? (() => {})}
+          renderLider={renderLiderActions}
         />
       ))}
 
@@ -513,6 +598,7 @@ export default function MapCanvas({
           key={place.locationId}
           place={place}
           onOpen={onOpenPlace ?? (() => {})}
+          onDownload={onDownloadPlace}
           onReady={(marker) => {
             if (marker) markers.current.set(place.locationId, marker);
             else markers.current.delete(place.locationId);

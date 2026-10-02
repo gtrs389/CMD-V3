@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nomeDoPdfDeInconsistencia } from '@/lib/domain/nome-do-pdf';
+import { nomeDoPdf, nomeDoPdfDeInconsistencia } from '@/lib/domain/nome-do-pdf';
 
 describe('nome do PDF de inconsistências', () => {
   const lideres = [
@@ -26,3 +26,11 @@ describe('nome do PDF de inconsistências', () => {
     expect(nomeDoPdfDeInconsistencia('', [])).toBe('inconsistência_time.pdf');
   });
 });
+
+describe('nome dos PDFs do mapa', () => {
+  it('a Equipe do Líder segue o mesmo jeito: equipe_felix.pdf', () => {
+    expect(nomeDoPdf('equipe', 'Félix Silva Targino')).toBe('equipe_felix.pdf');
+    expect(nomeDoPdf('equipe', 'Alex Araujo', ['Alex Souza'])).toBe('equipe_alex_araujo.pdf');
+  });
+});
+

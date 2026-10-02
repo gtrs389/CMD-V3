@@ -23,8 +23,17 @@ function palavras(nome: string): string[] {
 }
 
 export function nomeDoPdfDeInconsistencia(nome: string | null | undefined, outrosNomes: readonly string[] = []): string {
+  return nomeDoPdf('inconsistência', nome, outrosNomes);
+}
+
+/** O mesmo jeito de nomear, com outro comeco: `equipe_vivian.pdf`. */
+export function nomeDoPdf(
+  prefixo: string,
+  nome: string | null | undefined,
+  outrosNomes: readonly string[] = [],
+): string {
   const partes = palavras(nome ?? '');
-  if (partes.length === 0) return 'inconsistência_time.pdf';
+  if (partes.length === 0) return `${prefixo}_time.pdf`;
 
   const primeiro = partes[0];
   const mesmoPrimeiroNome = outrosNomes
@@ -33,5 +42,5 @@ export function nomeDoPdfDeInconsistencia(nome: string | null | undefined, outro
 
   const segundo = partes.slice(1).find((parte) => !LIGACOES.has(parte));
   const curto = mesmoPrimeiroNome > 0 && segundo ? `${primeiro}_${segundo}` : primeiro;
-  return `inconsistência_${curto}.pdf`;
+  return `${prefixo}_${curto}.pdf`;
 }

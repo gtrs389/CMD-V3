@@ -80,6 +80,10 @@ export function TeamChart({ points }: { points: TeamChartPoint[] }) {
               <stop offset="0%" stopColor="var(--color-accent-400)" stopOpacity="0.5" />
               <stop offset="100%" stopColor="var(--color-accent-400)" stopOpacity="0" />
             </linearGradient>
+            {/* A curva se desenha da esquerda para a direita ao aparecer. */}
+            <clipPath id="cmd-team-chart-revela">
+              <rect className="cmd-revela" x="0" y="0" width={WIDTH} height={HEIGHT} />
+            </clipPath>
           </defs>
 
           {ticks.map((tick, index) => {
@@ -98,6 +102,7 @@ export function TeamChart({ points }: { points: TeamChartPoint[] }) {
             );
           })}
 
+          <g clipPath="url(#cmd-team-chart-revela)">
           <path d={area} fill="url(#cmd-team-chart)" />
           <path
             d={line}
@@ -107,10 +112,13 @@ export function TeamChart({ points }: { points: TeamChartPoint[] }) {
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
+          </g>
 
           {coords.map((coord, index) => (
             <circle
               key={points[index].label + String(index)}
+              className="cmd-ponto"
+              style={{ '--cmd-atraso': `${250 + index * 110}ms` } as React.CSSProperties}
               cx={coord.x}
               cy={coord.y}
               r="3"
@@ -118,7 +126,9 @@ export function TeamChart({ points }: { points: TeamChartPoint[] }) {
               stroke="var(--color-navy-900)"
               strokeWidth="1.5"
               vectorEffect="non-scaling-stroke"
-            />
+            >
+              <title>{`${points[index].label}: ${points[index].value}`}</title>
+            </circle>
           ))}
         </svg>
 

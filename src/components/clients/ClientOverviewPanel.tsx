@@ -1,6 +1,6 @@
 'use client';
 
-import { contandoUmaVez } from '@/lib/domain/inconsistencias';
+import { contandoUmaVez, diagnosticar, municipioDaOperacao } from '@/lib/domain/inconsistencias';
 import { useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -37,6 +37,10 @@ import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
 import { TeamChart, type TeamChartPoint } from './TeamChart';
+import { LiderNoMapa } from './LiderNoMapa';
+import { Reveal } from '@/components/ui/Reveal';
+import { Contador } from '@/components/ui/Contador';
+import { cn } from '@/lib/utils/cn';
 
 /** Abreviacao dos dias, na ordem devolvida por `getDay()`. */
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -213,130 +217,170 @@ export function ClientOverviewPanel({
     return { ativos: ativos.length, obrigatorios, percentual };
   }, [client.form.fields, podeVerFormulario]);
 
-  return (
-    <div className="space-y-3">
-      {/* Estrutura do time. Quem e da Equipe ve so a propria lista: para
-          ele estes totais nao seriam os do time, e nao aparecem. */}
-      {mostrarRanking ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatCard
-            icon={<ShieldCheck aria-hidden="true" className="size-[1.125rem]" />}
-            tone="brand"
-            label="Administradores"
-            value={estrutura.administradores}
-            hint={
-              estrutura.administradores === 1
-                ? 'administra o time e cadastra os Líderes'
-                : 'administram o time e cadastram os Líderes'
-            }
-            onOpen={() => onOpenTab('equipe')}
-          />
-          <StatCard
-            icon={<UserCheck aria-hidden="true" className="size-[1.125rem]" />}
-            tone="accent"
-            label="Líderes"
-            value={estrutura.lideres}
-            hint={
+  // O mesmo diagnostico do quadro de Inconsistencias: e dele que o pino de
+  // cada Lider tira "quantos para corrigir" e o PDF.
+  const diagnostico = useMemo(
+    () =>
+      podeVerMapa && mostrarRanking
+        ? diagnosticar(
+            todos,
+            municipioDaOperacao({ stateUf: client.stateUf, cities: client.cities }),
+            client.inconsistenciasDesligadas ?? [],
+          )
+        : null,
+    [todos, client.stateUf, client.cities, client.inconsistenciasDesligadas, podeVerMapa, mostrarRanking],
+  );
+
+  /** O que o balao do pino de um Lider mostra no mapa. */
+  const acoesDoLider = diagnostico
+    ? (memberId: string) => (
+        <LiderNoMapa
+          memberId={memberId}
+          members={todos}
+          diagnostico={diagnostico}
+          clientName={client.name}
+          onVerEquipe={navegador ? (id) => navegador.abrirLider(id) : undefined}
+        />
+      )
+    : undefined;
+
+  // Os indicadores, numa faixa so: a estrutura do time e o ritmo de cadastro.
+  const indicadores = [
+    ...(mostrarRanking
+      ? [
+          {
+            icon: <ShieldCheck aria-hidden="true" className="size-[1.125rem]" />,
+            tone: 'brand' as const,
+            label: 'Administradores',
+            value: estrutura.administradores,
+            hint:
+              estrutura.administradores === 1 ? 'administra o time' : 'administram o time',
+          },
+          {
+            icon: <UserCheck aria-hidden="true" className="size-[1.125rem]" />,
+            tone: 'accent' as const,
+            label: 'Líderes',
+            value: estrutura.lideres,
+            hint:
               estrutura.lideres === 0
                 ? 'nenhum Líder ainda'
-                : `${formatNumber(estrutura.lideresComEquipe)} com Equipe · ${formatNumber(
-                    estrutura.lideres - estrutura.lideresComEquipe,
-                  )} sem ninguém ainda`
-            }
-            onOpen={() => onOpenTab('equipe')}
-          />
-          <StatCard
-            icon={<Users aria-hidden="true" className="size-[1.125rem]" />}
-            tone="success"
-            label="Liderados"
-            value={estrutura.liderados}
-            hint={
-              estrutura.lideres === 0
-                ? 'a Equipe dos Líderes'
-                : `média de ${formatNumber(estrutura.media)} por Líder`
-            }
-            onOpen={() => onOpenTab('equipe')}
+                : `${formatNumber(estrutura.lideresComEquipe)} com Equipe`,
+          },
+          {
+            icon: <Users aria-hidden="true" className="size-[1.125rem]" />,
+            tone: 'success' as const,
+            label: 'Liderados',
+            value: estrutura.liderados,
+            hint: estrutura.lideres === 0 ? 'a Equipe dos Líderes' : `média de ${formatNumber(estrutura.media)} por Líder`,
+          },
+        ]
+      : []),
+    {
+      icon: <BarChart3 aria-hidden="true" className="size-[1.125rem]" />,
+      tone: 'accent' as const,
+      label: 'Cadastros hoje',
+      value: stats.hoje,
+      hint: (
+        <span className="flex items-center gap-1">
+          <Clock3 aria-hidden="true" className="size-3 shrink-0" />
+          {stats.ultimo ? `Último ${formatRelative(stats.ultimo.createdAt)}` : 'Nenhum cadastro ainda'}
+        </span>
+      ),
+    },
+    {
+      icon: <TrendingUp aria-hidden="true" className="size-[1.125rem]" />,
+      tone: 'success' as const,
+      label: 'Últimos 7 dias',
+      value: stats.ultimos7,
+      badge: `${stats.variacao >= 0 ? '+' : ''}${formatNumber(stats.variacao)}%`,
+      hint: 'vs. semana anterior',
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* 1. O MAPA, em destaque: e a leitura que a operacao abre primeiro.
+          So opacidade na entrada — um transform num ancestral prenderia a
+          tela cheia do mapa (position: fixed) dentro do cartao. */}
+      {podeVerMapa ? (
+        <div className="animate-fade-in">
+          <MobilizationMap
+            clientId={client.id}
+            clientName={client.name}
+            destaque
+            renderLiderActions={acoesDoLider}
+            // O Time DEMO e todo de Alagoas: enquanto nao houver pino
+            // resolvido, o mapa abre no centro do estado.
+            fallbackCenter={client.isDemo ? ALAGOAS_CENTER : undefined}
           />
         </div>
       ) : null}
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <TeamCard
-          total={total}
-          mes={stats.mes}
-          serie={stats.serie}
-          recentes={stats.recentes}
-          restantes={restantes}
-        />
-
-        <div className="flex flex-col gap-3">
-          {/* Sem o cartao do link, os dois indicadores esticam e ocupam a
-              coluna inteira: nao sobra vao vazio ao lado da equipe. */}
-          <div
-            className={
-              showInviteCard ? 'grid gap-3 sm:grid-cols-2' : 'grid flex-1 gap-3 sm:grid-cols-2'
-            }
-          >
-            <StatCard
-              icon={<BarChart3 aria-hidden="true" className="size-[1.125rem]" />}
-              tone="accent"
-              label="Cadastros hoje"
-              value={stats.hoje}
-              hint={
-                <span className="flex items-center gap-1">
-                  <Clock3 aria-hidden="true" className="size-3 shrink-0" />
-                  {stats.ultimo ? `Último ${formatRelative(stats.ultimo.createdAt)}` : 'Nenhum cadastro ainda'}
-                </span>
-              }
-              onOpen={() => onOpenTab('equipe')}
-            />
-
-            <StatCard
-              icon={<TrendingUp aria-hidden="true" className="size-[1.125rem]" />}
-              tone="success"
-              label="Últimos 7 dias"
-              value={stats.ultimos7}
-              badge={`${stats.variacao >= 0 ? '+' : ''}${formatNumber(stats.variacao)}%`}
-              hint="em relação à semana anterior"
-              onOpen={() => onOpenTab('equipe')}
-            />
-          </div>
-
-          {showInviteCard ? (
-            <InviteCard
-              client={client}
-              canManage={podeGerenciarConvite}
-              onManage={onManageInvite}
-            />
-          ) : null}
-        </div>
+      {/* 2. Os indicadores: numeros que correm ate o valor. */}
+      <div
+        className={cn(
+          'grid gap-3 sm:grid-cols-2',
+          indicadores.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-2',
+        )}
+      >
+        {indicadores.map((item, i) => (
+          <Reveal key={item.label} delay={i * 70} className="flex">
+            <StatCard {...item} onOpen={() => onOpenTab('equipe')} />
+          </Reveal>
+        ))}
       </div>
 
-      {/* Coluna da direita: ranking da equipe e, para o ADMIN, o cartao do
-          formulario. Os links do time saem daqui — eles vivem no cabecalho,
-          nomeados um a um. */}
+      {/* 3. O ritmo e quem puxa: a equipe ao longo da semana e o ranking. */}
+      <div
+        className={cn(
+          'grid gap-3',
+          mostrarRanking ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]' : '',
+        )}
+      >
+        <Reveal className="flex flex-col">
+          <TeamCard
+            total={total}
+            mes={stats.mes}
+            serie={stats.serie}
+            recentes={stats.recentes}
+            restantes={restantes}
+          />
+        </Reveal>
+
+        {mostrarRanking ? (
+          <Reveal delay={90} className="flex flex-col">
+            <RankingCard
+              rows={ranking}
+              currentUserId={user?.id ?? null}
+              onOpen={navegador ? (id) => navegador.abrirLider(id) : undefined}
+            />
+          </Reveal>
+        ) : null}
+      </div>
+
+      {/* 4. Quem chegou por ultimo, o link e o formulario. */}
       <div
         className={
-          mostrarRanking || form
+          showInviteCard || form
             ? 'grid gap-3 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]'
             : 'grid gap-3'
         }
       >
-        <RecentMembersCard
-          members={stats.recentes}
-          options={relationshipOptions}
-          onOpenTeam={() => onOpenTab('equipe')}
-        />
+        <Reveal>
+          <RecentMembersCard
+            members={stats.recentes}
+            options={relationshipOptions}
+            onOpenTeam={() => onOpenTab('equipe')}
+          />
+        </Reveal>
 
-        {mostrarRanking || form ? (
-          <div className="flex flex-col gap-3">
-            {/* Quem mais cadastrou: a leitura que o responsavel pela operacao
-                abre primeiro. */}
-            {mostrarRanking ? (
-              <RankingCard
-                rows={ranking}
-                currentUserId={user?.id ?? null}
-                onOpen={navegador ? (id) => navegador.abrirLider(id) : undefined}
+        {showInviteCard || form ? (
+          <Reveal delay={90} className="flex flex-col gap-3">
+            {showInviteCard ? (
+              <InviteCard
+                client={client}
+                canManage={podeGerenciarConvite}
+                onManage={onManageInvite}
               />
             ) : null}
 
@@ -349,18 +393,9 @@ export function ClientOverviewPanel({
                 onEdit={onOpenForm}
               />
             ) : null}
-          </div>
+          </Reveal>
         ) : null}
       </div>
-
-      {podeVerMapa ? (
-        <MobilizationMap
-          clientId={client.id}
-          // O Time DEMO e todo de Alagoas: enquanto nao houver pino resolvido,
-          // o mapa abre no centro do estado, e nao em outra regiao do pais.
-          fallbackCenter={client.isDemo ? ALAGOAS_CENTER : undefined}
-        />
-      ) : null}
     </div>
   );
 }
@@ -385,8 +420,12 @@ function TeamCard({
   return (
     <section
       aria-labelledby="equipe-cadastrada"
-      className="rounded-card bg-navy-900 p-4 text-white shadow-overlay sm:p-5"
+      className="relative flex-1 overflow-hidden rounded-card bg-gradient-to-br from-navy-900 to-navy-800 p-4 text-white shadow-overlay sm:p-5"
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-24 -left-16 size-64 rounded-full bg-accent-500/15 blur-3xl"
+      />
       <div className="grid gap-4 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] sm:items-start">
         <div className="min-w-0">
           <h2 id="equipe-cadastrada" className="flex items-center gap-2 text-[0.8125rem] font-semibold">
@@ -400,7 +439,7 @@ function TeamCard({
           </h2>
 
           <p className="mt-3 text-[2.75rem] leading-none font-bold tracking-tight">
-            {formatNumber(total)}
+            <Contador valor={total} duracao={1200} />
           </p>
           <p className="mt-2 text-sm font-semibold text-emerald-400">
             +{formatNumber(mes)} neste mês
@@ -485,17 +524,18 @@ function StatCard({
       type="button"
       onClick={onOpen}
       aria-label={`${label}: ${formatNumber(value)}. Ver equipe`}
-      className="flex min-h-11 items-center gap-3 rounded-card border border-line bg-surface p-3.5 text-left shadow-card transition-colors hover:bg-ink-50"
+      className="group flex min-h-11 w-full items-center gap-3 rounded-card border border-line bg-surface p-3.5 text-left shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-overlay"
     >
       <span
         aria-hidden="true"
-        className={
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-control transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6',
           tone === 'accent'
-            ? 'flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-50 text-accent-600'
+            ? 'bg-accent-50 text-accent-600'
             : tone === 'brand'
-              ? 'flex size-9 shrink-0 items-center justify-center rounded-control bg-brand-50 text-brand-700'
-              : 'flex size-9 shrink-0 items-center justify-center rounded-control bg-success-50 text-success-600'
-        }
+              ? 'bg-brand-50 text-brand-700'
+              : 'bg-success-50 text-success-600',
+        )}
       >
         {icon}
       </span>
@@ -503,9 +543,7 @@ function StatCard({
       <span className="min-w-0 flex-1">
         <span className="block text-[0.6875rem] font-medium text-ink-500">{label}</span>
         <span className="mt-0.5 flex items-baseline gap-1.5">
-          <span className="text-[1.75rem] leading-none font-bold tracking-tight text-ink-900">
-            {formatNumber(value)}
-          </span>
+          <Contador valor={value} className="text-[1.75rem] leading-none font-bold tracking-tight text-ink-900" />
           {badge ? (
             <span className="text-xs font-semibold text-success-600">{badge}</span>
           ) : null}
@@ -513,7 +551,10 @@ function StatCard({
         <span className="mt-1 block truncate text-[0.6875rem] text-ink-500">{hint}</span>
       </span>
 
-      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-ink-400" />
+      <ChevronRight
+        aria-hidden="true"
+        className="size-4 shrink-0 text-ink-400 transition-transform duration-200 group-hover:translate-x-0.5"
+      />
     </button>
   );
 }
@@ -923,8 +964,13 @@ function RankingCard({
                   className="mt-1.5 block h-1 w-full overflow-hidden rounded-pill bg-ink-100"
                 >
                   <span
-                    className="block h-full rounded-pill bg-accent-600"
-                    style={{ width: `${maior > 0 ? Math.round((row.count / maior) * 100) : 0}%` }}
+                    className="cmd-barra block h-full rounded-pill bg-gradient-to-r from-accent-600 to-accent-400"
+                    style={
+                      {
+                        width: `${maior > 0 ? Math.round((row.count / maior) * 100) : 0}%`,
+                        '--cmd-atraso': `${Math.min(index, 12) * 60}ms`,
+                      } as React.CSSProperties
+                    }
                   />
                 </span>
               </div>
