@@ -585,12 +585,13 @@ function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
 
 /**
  * A pessoa cadastrada mais de uma vez, como na tela: cabecalho, os avisos
- * (conta para mais de um responsavel, registros que discordam) e a linha do
+ * (conta para mais de um responsavel) e a linha do
  * tempo dos cadastros — o primeiro em verde, as copias em vermelho.
  */
 export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
   const tom = TOM_DA_CERTEZA[grupo.nivel];
-  const avisos = grupo.responsaveis.length > 1 || grupo.divergencias;
+  // Onde os registros discordam nao aparece: nem na tela, nem aqui.
+  const avisos = grupo.responsaveis.length > 1;
   return (
     <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, marginBottom: 8 }} wrap={false}>
       <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f6f8fa', paddingHorizontal: 9, paddingVertical: 7, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
@@ -619,16 +620,9 @@ export function CartaoRepetido({ grupo }: { grupo: GrupoRepetidoPdf }) {
       {avisos ? (
         <View style={{ paddingHorizontal: 9, paddingVertical: 6, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
           {grupo.responsaveis.length > 1 ? (
-            <Text style={{ fontSize: 7.8, color: C.warning, marginBottom: grupo.divergencias ? 2 : 0 }}>
+            <Text style={{ fontSize: 7.8, color: C.warning }}>
               {s(`! Conta para ${grupo.responsaveis.length} responsáveis no ranking: `)}
               <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(grupo.responsaveis.join(' e '))}</Text>.
-            </Text>
-          ) : null}
-          {grupo.divergencias ? (
-            <Text style={{ fontSize: 7.8, color: C.muted }}>
-              {s('Os registros discordam em ')}
-              <Text style={{ fontFamily: 'Helvetica-Bold', color: C.ink2 }}>{s(grupo.divergencias)}</Text>
-              {s(': confira qual está certo antes de excluir a cópia.')}
             </Text>
           ) : null}
         </View>
