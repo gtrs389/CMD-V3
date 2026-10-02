@@ -1,3 +1,4 @@
+import { ehVerificacao } from '@/lib/domain/verificacoes-de-inconsistencia';
 import { z } from 'zod';
 import { appConfig } from '@/config/app.config';
 import { API_KEY_NAME_MAX } from '@/lib/domain/api-key';
@@ -658,6 +659,14 @@ export const inviteBatchSchema = z.object({
 
 /** Confirmacao de dados pela FonteData (migration 041): so o valor. */
 export const verificationToggleSchema = z.object({ enabled: z.boolean() });
+
+/** Verificacoes de inconsistencia desligadas no time (053): so ids conhecidos. */
+export const inconsistenciasDesligadasSchema = z.object({
+  desligadas: z
+    .array(z.string().max(40))
+    .max(50)
+    .refine((ids) => ids.every(ehVerificacao), 'Verificação desconhecida.'),
+});
 
 export const demoTeamCreateSchema = z.object({
   name: trimmed(80).min(2, 'Dê um nome ao Time DEMO.'),

@@ -543,6 +543,20 @@ describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
     expect(equipe.membros[0].recruitedBy).toMatchObject({ userId: vinculo, name: 'Bia', tag: 'NORTE' });
   });
 
+  it('com a planilha ligada, os Líderes são os da planilha: Líder do banco sem aba fica de fora', () => {
+    const leitura = { em: '2026-09-30T12:00:00.000Z', abas: [lerAbaDoSheets('Bia', [CABECALHO, ['Caio', '', '', '', '', '', '', '']])] };
+    const equipe = montarEquipe(
+      leitura,
+      [
+        { memberId: 'm-bia', name: 'Bia', userId: 'u-bia', tag: null },
+        { memberId: 'm-duda', name: 'Duda Reis', userId: 'u-duda', tag: null },
+      ],
+      { clientId: COPIA, estado: 'AL', cidade: 'Arapiraca' },
+    );
+    expect([...equipe.lideresForaDaPlanilha]).toEqual(['m-duda']);
+    expect(escritas).toEqual([]);
+  });
+
   it('planilha fechada: a lista do time continua abrindo, e o motivo aparece no cartão', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } })));
     const url = 'https://docs.google.com/spreadsheets/d/1PlanilhaFechadaNoGoogle';
@@ -550,6 +564,8 @@ describe('a planilha é lida ao vivo, e NADA dela vai para o banco', () => {
 
     const equipe = await equipeDaPlanilha(COPIA);
     expect(equipe?.membros).toEqual([]);
+    // Erro de leitura nao some com Lider nenhum.
+    expect(equipe?.lideresForaDaPlanilha.size).toBe(0);
     const status = await statusDaPlanilha(COPIA, { naHora: true });
     expect(status.ok).toBe(false);
     expect(status.erro).toContain('Qualquer pessoa com o link');

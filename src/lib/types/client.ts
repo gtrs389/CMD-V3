@@ -173,6 +173,11 @@ export interface Client extends Timestamped {
    * obrigatorios, preenchidos a mao.
    */
   verificationEnabled: boolean;
+  /**
+   * Verificacoes do quadro de Inconsistencias que o ADMIN geral desligou
+   * neste time (migration 053), pelos ids de `VERIFICACOES`. Vazio = todas.
+   */
+  inconsistenciasDesligadas: string[];
 }
 
 export interface ClientInput {

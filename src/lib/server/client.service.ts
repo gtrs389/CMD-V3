@@ -33,6 +33,7 @@ import {
 import { deleteImage, isDataUrl, signedUrl, signedUrls, uploadImage } from '@/lib/supabase/storage';
 import { daysAgoIso, startOfMonthIso } from '@/lib/utils/date';
 import { toClient } from './mappers';
+import { verificacoesValidas } from '@/lib/domain/verificacoes-de-inconsistencia';
 import {
   ensurePersonalInvite,
   inviteAccepts,
@@ -866,6 +867,28 @@ export async function setVerificationEnabled(id: string, enabled: boolean): Prom
   );
 
   return assemble(row ?? (await requireClientRow(id)));
+}
+
+/**
+ * Verificacoes do quadro de Inconsistencias desligadas neste time (053).
+ * Guarda so a lista; o quadro continua sendo calculado na tela.
+ */
+export async function setInconsistenciasDesligadas(id: string, desligadas: string[]): Promise<Client> {
+  await requireClientRow(id);
+
+  try {
+    const [row] = await updateRows<ClientRow>(
+      TABLES.clients,
+      { id: `eq.${id}` },
+      { inconsistencias_desligadas: verificacoesValidas(desligadas) },
+    );
+    return assemble(row ?? (await requireClientRow(id)));
+  } catch (error) {
+    if (error instanceof SupabaseRequestError && error.isMissingSchema) {
+      throw badRequest('Falta rodar a migration 053 no Supabase para guardar esta escolha.');
+    }
+    throw error;
+  }
 }
 
 /**

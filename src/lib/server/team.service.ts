@@ -118,6 +118,7 @@ export async function getTeamOverview(session: TeamSession): Promise<TeamOvervie
       // do ADMIN le, e e ele que diz se os cadastros desta operacao sao
       // conferidos na FonteData (migration 041).
       verificationEnabled: client.verification_enabled !== false,
+      inconsistenciasDesligadas: client.inconsistencias_desligadas ?? [],
       bannerTag: { ...DEFAULT_BANNER_TAG },
       createdAt: member.created_at,
       updatedAt: member.created_at,

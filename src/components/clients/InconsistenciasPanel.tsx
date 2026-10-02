@@ -16,6 +16,7 @@ import {
   PencilLine,
   Phone,
   ShieldAlert,
+  SlidersHorizontal,
   UserX,
   X,
 } from 'lucide-react';
@@ -55,6 +56,7 @@ import { Button } from '@/components/ui/Button';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { TierBadge } from '@/components/members/TierBadge';
 import { FiltroDeDadosCard } from './FiltroDeDadosCard';
+import { VerificacoesModal } from './VerificacoesModal';
 
 interface InconsistenciasPanelProps {
   /** Nome do time, para o arquivo do relatorio. */
@@ -65,6 +67,12 @@ interface InconsistenciasPanelProps {
   onOpenMember: (memberId: string) => void;
   /** Baixar o relatorio: a mesma regra da planilha da equipe. */
   canExport: boolean;
+  clientId: string;
+  /** Verificacoes desligadas neste time (053). */
+  desligadas: readonly string[];
+  /** Ligar e desligar verificacoes: so o ADMIN geral. */
+  canConfigure: boolean;
+  onConfigChanged: () => void;
 }
 
 /* -------------------------------------------------------------------------
@@ -154,7 +162,12 @@ export function InconsistenciasPanel({
   diagnostico,
   onOpenMember,
   canExport,
+  clientId,
+  desligadas,
+  canConfigure,
+  onConfigChanged,
 }: InconsistenciasPanelProps) {
+  const [configurando, setConfigurando] = useState(false);
   // Varios responsaveis de uma vez: a tela mostra a soma deles, e o PDF sai
   // separado, um por responsavel. Nenhum marcado = o time todo.
   const [selecionados, setSelecionados] = useState<string[]>([]);
@@ -350,7 +363,20 @@ export function InconsistenciasPanel({
           ) : null
         }
         exportar={
-          canExport && !nada ? (
+          canConfigure || (canExport && !nada) ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+              {canConfigure ? (
+                <Button variant="ghost" onClick={() => setConfigurando(true)} className="whitespace-nowrap">
+                  <SlidersHorizontal aria-hidden="true" className="size-4" />
+                  O que aparece
+                  {desligadas.length ? (
+                    <span className="rounded-pill bg-warning-50 px-1.5 text-xs font-semibold text-warning-600 tabular-nums">
+                      {desligadas.length} {desligadas.length === 1 ? 'desligada' : 'desligadas'}
+                    </span>
+                  ) : null}
+                </Button>
+              ) : null}
+              {canExport && !nada ? (
             <Button
               variant="secondary"
               onClick={baixarRelatorio}
@@ -361,6 +387,8 @@ export function InconsistenciasPanel({
               {baixando ??
                 (selecionados.length > 1 ? `Baixar ${selecionados.length} PDFs (um por líder)` : 'Baixar PDF')}
             </Button>
+              ) : null}
+            </div>
           ) : null
         }
       />
@@ -373,7 +401,18 @@ export function InconsistenciasPanel({
         gruposRepetidos={visto.certos}
         onOpenMember={onOpenMember}
         canExport={canExport}
+        desligadas={desligadas}
       />
+
+      {canConfigure ? (
+        <VerificacoesModal
+          open={configurando}
+          onClose={() => setConfigurando(false)}
+          clientId={clientId}
+          desligadas={desligadas}
+          onSaved={onConfigChanged}
+        />
+      ) : null}
 
       {nada ? (
         <div className="flex flex-col items-center rounded-card border border-success-600/30 bg-success-50/60 px-5 py-12 text-center">

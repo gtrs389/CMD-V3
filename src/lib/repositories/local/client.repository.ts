@@ -137,6 +137,7 @@ export function createLocalClientRepository(
         // Sem servidor nao ha fornecedor para consultar; o time nasce como
         // nasce no banco, com a confirmacao ligada.
         verificationEnabled: true,
+        inconsistenciasDesligadas: [],
         bannerTag: { ...DEFAULT_BANNER_TAG },
         createdAt: timestamp,
         updatedAt: timestamp,

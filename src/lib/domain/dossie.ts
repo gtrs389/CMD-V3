@@ -256,12 +256,12 @@ export function montarDossie(
   client: Pick<
     Client,
     'name' | 'stateUf' | 'cities' | 'isDemo' | 'createdAt' | 'verificationEnabled' | 'people'
-  >,
+  > & Partial<Pick<Client, 'inconsistenciasDesligadas'>>,
   members: readonly Member[],
   agora: Date = new Date(),
 ): Dossie {
   const referencia = municipioDaOperacao({ stateUf: client.stateUf, cities: client.cities });
-  const diagnostico = diagnosticar(members, referencia);
+  const diagnostico = diagnosticar(members, referencia, client.inconsistenciasDesligadas ?? []);
 
   const ts = (m: Member) => new Date(m.createdAt).getTime();
   const hoje0 = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate()).getTime();

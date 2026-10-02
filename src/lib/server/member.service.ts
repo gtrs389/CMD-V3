@@ -436,7 +436,10 @@ export async function listMembersByClient(clientId: string): Promise<Member[]> {
  * e Equipe por esse identificador.
  */
 function juntarComPlanilha(membros: Member[], planilha: EquipeDaPlanilha): Member[] {
-  const ligados = membros.map((membro) => {
+  // Com a planilha ligada, os Lideres do time sao os da planilha: Lider do
+  // banco sem aba nela nao aparece (nada e apagado).
+  const daPlanilha = membros.filter((membro) => !planilha.lideresForaDaPlanilha.has(membro.id));
+  const ligados = daPlanilha.map((membro) => {
     const vinculo = planilha.vinculoDoLider.get(membro.id);
     const linha = planilha.dadosDoLider.get(membro.id);
     // A linha do Lider na aba dele vale na tela: corrigido na planilha,

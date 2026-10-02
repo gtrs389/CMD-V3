@@ -586,15 +586,29 @@ const MAP_LINK_LIMIT = 2000;
  * time gravou, por mais recente e por mais numeroso que seja, nao disputa
  * mais espaco com ele.
  */
+/**
+ * Lideres do banco sem aba na planilha do Sheets (052): com a planilha
+ * ligada, os Lideres do time sao os dela, e o mapa mostra quem a lista
+ * mostra. Vazio em time sem planilha.
+ */
+async function lideresForaDaPlanilha(clientId: string): Promise<Set<string>> {
+  if (!(await sheetEnabled(clientId))) return new Set();
+  return (await equipeDaPlanilha(clientId))?.lideresForaDaPlanilha ?? new Set();
+}
+
 async function clientLinks(clientId: string): Promise<MemberLocationRow[]> {
-  const clientMembers = await selectRows<{ id: string }>(TABLES.members, {
+  const [todosDoTime, foraDaPlanilha] = await Promise.all([
+    selectRows<{ id: string }>(TABLES.members, {
     // O filtro do PostgREST precisa do operador: sem o `eq.` o banco recusa a
     // consulta e o mapa do time nao abre.
     select: 'id',
     // Mesmo recorte da lista do time: no duplicado com planilha do Sheets
     // (052), o mapa mostra quem a lista mostra.
     filters: { client_id: `eq.${clientId}`, ...(await sheetVisibilityFilter(clientId)) },
-  });
+    }),
+    lideresForaDaPlanilha(clientId),
+  ]);
+  const clientMembers = todosDoTime.filter((member) => !foraDaPlanilha.has(member.id));
 
   if (clientMembers.length === 0) return [];
 
@@ -1013,11 +1027,15 @@ export async function placeMembers(
       : Promise.resolve([]),
   ]);
 
-  const members = esconderEquipeDe
-    ? linhasDoBanco.filter(
-        (row) => !(row.client_id === esconderEquipeDe && row.recruited_by_role === 'EQUIPE'),
-      )
-    : linhasDoBanco;
+  const timeDaPlanilha = options.clientId ?? options.sheetClientId ?? null;
+  const foraDaPlanilha = timeDaPlanilha ? await lideresForaDaPlanilha(timeDaPlanilha) : new Set<string>();
+  const members = (
+    esconderEquipeDe
+      ? linhasDoBanco.filter(
+          (row) => !(row.client_id === esconderEquipeDe && row.recruited_by_role === 'EQUIPE'),
+        )
+      : linhasDoBanco
+  ).filter((row) => !foraDaPlanilha.has(row.id));
 
   type Linha = { tipo: 'banco'; row: MemberRow } | { tipo: 'planilha'; member: Member };
   const todas: Linha[] = [

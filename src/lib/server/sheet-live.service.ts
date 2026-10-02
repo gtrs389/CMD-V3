@@ -210,6 +210,13 @@ export interface EquipeDaPlanilha {
    * nela vale na tela (`aplicarLinhaDoLider`), sem gravar nada.
    */
   dadosDoLider: Map<string, PessoaDaAba>;
+  /**
+   * Lideres do banco SEM aba na planilha. Com a planilha ligada, os Lideres
+   * do time sao os da planilha: estes ficam fora da tela (lista, contagens,
+   * inconsistencias e mapa). Nada e apagado — desligar a planilha os traz de
+   * volta. Vazio quando a leitura falha: erro de leitura nao some com Lider.
+   */
+  lideresForaDaPlanilha: Set<string>;
   relatorio: RelatorioDaPlanilha;
   /**
    * UF do time: e com ela que a zona + secao da planilha acham a escola no
@@ -333,10 +340,17 @@ export function montarEquipe(
     pessoas += grupo.pessoas.length;
   }
 
+  const naPlanilha = new Set(
+    plano.grupos.flatMap((grupo) => (grupo.lider.tipo === 'existente' ? [grupo.lider.memberId] : [])),
+  );
+
   return {
     membros,
     vinculoDoLider,
     dadosDoLider,
+    lideresForaDaPlanilha: new Set(
+      lideres.map((lider) => lider.memberId).filter((id) => !naPlanilha.has(id)),
+    ),
     estado: base.estado,
     relatorio: {
       ok: true,
@@ -432,6 +446,7 @@ export async function equipeDaPlanilha(clientId: string): Promise<EquipeDaPlanil
       membros: [],
       vinculoDoLider: new Map(),
       dadosDoLider: new Map(),
+      lideresForaDaPlanilha: new Set(),
       estado: cliente.state_uf ?? ENDERECO_FIXO.state,
       relatorio: {
         ok: false,

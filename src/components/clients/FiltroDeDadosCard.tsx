@@ -42,6 +42,7 @@ export function FiltroDeDadosCard({
   gruposRepetidos = [],
   onOpenMember,
   canExport,
+  desligadas = [],
 }: {
   clientName: string;
   /** Ja recortada pelo responsavel escolhido no quadro. */
@@ -52,9 +53,14 @@ export function FiltroDeDadosCard({
   gruposRepetidos?: GrupoRepetido[];
   onOpenMember: (id: string) => void;
   canExport: boolean;
+  /** Verificacoes desligadas neste time (053): o botao do filtro some. */
+  desligadas?: readonly string[];
 }) {
   const toast = useToast();
-  const [marcados, setMarcados] = useState<string[]>([]);
+  const [escolhidos, setMarcados] = useState<string[]>([]);
+  const filtros = FILTROS_DE_DADOS.filter((f) => !desligadas.includes(f.id));
+  // Um filtro marcado e depois desligado deixa de valer na hora.
+  const marcados = escolhidos.filter((id) => !desligadas.includes(id));
   const [limite, setLimite] = useState(15);
   const [baixando, setBaixando] = useState(false);
 
@@ -75,7 +81,7 @@ export function FiltroDeDadosCard({
       const { gerarPdfDaLista } = await import('@/components/neo/ListasPdf');
       // Uma secao por filtro marcado, na ordem da tela — cada uma com a
       // estrutura que faz sentido para ela.
-      const secoes: SecaoDoFiltro[] = FILTROS_DE_DADOS.filter((f) => marcados.includes(f.id)).map((filtro) => {
+      const secoes: SecaoDoFiltro[] = filtros.filter((f) => marcados.includes(f.id)).map((filtro) => {
         if (filtro.id === 'repetido') {
           return { tipo: 'repetidos', rotulo: filtro.rotulo, grupos: gruposRepetidos.map(grupoRepetidoParaPdf) };
         }
@@ -137,13 +143,13 @@ export function FiltroDeDadosCard({
       </div>
 
       <div className="mt-4 space-y-3">
-        {GRUPOS.map((grupo) => (
+        {GRUPOS.filter((grupo) => filtros.some((f) => f.grupo === grupo)).map((grupo) => (
           <div key={grupo} className="flex flex-col gap-1.5 sm:flex-row sm:items-start">
             <p className="w-40 shrink-0 pt-1.5 text-xs font-semibold tracking-wide text-ink-500 uppercase">
               {grupo}
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {FILTROS_DE_DADOS.filter((f) => f.grupo === grupo).map((filtro) => {
+              {filtros.filter((f) => f.grupo === grupo).map((filtro) => {
                 const ativo = marcados.includes(filtro.id);
                 const quantos = contagem[filtro.id] ?? 0;
                 return (
