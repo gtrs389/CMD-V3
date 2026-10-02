@@ -154,6 +154,7 @@ export function toClient(row: ClientRow, options: ToClientOptions): Client {
     // Linha de um banco ainda sem a migration 041 nao tem a coluna: vale o
     // padrao, que e o comportamento de sempre — confirmacao ligada.
     verificationEnabled: row.verification_enabled !== false,
+    inconsistenciasDesligadas: row.inconsistencias_desligadas ?? [],
     banner: options.bannerUrl ?? null,
     bannerTag: {
       left: Number(row.banner_tag_left),

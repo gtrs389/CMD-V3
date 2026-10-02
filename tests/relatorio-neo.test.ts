@@ -101,6 +101,7 @@ function time(): { client: Parameters<typeof montarDossie>[0]; members: Member[]
     isDemo: false,
     createdAt: '2026-06-01T00:00:00Z',
     verificationEnabled: true,
+    inconsistenciasDesligadas: [],
     people: [{ id: 'p1', name: 'Marina Alves', phone: '82988887777', photo: null }] as Client['people'],
   };
   return { client, members: [...lideres, ...equipe] };

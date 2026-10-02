@@ -1,11 +1,12 @@
 import type { Member } from '@/lib/types';
 import { normalizeCpf, normalizeVoterId } from '@/lib/utils/documents';
-import { normalizePhone } from '@/lib/utils/phone';
+import { digitosDoTelefone, normalizePhone } from '@/lib/utils/phone';
 import { dadosParaConferir } from './conferencia';
 import { normalizeSearch } from '@/lib/utils/text';
 import { camposFaltantes } from './member-completeness';
 import { recruiterKey, recruiterText, NO_RECRUITER_KEY } from './recruitment';
 import { ENDERECO_FIXO } from './csv-import';
+import { VERIFICACAO_DA_FALTA, verificacaoDoInvalido } from './verificacoes-de-inconsistencia';
 
 /**
  * Quadro de inconsistencias do time.
@@ -454,11 +455,15 @@ function foraDoMunicipio(member: Member, referencia: MunicipioDaOperacao): strin
 export function problemasDasFichas(
   members: readonly Member[],
   referencia: MunicipioDaOperacao,
+  desligadas: ReadonlySet<string> = new Set(),
 ): ProblemaDaFicha[] {
   const problemas: ProblemaDaFicha[] = [];
 
   for (const member of members) {
-    const invalidos = dadosInvalidos(member);
+    const digitos = digitosDoTelefone(member.phone ?? '').length;
+    const invalidos = dadosInvalidos(member).filter(
+      (texto) => !desligadas.has(verificacaoDoInvalido(texto, digitos)),
+    );
     if (invalidos.length) {
       problemas.push({ tipo: 'invalido', member, detalhe: invalidos.join(', ') });
     }
@@ -511,7 +516,8 @@ export function problemasDasFichas(
     }
   }
 
-  return problemas;
+  // As verificacoes de ficha desligadas tem o mesmo id do tipo.
+  return desligadas.size ? problemas.filter((p) => !desligadas.has(p.tipo)) : problemas;
 }
 
 /* -------------------------------------------------------------------------
@@ -538,13 +544,23 @@ export interface Incompletos {
   porResponsavel: IncompletosPorResponsavel[];
 }
 
-export function cadastrosIncompletos(members: readonly Member[]): Incompletos {
+/**
+ * `desligadas`: verificacoes que o ADMIN desligou neste time (053). O campo
+ * de uma verificacao desligada nao conta como falta — e quem so tinha essa
+ * falta sai da lista.
+ */
+export function cadastrosIncompletos(
+  members: readonly Member[],
+  desligadas: ReadonlySet<string> = new Set(),
+): Incompletos {
   const membros: Incompletos['membros'] = [];
   const porCampo = new Map<string, number>();
   const porResponsavel = new Map<string, IncompletosPorResponsavel>();
 
   for (const member of members) {
-    const faltas = camposFaltantes(member);
+    const faltas = camposFaltantes(member).filter(
+      (campo) => !desligadas.has(VERIFICACAO_DA_FALTA[campo] ?? ''),
+    );
     const chave = recruiterKey(member);
     const linha = porResponsavel.get(chave) ?? {
       chave,
@@ -600,14 +616,26 @@ export interface Diagnostico {
   saude: number;
 }
 
+/**
+ * `desligadas`: as verificacoes que o ADMIN geral desligou neste time
+ * (migration 053). Somem de tudo — secoes, contagens e nota de saude —, como
+ * se nao existissem.
+ */
 export function diagnosticar(
   members: readonly Member[],
   referencia: MunicipioDaOperacao,
+  desligadas: readonly string[] = [],
 ): Diagnostico {
-  const repetidos = cadastrosRepetidos(members);
-  const telefones = telefonesCompartilhados(members, repetidos);
-  const incompletos = cadastrosIncompletos(members);
-  const problemas = problemasDasFichas(members, referencia);
+  const fora = new Set(desligadas);
+  const todosOsRepetidos = cadastrosRepetidos(members);
+  const repetidos = todosOsRepetidos.filter((grupo) =>
+    grupo.certeza === 'possivel' ? !fora.has('possivel-repetido') : !fora.has('repetido'),
+  );
+  // O agrupamento por pessoa do telefone usa TODOS os repetidos: desligar a
+  // secao de repetidos nao transforma a mesma pessoa em duas.
+  const telefones = fora.has('telefone-repetido') ? [] : telefonesCompartilhados(members, todosOsRepetidos);
+  const incompletos = cadastrosIncompletos(members, fora);
+  const problemas = problemasDasFichas(members, referencia, fora);
 
   const comProblema = new Set<string>();
   for (const grupo of repetidos) {

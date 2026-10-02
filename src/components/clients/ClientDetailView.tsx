@@ -135,8 +135,11 @@ export function ClientDetailView({
       diagnosticar(
         memberList,
         municipioDaOperacao({ stateUf: client?.stateUf, cities: client?.cities }),
+        // O que o ADMIN geral desligou neste time (053) some de tudo:
+        // quadro, contagens da visao geral e nota.
+        client?.inconsistenciasDesligadas ?? [],
       ),
-    [memberList, client?.stateUf, client?.cities],
+    [memberList, client?.stateUf, client?.cities, client?.inconsistenciasDesligadas],
   );
 
   /**
@@ -633,6 +636,10 @@ export function ClientDetailView({
                 diagnostico={diagnostico}
                 onOpenMember={(id) => navegador?.abrirPessoa(id)}
                 canExport={can('member.export')}
+                clientId={client.id}
+                desligadas={client.inconsistenciasDesligadas ?? []}
+                canConfigure={can('form.manage')}
+                onConfigChanged={reload}
               />
             )}
           </ComNavegador>

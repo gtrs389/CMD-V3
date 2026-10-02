@@ -207,6 +207,11 @@ export interface ClientRow {
    */
   verification_enabled: boolean;
   /**
+   * Verificacoes do quadro de Inconsistencias desligadas neste time
+   * (migration 053). Ausente em banco sem a migration: tudo ligado.
+   */
+  inconsistencias_desligadas?: string[] | null;
+  /**
    * Banner do celular deste time (migration 035), no Storage privado.
    *
    * Nulo no time que nao subiu o seu: ele continua exibindo o banner padrao

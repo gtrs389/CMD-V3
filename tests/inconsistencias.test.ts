@@ -313,3 +313,42 @@ describe('diagnóstico e saúde', () => {
     expect(doResponsavel(a, 'u-bruna')).toBe(false);
   });
 });
+
+describe('verificações desligadas no time', () => {
+  it('telefone incompleto desligado: some do quadro e da nota; o resto continua', () => {
+    const curto = pessoa({ phone: '8299' });
+    const semBairro = pessoa({ district: null });
+    const tudoCerto = pessoa();
+
+    // A ficha de teste nao tem titulo: "sem título" fica desligado nos dois.
+    const ligado = diagnosticar([curto, semBairro, tudoCerto], PALMEIRA, ['sem-titulo']);
+    expect(ligado.problemas.some((p) => p.member.id === curto.id)).toBe(true);
+
+    const desligado = diagnosticar([curto, semBairro, tudoCerto], PALMEIRA, ['sem-titulo', 'telefone-incompleto']);
+    expect(desligado.problemas.some((p) => p.member.id === curto.id)).toBe(false);
+    // Sem bairro continua sendo apontado.
+    expect(desligado.incompletos.membros.map((i) => i.member.id)).toEqual([semBairro.id]);
+    expect(desligado.pessoasComProblema).toBe(1);
+  });
+
+  it('desligar uma falta tira só aquele campo; quem tem outra falta continua', () => {
+    const duas = pessoa({ phone: '', district: null });
+    const d = diagnosticar([duas], PALMEIRA, ['sem-telefone', 'sem-titulo']);
+    expect(d.incompletos.membros[0].faltas).toEqual(['bairro']);
+  });
+
+  it('telefone que não confere continua quando só o incompleto é desligado', () => {
+    const sobrando = pessoa({ phone: '829999999999' });
+    const d = diagnosticar([sobrando], PALMEIRA, ['telefone-incompleto']);
+    expect(d.problemas.some((p) => p.tipo === 'invalido')).toBe(true);
+  });
+
+  it('repetidos e possíveis desligam separados', () => {
+    const a = pessoa({ name: 'Rita Alves', voterId: '100000002720' });
+    const b = pessoa({ name: 'Rita Alves', voterId: '100000002720' });
+    const c = pessoa({ name: 'Rita Alves', section: '999' });
+    expect(diagnosticar([a, b, c], PALMEIRA, ['possivel-repetido']).repetidos.map((g) => g.certeza)).toEqual(['certa']);
+    expect(diagnosticar([a, b, c], PALMEIRA, ['repetido']).repetidos.map((g) => g.certeza)).toEqual(['possivel']);
+  });
+});
+
