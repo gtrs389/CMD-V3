@@ -7,7 +7,6 @@ import {
   chaveDoNome,
   contandoUmaVez,
   diagnosticar,
-  oQueSeRepete,
   doResponsavel,
   municipioDaOperacao,
   problemasDasFichas,
@@ -384,15 +383,6 @@ describe('mesma pessoa, mesmo Líder: conta uma vez', () => {
     const a = pessoa({ voterId: '100000002720', recruitedBy: JOAO });
     const b = pessoa({ voterId: '100000002720', recruitedBy: BRUNA });
     expect(contandoUmaVez([a, b])).toHaveLength(2);
-  });
-
-  it('o cartão diz o dado repetido: o número do título', () => {
-    const a = pessoa({ voterId: '100000002720' });
-    const b = pessoa({ voterId: '100000002720' });
-    const [grupo] = cadastrosRepetidos([a, b]);
-    const [igual] = oQueSeRepete(grupo);
-    expect(igual.rotulo).toBe('Mesmo título de eleitor');
-    expect(igual.valor.replace(/\D/g, '')).toBe('100000002720');
   });
 });
 

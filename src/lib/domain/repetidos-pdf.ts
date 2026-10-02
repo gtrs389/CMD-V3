@@ -1,5 +1,5 @@
 import type { Member } from '@/lib/types';
-import { CERTEZA_ROTULO, oQueSeRepete, type GrupoRepetido } from './inconsistencias';
+import { CERTEZA_ROTULO, EVIDENCIA_INFO, type GrupoRepetido } from './inconsistencias';
 import { resumoDasFaltas } from './member-completeness';
 import { recruiterText } from './recruitment';
 
@@ -11,9 +11,6 @@ export interface RegistroRepetidoParaPdf {
   id: string;
   nome: string;
   nivel: string;
-  cadastradoEm: string;
-  como: string;
-  ondeMora: string;
   cadastradoPor: string;
   telefone: string;
   votaEm: string;
@@ -40,9 +37,6 @@ export function registroParaPdf(member: Member, primeiro: boolean): RegistroRepe
           ? 'Líder desativado'
           : 'Líder'
         : 'Equipe',
-    cadastradoEm: member.createdAt,
-    como: member.source === 'invite' ? 'Pelo link' : 'Pelo painel',
-    ondeMora: [member.district, member.street].filter(Boolean).join(' · '),
     cadastradoPor: recruiterText(member.recruitedBy),
     telefone: member.phone ?? '',
     votaEm: member.zone || member.section ? `Zona ${member.zone || '?'} · Seção ${member.section || '?'}` : '',
@@ -55,8 +49,8 @@ export function grupoRepetidoParaPdf(grupo: GrupoRepetido): GrupoRepetidoParaPdf
     nome: grupo.nome,
     certeza: CERTEZA_ROTULO[grupo.certeza],
     nivel: grupo.certeza,
-    // Com o dado repetido: "Mesmo título de eleitor: 0245 0597 9170".
-    evidencias: oQueSeRepete(grupo).map((igual) => (igual.valor ? `${igual.rotulo}: ${igual.valor}` : igual.rotulo)),
+    // So o motivo, nunca o dado: "Mesmo título de eleitor".
+    evidencias: grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo),
     divergencias: grupo.divergencias.length ? resumoDasFaltas(grupo.divergencias, grupo.divergencias.length) : '',
     responsaveis: grupo.responsaveis,
     registros: grupo.registros.map((r) => registroParaPdf(r.member, r.primeiro)),
