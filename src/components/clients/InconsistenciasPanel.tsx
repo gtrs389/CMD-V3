@@ -28,6 +28,7 @@ import {
   TIPOS,
   doResponsavel,
   entraNasInconsistencias,
+  motivosDosRegistros,
   EVIDENCIA_INFO,
   type Certeza,
   type Diagnostico,
@@ -793,6 +794,7 @@ function CartaoRepetido({
   onOpenMember: (id: string) => void;
 }) {
   const tom = TOM_DA_CERTEZA[grupo.certeza];
+  const motivos = motivosDosRegistros(grupo);
   // A mesma pessoa repetida pelo MESMO responsavel conta uma vez (so no
   // grupo certo): o cartao diz isso, para ninguem achar que o ranking inflou.
   const mesmoResponsavel =
@@ -900,6 +902,19 @@ function CartaoRepetido({
                 )}
                 <TierBadge tier={member.tier} />
                 <LiderDesativado member={member} />
+                {/* O motivo DESTE registro: o que ele repete de outro do grupo. */}
+                {(motivos.get(member.id) ?? []).map((evidencia) => (
+                  <span
+                    key={evidencia}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-control border px-2 py-0.5 text-[0.6875rem] font-semibold',
+                      CHIP_DO_MOTIVO[tom],
+                    )}
+                  >
+                    <Fingerprint aria-hidden="true" className="size-3 shrink-0" />
+                    {EVIDENCIA_INFO[evidencia].rotulo}
+                  </span>
+                ))}
               </div>
 
               {/* So o que serve para decidir qual fica: quem cadastrou, o

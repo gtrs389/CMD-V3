@@ -1,5 +1,5 @@
 import type { Member } from '@/lib/types';
-import { CERTEZA_ROTULO, EVIDENCIA_INFO, type GrupoRepetido } from './inconsistencias';
+import { CERTEZA_ROTULO, EVIDENCIA_INFO, motivosDosRegistros, type GrupoRepetido } from './inconsistencias';
 import { resumoDasFaltas } from './member-completeness';
 import { recruiterText } from './recruitment';
 
@@ -15,6 +15,8 @@ export interface RegistroRepetidoParaPdf {
   telefone: string;
   votaEm: string;
   primeiro: boolean;
+  /** O que ESTE registro repete de outro do grupo: "Mesmo título de eleitor". */
+  motivos: string[];
 }
 
 export interface GrupoRepetidoParaPdf {
@@ -27,7 +29,7 @@ export interface GrupoRepetidoParaPdf {
   registros: RegistroRepetidoParaPdf[];
 }
 
-export function registroParaPdf(member: Member, primeiro: boolean): RegistroRepetidoParaPdf {
+export function registroParaPdf(member: Member, primeiro: boolean, motivos: string[] = []): RegistroRepetidoParaPdf {
   return {
     id: member.id,
     nome: member.name,
@@ -41,6 +43,7 @@ export function registroParaPdf(member: Member, primeiro: boolean): RegistroRepe
     telefone: member.phone ?? '',
     votaEm: member.zone || member.section ? `Zona ${member.zone || '?'} · Seção ${member.section || '?'}` : '',
     primeiro,
+    motivos,
   };
 }
 
@@ -53,6 +56,11 @@ export function grupoRepetidoParaPdf(grupo: GrupoRepetido): GrupoRepetidoParaPdf
     evidencias: grupo.evidencias.map((e) => EVIDENCIA_INFO[e].rotulo),
     divergencias: grupo.divergencias.length ? resumoDasFaltas(grupo.divergencias, grupo.divergencias.length) : '',
     responsaveis: grupo.responsaveis,
-    registros: grupo.registros.map((r) => registroParaPdf(r.member, r.primeiro)),
+    registros: (() => {
+      const motivos = motivosDosRegistros(grupo);
+      return grupo.registros.map((r) =>
+        registroParaPdf(r.member, r.primeiro, (motivos.get(r.member.id) ?? []).map((e) => EVIDENCIA_INFO[e].rotulo)),
+      );
+    })(),
   };
 }

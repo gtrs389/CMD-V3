@@ -297,6 +297,32 @@ export function cadastrosRepetidos(members: readonly Member[]): GrupoRepetido[] 
 }
 
 /**
+ * O motivo de CADA registro estar no grupo: o que ele repete de outro
+ * registro do mesmo grupo. E a etiqueta da linha — num grupo de quatro, um
+ * pode estar ali pelo titulo e outro so pelo nome e secao.
+ *
+ * "Mesmo nome" sai quando o registro ja tem "mesmo nome e telefone" ou "e
+ * secao": repeti-lo seria ruido.
+ */
+export function motivosDosRegistros(grupo: GrupoRepetido): Map<string, Evidencia[]> {
+  const chaves = new Map(grupo.registros.map(({ member }) => [member.id, chavesDe(member)]));
+  const motivos = new Map<string, Evidencia[]>();
+  for (const { member } of grupo.registros) {
+    const minhas = chaves.get(member.id)!;
+    const proprios = EVIDENCIAS.filter(
+      (evidencia) =>
+        minhas[evidencia] &&
+        grupo.registros.some(
+          (outro) => outro.member.id !== member.id && chaves.get(outro.member.id)![evidencia] === minhas[evidencia],
+        ),
+    );
+    const comNome = proprios.some((e) => e === 'nome-telefone' || e === 'nome-secao');
+    motivos.set(member.id, comNome ? proprios.filter((e) => e !== 'nome') : proprios);
+  }
+  return motivos;
+}
+
+/**
  * A mesma pessoa cadastrada mais de uma vez PELO MESMO responsavel conta
  * UMA vez: o primeiro cadastro conta, as copias dele nao — nas contagens do
  * time, do Lider e do ranking.
