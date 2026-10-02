@@ -198,6 +198,8 @@ export interface PlaceMember {
   email: string | null;
   zone: string | null;
   section: string | null;
+  /** "Fulano · Líder": quem cadastrou, ja no texto da tela. */
+  cadastradoPor: string | null;
 }
 
 export interface PlaceMembersPayload {

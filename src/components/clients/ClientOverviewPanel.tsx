@@ -810,7 +810,9 @@ interface RankingRow {
 /** Medalhas das tres primeiras posicoes. Da quarta em diante, so o numero. */
 const MEDAL_CLASSES = [
   'bg-[#e0a426] text-white',
-  'bg-ink-300 text-white',
+  // Prata. `ink-300` nao existe na paleta: o 2o lugar saia sem fundo, com
+  // o numero branco no branco.
+  'bg-[#8e9aa7] text-white',
   'bg-[#b06a2c] text-white',
 ];
 
