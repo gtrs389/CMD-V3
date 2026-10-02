@@ -352,3 +352,19 @@ describe('verificações desligadas no time', () => {
   });
 });
 
+describe('Líder que só existe como aba (time lido ao vivo)', () => {
+  it('não entra em nenhuma inconsistência — a Equipe dele entra', () => {
+    const lider = pessoa({ name: 'ADALBERTO', tier: 'LIDER', fromSheet: true, voterId: null, phone: '', zone: '', section: '' });
+    const daEquipe = pessoa({ name: 'Caio Reis', fromSheet: true, voterId: null });
+    const d = diagnosticar([lider, daEquipe], PALMEIRA);
+    const ids = [
+      ...d.problemas.map((p) => p.member.id),
+      ...d.incompletos.membros.map((i) => i.member.id),
+      ...d.repetidos.flatMap((g) => g.registros.map((r) => r.member.id)),
+    ];
+    expect(ids).not.toContain(lider.id);
+    expect(d.incompletos.membros.map((i) => i.member.id)).toEqual([daEquipe.id]);
+    expect(d.total).toBe(1);
+  });
+});
+

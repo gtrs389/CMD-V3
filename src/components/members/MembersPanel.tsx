@@ -53,13 +53,11 @@ import {
   opcoesDeReferencia,
   opcoesDeZona,
   passaNaFoto,
-  passaNaOrigem,
   passaNaReferencia,
   passaNaZona,
   situacaoDaFoto,
   tituloLegivel,
   type FiltroDeFoto,
-  type FiltroDeOrigem,
 } from '@/lib/domain/filtros-da-equipe';
 import { problemaDoTitulo } from '@/lib/domain/conferencia';
 
@@ -175,7 +173,6 @@ function ListaDoTime({
   const [referencia, setReferencia] = useState('todas');
   const [foto, setFoto] = useState<FiltroDeFoto>('todos');
   const [zona, setZona] = useState('todas');
-  const [origem, setOrigem] = useState<FiltroDeOrigem>('todas');
   // "Ver a Equipe na lista" pedido depois da lista montada: aplicado na
   // renderizacao, comparando com o ultimo pedido visto — o filtro certo ja
   // sai na primeira pintura.
@@ -190,7 +187,6 @@ function ListaDoTime({
       setReferencia('todas');
       setFoto('todos');
       setZona('todas');
-      setOrigem('todas');
       setTerm('');
     }
   }
@@ -213,7 +209,6 @@ function ListaDoTime({
   const referencias = useMemo(() => opcoesDeReferencia(ordered), [ordered]);
   const zonas = useMemo(() => opcoesDeZona(ordered), [ordered]);
   const fotos = useMemo(() => contarFotos(ordered), [ordered]);
-  const daPlanilha = useMemo(() => ordered.filter((m) => m.fromSheet).length, [ordered]);
   // A opcao escolhida sumiu da lista (a planilha mudou): volta a "todas".
   if (referencia !== 'todas' && !referencias.some((o) => o.valor === referencia)) setReferencia('todas');
   if (zona !== 'todas' && !zonas.some((o) => o.valor === zona)) setZona('todas');
@@ -240,7 +235,6 @@ function ListaDoTime({
       if (!passaNaReferencia(member, referencia)) return false;
       if (!passaNaFoto(member, foto)) return false;
       if (!passaNaZona(member, zona)) return false;
-      if (!passaNaOrigem(member, origem)) return false;
 
       const resultado = buscarPessoa(member, term);
       if (!resultado.achou) return false;
@@ -251,7 +245,7 @@ function ListaDoTime({
       return true;
     });
     return { filtered, achadoEm };
-  }, [ordered, term, recruiter, nivel, tag, situacao, referencia, foto, zona, origem]);
+  }, [ordered, term, recruiter, nivel, tag, situacao, referencia, foto, zona]);
 
   /** Contagens de cada botao de filtro, sobre o time inteiro. */
   const contagens = useMemo(
@@ -305,13 +299,6 @@ function ListaDoTime({
           limpar: () => setZona('todas'),
         }
       : null,
-    origem !== 'todas'
-      ? {
-          id: 'origem',
-          rotulo: origem === 'planilha' ? 'Da planilha' : 'Do sistema',
-          limpar: () => setOrigem('todas'),
-        }
-      : null,
     recruiter !== 'todos'
       ? {
           id: 'responsavel',
@@ -330,7 +317,6 @@ function ListaDoTime({
     setReferencia('todas');
     setFoto('todos');
     setZona('todas');
-    setOrigem('todas');
   }
 
   /** Clicar na tag de uma linha filtra a lista por ela. */
@@ -665,20 +651,6 @@ function ListaDoTime({
                   ]}
                 />
               ) : null}
-              {daPlanilha > 0 ? (
-                <FiltroEmCaixa
-                  id="filtro-origem"
-                  rotulo="Origem"
-                  valor={origem}
-                  padrao="todas"
-                  onChange={(v) => setOrigem(v as FiltroDeOrigem)}
-                  opcoes={[
-                    { valor: 'todas', rotulo: 'Todas' },
-                    { valor: 'planilha', rotulo: `Da planilha (${daPlanilha})` },
-                    { valor: 'sistema', rotulo: `Do sistema (${ordered.length - daPlanilha})` },
-                  ]}
-                />
-              ) : null}
             </div>
           </div>
         ) : null}
@@ -783,11 +755,7 @@ function ListaDoTime({
                         <div className="col-span-2 min-w-0">
                           <dt className="text-ink-500">Líder</dt>
                           <dd className="mt-0.5">
-                            {member.fromSheet && member.tier === 'LIDER' ? (
-                              <span className="text-ink-700">Aba da planilha</span>
-                            ) : (
-                              <RecruitedBy recruiter={member.recruitedBy} />
-                            )}
+                            <RecruitedBy recruiter={member.recruitedBy} />
                           </dd>
                         </div>
                       </dl>
@@ -904,14 +872,7 @@ function ListaDoTime({
                     {!somenteBasico ? (
                       <>
                         <td className="px-3 py-3">
-                          {member.fromSheet && member.tier === 'LIDER' ? (
-                            <span className="flex items-center gap-1.5 text-xs text-ink-500">
-                              <FileSpreadsheet aria-hidden="true" className="size-3.5 shrink-0 text-success-600" />
-                              Aba da planilha
-                            </span>
-                          ) : (
-                            <RecruitedBy recruiter={member.recruitedBy} />
-                          )}
+                          <RecruitedBy recruiter={member.recruitedBy} />
                         </td>
                         <td className="px-3 py-3">
                           {member.reference ? (
@@ -1119,15 +1080,8 @@ function SeloDaLinha({ member }: { member: Member }) {
           Incompleto
         </Badge>
       ) : null}
-      {member.fromSheet ? (
-        <span
-          title="Lida ao vivo da planilha do Google Sheets. Para corrigir, corrija na planilha."
-          className="inline-flex items-center gap-1 rounded-pill bg-success-50 px-2 py-0.5 text-[0.6875rem] font-medium text-success-700"
-        >
-          <FileSpreadsheet aria-hidden="true" className="size-3" />
-          Planilha
-        </span>
-      ) : (
+      {/* Quem e lido ao vivo nao tem data de cadastro: nao mostra nenhuma. */}
+      {member.fromSheet ? null : (
         <span className="text-[0.6875rem] text-ink-400 tabular-nums" title="Data do cadastro">
           {formatDate(member.createdAt)}
         </span>

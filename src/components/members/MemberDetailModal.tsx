@@ -340,9 +340,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
                 <Badge tone={member.source === 'invite' ? 'brand' : 'neutral'}>
                   {member.source === 'invite' ? 'Cadastro pelo link' : 'Cadastro pelo painel'}
                 </Badge>
-                {daPlanilha ? (
-                  <Badge tone="success">Da planilha do Sheets</Badge>
-                ) : (
+                {daPlanilha ? null : (
                   <Badge
                     tone={
                       member.access === 'ACTIVE'
@@ -374,11 +372,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
               {/* Entrar no painel desta pessoa: exclusivo do ADMIN geral, e
                   a rota confere de novo. O botao some sozinho para quem nao
                   pode e para quem ainda nao tem acesso. */}
-              {daPlanilha ? (
-                <p className="mt-3 rounded-control bg-success-50 px-3 py-2 text-[0.8125rem] text-ink-700">
-                  Lida ao vivo da planilha do Google Sheets. Para corrigir, corrija na planilha.
-                </p>
-              ) : member.userId?.startsWith('planilha-') ? null : (
+              {daPlanilha || member.userId?.startsWith('planilha-') ? null : (
                 <div className="mt-3 flex flex-wrap items-start gap-2">
                   <InspectMemberButton member={member} />
                   <DesativarLiderButton member={member} />

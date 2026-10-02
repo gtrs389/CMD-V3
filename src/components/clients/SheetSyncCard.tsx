@@ -208,8 +208,11 @@ export function SheetSyncCard({ client }: { client: Client }) {
           </li>
           <li>Aba oculta e linha sem nome ficam de fora.</li>
           <li>
-            As pessoas da planilha aparecem com o selo <strong>“Da planilha”</strong> e não são
-            editadas aqui: para corrigir, corrija na planilha.
+            As pessoas aparecem no time como qualquer cadastro, sem nenhum selo, e não são editadas
+            aqui: para corrigir, corrija na planilha.
+          </li>
+          <li>
+            Ligada, os Líderes do time são os das abas. Líder sem aba não aparece (nada é apagado).
           </li>
         </ul>
       </details>

@@ -36,7 +36,7 @@ export function RecruitedBy({ recruiter, withLabel = false, className }: Recruit
             aria-hidden="true"
             className="flex size-5 shrink-0 items-center justify-center rounded-full bg-ink-100 text-[0.5rem] font-semibold text-ink-500"
           >
-            {initials(recruiter.name)}
+            {initials(recruiter.name || texto)}
           </span>
         )
       ) : null}

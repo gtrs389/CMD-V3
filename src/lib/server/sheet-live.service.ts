@@ -327,8 +327,11 @@ export function montarEquipe(
           contexto,
           { vinculo, name: grupo.lider.name, tag: null },
         ),
-        // O Lider novo foi "cadastrado" pela planilha, e e Lider.
-        recruitedBy: { userId: null, name: 'Planilha do Google Sheets', role: 'ADMIN', photo: null },
+        // O Lider novo e Lider do time, trazido pela administracao. Nenhum
+        // texto da tela fala em planilha: sem nome, o "cadastrado por" diz
+        // so "Administração do time". O id e de tela (nunca vira "acesso
+        // removido").
+        recruitedBy: { userId: `${PREFIXO_DA_PLANILHA}administracao`, name: '', role: 'ADMIN', photo: null },
         tier: 'LIDER',
         userId: vinculo,
       });

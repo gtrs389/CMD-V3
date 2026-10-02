@@ -266,7 +266,6 @@ function PersonRow({
         <p className="truncate text-sm font-medium text-ink-900">{member.name}</p>
         <p className="truncate text-xs text-ink-500">
           {member.clientName}
-          {daPlanilha ? <span className="font-semibold text-success-600"> · Da planilha</span> : null}
         </p>
 
         {member.email ? <p className="truncate text-xs text-ink-500">{member.email}</p> : null}
