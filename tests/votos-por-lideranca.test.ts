@@ -47,6 +47,12 @@ describe('ranking de votos (escolas e zonas)', () => {
     expect(r.zonas[1]).toMatchObject({ zona: '28', votos: 5 });
   });
 
+  it('lista todas as secoes, da mais forte para a mais fraca, com o local de cada uma', () => {
+    const r = rankingDeVotos(ESCOLAS);
+    expect(r.secoes.map((x) => `${x.zona}/${x.secao}:${x.votos}`)).toEqual(['10/200:30', '10/144:20', '10/145:12', '28/10:5']);
+    expect(r.secoes[0]).toMatchObject({ posicao: 1, local: 'Escola B', municipio: 'Palmeira dos Índios/AL' });
+  });
+
   it('com zona escolhida, so as secoes dela contam', () => {
     const r = rankingDeVotos(ESCOLAS, '28');
     expect(r.total).toBe(5);

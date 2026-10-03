@@ -42,10 +42,24 @@ export interface ZonaNoRanking {
   escolaForte: string | null;
 }
 
+export interface SecaoNoRanking {
+  posicao: number;
+  zona: string;
+  secao: string;
+  votos: number;
+  /** Fracao do total do recorte (0 a 1). */
+  fatia: number;
+  /** O local de votacao onde a secao funciona. */
+  local: string;
+  municipio: string | null;
+}
+
 export interface RankingDeVotos {
   total: number;
   escolas: EscolaNoRanking[];
   zonas: ZonaNoRanking[];
+  /** TODAS as secoes com voto, da que tem mais para a que tem menos. */
+  secoes: SecaoNoRanking[];
   totalDeSecoes: number;
 }
 
@@ -86,10 +100,31 @@ export function rankingDeVotos(places: readonly PollingPlacePin[], zona: string 
     }))
     .sort((a, b) => b.votos - a.votos || a.zona.localeCompare(b.zona, 'pt-BR', { numeric: true }));
 
+  const secoes = escolas
+    .flatMap((escola) =>
+      escola.secoes
+        .filter((linha) => linha.section && linha.total > 0)
+        .map((linha) => ({
+          zona: zonaLimpa(linha.zone) || '?',
+          secao: (linha.section ?? '').trim().replace(/^0+(?=\d)/, ''),
+          votos: linha.total,
+          local: escola.place.title ?? 'Local de votação',
+          municipio: [escola.place.city, escola.place.state].filter(Boolean).join('/') || null,
+        })),
+    )
+    .sort(
+      (a, b) =>
+        b.votos - a.votos ||
+        a.zona.localeCompare(b.zona, 'pt-BR', { numeric: true }) ||
+        a.secao.localeCompare(b.secao, 'pt-BR', { numeric: true }),
+    )
+    .map((linha, i) => ({ ...linha, posicao: i + 1, fatia: total ? linha.votos / total : 0 }));
+
   return {
     total,
     escolas,
     zonas,
+    secoes,
     totalDeSecoes: zonas.reduce((soma, z) => soma + z.secoes, 0),
   };
 }
