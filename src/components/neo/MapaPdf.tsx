@@ -105,6 +105,8 @@ export function PdfDaEscola({ time, escola, pessoas, geradoEm }: PdfDaEscolaProp
           }))}
           total={votos}
           cor={C.navy}
+          unidade={['voto', 'votos']}
+          larguraDoRotulo={140}
           vazio="Nenhuma seção informada."
         />
 
@@ -216,6 +218,22 @@ export async function gerarPdfDaEquipe(props: PdfDaEquipeProps): Promise<Blob> {
 
 const MEDALHA = ['#e0a426', '#8e9aa7', '#b06a2c'];
 
+/** "72 votos", "1 voto": o numero sempre com o que ele conta. */
+const votos = (n: number) => `${num(n)} ${n === 1 ? 'voto' : 'votos'}`;
+const pessoas = (n: number) => `${num(n)} ${n === 1 ? 'pessoa' : 'pessoas'}`;
+
+/** Faixa de leitura: diz, em uma frase, o que e um voto neste documento. */
+function ComoLer({ texto }: { texto: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.goldSoft, borderLeftWidth: 3, borderLeftColor: C.gold, paddingVertical: 6, paddingHorizontal: 8, marginBottom: 10 }}>
+      <Text style={{ fontSize: 8, color: C.ink2, lineHeight: 1.4 }}>
+        <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s('Como ler: ')}</Text>
+        {s(texto)}
+      </Text>
+    </View>
+  );
+}
+
 function Podio({ itens }: { itens: { titulo: string; sub?: string | null; valor: string; nota?: string }[] }) {
   // 2o, 1o, 3o: o primeiro no meio e mais alto, como num podio de verdade.
   const ordem = [1, 0, 2].filter((i) => itens[i]);
@@ -265,9 +283,9 @@ function secoesEmLinha(secoes: { zone: string | null; section: string | null; to
   const partes = secoes
     .filter((linha) => linha.section)
     .slice(0, limite)
-    .map((linha) => `${linha.section} (${num(linha.total)})`);
+    .map((linha) => `Seção ${linha.section}: ${votos(linha.total)}`);
   const resto = secoes.filter((linha) => linha.section).length - partes.length;
-  return partes.length ? `${partes.join(' · ')}${resto > 0 ? ` +${resto}` : ''}` : '—';
+  return partes.length ? `${partes.join(' · ')}${resto > 0 ? ` · e mais ${resto} ${resto === 1 ? 'seção' : 'seções'}` : ''}` : '—';
 }
 
 /* -------------------------------------------------------------------------
@@ -301,6 +319,8 @@ export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRa
           ]}
         />
 
+        <ComoLer texto="cada pessoa cadastrada que vota num local é 1 voto para esse local. Ex.: 72 votos = 72 pessoas cadastradas votam ali." />
+
         <LinhaDeKpis>
           <Kpi valor={num(total)} rotulo="votos estimados" tom={C.navy} />
           <Kpi valor={num(escolas.length)} rotulo="locais de votação" tom={C.blue} />
@@ -315,8 +335,8 @@ export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRa
               itens={escolas.slice(0, 3).map((e) => ({
                 titulo: e.place.title ?? 'Local de votação',
                 sub: [e.place.city, e.place.state].filter(Boolean).join('/'),
-                valor: num(e.votos),
-                nota: `${pct(e.votos, total)}% dos votos`,
+                valor: votos(e.votos),
+                nota: `${pct(e.votos, total)}% de todos os votos`,
               }))}
             />
           </>
@@ -331,7 +351,7 @@ export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRa
             { titulo: 'Zona', largura: '11%', celula: (z) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(z.zona)}</Text> },
             { titulo: 'Votos', largura: '27%', celula: (z) => (
               <View style={{ width: '100%' }}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{s(`${num(z.votos)} · ${pct(z.votos, total)}%`)}</Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{s(`${votos(z.votos)} · ${pct(z.votos, total)}%`)}</Text>
                 <BarraNaCelula fatia={z.votos / maiorZona} cor={C.gold} />
               </View>
             ) },
@@ -376,13 +396,13 @@ export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRa
               largura: '20%',
               celula: (e) => (
                 <View style={{ width: '100%' }}>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{s(`${num(e.votos)} · ${pct(e.votos, total)}%`)}</Text>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{s(`${votos(e.votos)} · ${pct(e.votos, total)}%`)}</Text>
                   <BarraNaCelula fatia={escolas[0] ? e.votos / escolas[0].votos : 0} />
                 </View>
               ),
             },
             {
-              titulo: 'Zona · seções (votos)',
+              titulo: 'Zona e seções',
               largura: '36%',
               celula: (e) => {
                 const zonasDaEscola = [...new Set(e.secoes.map((linha) => linha.zone).filter(Boolean))];
@@ -391,7 +411,7 @@ export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRa
                     <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 7.4 }}>
                       {s(zonasDaEscola.length ? `Zona ${zonasDaEscola.join(', ')}` : 'Sem zona')}
                     </Text>
-                    <Text style={{ fontSize: 7, color: C.muted, marginTop: 1 }}>{s(`Seções ${secoesEmLinha(e.secoes)}`)}</Text>
+                    <Text style={{ fontSize: 7, color: C.muted, marginTop: 1 }}>{s(secoesEmLinha(e.secoes))}</Text>
                   </View>
                 );
               },
@@ -429,7 +449,7 @@ function ColunaDeBarras({ titulo, linhas, total, cor }: { titulo: string; linhas
           <View key={linha.rotulo} style={{ marginBottom: 4 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ fontSize: 7.4, color: C.ink2, flex: 1, paddingRight: 4 }}>{s(linha.rotulo)}</Text>
-              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold' }}>{s(`${num(linha.votos)} · ${pct(linha.votos, total)}%`)}</Text>
+              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold' }}>{s(`${votos(linha.votos)} · ${pct(linha.votos, total)}%`)}</Text>
             </View>
             {linha.detalhe ? <Text style={{ fontSize: 6.4, color: C.faint }}>{s(linha.detalhe)}</Text> : null}
             <View style={{ marginTop: 1.5 }}>
@@ -459,18 +479,18 @@ function FichaDoLider({ item }: { item: LiderNoRanking }) {
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 15, fontFamily: 'Helvetica-Bold', color: MEDALHA[0] }}>{num(item.equipe)}</Text>
-          <Text style={{ fontSize: 6.6, color: C.navy3 }}>{s(`na Equipe · ${Math.round(item.fatia * 100)}% dos liderados`)}</Text>
+          <Text style={{ fontSize: 15, fontFamily: 'Helvetica-Bold', color: MEDALHA[0] }}>{s(pessoas(item.equipe))}</Text>
+          <Text style={{ fontSize: 6.6, color: C.navy3 }}>{s(`na Equipe = ${votos(item.equipe)} · ${Math.round(item.fatia * 100)}% dos liderados`)}</Text>
         </View>
       </View>
       <View style={{ flexDirection: 'row', paddingHorizontal: 9, paddingTop: 7, paddingBottom: 3 }}>
-        <ColunaDeBarras titulo="Locais de votação" linhas={item.escolas} total={item.equipe} cor={C.navy} />
-        <ColunaDeBarras titulo="Zonas" linhas={item.zonas} total={item.equipe} cor={C.gold} />
-        <ColunaDeBarras titulo="Seções" linhas={item.secoes} total={item.equipe} cor={C.blue} />
+        <ColunaDeBarras titulo="Votos por local de votação" linhas={item.escolas} total={item.equipe} cor={C.navy} />
+        <ColunaDeBarras titulo="Votos por zona" linhas={item.zonas} total={item.equipe} cor={C.gold} />
+        <ColunaDeBarras titulo="Votos por seção" linhas={item.secoes} total={item.equipe} cor={C.blue} />
       </View>
       <Text style={{ fontSize: 6.6, color: C.faint, paddingHorizontal: 9, paddingBottom: 6 }}>
         {s(
-          `${num(item.comEscola)} de ${num(item.equipe)} com local de votação identificado` +
+          `${pessoas(item.comEscola)} de ${num(item.equipe)} com local de votação identificado` +
             (item.semSecao ? ` · ${num(item.semSecao)} sem zona e seção no cadastro` : ''),
         )}
       </Text>
@@ -496,6 +516,8 @@ export function PdfDoRankingDeLideres({ time, ranking, geradoEm }: PdfDoRankingD
           chips={[{ texto: 'A mesma pessoa repetida pelo mesmo Líder conta uma vez', cor: C.muted, fundo: C.bg }]}
         />
 
+        <ComoLer texto="cada pessoa da Equipe de um Líder é 1 voto no local, na zona e na seção onde ela vota. Ex.: 72 votos no Colégio X = 72 pessoas da Equipe votam lá." />
+
         <LinhaDeKpis>
           <Kpi valor={num(lideres.length)} rotulo="Líderes" tom={C.navy} />
           <Kpi valor={num(comEquipe)} rotulo="já trouxeram alguém" tom={C.success} />
@@ -509,9 +531,9 @@ export function PdfDoRankingDeLideres({ time, ranking, geradoEm }: PdfDoRankingD
             <Podio
               itens={comGente.slice(0, 3).map((l) => ({
                 titulo: l.lider.name,
-                sub: l.escolas[0] ? `Mais forte em ${l.escolas[0].rotulo}` : null,
-                valor: num(l.equipe),
-                nota: `${pct(l.equipe, totalDeLiderados)}% dos liderados`,
+                sub: l.escolas[0] ? `Mais forte em ${l.escolas[0].rotulo} (${votos(l.escolas[0].votos)})` : null,
+                valor: pessoas(l.equipe),
+                nota: `${votos(l.equipe)} · ${pct(l.equipe, totalDeLiderados)}% dos liderados`,
               }))}
             />
           </>
@@ -537,7 +559,7 @@ export function PdfDoRankingDeLideres({ time, ranking, geradoEm }: PdfDoRankingD
             },
             {
               titulo: 'Líder',
-              largura: '27%',
+              largura: '25%',
               celula: (l) => (
                 <View>
                   <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(l.lider.name)}</Text>
@@ -547,29 +569,53 @@ export function PdfDoRankingDeLideres({ time, ranking, geradoEm }: PdfDoRankingD
             },
             {
               titulo: 'Equipe',
-              largura: '15%',
+              largura: '16%',
               celula: (l) => (
                 <View style={{ width: '100%' }}>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{s(`${num(l.equipe)} · ${pct(l.equipe, totalDeLiderados)}%`)}</Text>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>{s(`${pessoas(l.equipe)} · ${pct(l.equipe, totalDeLiderados)}%`)}</Text>
                   <BarraNaCelula fatia={lideres[0]?.equipe ? l.equipe / lideres[0].equipe : 0} cor={C.navy} />
                 </View>
               ),
             },
             {
               titulo: 'Local mais forte',
-              largura: '30%',
+              largura: '31%',
               celula: (l) =>
                 l.escolas[0] ? (
                   <View>
                     <Text>{s(l.escolas[0].rotulo)}</Text>
-                    <Text style={{ fontSize: 6.6, color: C.faint, marginTop: 1 }}>{s(`${num(l.escolas[0].votos)} ${l.escolas[0].votos === 1 ? 'voto' : 'votos'}`)}</Text>
+                    <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginTop: 1 }}>{s(votos(l.escolas[0].votos))}</Text>
                   </View>
                 ) : (
                   '—'
                 ),
             },
-            { titulo: 'Zona forte', largura: '10%', celula: (l) => (l.zonas[0] ? `${l.zonas[0].rotulo.replace('Zona ', '')} (${num(l.zonas[0].votos)})` : '—') },
-            { titulo: 'Seção forte', largura: '12%', celula: (l) => (l.secoes[0] ? `${l.secoes[0].rotulo.split('Seção ')[1] ?? '—'} (${num(l.secoes[0].votos)})` : '—') },
+            {
+              titulo: 'Zona mais forte',
+              largura: '11%',
+              celula: (l) =>
+                l.zonas[0] ? (
+                  <View>
+                    <Text>{s(l.zonas[0].rotulo)}</Text>
+                    <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginTop: 1 }}>{s(votos(l.zonas[0].votos))}</Text>
+                  </View>
+                ) : (
+                  '—'
+                ),
+            },
+            {
+              titulo: 'Seção mais forte',
+              largura: '11%',
+              celula: (l) =>
+                l.secoes[0] ? (
+                  <View>
+                    <Text>{s(`Seção ${l.secoes[0].rotulo.split('Seção ')[1] ?? '—'}`)}</Text>
+                    <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginTop: 1 }}>{s(votos(l.secoes[0].votos))}</Text>
+                  </View>
+                ) : (
+                  '—'
+                ),
+            },
           ]}
         />
 
