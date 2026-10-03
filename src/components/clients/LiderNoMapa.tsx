@@ -67,7 +67,6 @@ export function LiderNoMapa({
   async function pdfDaEquipe() {
     const { gerarPdfDaEquipe } = await import('@/components/neo/MapaPdf');
     const blob = await gerarPdfDaEquipe({
-      time: clientName,
       lider: lider!,
       equipe,
       comInconsistencia,

@@ -36,12 +36,12 @@ async function todasAsPessoas(place: PollingPlacePin, clientId?: string): Promis
 }
 
 /** "escola-estadual-prof-elza-soares.pdf": o nome da escola no arquivo. */
-export async function baixarPdfDaEscola(place: PollingPlacePin, time: string, clientId?: string): Promise<void> {
+export async function baixarPdfDaEscola(place: PollingPlacePin, clientId?: string): Promise<void> {
   const [pessoas, { gerarPdfDaEscola }] = await Promise.all([
     todasAsPessoas(place, clientId),
     import('@/components/neo/MapaPdf'),
   ]);
-  const blob = await gerarPdfDaEscola({ time, escola: place, pessoas, geradoEm: new Date().toISOString() });
+  const blob = await gerarPdfDaEscola({ escola: place, pessoas, geradoEm: new Date().toISOString() });
   baixarArquivo(`${slug(place.title ?? 'local-de-votacao')}.pdf`, blob);
 }
 
@@ -68,7 +68,6 @@ export async function baixarPdfDoRankingDeVotos(
 ): Promise<void> {
   const { gerarPdfDoRankingDeVotos } = await import('@/components/neo/MapaPdf');
   const blob = await gerarPdfDoRankingDeVotos({
-    time,
     ranking: rankingDeVotos(places, query?.zone ?? null),
     filtro: recorteEmPalavras(query),
     geradoEm: new Date().toISOString(),
@@ -94,7 +93,6 @@ export async function baixarPdfDoRankingDeLideres({
     import('@/components/neo/MapaPdf'),
   ]);
   const blob = await gerarPdfDoRankingDeLideres({
-    time,
     ranking: rankingDeLideres(members, mapa.pollingPlaces),
     geradoEm: new Date().toISOString(),
   });

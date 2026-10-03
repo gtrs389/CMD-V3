@@ -465,7 +465,7 @@ export function MobilizationMap({
                 pins={selection.pins}
                 places={selection.places}
                 onOpenPlace={setOpenPlace}
-                onDownloadPlace={(place) => baixarPdfDaEscola(place, clientName ?? 'Mapa da mobilização', clientId)}
+                onDownloadPlace={(place) => baixarPdfDaEscola(place, clientId)}
                 onOpenMember={abrirFicha}
                 renderLiderActions={renderLiderActions}
                 focusPlace={focusPlace}
