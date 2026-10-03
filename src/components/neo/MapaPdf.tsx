@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
 import { appConfig } from '@/config/app.config';
 import type { Member } from '@/lib/types';
@@ -20,7 +21,6 @@ import {
   Rodape,
   Tabela,
   data,
-  dataLonga,
   num,
   pct,
   s,
@@ -36,12 +36,12 @@ import {
 
 const AVISO = 'Documento reservado · contém dados pessoais (LGPD). Não compartilhe fora da coordenação.';
 
-function Titulo({ kicker, titulo, sub, chips = [] }: { kicker: string; titulo: string; sub: string; chips?: { texto: string; cor: string; fundo: string }[] }) {
+function Titulo({ kicker, titulo, sub, chips = [] }: { kicker: string; titulo: string; sub?: string; chips?: { texto: string; cor: string; fundo: string }[] }) {
   return (
     <View style={{ marginBottom: 14 }}>
       <Text style={st.kicker}>{s(kicker)}</Text>
       <Text style={{ fontSize: 19, fontFamily: 'Helvetica-Bold', color: C.navy, lineHeight: 1.2, marginTop: 3 }}>{s(titulo)}</Text>
-      <Text style={{ fontSize: 9, color: C.muted, marginTop: 3 }}>{s(sub)}</Text>
+      {sub ? <Text style={{ fontSize: 9, color: C.muted, marginTop: 3 }}>{s(sub)}</Text> : null}
       <View style={{ width: 42, height: 2, backgroundColor: C.gold, marginTop: 8 }} />
       {chips.length ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
@@ -68,7 +68,7 @@ export interface PdfDaEscolaProps {
   geradoEm: string;
 }
 
-export function PdfDaEscola({ time, escola, pessoas, geradoEm }: PdfDaEscolaProps) {
+export function PdfDaEscola({ time, escola, pessoas }: PdfDaEscolaProps) {
   const votos = estimatedVotes(escola);
   const nome = escola.title ?? 'Local de votação';
   const municipio = [escola.city, escola.state].filter(Boolean).join('/');
@@ -84,7 +84,6 @@ export function PdfDaEscola({ time, escola, pessoas, geradoEm }: PdfDaEscolaProp
           kicker="LOCAL DE VOTAÇÃO"
           titulo={nome}
           sub={[escola.address, municipio].filter(Boolean).join(' · ') || municipio || '—'}
-          chips={[{ texto: `${time} · ${dataLonga(geradoEm)}`, cor: C.navy, fundo: C.bg }]}
         />
 
         <LinhaDeKpis>
@@ -166,7 +165,6 @@ export function PdfDaEquipe({ time, lider, equipe, comInconsistencia, geradoEm }
         <Titulo
           kicker="EQUIPE DO LÍDER"
           titulo={lider.name}
-          sub={[lider.phone ? telefone(lider.phone) : null, `${time} · ${dataLonga(geradoEm)}`].filter(Boolean).join(' · ')}
           chips={[
             ...(lider.tag ? [{ texto: lider.tag, cor: C.white, fundo: C.navy }] : []),
             ...(lider.access === 'DISABLED' ? [{ texto: 'Líder desativado', cor: C.danger, fundo: C.dangerSoft }] : []),
@@ -278,14 +276,10 @@ function BarraNaCelula({ fatia, cor = C.navy }: { fatia: number; cor?: string })
   );
 }
 
-/** "144 (20) · 145 (12)" — as secoes de uma escola, com os votos de cada uma. */
-function secoesEmLinha(secoes: { zone: string | null; section: string | null; total: number }[], limite = 8): string {
-  const partes = secoes
-    .filter((linha) => linha.section)
-    .slice(0, limite)
-    .map((linha) => `Seção ${linha.section}: ${votos(linha.total)}`);
-  const resto = secoes.filter((linha) => linha.section).length - partes.length;
-  return partes.length ? `${partes.join(' · ')}${resto > 0 ? ` · e mais ${resto} ${resto === 1 ? 'seção' : 'seções'}` : ''}` : '—';
+/** "Seção 144: 20 votos · Seção 145: 12 votos" — TODAS as secoes da escola. */
+function secoesEmLinha(secoes: { zone: string | null; section: string | null; total: number }[]): string {
+  const partes = secoes.filter((linha) => linha.section).map((linha) => `Seção ${linha.section}: ${votos(linha.total)}`);
+  return partes.length ? partes.join(' · ') : '—';
 }
 
 /* -------------------------------------------------------------------------
@@ -300,7 +294,7 @@ export interface PdfDoRankingDeVotosProps {
   geradoEm: string;
 }
 
-export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRankingDeVotosProps) {
+export function PdfDoRankingDeVotos({ time, ranking, filtro }: PdfDoRankingDeVotosProps) {
   const { escolas, zonas, total } = ranking;
   const maiorZona = Math.max(1, ...zonas.map((z) => z.votos));
   return (
@@ -312,7 +306,6 @@ export function PdfDoRankingDeVotos({ time, ranking, filtro, geradoEm }: PdfDoRa
         <Titulo
           kicker="ONDE VOCÊ TEM MAIS VOTOS"
           titulo={`${num(total)} ${total === 1 ? 'voto' : 'votos'} em ${num(escolas.length)} ${escolas.length === 1 ? 'local' : 'locais'}`}
-          sub={`${time} · ${dataLonga(geradoEm)}`}
           chips={[
             { texto: filtro ? `Recorte: ${filtro}` : 'Todo o mapa', cor: C.navy, fundo: C.bg },
             { texto: 'Uma pessoa cadastrada que vota no local, um voto', cor: C.muted, fundo: C.bg },
@@ -437,28 +430,70 @@ export interface PdfDoRankingDeLideresProps {
   geradoEm: string;
 }
 
-function ColunaDeBarras({ titulo, linhas, total, cor }: { titulo: string; linhas: LinhaContada[]; total: number; cor: string }) {
-  const maior = Math.max(1, ...linhas.map((l) => l.votos));
+/** "23%", e "<1%" quando ha voto mas a fatia arredonda para zero. */
+const fatiaEmTexto = (parte: number, total: number) => {
+  const p = pct(parte, total);
+  return p === 0 && parte > 0 ? '<1%' : `${p}%`;
+};
+
+/** Uma linha de "votos por ...": rotulo, detalhe, valor e barra. */
+function CelulaDeVoto({ linha, total, maior, cor }: { linha: LinhaContada; total: number; maior: number; cor: string }) {
   return (
-    <View style={{ flex: 1, marginRight: 8 }}>
-      <Text style={{ fontSize: 6.6, fontFamily: 'Helvetica-Bold', color: C.faint, letterSpacing: 0.8, marginBottom: 4 }}>{s(titulo.toUpperCase())}</Text>
-      {linhas.length === 0 ? (
-        <Text style={{ fontSize: 7.4, color: C.faint }}>—</Text>
-      ) : (
-        linhas.slice(0, 5).map((linha) => (
-          <View key={linha.rotulo} style={{ marginBottom: 4 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontSize: 7.4, color: C.ink2, flex: 1, paddingRight: 4 }}>{s(linha.rotulo)}</Text>
-              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold' }}>{s(`${votos(linha.votos)} · ${pct(linha.votos, total)}%`)}</Text>
-            </View>
-            {linha.detalhe ? <Text style={{ fontSize: 6.4, color: C.faint }}>{s(linha.detalhe)}</Text> : null}
-            <View style={{ marginTop: 1.5 }}>
-              <BarraNaCelula fatia={linha.votos / maior} cor={cor} />
-            </View>
-          </View>
-        ))
-      )}
-      {linhas.length > 5 ? <Text style={{ fontSize: 6.6, color: C.faint }}>{s(`e mais ${linhas.length - 5}`)}</Text> : null}
+    <View style={{ flex: 1, paddingRight: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 7.6, color: C.ink2, flex: 1, paddingRight: 4 }}>{s(linha.rotulo)}</Text>
+        <Text style={{ fontSize: 7.6, fontFamily: 'Helvetica-Bold' }}>{s(`${votos(linha.votos)} · ${fatiaEmTexto(linha.votos, total)}`)}</Text>
+      </View>
+      {linha.detalhe ? <Text style={{ fontSize: 6.4, color: C.faint }}>{s(linha.detalhe)}</Text> : null}
+      <View style={{ marginTop: 1.5 }}>
+        <BarraNaCelula fatia={linha.votos / maior} cor={cor} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * "Votos por local / zona / secao": TODAS as linhas, nenhuma escondida em
+ * "e mais N". Em duas colunas, para caber; cada par de linhas e indivisivel,
+ * e a lista continua na pagina seguinte quando for longa.
+ */
+function ListaDeVotos({
+  titulo,
+  linhas,
+  total,
+  cor,
+  cabecalho,
+}: {
+  titulo: string;
+  linhas: LinhaContada[];
+  total: number;
+  cor: string;
+  /** Vai PRESO ao titulo e ao primeiro par: nunca fica sozinho no pe da pagina. */
+  cabecalho?: ReactNode;
+}) {
+  const maior = Math.max(1, ...linhas.map((l) => l.votos));
+  const pares: LinhaContada[][] = [];
+  for (let i = 0; i < linhas.length; i += 2) pares.push(linhas.slice(i, i + 2));
+  const par = (dupla: LinhaContada[], i: number) => (
+    <View key={i} style={{ flexDirection: 'row', marginBottom: 4 }} wrap={false}>
+      <CelulaDeVoto linha={dupla[0]} total={total} maior={maior} cor={cor} />
+      {dupla[1] ? <CelulaDeVoto linha={dupla[1]} total={total} maior={maior} cor={cor} /> : <View style={{ flex: 1 }} />}
+    </View>
+  );
+  return (
+    <View style={{ marginBottom: 8 }}>
+      {/* Titulo + primeiro par juntos (e o cabecalho do Lider, quando vem):
+          a lista nunca comeca no pe de uma pagina e termina na outra. */}
+      <View wrap={false}>
+        {cabecalho}
+        <View style={cabecalho ? { paddingHorizontal: 9, paddingTop: 8 } : undefined}>
+          <Text style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: C.faint, letterSpacing: 0.8, marginBottom: 4 }}>
+            {s(`${titulo.toUpperCase()} (${num(linhas.length)})`)}
+          </Text>
+          {linhas.length === 0 ? <Text style={{ fontSize: 7.4, color: C.faint }}>—</Text> : par(pares[0], 0)}
+        </View>
+      </View>
+      <View style={cabecalho ? { paddingHorizontal: 9 } : undefined}>{pares.slice(1).map((dupla, i) => par(dupla, i + 1))}</View>
     </View>
   );
 }
@@ -467,38 +502,48 @@ function FichaDoLider({ item }: { item: LiderNoRanking }) {
   const { lider } = item;
   const medalha = item.posicao <= 3 ? MEDALHA[item.posicao - 1] : C.navy2;
   return (
-    <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, marginBottom: 9 }} wrap={false}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navy, paddingHorizontal: 9, paddingVertical: 7, borderTopLeftRadius: 5, borderTopRightRadius: 5 }}>
-        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: medalha, justifyContent: 'center', alignItems: 'center', marginRight: 7 }}>
-          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{item.posicao}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>{s(lider.name)}</Text>
-          <Text style={{ fontSize: 6.8, color: C.navy3, marginTop: 1 }}>
-            {s([lider.tag, lider.phone ? telefone(lider.phone) : null].filter(Boolean).join(' · ') || 'Líder')}
-          </Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 15, fontFamily: 'Helvetica-Bold', color: MEDALHA[0] }}>{s(pessoas(item.equipe))}</Text>
-          <Text style={{ fontSize: 6.6, color: C.navy3 }}>{s(`na Equipe = ${votos(item.equipe)} · ${Math.round(item.fatia * 100)}% dos liderados`)}</Text>
-        </View>
-      </View>
-      <View style={{ flexDirection: 'row', paddingHorizontal: 9, paddingTop: 7, paddingBottom: 3 }}>
-        <ColunaDeBarras titulo="Votos por local de votação" linhas={item.escolas} total={item.equipe} cor={C.navy} />
-        <ColunaDeBarras titulo="Votos por zona" linhas={item.zonas} total={item.equipe} cor={C.gold} />
-        <ColunaDeBarras titulo="Votos por seção" linhas={item.secoes} total={item.equipe} cor={C.blue} />
+    <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, marginBottom: 10 }}>
+      <ListaDeVotos
+        titulo="Votos por local de votação"
+        linhas={item.escolas}
+        total={item.equipe}
+        cor={C.navy}
+        cabecalho={
+          <>
+            {/* Sem telefone: o PDF circula, e o numero do Lider nao vai junto. */}
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navy, paddingHorizontal: 9, paddingVertical: 7, borderTopLeftRadius: 5, borderTopRightRadius: 5 }}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: medalha, justifyContent: 'center', alignItems: 'center', marginRight: 7 }}>
+                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{item.posicao}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>{s(lider.name)}</Text>
+                <Text style={{ fontSize: 6.8, color: C.navy3, marginTop: 1 }}>{s(lider.tag ? `Líder · ${lider.tag}` : 'Líder')}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 15, fontFamily: 'Helvetica-Bold', color: MEDALHA[0] }}>{s(pessoas(item.equipe))}</Text>
+                <Text style={{ fontSize: 6.6, color: C.navy3 }}>{s(`na Equipe = ${votos(item.equipe)} · ${Math.round(item.fatia * 100)}% dos liderados`)}</Text>
+              </View>
+            </View>
+          </>
+        }
+      />
+      <View style={{ paddingHorizontal: 9, paddingBottom: 2 }}>
+        <ListaDeVotos titulo="Votos por zona" linhas={item.zonas} total={item.equipe} cor={C.gold} />
+        <ListaDeVotos titulo="Votos por seção" linhas={item.secoes} total={item.equipe} cor={C.blue} />
       </View>
       <Text style={{ fontSize: 6.6, color: C.faint, paddingHorizontal: 9, paddingBottom: 6 }}>
         {s(
           `${pessoas(item.comEscola)} de ${num(item.equipe)} com local de votação identificado` +
-            (item.semSecao ? ` · ${num(item.semSecao)} sem zona e seção no cadastro` : ''),
+            (item.semSecao ? ` · ${pessoas(item.semSecao)} sem zona e seção no cadastro` : ''),
         )}
       </Text>
     </View>
   );
 }
 
-export function PdfDoRankingDeLideres({ time, ranking, geradoEm }: PdfDoRankingDeLideresProps) {
+export function PdfDoRankingDeLideres({ time, ranking }: PdfDoRankingDeLideresProps) {
   const { lideres, totalDeLiderados, comEquipe } = ranking;
   const media = lideres.length ? totalDeLiderados / lideres.length : 0;
   const comGente = lideres.filter((l) => l.equipe > 0);
@@ -512,7 +557,6 @@ export function PdfDoRankingDeLideres({ time, ranking, geradoEm }: PdfDoRankingD
         <Titulo
           kicker="RANKING DOS LÍDERES"
           titulo={`${num(lideres.length)} ${lideres.length === 1 ? 'Líder' : 'Líderes'}, ${num(totalDeLiderados)} ${totalDeLiderados === 1 ? 'liderado' : 'liderados'}`}
-          sub={`${time} · ${dataLonga(geradoEm)}`}
           chips={[{ texto: 'A mesma pessoa repetida pelo mesmo Líder conta uma vez', cor: C.muted, fundo: C.bg }]}
         />
 
