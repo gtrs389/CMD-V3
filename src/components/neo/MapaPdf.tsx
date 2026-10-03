@@ -10,6 +10,7 @@ import type {
   LinhaContada,
   RankingDeLideres,
   RankingDeVotos,
+  SecaoNoRanking,
 } from '@/lib/domain/votos-por-lideranca';
 import {
   Barras,
@@ -317,6 +318,174 @@ function secoesEmLinha(secoes: { zone: string | null; section: string | null; to
 }
 
 /* -------------------------------------------------------------------------
+   Graficos das secoes
+   ------------------------------------------------------------------------- */
+
+/** Um tom so (verde), do escuro ao claro: magnitude, nao identidade. */
+const VERDE = ['#17693a', '#4f9a6b', '#a9d2b7'];
+
+function TituloDeGrafico({ titulo, nota }: { titulo: string; nota: string }) {
+  return (
+    <View style={{ marginBottom: 6 }}>
+      <Text style={{ fontSize: 8.6, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(titulo)}</Text>
+      <Text style={{ fontSize: 6.8, color: C.faint, marginTop: 1 }}>{s(nota)}</Text>
+    </View>
+  );
+}
+
+/**
+ * As secoes mais fortes em colunas: o numero de votos em cima de cada
+ * coluna, a secao e a zona embaixo. Uma cor so; a altura e que conta.
+ */
+function ColunasDasSecoes({ secoes }: { secoes: SecaoNoRanking[] }) {
+  const itens = secoes.slice(0, 20);
+  const maior = Math.max(1, ...itens.map((x) => x.votos));
+  const ALTURA = 96;
+  return (
+    <View style={{ backgroundColor: C.bg, borderRadius: 6, padding: 10, marginBottom: 8 }} wrap={false}>
+      <TituloDeGrafico
+        titulo={`As ${itens.length} seções com mais votos`}
+        nota="O número em cima da coluna é a quantidade de votos da seção. Embaixo: o número da seção e a zona."
+      />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: ALTURA + 12, borderBottomWidth: 0.75, borderBottomColor: C.line }}>
+        {itens.map((x) => (
+          <View key={x.posicao} style={{ flex: 1, alignItems: 'center', paddingHorizontal: 2 }}>
+            <Text style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: C.ink, marginBottom: 1.5 }}>{num(x.votos)}</Text>
+            <View
+              style={{
+                width: '78%',
+                height: Math.max(2, (x.votos / maior) * ALTURA),
+                backgroundColor: x.posicao <= 3 ? VERDE[0] : VERDE[1],
+                borderTopLeftRadius: 3,
+                borderTopRightRadius: 3,
+              }}
+            />
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', marginTop: 3 }}>
+        {itens.map((x) => (
+          <View key={x.posicao} style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={{ fontSize: 6.4, fontFamily: 'Helvetica-Bold', color: C.ink2 }}>{s(x.secao)}</Text>
+            <Text style={{ fontSize: 5.6, color: C.faint }}>{s(`Z${x.zona}`)}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const FAIXAS: { rotulo: string; de: number; ate: number }[] = [
+  { rotulo: '20 votos ou mais', de: 20, ate: Infinity },
+  { rotulo: '10 a 19 votos', de: 10, ate: 19 },
+  { rotulo: '5 a 9 votos', de: 5, ate: 9 },
+  { rotulo: '2 a 4 votos', de: 2, ate: 4 },
+  { rotulo: '1 voto', de: 1, ate: 1 },
+];
+
+/** Quantas secoes caem em cada faixa de votos. */
+function FaixasDasSecoes({ secoes }: { secoes: SecaoNoRanking[] }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg, borderRadius: 6, padding: 10, marginRight: 6 }}>
+      <TituloDeGrafico titulo="Quantas seções em cada faixa de votos" nota="Cada barra conta seções, não votos." />
+      <Barras
+        itens={FAIXAS.map((f) => ({
+          rotulo: f.rotulo,
+          quantidade: secoes.filter((x) => x.votos >= f.de && x.votos <= f.ate).length,
+        }))}
+        cor={VERDE[0]}
+        unidade={['seção', 'seções']}
+        larguraDoRotulo={62}
+      />
+    </View>
+  );
+}
+
+/**
+ * Onde os votos estao concentrados: as 10 secoes mais fortes, as 20
+ * seguintes e o resto, numa barra so que soma 100% dos votos.
+ */
+function ConcentracaoDosVotos({ secoes, total }: { secoes: SecaoNoRanking[]; total: number }) {
+  const soma = (lista: SecaoNoRanking[]) => lista.reduce((acc, x) => acc + x.votos, 0);
+  const grupos = [
+    { rotulo: `As 10 seções mais fortes`, votos: soma(secoes.slice(0, 10)), qtd: Math.min(10, secoes.length) },
+    { rotulo: `As 20 seguintes`, votos: soma(secoes.slice(10, 30)), qtd: Math.max(0, Math.min(20, secoes.length - 10)) },
+    { rotulo: `As outras ${num(Math.max(0, secoes.length - 30))}`, votos: soma(secoes.slice(30)), qtd: Math.max(0, secoes.length - 30) },
+  ].filter((g) => g.qtd > 0);
+  const base = Math.max(1, grupos.reduce((acc, g) => acc + g.votos, 0));
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg, borderRadius: 6, padding: 10 }}>
+      <TituloDeGrafico titulo="Onde os votos estão concentrados" nota="A barra inteira é 100% dos votos das seções." />
+      <View style={{ flexDirection: 'row', height: 14, marginBottom: 8 }}>
+        {grupos.map((g, i) => (
+          <View
+            key={g.rotulo}
+            style={{
+              width: `${(g.votos / base) * 100}%`,
+              height: 14,
+              backgroundColor: VERDE[i],
+              borderLeftWidth: i ? 2 : 0,
+              borderLeftColor: C.bg,
+              borderTopLeftRadius: i === 0 ? 4 : 0,
+              borderBottomLeftRadius: i === 0 ? 4 : 0,
+              borderTopRightRadius: i === grupos.length - 1 ? 4 : 0,
+              borderBottomRightRadius: i === grupos.length - 1 ? 4 : 0,
+            }}
+          />
+        ))}
+      </View>
+      {grupos.map((g, i) => (
+        <View key={g.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 3.5 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 1.5, backgroundColor: VERDE[i], marginRight: 5 }} />
+          <Text style={{ flex: 1, fontSize: 7.6, color: C.ink2 }}>{s(g.rotulo)}</Text>
+          <Text style={{ fontSize: 7.6, fontFamily: 'Helvetica-Bold', color: C.ink }}>
+            {s(`${votos(g.votos)} · ${fatiaEmTexto(g.votos, total)}`)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function GraficosDasSecoes({ secoes, total }: { secoes: SecaoNoRanking[]; total: number }) {
+  if (secoes.length === 0) return null;
+  const media = total / secoes.length;
+  const forte = secoes[0];
+  const top10 = secoes.slice(0, 10).reduce((acc, x) => acc + x.votos, 0);
+  return (
+    <View style={{ marginBottom: 6 }}>
+      <LinhaDeKpis>
+        <Kpi valor={num(secoes.length)} rotulo="seções com voto" tom={C.success} />
+        <Kpi
+          valor={votos(forte.votos)}
+          rotulo="na seção mais forte"
+          nota={`Zona ${forte.zona} · Seção ${forte.secao}`}
+          tom={C.navy}
+        />
+        <Kpi
+          valor={`${media.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} votos`}
+          rotulo="em média por seção"
+          tom={C.blue}
+        />
+        <Kpi
+          valor={fatiaEmTexto(top10, total)}
+          rotulo={secoes.length > 10 ? 'dos votos estão nas 10 seções mais fortes' : 'dos votos estão nessas seções'}
+          nota={votos(top10)}
+          tom={C.gold}
+        />
+      </LinhaDeKpis>
+      <View style={{ marginTop: 4 }}>
+        <ColunasDasSecoes secoes={secoes} />
+      </View>
+      <View style={{ flexDirection: 'row', marginBottom: 10 }} wrap={false}>
+        <FaixasDasSecoes secoes={secoes} />
+        <ConcentracaoDosVotos secoes={secoes} total={total} />
+      </View>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------
    Onde voce tem mais votos
    ------------------------------------------------------------------------- */
 
@@ -450,16 +619,7 @@ export function PdfDoRankingDeVotos({ ranking, filtro }: PdfDoRankingDeVotosProp
           texto={`Todas as seções com voto, da que tem mais para a que tem menos, e o local onde cada uma funciona (${num(secoes.length)} ${secoes.length === 1 ? 'seção' : 'seções'}).`}
           quebra={secoes.length > 0}
         />
-        {secoes.length >= 3 ? (
-          <Podio
-            itens={secoes.slice(0, 3).map((x) => ({
-              titulo: `Zona ${x.zona} · Seção ${x.secao}`,
-              sub: x.local,
-              valor: votos(x.votos),
-              nota: `${fatiaEmTexto(x.votos, total)} de todos os votos`,
-            }))}
-          />
-        ) : null}
+        <GraficosDasSecoes secoes={secoes} total={total} />
         <Tabela
           linhas={secoes}
           chave={(x) => `${x.posicao}`}
