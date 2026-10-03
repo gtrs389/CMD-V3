@@ -230,8 +230,12 @@ function ComoLer({ texto }: { texto: string }) {
   );
 }
 
+/** Altura de cada degrau (1o, 2o, 3o): fixa, para o desenho nao depender do texto. */
+const DEGRAU = [62, 44, 30];
+
 function Podio({ itens }: { itens: { titulo: string; sub?: string | null; valor: string; nota?: string }[] }) {
-  // 2o, 1o, 3o: o primeiro no meio e mais alto, como num podio de verdade.
+  // 2o, 1o, 3o: o primeiro no meio e mais alto, como num podio de verdade. O
+  // texto fica em cima do degrau; o degrau e que marca a posicao.
   const ordem = [1, 0, 2].filter((i) => itens[i]);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 4, marginBottom: 10 }} wrap={false}>
@@ -239,26 +243,29 @@ function Podio({ itens }: { itens: { titulo: string; sub?: string | null; valor:
         const item = itens[i];
         const alto = i === 0;
         return (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              marginHorizontal: 3,
-              paddingVertical: alto ? 14 : 10,
-              paddingHorizontal: 9,
-              borderRadius: 6,
-              backgroundColor: alto ? C.navy : C.bg,
-              borderTopWidth: 3,
-              borderTopColor: MEDALHA[i],
-            }}
-          >
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: MEDALHA[i], justifyContent: 'center', alignItems: 'center', marginBottom: 5 }}>
-              <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: C.white }}>{i + 1}</Text>
+          <View key={i} style={{ flex: 1, marginHorizontal: 1, justifyContent: 'flex-end' }}>
+            <View style={{ alignItems: 'center', paddingHorizontal: 6, marginBottom: 5 }}>
+              <Text style={{ fontSize: alto ? 10 : 9, fontFamily: 'Helvetica-Bold', color: C.ink, lineHeight: 1.25, textAlign: 'center' }}>{s(item.titulo)}</Text>
+              {item.sub ? <Text style={{ fontSize: 7, color: C.muted, marginTop: 1.5, textAlign: 'center' }}>{s(item.sub)}</Text> : null}
+              <Text style={{ fontSize: alto ? 20 : 15, fontFamily: 'Helvetica-Bold', color: alto ? MEDALHA[0] : C.navy, marginTop: 4 }}>{s(item.valor)}</Text>
+              {item.nota ? <Text style={{ fontSize: 6.8, color: C.faint, marginTop: 1 }}>{s(item.nota)}</Text> : null}
             </View>
-            <Text style={{ fontSize: alto ? 10 : 9, fontFamily: 'Helvetica-Bold', color: alto ? C.white : C.ink, lineHeight: 1.25 }}>{s(item.titulo)}</Text>
-            {item.sub ? <Text style={{ fontSize: 7, color: alto ? C.navy3 : C.muted, marginTop: 1.5 }}>{s(item.sub)}</Text> : null}
-            <Text style={{ fontSize: alto ? 20 : 15, fontFamily: 'Helvetica-Bold', color: alto ? MEDALHA[0] : C.navy, marginTop: 6 }}>{s(item.valor)}</Text>
-            {item.nota ? <Text style={{ fontSize: 6.8, color: alto ? C.navy3 : C.faint, marginTop: 1 }}>{s(item.nota)}</Text> : null}
+            <View
+              style={{
+                height: DEGRAU[i],
+                backgroundColor: alto ? C.navy : C.bg,
+                borderTopWidth: 3,
+                borderTopColor: MEDALHA[i],
+                borderTopLeftRadius: 4,
+                borderTopRightRadius: 4,
+                alignItems: 'center',
+                paddingTop: 6,
+              }}
+            >
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: MEDALHA[i], justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.white }}>{`${i + 1}º`}</Text>
+              </View>
+            </View>
           </View>
         );
       })}
