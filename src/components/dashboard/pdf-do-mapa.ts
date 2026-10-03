@@ -1,4 +1,7 @@
-import type { PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
+import type { Member } from '@/lib/types';
+import type { MapOverviewPayload, PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
+import type { MapQuery } from '@/lib/domain/map-filters';
+import { rankingDeLideres, rankingDeVotos } from '@/lib/domain/votos-por-lideranca';
 import { api } from '@/lib/repositories/http/api';
 import { baixarArquivo } from '@/lib/utils/download';
 
@@ -40,4 +43,60 @@ export async function baixarPdfDaEscola(place: PollingPlacePin, time: string, cl
   ]);
   const blob = await gerarPdfDaEscola({ time, escola: place, pessoas, geradoEm: new Date().toISOString() });
   baixarArquivo(`${slug(place.title ?? 'local-de-votacao')}.pdf`, blob);
+}
+
+/** O recorte do mapa em palavras, para o PDF dizer de que pedaco ele fala. */
+function recorteEmPalavras(query: MapQuery | null): string | null {
+  if (!query) return null;
+  const partes = [
+    query.zone ? `Zona ${query.zone}` : null,
+    query.city,
+    query.state,
+    query.minVotes > 0 ? `a partir de ${query.minVotes} votos` : null,
+    query.search.trim() ? `busca "${query.search.trim()}"` : null,
+  ].filter(Boolean);
+  return partes.length ? partes.join(' · ') : null;
+}
+
+const dataDoArquivo = () => new Date().toISOString().slice(0, 10);
+
+/** "Onde voce tem mais votos", com o mesmo recorte que esta na tela. */
+export async function baixarPdfDoRankingDeVotos(
+  places: readonly PollingPlacePin[],
+  query: MapQuery | null,
+  time: string,
+): Promise<void> {
+  const { gerarPdfDoRankingDeVotos } = await import('@/components/neo/MapaPdf');
+  const blob = await gerarPdfDoRankingDeVotos({
+    time,
+    ranking: rankingDeVotos(places, query?.zone ?? null),
+    filtro: recorteEmPalavras(query),
+    geradoEm: new Date().toISOString(),
+  });
+  baixarArquivo(`onde-tem-mais-votos_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
+}
+
+/**
+ * Ranking dos Lideres, e de cada um: onde a Equipe vota. As escolas vem do
+ * mapa do time (a secao do cadastro aponta o local), lido na hora do clique.
+ */
+export async function baixarPdfDoRankingDeLideres({
+  time,
+  clientId,
+  members,
+}: {
+  time: string;
+  clientId: string;
+  members: readonly Member[];
+}): Promise<void> {
+  const [mapa, { gerarPdfDoRankingDeLideres }] = await Promise.all([
+    api<MapOverviewPayload>(`/api/mapa?clientId=${encodeURIComponent(clientId)}`),
+    import('@/components/neo/MapaPdf'),
+  ]);
+  const blob = await gerarPdfDoRankingDeLideres({
+    time,
+    ranking: rankingDeLideres(members, mapa.pollingPlaces),
+    geradoEm: new Date().toISOString(),
+  });
+  baixarArquivo(`ranking-dos-lideres_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
 }
