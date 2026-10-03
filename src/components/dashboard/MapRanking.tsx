@@ -5,6 +5,7 @@ import type { PollingPlacePin } from '@/lib/domain/map-pin';
 import { ESTIMATED_VOTES_HINT } from '@/lib/domain/map-pin';
 import { rankPlaces, sectionsInZone } from '@/lib/domain/map-filters';
 import { cn } from '@/lib/utils/cn';
+import { BotaoDePdf } from './BotaoDePdf';
 import { formatNumber } from '@/lib/utils/text';
 
 /**
@@ -31,20 +32,27 @@ interface MapRankingProps {
   /** Local em foco: fica destacado na lista. */
   activeId?: string | null;
   onFocus: (place: PollingPlacePin) => void;
+  /** Baixa este ranking em PDF (escolas, zonas e secoes). */
+  onDownload?: () => Promise<void>;
   className?: string;
 }
 
-export function MapRanking({ places, zone, activeId, onFocus, className }: MapRankingProps) {
+export function MapRanking({ places, zone, activeId, onFocus, onDownload, className }: MapRankingProps) {
   const ranking = rankPlaces(places, zone).filter((item) => item.votes > 0);
   const total = ranking.reduce((soma, item) => soma + item.votes, 0);
 
   return (
     <div className={cn('flex min-h-0 flex-col bg-surface', className)}>
       <header className="border-b border-line px-4 py-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-          <Trophy aria-hidden="true" className="size-4 text-brand-700" />
-          Onde você tem mais votos
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <Trophy aria-hidden="true" className="size-4 text-brand-700" />
+            Onde você tem mais votos
+          </h3>
+          {onDownload && ranking.length > 0 ? (
+            <BotaoDePdf onClick={onDownload} rotulo="PDF" titulo="Baixar o ranking de locais, zonas e seções em PDF" />
+          ) : null}
+        </div>
         <p className="mt-0.5 text-xs text-ink-500">
           {ranking.length > 0
             ? `${formatNumber(total)} votos em ${formatNumber(ranking.length)} ${

@@ -276,12 +276,15 @@ export function Barras({
   total,
   larguraDoRotulo = 118,
   vazio = 'Sem dados.',
+  unidade,
 }: {
   itens: ItemDeBarra[];
   cor?: string;
   total?: number;
   larguraDoRotulo?: number;
   vazio?: string;
+  /** O que o numero conta, no singular e no plural: ['voto', 'votos']. */
+  unidade?: [string, string];
 }) {
   const maior = Math.max(1, ...itens.map((i) => i.quantidade));
   if (itens.length === 0) return <Text style={{ fontSize: 8.5, color: C.faint }}>{s(vazio)}</Text>;
@@ -300,8 +303,9 @@ export function Barras({
               }}
             />
           </View>
-          <Text style={{ width: 54, textAlign: 'right', fontSize: 7.8, fontFamily: 'Helvetica-Bold' }}>
+          <Text style={{ width: unidade ? 88 : 54, textAlign: 'right', fontSize: 7.8, fontFamily: 'Helvetica-Bold' }}>
             {num(item.quantidade)}
+            {unidade ? ` ${item.quantidade === 1 ? unidade[0] : unidade[1]}` : ''}
             {total ? <Text style={{ fontFamily: 'Helvetica', color: C.faint }}>{` · ${pct(item.quantidade, total)}%`}</Text> : null}
           </Text>
         </View>

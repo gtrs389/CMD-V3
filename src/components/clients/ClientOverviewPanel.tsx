@@ -38,6 +38,8 @@ import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
 import { TeamChart, type TeamChartPoint } from './TeamChart';
 import { LiderNoMapa } from './LiderNoMapa';
+import { BotaoDePdf } from '@/components/dashboard/BotaoDePdf';
+import { baixarPdfDoRankingDeLideres } from '@/components/dashboard/pdf-do-mapa';
 import { Reveal } from '@/components/ui/Reveal';
 import { Contador } from '@/components/ui/Contador';
 import { cn } from '@/lib/utils/cn';
@@ -357,6 +359,9 @@ export function ClientOverviewPanel({
             <div className="flex flex-1 flex-col lg:absolute lg:inset-0">
               <RankingCard
                 rows={ranking}
+                onDownload={() =>
+                  baixarPdfDoRankingDeLideres({ time: client.name, clientId: client.id, members: todos })
+                }
                 currentUserId={user?.id ?? null}
                 onOpen={navegador ? (id) => navegador.abrirLider(id) : undefined}
               />
@@ -881,7 +886,10 @@ function RankingCard({
   rows,
   currentUserId,
   onOpen,
+  onDownload,
 }: {
+  /** Baixa o Ranking dos Lideres em PDF, com onde a Equipe de cada um vota. */
+  onDownload?: () => Promise<void>;
   rows: RankingRow[];
   /** Destaca a linha de quem esta olhando o painel. */
   currentUserId: string | null;
@@ -907,6 +915,15 @@ function RankingCard({
         {rows.length > 0 ? (
           <span className="rounded-pill bg-accent-50 px-2 py-0.5 text-[0.6875rem] font-semibold text-accent-700 tabular-nums">
             {formatNumber(rows.length)}
+          </span>
+        ) : null}
+        {onDownload && rows.length > 0 ? (
+          <span className="ml-auto">
+            <BotaoDePdf
+              onClick={onDownload}
+              rotulo="PDF"
+              titulo="Baixar o Ranking dos Líderes em PDF, com locais, zonas e seções de cada um"
+            />
           </span>
         ) : null}
       </div>
