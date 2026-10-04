@@ -114,3 +114,21 @@ O que ele **não** toca:
 
 Não cria acesso nem link próprio, pelo mesmo motivo do cadastro novo. É
 idempotente e não apaga nada.
+
+# Votação por seção do TSE (resultado da eleição)
+
+O mapa mostra a votação oficial de qualquer candidato por escola, zona e
+seção (botão **Votação 2026 (TSE)**). Os dados vêm da planilha **Votação por
+seção eleitoral** do Portal de Dados Abertos do TSE
+(`votacao_secao_2026_AL.zip`), que sai depois do fim da apuração.
+
+1. Rode a migration `054_votacao_por_secao.sql` no SQL Editor do Supabase.
+2. Baixe o `.zip` do estado no Portal de Dados Abertos.
+3. No mapa, como ADMIN geral: **Votação 2026 (TSE) → Escolher arquivo**, e
+   envie o `.zip` como veio. A planilha é lida no próprio navegador (pode
+   levar alguns minutos) e só o resultado sobe para o banco.
+
+Enviar de novo (por exemplo, com o 2º turno) atualiza sem duplicar. O
+boletim de urna (`bweb_...`) também é aceito: as colunas são achadas pelo
+nome. A escola de cada seção vem da tabela `cmd_polling_places`; seção cujo
+local não tem coordenada entra no PDF, mas não vira pino.

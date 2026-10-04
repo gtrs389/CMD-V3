@@ -401,6 +401,29 @@ export async function insertRowsInChunks<T>(
   return gravados;
 }
 
+/**
+ * Grava ou atualiza pela chave unica (`onConflict`), sem devolver as linhas.
+ *
+ * Para cargas repetiveis, como a planilha do TSE: enviar o mesmo arquivo de
+ * novo atualiza cada linha no lugar, nunca duplica. Em lotes, como a
+ * insercao, pelo mesmo motivo de tamanho do corpo.
+ */
+export async function upsertRows(
+  table: string,
+  values: Record<string, QueryValue | object>[],
+  onConflict: string,
+  size = INSERT_CHUNK,
+): Promise<void> {
+  for (let inicio = 0; inicio < values.length; inicio += size) {
+    const search = new URLSearchParams({ on_conflict: onConflict });
+    await request<null>(`${buildUrl(table, {})}?${search}`, {
+      method: 'POST',
+      body: JSON.stringify(alignRowKeys(values.slice(inicio, inicio + size))),
+      prefer: ['resolution=merge-duplicates', 'return=minimal'],
+    });
+  }
+}
+
 export async function insertOne<T>(
   table: string,
   value: Record<string, QueryValue | object>,

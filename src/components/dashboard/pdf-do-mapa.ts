@@ -76,6 +76,26 @@ export async function baixarPdfDoRankingDeVotos(
 }
 
 /**
+ * A votacao oficial de um candidato (TSE): locais, zonas e secoes, com o
+ * mesmo recorte do mapa. Entram tambem as escolas sem coordenada, que nao
+ * viram pino mas tiveram voto.
+ */
+export async function baixarPdfDaVotacao(
+  places: readonly PollingPlacePin[],
+  query: MapQuery | null,
+  candidato: { rotulo: string; nome: string; numero: string },
+): Promise<void> {
+  const { gerarPdfDoRankingDeVotos } = await import('@/components/neo/MapaPdf');
+  const blob = await gerarPdfDoRankingDeVotos({
+    ranking: rankingDeVotos(places, query?.zone ?? null),
+    filtro: recorteEmPalavras(query),
+    geradoEm: new Date().toISOString(),
+    votacao: candidato.rotulo,
+  });
+  baixarArquivo(`votacao_${slug(candidato.nome)}-${candidato.numero}_${dataDoArquivo()}.pdf`, blob);
+}
+
+/**
  * Quem vota em cada local do ranking: a pessoa, a zona, a secao e o Lider.
  *
  * As pessoas vem da mesma lista do "Ver pessoas", local por local — poucos

@@ -36,10 +36,24 @@ interface MapRankingProps {
   onDownload?: () => Promise<void>;
   /** Baixa, em PDF, quem vota em cada local: zona, secao e Lider de cada pessoa. */
   onDownloadPeople?: () => Promise<void>;
+  /** Titulo da lista. Na votacao do TSE: "Onde Fulano teve mais votos". */
+  titulo?: string;
+  /** Rodape: de onde o numero vem. */
+  nota?: string;
   className?: string;
 }
 
-export function MapRanking({ places, zone, activeId, onFocus, onDownload, onDownloadPeople, className }: MapRankingProps) {
+export function MapRanking({
+  places,
+  zone,
+  activeId,
+  onFocus,
+  onDownload,
+  onDownloadPeople,
+  titulo = 'Onde você tem mais votos',
+  nota = ESTIMATED_VOTES_HINT,
+  className,
+}: MapRankingProps) {
   const ranking = rankPlaces(places, zone).filter((item) => item.votes > 0);
   const total = ranking.reduce((soma, item) => soma + item.votes, 0);
 
@@ -48,8 +62,8 @@ export function MapRanking({ places, zone, activeId, onFocus, onDownload, onDown
       <header className="border-b border-line px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-            <Trophy aria-hidden="true" className="size-4 text-brand-700" />
-            Onde você tem mais votos
+            <Trophy aria-hidden="true" className="size-4 shrink-0 text-brand-700" />
+            <span className="min-w-0">{titulo}</span>
           </h3>
           {ranking.length > 0 && (onDownload || onDownloadPeople) ? (
             <div className="flex items-center gap-1.5">
@@ -168,7 +182,7 @@ export function MapRanking({ places, zone, activeId, onFocus, onDownload, onDown
       )}
 
       <p className="border-t border-line px-4 py-2 text-[0.625rem] text-ink-500 italic">
-        {ESTIMATED_VOTES_HINT}
+        {nota}
       </p>
     </div>
   );

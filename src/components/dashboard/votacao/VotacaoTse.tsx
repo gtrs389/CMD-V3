@@ -1,0 +1,307 @@
+'use client';
+
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Upload, Vote, X } from 'lucide-react';
+import {
+  cargosDaVotacao,
+  filtrarCandidatos,
+  type CandidatoDaVotacao,
+} from '@/lib/domain/votacao-tse';
+import { api } from '@/lib/repositories/http/api';
+import { useRepositoryQuery } from '@/hooks/use-repository-query';
+import { cn } from '@/lib/utils/cn';
+import { formatNumber } from '@/lib/utils/text';
+import { Modal } from '@/components/ui/Modal';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { Select } from '@/components/ui/Select';
+import { Spinner } from '@/components/ui/Spinner';
+import { importarVotacao, type Andamento, type ResumoDoEnvio } from './importar-votacao';
+
+/**
+ * "Votacao 2026": escolher QUALQUER candidato e ver, no mapa, onde ele teve
+ * voto — escola, zona e secao —, pelo resultado oficial do TSE.
+ *
+ * A lista vem inteira de uma vez (sao alguns milhares de nomes, sem as
+ * secoes) e e filtrada aqui: digitar nao espera o servidor.
+ *
+ * O ADMIN geral tambem envia a planilha aqui mesmo, no rodape da janela.
+ */
+
+/** Quantos nomes a lista mostra de cada vez: a busca acha o resto. */
+const NA_TELA = 80;
+
+export function BotaoDaVotacao({
+  selecionado,
+  onSelect,
+  onClear,
+  podeEnviar,
+  className,
+}: {
+  selecionado: CandidatoDaVotacao | null;
+  onSelect: (candidato: CandidatoDaVotacao) => void;
+  onClear: () => void;
+  podeEnviar: boolean;
+  className?: string;
+}) {
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <>
+      <div className={cn('inline-flex items-center', className)}>
+        <button
+          type="button"
+          onClick={() => setAberto(true)}
+          aria-pressed={selecionado !== null}
+          className={cn(
+            'inline-flex min-h-9 items-center gap-1.5 border px-3 text-xs font-semibold transition-colors',
+            selecionado ? 'rounded-l-pill border-accent-600 bg-accent-500 text-navy-900' : 'rounded-pill',
+            !selecionado && 'border-line bg-surface text-ink-700 hover:bg-ink-50',
+          )}
+        >
+          <Vote aria-hidden="true" className="size-3.5" />
+          {selecionado ? `Votação: ${selecionado.nome}` : 'Votação 2026 (TSE)'}
+        </button>
+        {selecionado ? (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Voltar ao mapa da campanha"
+            title="Voltar ao mapa da campanha"
+            className="inline-flex min-h-9 items-center rounded-r-pill border border-l-0 border-accent-600 bg-accent-500 px-2 text-navy-900 hover:bg-accent-400"
+          >
+            <X aria-hidden="true" className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+
+      {aberto ? (
+        <SeletorDaVotacao
+          podeEnviar={podeEnviar}
+          onClose={() => setAberto(false)}
+          onSelect={(c) => {
+            onSelect(c);
+            setAberto(false);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function SeletorDaVotacao({
+  podeEnviar,
+  onClose,
+  onSelect,
+}: {
+  podeEnviar: boolean;
+  onClose: () => void;
+  onSelect: (candidato: CandidatoDaVotacao) => void;
+}) {
+  const loader = useCallback(
+    () => api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao').then((r) => r.candidatos),
+    [],
+  );
+  const { data: lista, error, reload } = useRepositoryQuery(loader);
+  const erro = error ? 'Não foi possível carregar a votação.' : null;
+  const [turno, setTurno] = useState<number | null>(null);
+  const [cargo, setCargo] = useState<number | null>(null);
+  const [busca, setBusca] = useState('');
+  const [todos, setTodos] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+
+  const turnos = useMemo(() => [...new Set((lista ?? []).map((c) => c.turno))].sort(), [lista]);
+  const cargos = useMemo(() => cargosDaVotacao(lista ?? []), [lista]);
+  // Comeca no 1o turno: sem isso, o mesmo nome apareceria duas vezes.
+  const turnoAtivo = turno ?? turnos[0] ?? null;
+  const achados = useMemo(
+    () => filtrarCandidatos(lista ?? [], { turno: turnoAtivo, cargoCodigo: cargo, busca, todos }),
+    [lista, turnoAtivo, cargo, busca, todos],
+  );
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      busy={enviando}
+      size="lg"
+      title="Votação 2026 · resultado do TSE"
+      description="Escolha um candidato para ver no mapa onde ele teve voto: escola, zona e seção."
+    >
+      {erro ? (
+        <p className="rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">{erro}</p>
+      ) : lista === null ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-ink-500">
+          <Spinner className="size-4" /> Carregando a votação…
+        </div>
+      ) : lista.length === 0 ? (
+        <p className="rounded-control border border-line bg-ink-50 px-3 py-4 text-center text-sm text-ink-700">
+          Nenhuma votação carregada ainda.
+          {podeEnviar ? ' Envie a planilha do TSE abaixo.' : ' O administrador do sistema precisa enviar a planilha do TSE.'}
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {turnos.length > 1
+              ? turnos.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    aria-pressed={turnoAtivo === t}
+                    onClick={() => setTurno(t)}
+                    className={cn(
+                      'inline-flex min-h-9 items-center rounded-pill border px-3 text-xs font-medium',
+                      turnoAtivo === t ? 'border-brand-700 bg-brand-700 text-white' : 'border-line bg-surface text-ink-700',
+                    )}
+                  >
+                    {t}º turno
+                  </button>
+                ))
+              : null}
+            <Select
+              aria-label="Cargo"
+              value={cargo === null ? '' : String(cargo)}
+              onChange={(e) => setCargo(e.target.value ? Number(e.target.value) : null)}
+              className="min-w-48 flex-1"
+            >
+              <option value="">Todos os cargos</option>
+              {cargos.map((c) => (
+                <option key={c.codigo} value={String(c.codigo)}>
+                  {c.nome}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <SearchInput
+            id="busca-candidato"
+            value={busca}
+            onChange={setBusca}
+            label="Buscar candidato"
+            placeholder="Nome ou número do candidato"
+          />
+
+          <label className="flex items-center gap-2 text-xs text-ink-700">
+            <input type="checkbox" checked={todos} onChange={(e) => setTodos(e.target.checked)} />
+            Mostrar também voto de legenda, branco e nulo
+          </label>
+
+          <ul className="max-h-[45vh] divide-y divide-line overflow-y-auto rounded-control border border-line">
+            {achados.length === 0 ? (
+              <li className="px-3 py-6 text-center text-sm text-ink-500">Ninguém encontrado com essa busca.</li>
+            ) : (
+              achados.slice(0, NA_TELA).map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(c)}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-brand-50"
+                  >
+                    <span className="flex min-w-14 justify-center rounded-control bg-ink-100 px-1.5 py-1 text-xs font-bold text-ink-700 tabular-nums">
+                      {c.numero}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-ink-900">{c.nome}</span>
+                      <span className="block text-xs text-ink-500">
+                        {c.cargo} · {c.turno}º turno · {c.uf}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-brand-800 tabular-nums">
+                      {formatNumber(c.total)} <span className="text-xs font-normal text-ink-500">votos</span>
+                    </span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+          {achados.length > NA_TELA ? (
+            <p className="text-xs text-ink-500">
+              Mostrando os {NA_TELA} mais votados de {formatNumber(achados.length)}. Busque pelo nome ou número para achar os outros.
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      {podeEnviar ? <EnvioDaPlanilha onEnviando={setEnviando} onFim={reload} /> : null}
+    </Modal>
+  );
+}
+
+/** Rodape do ADMIN: enviar a planilha de votacao por secao do TSE. */
+function EnvioDaPlanilha({ onEnviando, onFim }: { onEnviando: (sim: boolean) => void; onFim: () => void }) {
+  const campo = useRef<HTMLInputElement>(null);
+  const [andamento, setAndamento] = useState<Andamento | null>(null);
+  const [resumo, setResumo] = useState<ResumoDoEnvio | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function enviar(arquivo: File) {
+    setErro(null);
+    setResumo(null);
+    onEnviando(true);
+    try {
+      setResumo(await importarVotacao(arquivo, setAndamento));
+      onFim();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível ler a planilha.');
+    } finally {
+      setAndamento(null);
+      onEnviando(false);
+      if (campo.current) campo.current.value = '';
+    }
+  }
+
+  return (
+    <section className="mt-4 space-y-2 border-t border-line pt-4">
+      <h3 className="text-sm font-semibold text-ink-900">Enviar a votação do TSE</h3>
+      <p className="text-xs text-ink-500">
+        No Portal de Dados Abertos do TSE (dadosabertos.tse.jus.br), baixe <b>Resultados 2026 → Votação por seção
+        eleitoral</b>, o arquivo de <b>AL</b>, e envie o .zip como veio. A planilha é lida aqui no navegador e pode levar
+        alguns minutos. Enviar de novo (por exemplo, com o 2º turno) atualiza sem duplicar.
+      </p>
+
+      <input
+        ref={campo}
+        type="file"
+        accept=".zip,.csv,.txt"
+        className="sr-only"
+        id="arquivo-votacao"
+        disabled={andamento !== null}
+        onChange={(e) => {
+          const arquivo = e.target.files?.[0];
+          if (arquivo) void enviar(arquivo);
+        }}
+      />
+      <label
+        htmlFor="arquivo-votacao"
+        className={cn(
+          'inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-control border border-brand-200 bg-surface px-3 text-sm font-semibold text-brand-800 hover:bg-brand-50',
+          andamento && 'pointer-events-none opacity-60',
+        )}
+      >
+        <Upload aria-hidden="true" className="size-4" />
+        Escolher arquivo (.zip ou .csv)
+      </label>
+
+      {andamento ? (
+        <div className="space-y-1" role="status">
+          <p className="text-xs text-ink-700">{andamento.texto}</p>
+          <div className="h-1.5 w-full overflow-hidden rounded-pill bg-ink-100">
+            <div className="h-full rounded-pill bg-brand-600 transition-all" style={{ width: `${Math.round(andamento.fracao * 100)}%` }} />
+          </div>
+        </div>
+      ) : null}
+
+      {resumo ? (
+        <p className="rounded-control border border-success-600/30 bg-success-50 px-3 py-2 text-xs text-success-700" role="status">
+          Pronto: {formatNumber(resumo.candidatos)} candidatos em {formatNumber(resumo.secoes)} seções ({resumo.cargos.join(', ')}).
+          {resumo.ignoradas > 0 ? ` ${formatNumber(resumo.ignoradas)} linhas incompletas foram ignoradas.` : ''}
+        </p>
+      ) : null}
+
+      {erro ? (
+        <p className="rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700" role="alert">
+          {erro}
+        </p>
+      ) : null}
+    </section>
+  );
+}
