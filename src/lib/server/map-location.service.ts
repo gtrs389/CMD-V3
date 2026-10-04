@@ -1098,10 +1098,13 @@ export async function placeMembers(
         zone: member.zone,
         section: member.section,
         cadastradoPor: member.recruitedBy ? recruiterText(member.recruitedBy) : null,
+        tier: member.tier,
+        lider: member.tier === 'EQUIPE' ? member.recruitedBy?.name.trim() || null : null,
       };
     }
     const member = linha.row;
     const eleitoral = tseById.get(member.id);
+    const tier = tierOf(member.recruited_by_role);
     return {
       memberId: member.id,
       name: member.name,
@@ -1123,6 +1126,9 @@ export async function placeMembers(
             photo: null,
           })
         : null,
+      tier,
+      // Quem e da Equipe foi cadastrado pelo proprio Lider.
+      lider: tier === 'EQUIPE' ? member.recruited_by_name?.trim() || null : null,
     };
   });
 

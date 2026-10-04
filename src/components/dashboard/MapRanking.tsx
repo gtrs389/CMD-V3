@@ -34,10 +34,12 @@ interface MapRankingProps {
   onFocus: (place: PollingPlacePin) => void;
   /** Baixa este ranking em PDF (escolas, zonas e secoes). */
   onDownload?: () => Promise<void>;
+  /** Baixa, em PDF, quem vota em cada local: zona, secao e Lider de cada pessoa. */
+  onDownloadPeople?: () => Promise<void>;
   className?: string;
 }
 
-export function MapRanking({ places, zone, activeId, onFocus, onDownload, className }: MapRankingProps) {
+export function MapRanking({ places, zone, activeId, onFocus, onDownload, onDownloadPeople, className }: MapRankingProps) {
   const ranking = rankPlaces(places, zone).filter((item) => item.votes > 0);
   const total = ranking.reduce((soma, item) => soma + item.votes, 0);
 
@@ -49,8 +51,19 @@ export function MapRanking({ places, zone, activeId, onFocus, onDownload, classN
             <Trophy aria-hidden="true" className="size-4 text-brand-700" />
             Onde você tem mais votos
           </h3>
-          {onDownload && ranking.length > 0 ? (
-            <BotaoDePdf onClick={onDownload} rotulo="PDF" titulo="Baixar o ranking de locais, zonas e seções em PDF" />
+          {ranking.length > 0 && (onDownload || onDownloadPeople) ? (
+            <div className="flex items-center gap-1.5">
+              {onDownload ? (
+                <BotaoDePdf onClick={onDownload} rotulo="PDF" titulo="Baixar o ranking de locais, zonas e seções em PDF" />
+              ) : null}
+              {onDownloadPeople ? (
+                <BotaoDePdf
+                  onClick={onDownloadPeople}
+                  rotulo="Pessoas"
+                  titulo="Baixar em PDF quem vota em cada local, com zona, seção e Líder de cada pessoa"
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
         <p className="mt-0.5 text-xs text-ink-500">

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Member, Recruiter } from '@/lib/types';
-import type { PollingPlacePin } from '@/lib/domain/map-pin';
-import { escolaDaSecao, rankingDeLideres, rankingDeVotos } from '@/lib/domain/votos-por-lideranca';
+import type { PlaceMember, PollingPlacePin } from '@/lib/domain/map-pin';
+import { escolaDaSecao, pessoasPorEscola, rankingDeLideres, rankingDeVotos } from '@/lib/domain/votos-por-lideranca';
 
 const escola = (id: string, titulo: string, secoes: [string, string, number][]): PollingPlacePin => ({
   locationId: id,
@@ -86,5 +86,47 @@ describe('ranking dos Líderes (onde a Equipe vota)', () => {
     expect(primeiro.secoes[0]).toMatchObject({ rotulo: 'Zona 10 · Seção 144', votos: 2, detalhe: 'Escola A' });
     expect(primeiro.semSecao).toBe(1);
     expect(segundo.escolas[0].rotulo).toBe('Escola C');
+  });
+});
+
+describe('quem vota em cada local', () => {
+  const quem = (id: string, nome: string, zone: string | null, section: string | null, lider: string | null): PlaceMember => ({
+    memberId: id, name: nome, photo: null, clientId: 't', clientName: 'Time', phone: null, email: null, zone, section,
+    cadastradoPor: null, tier: lider ? 'EQUIPE' : 'LIDER', lider,
+  });
+  const PESSOAS = new Map<string, PlaceMember[]>([
+    ['a', [
+      quem('1', 'Zeca', '10', '145', 'Ana'),
+      quem('2', 'Bia', null, null, 'Ana'),
+      quem('3', 'Caio', '010', '0144', 'Rui'),
+      quem('4', 'Ana', '10', '144', null),
+    ]],
+    ['b', [quem('5', 'Duda', '10', '200', 'Ana')]],
+    ['c', [quem('6', 'Eva', '28', '10', 'Rui')]],
+  ]);
+
+  it('segue a ordem do ranking; dentro do local, zona, seção e nome', () => {
+    const r = pessoasPorEscola(rankingDeVotos(ESCOLAS), PESSOAS);
+    expect(r.escolas.map((e) => e.escola.place.title)).toEqual(['Escola A', 'Escola B', 'Escola C']);
+    expect(r.escolas[0].pessoas.map((p) => `${p.nome}:${p.zona}/${p.secao}`)).toEqual([
+      'Ana:10/144',
+      'Caio:10/144',
+      'Zeca:10/145',
+      'Bia:null/null',
+    ]);
+    expect(r.totalDePessoas).toBe(6);
+    expect(r.lideres).toBe(2);
+  });
+
+  it('o Líder vem marcado; quem é da Equipe traz o nome do Líder', () => {
+    const [a] = pessoasPorEscola(rankingDeVotos(ESCOLAS), PESSOAS).escolas;
+    expect(a.pessoas.find((p) => p.nome === 'Ana')).toMatchObject({ ehLider: true, lider: null });
+    expect(a.pessoas.find((p) => p.nome === 'Caio')).toMatchObject({ ehLider: false, lider: 'Rui' });
+  });
+
+  it('com zona escolhida, só quem vota nela entra', () => {
+    const r = pessoasPorEscola(rankingDeVotos(ESCOLAS, '28'), PESSOAS, '28');
+    expect(r.escolas.map((e) => e.escola.place.title)).toEqual(['Escola C']);
+    expect(r.escolas[0].pessoas.map((p) => p.nome)).toEqual(['Eva']);
   });
 });
