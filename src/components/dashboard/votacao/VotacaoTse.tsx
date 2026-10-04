@@ -105,7 +105,7 @@ function SeletorDaVotacao({
   const { data: lista, error, reload } = useRepositoryQuery(loader);
   const erro = error ? 'Não foi possível carregar a votação.' : null;
   // Com a janela aberta, a apuracao anda: boletim novo recarrega a lista.
-  const { situacao, coletando } = useVotacaoAoVivo(true, reload);
+  const { situacao, coletando, erro: erroAoVivo } = useVotacaoAoVivo(true, reload);
   const andamento = textoDoAndamento(situacao);
   const [turno, setTurno] = useState<number | null>(null);
   const [cargo, setCargo] = useState<number | null>(null);
@@ -131,7 +131,12 @@ function SeletorDaVotacao({
       title="Votação 2026 · resultado do TSE"
       description="Escolha um candidato para ver no mapa onde ele teve voto: escola, zona e seção."
     >
-      <AndamentoAoVivo texto={andamento} coletando={coletando} pausadoAte={situacao?.pausadoAte ?? null} />
+      <AndamentoAoVivo
+        texto={andamento}
+        coletando={coletando}
+        pausadoAte={situacao?.pausadoAte ?? null}
+        erro={erroAoVivo}
+      />
 
       {erro ? (
         <p className="rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">{erro}</p>
@@ -141,8 +146,9 @@ function SeletorDaVotacao({
         </div>
       ) : lista.length === 0 ? (
         <p className="rounded-control border border-line bg-ink-50 px-3 py-4 text-center text-sm text-ink-700">
-          Ainda não chegou nenhum boletim de urna. A lista se atualiza sozinha a cada minuto, conforme o TSE
-          publica as seções.
+          {erroAoVivo
+            ? 'Nenhum boletim de urna ainda: a busca no TSE não está funcionando (veja o motivo acima).'
+            : 'Ainda não chegou nenhum boletim de urna. A lista se atualiza sozinha a cada minuto, conforme o TSE publica as seções.'}
         </p>
       ) : (
         <div className="space-y-3">
@@ -317,13 +323,27 @@ export function AndamentoAoVivo({
   texto,
   coletando,
   pausadoAte,
+  erro,
   className,
 }: {
   texto: string | null;
   coletando: boolean;
   pausadoAte: string | null;
+  /** Por que a busca falhou. Nunca fica escondido atras de "buscando...". */
+  erro?: string | null;
   className?: string;
 }) {
+  if (erro && !pausadoAte) {
+    return (
+      <p
+        className={cn('mb-3 rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700', className)}
+        role="alert"
+      >
+        <b>A busca ao vivo falhou.</b> {erro}
+        {texto ? ` (${texto})` : ''}
+      </p>
+    );
+  }
   return (
     <p className={cn('mb-3 flex items-center gap-2 text-xs text-ink-700', className)} role="status">
       <span className="relative flex size-2 shrink-0">

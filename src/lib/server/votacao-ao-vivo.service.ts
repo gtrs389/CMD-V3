@@ -37,7 +37,7 @@ const TABELA_NOMES = 'cmd_tse_live_candidates';
 const TABELA_ESTADO = 'cmd_tse_live_state';
 
 /** Quanto tempo uma coleta pode durar (a rota tem 60 s). */
-const PRAZO_PADRAO_MS = 40_000;
+const PRAZO_PADRAO_MS = 25_000;
 const SIMULTANEAS = 3;
 const INTERVALO_MS = 70;
 /** Secao sem boletim: so volta a ser consultada depois disto. */
@@ -146,6 +146,27 @@ function freio() {
   };
 }
 
+/**
+ * Por que a lista de secoes do TSE nao abriu, em palavras de quem resolve.
+ *
+ * O TSE costuma recusar acessos vindos de fora do Brasil durante a apuracao,
+ * e a Vercel roda as funcoes nos EUA por padrao: e o caso mais provavel do
+ * 403 e da falta de resposta.
+ */
+export function motivoDaRecusa(status: number): string {
+  if (status === 403 || status === 429 || status === 0) {
+    return (
+      `O TSE ${status === 0 ? 'não respondeu ao servidor' : `recusou a consulta do servidor (HTTP ${status})`}. ` +
+      'O TSE costuma bloquear acessos de fora do Brasil durante a apuração, e a Vercel roda nos EUA por padrão: ' +
+      'em Vercel → Settings → Functions → Function Region, escolha São Paulo (gru1) e publique de novo.'
+    );
+  }
+  if (status === 404) {
+    return 'O TSE ainda não publicou a lista de seções deste turno (HTTP 404). Confira os códigos do turno (TSE_PLEITO).';
+  }
+  return `A lista de seções do TSE não abriu (HTTP ${status}).`;
+}
+
 const json = (corpo: ArrayBuffer | undefined): unknown => JSON.parse(new TextDecoder('utf-8').decode(corpo));
 const zeros = (n: number, tam: number) => String(n).padStart(tam, '0');
 
@@ -177,7 +198,7 @@ export async function coletarAoVivo(prazoMs = PRAZO_PADRAO_MS): Promise<Situacao
     // 1. A lista de secoes da UF: uma vez so.
     if (total === 0) {
       const r = await baixar(urlDaListaDeSecoes(c, c.uf));
-      if (r.status !== 200) throw new Error(`A lista de seções do TSE não abriu (HTTP ${r.status}).`);
+      if (r.status !== 200) throw new Error(motivoDaRecusa(r.status));
       const secoes = secoesDaLista(json(r.corpo));
       await upsertRows(
         TABELA_SECOES,

@@ -30,6 +30,8 @@ const A_CADA_MS = 60_000;
 export function useVotacaoAoVivo(ativo: boolean, aoChegarBoletim?: () => void) {
   const [situacao, setSituacao] = useState<SituacaoAoVivo | null>(null);
   const [coletando, setColetando] = useState(false);
+  /** Por que a coleta falhou: migration pendente, TSE recusando... */
+  const [erro, setErro] = useState<string | null>(null);
   const aviso = useRef(aoChegarBoletim);
 
   useEffect(() => {
@@ -47,9 +49,12 @@ export function useVotacaoAoVivo(ativo: boolean, aoChegarBoletim?: () => void) {
         .then((s) => {
           if (!vivo) return;
           setSituacao(s);
+          setErro(null);
           if ((s.novas ?? 0) > 0) aviso.current?.();
         })
-        .catch(() => undefined)
+        .catch((e: unknown) => {
+          if (vivo) setErro(e instanceof Error ? e.message : 'Não foi possível buscar os boletins.');
+        })
         .finally(() => vivo && setColetando(false));
     };
 
@@ -62,7 +67,8 @@ export function useVotacaoAoVivo(ativo: boolean, aoChegarBoletim?: () => void) {
     };
   }, [ativo]);
 
-  return { situacao, coletando };
+  // O erro da propria coleta, ou o que o servidor guardou da ultima.
+  return { situacao, coletando, erro: erro ?? situacao?.ultimoErro ?? null };
 }
 
 /** "1.234 de 7.000 seções (18%) · atualizado às 19:42". */
