@@ -17,7 +17,7 @@ export interface SituacaoAoVivo {
 }
 
 /** De quanto em quanto tempo a tela pede uma coleta nova. */
-const A_CADA_MS = 60_000;
+const A_CADA_MS = 30_000;
 
 /**
  * Mantem a votacao ao vivo andando enquanto a tela estiver aberta.

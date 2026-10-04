@@ -785,6 +785,8 @@ export interface ElectionVotesRow {
   name: string;
   kind: 'CANDIDATO' | 'LEGENDA' | 'BRANCO' | 'NULO';
   total_votes: number;
+  /** Total oficial do TSE no estado, na apuracao ao vivo (migration 056). */
+  official_votes: number | null;
   /** [[zona, secao, votos], ...] */
   sections: [number, number, number][];
   updated_at: string;

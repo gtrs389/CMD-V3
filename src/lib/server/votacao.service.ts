@@ -60,7 +60,7 @@ export async function gravarCandidatos(candidatos: VotacaoDoCandidato[]): Promis
   );
 }
 
-const RESUMO = 'id,year,round,uf,office_code,office,number,name,kind,total_votes';
+const RESUMO = 'id,year,round,uf,office_code,office,number,name,kind,total_votes,official_votes';
 
 function candidato(row: Omit<ElectionVotesRow, 'sections' | 'updated_at'>): CandidatoDaVotacao {
   return {
@@ -74,6 +74,7 @@ function candidato(row: Omit<ElectionVotesRow, 'sections' | 'updated_at'>): Cand
     nome: row.name,
     tipo: row.kind,
     total: row.total_votes,
+    totalOficial: row.official_votes ?? null,
   };
 }
 

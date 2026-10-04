@@ -8,6 +8,7 @@ import {
   filtrarCandidatos,
   indiceDeColunas,
   rotuloDoCandidato,
+  textoDosTotais,
   separadorDe,
   tipoDoVoto,
   type LocalDoTse,
@@ -140,7 +141,7 @@ describe('as escolas de um candidato', () => {
 
 describe('o seletor de candidato', () => {
   const c = (id: string, nome: string, numero: string, cargoCodigo: number, cargo: string, total: number, turno = 1, tipo: 'CANDIDATO' | 'LEGENDA' = 'CANDIDATO') =>
-    ({ id, ano: 2026, turno, uf: 'AL', cargoCodigo, cargo, numero, nome, tipo, total });
+    ({ id, ano: 2026, turno, uf: 'AL', cargoCodigo, cargo, numero, nome, tipo, total, totalOficial: null });
   const LISTA = [
     c('1', 'JOSÉ DA CONCEIÇÃO', '15123', 7, 'Deputado Estadual', 300),
     c('2', 'MARIA LIMA', '13456', 7, 'Deputado Estadual', 900),
@@ -164,5 +165,15 @@ describe('o seletor de candidato', () => {
       { codigo: 3, nome: 'Governador' },
       { codigo: 7, nome: 'Deputado Estadual' },
     ]);
+  });
+});
+
+describe('os dois totais do candidato', () => {
+  it('mostra o contado nas seções e o total oficial do TSE, sem esconder a diferença', () => {
+    expect(textoDosTotais({ total: 1234, totalOficial: 5678 })).toBe(
+      '1.234 votos contados nas seções · 5.678 no total do TSE (21% já no mapa)',
+    );
+    expect(textoDosTotais({ total: 5678, totalOficial: 5678 })).toBe('5.678 votos (todos já no mapa)');
+    expect(textoDosTotais({ total: 300, totalOficial: null })).toBe('300 votos');
   });
 });

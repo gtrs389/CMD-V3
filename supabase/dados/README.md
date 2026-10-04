@@ -138,8 +138,9 @@ local não tem coordenada entra no PDF, mas não vira pino.
 Não precisa enviar nada: o próprio sistema busca no TSE o **boletim de urna**
 de cada seção assim que ele é publicado, e o mapa se atualiza sozinho.
 
-1. Rode a migration `055_votacao_ao_vivo.sql` no SQL Editor do Supabase
-   (depois da `054`).
+1. Rode as migrations `055_votacao_ao_vivo.sql` e
+   `056_votacao_ao_vivo_rapida.sql` no SQL Editor do Supabase (depois da
+   `054`).
 2. Abra o mapa e clique em **Votação 2026 (TSE)**. Enquanto a janela ou um
    candidato estiver na tela, o sistema busca boletins novos a cada minuto e
    mostra quantas seções já chegaram.
@@ -161,3 +162,15 @@ O TSE bloqueia por cerca de 10 minutos quem consulta demais. Por isso a
 coleta faz no máximo 3 consultas ao mesmo tempo, uma coleta por vez em todo
 o sistema, espera alguns minutos antes de consultar de novo uma seção sem
 boletim e pausa sozinha por 11 minutos se o TSE recusar várias seguidas.
+
+### Por que o mapa fica um pouco atrás dos painéis de apuração
+
+Os painéis de apuração (TSE, imprensa) mostram o **total do estado**, que o
+TSE soma assim que recebe cada urna. O boletim de cada seção, que é o que dá
+escola, zona e seção, é publicado **um pouco depois** dessa soma. Por isso,
+durante a apuração, o mapa mostra dois números: os votos já contados seção a
+seção e o total oficial do TSE no estado. A diferença some quando os
+boletins terminam de ser publicados.
+
+A coleta relê a lista de seções a cada 2 minutos: ela diz quais boletins já
+chegaram, e só esses são buscados.

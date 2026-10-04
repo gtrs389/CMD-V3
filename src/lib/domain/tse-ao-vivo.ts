@@ -54,6 +54,11 @@ export interface SecaoDaApuracao {
   municipio: string;
   zona: string;
   secao: string;
+  /**
+   * Quando o boletim chegou ao TSE ("04/10/2026 17:31:26"), pela propria
+   * lista de secoes. Nulo: ainda nao chegou — nao adianta consultar.
+   */
+  chegada?: string | null;
 }
 
 export function urlDaListaDeSecoes(c: ConfiguracaoDaApuracao, uf: string): string {
@@ -88,16 +93,27 @@ type Json = Record<string, unknown>;
 const lista = (v: unknown): Json[] => (Array.isArray(v) ? (v as Json[]) : []);
 const texto = (v: unknown): string => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
 
-/** Todas as secoes da UF, como a lista do TSE traz (abr -> mu -> zon -> sec). */
+/**
+ * Todas as secoes da UF, como a lista do TSE traz (abr -> mu -> zon -> sec),
+ * com o sinal de chegada do boletim (da/ha).
+ *
+ * Secao AGREGADA (listada em `nsa` de outra) fica de fora: os eleitores dela
+ * votam na urna da principal, e boletim proprio nunca vai existir —
+ * consulta-la seria so acumular 404 no TSE.
+ */
 export function secoesDaLista(json: unknown): SecaoDaApuracao[] {
   const secoes: SecaoDaApuracao[] = [];
   for (const abrangencia of lista((json as Json)?.abr)) {
     for (const municipio of lista(abrangencia.mu)) {
       for (const zona of lista(municipio.zon)) {
+        const agregadas = new Set(
+          lista(zona.sec).flatMap((s) => (Array.isArray(s.nsa) ? (s.nsa as unknown[]).map((n) => Number(texto(n))) : [])),
+        );
         for (const secao of lista(zona.sec)) {
           const ns = texto(secao.ns);
-          if (!texto(municipio.cd) || !texto(zona.cd) || !ns) continue;
-          secoes.push({ municipio: texto(municipio.cd), zona: texto(zona.cd), secao: ns });
+          if (!texto(municipio.cd) || !texto(zona.cd) || !ns || agregadas.has(Number(ns))) continue;
+          const chegada = `${texto(secao.da)} ${texto(secao.ha)}`.trim() || null;
+          secoes.push({ municipio: texto(municipio.cd), zona: texto(zona.cd), secao: ns, chegada });
         }
       }
     }
@@ -144,6 +160,17 @@ export interface NomeNaApuracao {
   nome: string;
   partido: string | null;
   tipo: 'CANDIDATO' | 'LEGENDA';
+  /**
+   * Total oficial no estado, como o TSE divulga (vap): o numero que os
+   * paineis de apuracao mostram. Nulo quando o arquivo nao traz.
+   */
+  votosOficiais: number | null;
+}
+
+/** "1.234", "1234" ou 1234 -> 1234. Vazio ou estranho -> nulo. */
+function votos(v: unknown): number | null {
+  const digitos = texto(v).replace(/\D/g, '');
+  return digitos ? Number(digitos) : null;
 }
 
 /**
@@ -158,13 +185,20 @@ export function nomesDoCargo(json: unknown, cargo: number): NomeNaApuracao[] {
         const sigla = texto(partido.sg) || null;
         const numeroDoPartido = texto(partido.n);
         if (PROPORCIONAIS.has(cargo) && numeroDoPartido && sigla) {
-          nomes.set(numeroDoPartido, { cargo, numero: numeroDoPartido, nome: sigla, partido: sigla, tipo: 'LEGENDA' });
+          nomes.set(numeroDoPartido, {
+            cargo,
+            numero: numeroDoPartido,
+            nome: sigla,
+            partido: sigla,
+            tipo: 'LEGENDA',
+            votosOficiais: votos(partido.vl ?? partido.vap),
+          });
         }
         for (const candidato of lista(partido.cand)) {
           const numero = texto(candidato.n);
           const nome = texto(candidato.nmu) || texto(candidato.nm);
           if (!numero || !nome) continue;
-          nomes.set(numero, { cargo, numero, nome, partido: sigla, tipo: 'CANDIDATO' });
+          nomes.set(numero, { cargo, numero, nome, partido: sigla, tipo: 'CANDIDATO', votosOficiais: votos(candidato.vap) });
         }
       }
     }

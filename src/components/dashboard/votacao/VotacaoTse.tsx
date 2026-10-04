@@ -217,8 +217,16 @@ function SeletorDaVotacao({
                         {c.cargo} · {c.turno}º turno · {c.uf}
                       </span>
                     </span>
-                    <span className="shrink-0 text-sm font-bold text-brand-800 tabular-nums">
-                      {formatNumber(c.total)} <span className="text-xs font-normal text-ink-500">votos</span>
+                    <span className="shrink-0 text-right tabular-nums">
+                      <span className="block text-sm font-bold text-brand-800">
+                        {formatNumber(c.total)} <span className="text-xs font-normal text-ink-500">votos</span>
+                      </span>
+                      {/* O total oficial do TSE anda na frente durante a apuracao. */}
+                      {c.totalOficial !== null && c.totalOficial > c.total ? (
+                        <span className="block text-[0.6875rem] text-ink-500">
+                          TSE no estado: {formatNumber(c.totalOficial)}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 </li>

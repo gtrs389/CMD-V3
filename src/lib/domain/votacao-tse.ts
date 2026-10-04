@@ -384,7 +384,15 @@ export interface CandidatoDaVotacao {
   numero: string;
   nome: string;
   tipo: TipoDeVoto;
+  /** Votos contados nos boletins (ou na planilha) secao por secao. */
   total: number;
+  /**
+   * Total oficial no estado, como o TSE divulga na apuracao: e o numero que
+   * os paineis de apuracao mostram. Na apuracao ao vivo ele anda na frente,
+   * porque o boletim de cada secao e publicado um pouco depois da soma.
+   * Nulo fora da apuracao ao vivo.
+   */
+  totalOficial: number | null;
 }
 
 export interface VotacaoNoMapa {
@@ -431,4 +439,20 @@ export function cargosDaVotacao(lista: readonly CandidatoDaVotacao[]): { codigo:
   const porCodigo = new Map<number, string>();
   for (const c of lista) if (!porCodigo.has(c.cargoCodigo)) porCodigo.set(c.cargoCodigo, c.cargo);
   return [...porCodigo.entries()].sort((a, b) => a[0] - b[0]).map(([codigo, nome]) => ({ codigo, nome }));
+}
+
+/**
+ * Os dois numeros do candidato, sem esconder a diferenca:
+ * "1.234 votos contados nas seções · 5.678 no total do TSE (22% já no mapa)".
+ *
+ * Na apuracao, o TSE soma o estado antes de publicar o boletim de cada
+ * secao; o mapa so pode mostrar o que ja veio por secao. Por isso o total
+ * oficial anda na frente ate a apuracao terminar.
+ */
+export function textoDosTotais(c: Pick<CandidatoDaVotacao, 'total' | 'totalOficial'>): string {
+  const n = (v: number) => v.toLocaleString('pt-BR');
+  if (c.totalOficial === null || c.totalOficial <= 0) return `${n(c.total)} votos`;
+  if (c.total >= c.totalOficial) return `${n(c.total)} votos (todos já no mapa)`;
+  const pct = Math.floor((c.total / c.totalOficial) * 100);
+  return `${n(c.total)} votos contados nas seções · ${n(c.totalOficial)} no total do TSE (${pct}% já no mapa)`;
 }

@@ -37,14 +37,24 @@ const TABELA_NOMES = 'cmd_tse_live_candidates';
 const TABELA_ESTADO = 'cmd_tse_live_state';
 
 /** Quanto tempo uma coleta pode durar (a rota tem 60 s). */
-const PRAZO_PADRAO_MS = 25_000;
-const SIMULTANEAS = 3;
-const INTERVALO_MS = 70;
-/** Secao sem boletim: so volta a ser consultada depois disto. */
-const REVER_DEPOIS_MS = 4 * 60_000;
-/** Secoes por coleta, no maximo. */
-const POR_COLETA = 450;
-const NOMES_VALEM_MS = 30 * 60_000;
+const PRAZO_PADRAO_MS = 40_000;
+/**
+ * Ritmo: 6 consultas ao mesmo tempo, no maximo uma a cada 40 ms (~25 por
+ * segundo). O TSE bloqueia acima de ~100 por segundo, ou com muito 404 — e
+ * 404 quase nao ha, porque so se consulta secao cujo boletim ja chegou.
+ */
+const SIMULTANEAS = 6;
+const INTERVALO_MS = 40;
+/** Boletim que chegou mas ainda nao estava no auxiliar: tenta de novo logo. */
+const REVER_CHEGADA_MS = 60_000;
+/** Sem o sinal de chegada na lista (formato antigo): consulta as cegas, devagar. */
+const REVER_SEM_SINAL_MS = 4 * 60_000;
+/** Secoes por coleta, no maximo (o banco devolve ate 1000 linhas por consulta). */
+const POR_COLETA = 1000;
+/** A lista de secoes (com o sinal de chegada) e relida a cada 2 minutos. */
+const LISTA_VALE_MS = 2 * 60_000;
+/** Nomes e totais oficiais do TSE, relidos a cada 3 minutos. */
+const NOMES_VALEM_MS = 3 * 60_000;
 const PAUSA_DO_TSE_MS = 11 * 60_000;
 
 /** O turno e o estado apurados. Os codigos do 2o turno chegam por variavel de ambiente. */
@@ -77,6 +87,7 @@ export interface SituacaoAoVivo {
 
 interface EstadoRow {
   lock_until: string;
+  list_at: string | null;
   paused_until: string | null;
   names_at: string | null;
   last_run_at: string | null;
@@ -189,23 +200,40 @@ export async function coletarAoVivo(prazoMs = PRAZO_PADRAO_MS): Promise<Situacao
   const fim = Date.now() + prazoMs;
   const baixar = freio();
   let novas = 0;
+  let nomesNovos = false;
   let erro: string | null = null;
   const atual = await estado(c);
   let total = atual?.sections_total ?? 0;
   let feitas = atual?.sections_done ?? 0;
 
   try {
-    // 1. A lista de secoes da UF: uma vez so.
-    if (total === 0) {
+    // 1. A lista de secoes da UF, relida a cada 2 minutos: e ela que diz
+    //    quais boletins ja chegaram (da/ha). Assim a coleta vai direto nas
+    //    secoes certas, em vez de perguntar por todas.
+    let comSinal: boolean | null = null;
+    if (total === 0 || !atual?.list_at || Date.now() - new Date(atual.list_at).getTime() > LISTA_VALE_MS) {
       const r = await baixar(urlDaListaDeSecoes(c, c.uf));
-      if (r.status !== 200) throw new Error(motivoDaRecusa(r.status));
-      const secoes = secoesDaLista(json(r.corpo));
-      await upsertRows(
-        TABELA_SECOES,
-        secoes.map((s) => ({ ...chave, city_code: Number(s.municipio), zone: Number(s.zona), section: Number(s.secao) })),
-        'pleito,uf,zone,section',
-      );
-      total = secoes.length;
+      if (r.status !== 200) {
+        if (total === 0) throw new Error(motivoDaRecusa(r.status));
+      } else {
+        const secoes = secoesDaLista(json(r.corpo));
+        comSinal = secoes.some((s) => s.chegada);
+        // Na primeira vez entram todas; depois, so as que ganharam sinal.
+        const novasNaLista = total === 0 ? secoes : secoes.filter((s) => s.chegada);
+        await upsertRows(
+          TABELA_SECOES,
+          novasNaLista.map((s) => ({
+            ...chave,
+            city_code: Number(s.municipio),
+            zone: Number(s.zona),
+            section: Number(s.secao),
+            arrived_at: s.chegada?.slice(0, 40) ?? null,
+          })),
+          'pleito,uf,zone,section',
+        );
+        total = secoes.length;
+        await updateRows(TABELA_ESTADO, filtro, { list_at: new Date().toISOString() });
+      }
     }
 
     // 2. Os nomes dos candidatos, renovados de tempos em tempos.
@@ -223,18 +251,34 @@ export async function coletarAoVivo(prazoMs = PRAZO_PADRAO_MS): Promise<Situacao
             name: n.nome.slice(0, 200),
             party: n.partido?.slice(0, 40) ?? null,
             kind: n.tipo,
+            official_votes: n.votosOficiais,
           })),
           'pleito,uf,office_code,number',
         );
       }
       await updateRows(TABELA_ESTADO, filtro, { names_at: new Date().toISOString() });
+      nomesNovos = true;
     }
 
-    // 3. A fila: secoes sem boletim, da consultada ha mais tempo.
-    const antes = new Date(Date.now() - REVER_DEPOIS_MS).toISOString();
+    // 3. A fila: secoes sem boletim. Com o sinal de chegada, so as que ja
+    //    chegaram; sem ele (formato antigo da lista), todas, devagar.
+    if (comSinal === null) {
+      const algum = await selectRows<{ section: number }>(TABELA_SECOES, {
+        select: 'section',
+        filters: { ...filtro, arrived_at: 'not.is.null' },
+        limit: 1,
+      });
+      comSinal = algum.length > 0;
+    }
+    const antes = new Date(Date.now() - (comSinal ? REVER_CHEGADA_MS : REVER_SEM_SINAL_MS)).toISOString();
     const fila = await selectRows<SecaoRow>(TABELA_SECOES, {
       select: 'city_code,zone,section',
-      filters: { ...filtro, votes: 'is.null', or: `(checked_at.is.null,checked_at.lt."${antes}")` },
+      filters: {
+        ...filtro,
+        votes: 'is.null',
+        ...(comSinal ? { arrived_at: 'not.is.null' } : {}),
+        or: `(checked_at.is.null,checked_at.lt."${antes}")`,
+      },
       order: 'checked_at.asc.nullsfirst',
       limit: POR_COLETA,
     });
@@ -296,8 +340,8 @@ export async function coletarAoVivo(prazoMs = PRAZO_PADRAO_MS): Promise<Situacao
     await Promise.all(Array.from({ length: SIMULTANEAS }, trabalhar));
     await gravar();
 
-    // 4. O que chegou vira a votacao que o mapa le.
-    if (novas > 0) {
+    // 4. O que chegou (e os totais oficiais novos) vira a votacao que o mapa le.
+    if (novas > 0 || nomesNovos) {
       await callFunction<number>('cmd_tse_live_consolidate', {
         p_pleito: c.pleito,
         p_uf: c.uf,
