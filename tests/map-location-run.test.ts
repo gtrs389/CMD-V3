@@ -670,6 +670,21 @@ describe('mapa agrupado por local de votação', () => {
     expect(serializado).not.toMatch(/cpf|nomeMae|situacaoCadastral|renda|device/i);
   });
 
+  it('"Ver pessoas" diz quem é Líder e quem é o Líder de quem é da Equipe', async () => {
+    await montarLocal();
+    Object.assign(db.members.p1, { recruited_by_role: 'ADMIN', recruited_by_user_id: 'u-adm', recruited_by_name: 'Adm' });
+    Object.assign(db.members.p2, { recruited_by_role: 'EQUIPE', recruited_by_user_id: 'u-joao', recruited_by_name: ' João Pedro ' });
+    const { pollingPlaces } = await mapOverview();
+
+    const lista = await placeMembers(pollingPlaces[0].locationId);
+    const de = (nome: string) => lista.items.find((item) => item.name === nome);
+
+    expect(de('Ana Souza')).toMatchObject({ tier: 'LIDER', lider: null });
+    expect(de('Bruno Lima')).toMatchObject({ tier: 'EQUIPE', lider: 'João Pedro' });
+    // Cadastro antigo, sem origem: e Lider, pela regra de sempre.
+    expect(de('Cris Melo')).toMatchObject({ tier: 'LIDER', lider: null });
+  });
+
   it('a busca por nome filtra a lista no servidor', async () => {
     await montarLocal();
     const { pollingPlaces } = await mapOverview();

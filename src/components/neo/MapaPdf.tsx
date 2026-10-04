@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
 import { appConfig } from '@/config/app.config';
 import type { Member } from '@/lib/types';
@@ -8,6 +8,7 @@ import { recruiterText } from '@/lib/domain/recruitment';
 import type {
   LiderNoRanking,
   LinhaContada,
+  PessoasPorEscola,
   RankingDeLideres,
   RankingDeVotos,
 } from '@/lib/domain/votos-por-lideranca';
@@ -506,6 +507,97 @@ export function PdfDoRankingDeVotos({ ranking, filtro }: PdfDoRankingDeVotosProp
 
 export async function gerarPdfDoRankingDeVotos(props: PdfDoRankingDeVotosProps): Promise<Blob> {
   return pdf(<PdfDoRankingDeVotos {...props} />).toBlob();
+}
+
+/* -------------------------------------------------------------------------
+   Quem vota em cada local: a pessoa, a zona, a secao e o Lider
+   ------------------------------------------------------------------------- */
+
+export interface PdfDasPessoasPorEscolaProps {
+  lista: PessoasPorEscola;
+  /** O recorte do mapa, em palavras. Vazio: tudo. */
+  filtro: string | null;
+  geradoEm: string;
+}
+
+export function PdfDasPessoasPorEscola({ lista, filtro }: PdfDasPessoasPorEscolaProps) {
+  const { escolas, totalDePessoas, lideres } = lista;
+  const comGente = escolas.filter((e) => e.pessoas.length > 0);
+  return (
+    <Document title="Quem vota em cada local" author={s(appConfig.name)} language="pt-BR">
+      <Page size="A4" style={st.page}>
+        <Cabecalho esquerda="Quem vota em cada local" direita={appConfig.shortName} />
+        <Rodape texto={AVISO} />
+
+        <Titulo
+          kicker="LOCAIS DE VOTAÇÃO · PESSOAS"
+          titulo="Quem vota em cada local"
+          sub={filtro ? `Recorte do mapa: ${filtro}` : 'Todos os locais do mapa'}
+        />
+
+        <LinhaDeKpis>
+          <Kpi valor={num(totalDePessoas)} rotulo={totalDePessoas === 1 ? 'pessoa' : 'pessoas'} tom={C.navy} />
+          <Kpi valor={num(comGente.length)} rotulo={comGente.length === 1 ? 'local de votação' : 'locais de votação'} tom={C.blue} />
+          <Kpi valor={num(lideres)} rotulo={lideres === 1 ? 'líder com equipe aqui' : 'líderes com equipe aqui'} tom={C.gold} />
+        </LinhaDeKpis>
+
+        <ComoLer texto="cada local traz quem vota nele, em ordem de zona e seção, e o Líder de cada pessoa. Quem é Líder aparece marcado como Líder." />
+
+        {comGente.length === 0 ? (
+          <Text style={{ fontSize: 8.5, color: C.faint }}>{s('Ninguém listado nos locais deste recorte.')}</Text>
+        ) : null}
+
+        {comGente.map(({ escola, pessoas: gente }, i) => {
+          const municipio = [escola.place.city, escola.place.state].filter(Boolean).join('/');
+          return (
+            // Titulo e tabela direto na pagina, sem um View em volta: o
+            // minPresenceAhead so quebra a pagina quando ha algo antes dele.
+            <Fragment key={escola.place.locationId}>
+              {/* O nome do local nunca fica sozinho no pe da pagina. */}
+              <View
+                wrap={false}
+                minPresenceAhead={80}
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navy, borderRadius: 4, paddingVertical: 6, paddingHorizontal: 8, marginTop: i === 0 ? 4 : 14, marginBottom: 4 }}
+              >
+                <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: MEDALHA[escola.posicao - 1] ?? C.navy3, justifyContent: 'center', alignItems: 'center', marginRight: 7 }}>
+                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{escola.posicao}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>{s(escola.place.title ?? 'Local de votação')}</Text>
+                  {municipio ? <Text style={{ fontSize: 7, color: C.navy3, marginTop: 1 }}>{s(municipio)}</Text> : null}
+                </View>
+                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: MEDALHA[0] }}>{s(pessoas(gente.length))}</Text>
+              </View>
+              <Tabela
+                linhas={gente}
+                chave={(p) => p.id}
+                colunas={[
+                  { titulo: '#', largura: '6%', celula: (_p, j) => String(j + 1) },
+                  { titulo: 'Pessoa', largura: '42%', celula: (p) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(p.nome)}</Text> },
+                  { titulo: 'Zona', largura: '9%', alinhar: 'center', celula: (p) => p.zona ?? '—' },
+                  { titulo: 'Seção', largura: '9%', alinhar: 'center', celula: (p) => p.secao ?? '—' },
+                  {
+                    titulo: 'Líder',
+                    largura: '34%',
+                    celula: (p) =>
+                      p.ehLider ? (
+                        <Chip texto="É Líder" cor={C.gold} fundo={C.goldSoft} />
+                      ) : (
+                        <Text style={{ color: p.lider ? C.ink : C.faint }}>{s(p.lider ?? 'Sem líder informado')}</Text>
+                      ),
+                  },
+                ]}
+              />
+            </Fragment>
+          );
+        })}
+      </Page>
+    </Document>
+  );
+}
+
+export async function gerarPdfDasPessoasPorEscola(props: PdfDasPessoasPorEscolaProps): Promise<Blob> {
+  return pdf(<PdfDasPessoasPorEscola {...props} />).toBlob();
 }
 
 /* -------------------------------------------------------------------------

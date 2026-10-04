@@ -202,6 +202,10 @@ export interface PlaceMember {
   section: string | null;
   /** "Fulano · Líder": quem cadastrou, ja no texto da tela. */
   cadastradoPor: string | null;
+  /** Lider ou Equipe, pela regra de sempre: sai de quem cadastrou. */
+  tier: 'LIDER' | 'EQUIPE';
+  /** Nome do Lider de quem e da Equipe. Nulo no proprio Lider. */
+  lider: string | null;
 }
 
 export interface PlaceMembersPayload {

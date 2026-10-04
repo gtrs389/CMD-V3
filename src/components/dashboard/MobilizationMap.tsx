@@ -18,7 +18,7 @@ import { MapRanking } from './MapRanking';
 import { MemberSheetPanel } from './MemberSheetPanel';
 import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { MapaCarregando } from './MapaCarregando';
-import { baixarPdfDaEscola, baixarPdfDoRankingDeVotos } from './pdf-do-mapa';
+import { baixarPdfDaEscola, baixarPdfDasPessoasPorEscola, baixarPdfDoRankingDeVotos } from './pdf-do-mapa';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
@@ -241,6 +241,9 @@ export function MobilizationMap({
       activeId={focusPlace?.locationId ?? null}
       onFocus={focar}
       onDownload={() => baixarPdfDoRankingDeVotos(selection.places, query, clientName ?? 'Mapa da mobilização')}
+      onDownloadPeople={() =>
+        baixarPdfDasPessoasPorEscola(selection.places, query, clientName ?? 'Mapa da mobilização', clientId)
+      }
       // A altura vem de quem envolve (o flex estica o filho); a largura
       // precisa ser pedida, porque em linha o flex nao estica na horizontal.
       className="w-full"

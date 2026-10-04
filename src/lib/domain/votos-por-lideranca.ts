@@ -1,5 +1,5 @@
 import type { Member } from '@/lib/types';
-import type { PollingPlacePin, SectionVotes } from './map-pin';
+import type { PlaceMember, PollingPlacePin, SectionVotes } from './map-pin';
 import { sectionKey, sectionVotes } from './map-pin';
 import { rankPlaces } from './map-filters';
 import { contandoUmaVez } from './inconsistencias';
@@ -245,5 +245,78 @@ export function rankingDeLideres(
     })),
     totalDeLiderados,
     comEquipe: ordenadas.filter((l) => l.equipe > 0).length,
+  };
+}
+
+/* -------------------------------------------------------------------------
+   Quem vota em cada escola: a pessoa, a zona, a secao e o Lider dela
+   ------------------------------------------------------------------------- */
+
+export interface PessoaNaEscola {
+  id: string;
+  nome: string;
+  zona: string | null;
+  secao: string | null;
+  /** O Lider de quem e da Equipe. Nulo no proprio Lider ou sem origem. */
+  lider: string | null;
+  ehLider: boolean;
+}
+
+export interface EscolaComPessoas {
+  escola: EscolaNoRanking;
+  pessoas: PessoaNaEscola[];
+}
+
+export interface PessoasPorEscola {
+  escolas: EscolaComPessoas[];
+  totalDePessoas: number;
+  /** Lideres diferentes com alguem da Equipe na lista. */
+  lideres: number;
+}
+
+const secaoLimpa = (secao: string | null | undefined) => (secao ?? '').trim().replace(/^0+(?=\d)/, '');
+
+/**
+ * As pessoas de cada escola do ranking, na ordem do ranking.
+ *
+ * Com zona escolhida, so quem vota nela entra: e o mesmo recorte do
+ * ranking. Dentro da escola, a lista segue zona, secao e nome — e assim que
+ * a campanha divide o trabalho no dia, secao por secao.
+ */
+export function pessoasPorEscola(
+  ranking: RankingDeVotos,
+  pessoasDoLocal: ReadonlyMap<string, readonly PlaceMember[]>,
+  zona: string | null = null,
+): PessoasPorEscola {
+  const alvo = zona ? zonaLimpa(zona) : null;
+  const porNumero = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true });
+
+  const escolas = ranking.escolas.map((escola) => {
+    const pessoas = (pessoasDoLocal.get(escola.place.locationId) ?? [])
+      .filter((p) => !alvo || zonaLimpa(p.zone) === alvo)
+      .map((p) => ({
+        id: p.memberId,
+        nome: p.name,
+        zona: zonaLimpa(p.zone) || null,
+        secao: secaoLimpa(p.section) || null,
+        lider: p.tier === 'EQUIPE' ? p.lider : null,
+        ehLider: p.tier === 'LIDER',
+      }))
+      .sort(
+        (a, b) =>
+          // Sem zona/secao vai para o fim: e o resto, nao uma secao.
+          Number(!a.zona && !a.secao) - Number(!b.zona && !b.secao) ||
+          porNumero(a.zona ?? '', b.zona ?? '') ||
+          porNumero(a.secao ?? '', b.secao ?? '') ||
+          a.nome.localeCompare(b.nome, 'pt-BR'),
+      );
+    return { escola, pessoas };
+  });
+
+  const todas = escolas.flatMap((e) => e.pessoas);
+  return {
+    escolas,
+    totalDePessoas: todas.length,
+    lideres: new Set(todas.map((p) => p.lider).filter(Boolean)).size,
   };
 }
