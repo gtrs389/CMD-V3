@@ -8,6 +8,7 @@ const atualizadas: { tabela: string; valores: Record<string, unknown> }[] = [];
 let travaLivre = true;
 let estado: Record<string, unknown> | null = null;
 let fila: Record<string, unknown>[] = [];
+const consultas: Record<string, string>[] = [];
 
 vi.mock('@/lib/supabase/rest', () => ({
   callFunction: vi.fn(async (fn: string, args: Record<string, unknown>) => {
@@ -15,7 +16,10 @@ vi.mock('@/lib/supabase/rest', () => ({
     return fn === 'cmd_tse_live_lock' ? travaLivre : 1;
   }),
   selectOne: vi.fn(async () => estado),
-  selectRows: vi.fn(async () => fila),
+  selectRows: vi.fn(async (_t: string, opcoes: { filters?: Record<string, string> }) => {
+    consultas.push(opcoes.filters ?? {});
+    return fila;
+  }),
   upsertRows: vi.fn(async (tabela: string, linhas: Record<string, unknown>[]) => {
     gravadas.push({ tabela, linhas });
   }),
@@ -52,6 +56,7 @@ beforeEach(() => {
   gravadas.length = 0;
   atualizadas.length = 0;
   pedidos.length = 0;
+  consultas.length = 0;
   travaLivre = true;
   estado = { sections_total: 0, sections_done: 0, names_at: null, last_run_at: null, paused_until: null };
   fila = [
@@ -65,7 +70,12 @@ describe('coleta ao vivo dos boletins de urna', () => {
     const dir = `${BASE}/arquivo-urna/3220/dados/al/01120/0008`;
     tse({
       [`${BASE}/arquivo-urna/3220/config/al/al-p003220-cs.json`]: {
-        abr: [{ cd: 'AL', mu: [{ cd: '01120', zon: [{ cd: '0008', sec: [{ ns: '0001' }, { ns: '0002' }] }] }] }],
+        abr: [
+          {
+            cd: 'AL',
+            mu: [{ cd: '01120', zon: [{ cd: '0008', sec: [{ ns: '0001', da: '04/10/2026', ha: '17:31:26' }, { ns: '0002' }] }] }],
+          },
+        ],
       },
       [`${BASE}/6259/dados/al/al-c0007-e006259-u.json`]: {
         carg: [{ agr: [{ par: [{ n: '91', sg: 'P91', cand: [{ n: '91002', nmu: 'CANDIDATO 91002' }] }] }] }],
@@ -84,9 +94,11 @@ describe('coleta ao vivo dos boletins de urna', () => {
     // A lista de secoes entrou no banco.
     const secoes = gravadas.find((g) => g.tabela === 'cmd_tse_live_sections' && g.linhas.length === 2 && !('checked_at' in g.linhas[0]));
     expect(secoes?.linhas).toEqual([
-      { pleito: 3220, uf: 'AL', city_code: 1120, zone: 8, section: 1 },
-      { pleito: 3220, uf: 'AL', city_code: 1120, zone: 8, section: 2 },
+      { pleito: 3220, uf: 'AL', city_code: 1120, zone: 8, section: 1, arrived_at: '04/10/2026 17:31:26' },
+      { pleito: 3220, uf: 'AL', city_code: 1120, zone: 8, section: 2, arrived_at: null },
     ]);
+    // Com o sinal de chegada na lista, a fila so pega quem ja chegou.
+    expect(consultas.at(-1)).toMatchObject({ votes: 'is.null', arrived_at: 'not.is.null' });
     // Os nomes.
     const nomes = gravadas.filter((g) => g.tabela === 'cmd_tse_live_candidates').flatMap((g) => g.linhas);
     expect(nomes).toContainEqual(expect.objectContaining({ office_code: 7, number: '91002', name: 'CANDIDATO 91002', kind: 'CANDIDATO' }));

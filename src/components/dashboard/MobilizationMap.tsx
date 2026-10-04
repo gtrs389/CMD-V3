@@ -12,7 +12,7 @@ import {
   type MapQuery,
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
-import { rotuloDoCandidato, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
+import { rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
 import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
@@ -453,7 +453,7 @@ export function MobilizationMap({
               ? 'Não foi possível carregar a votação deste candidato.'
               : votacao === null
                 ? 'Carregando a votação…'
-                : `${rotuloDoCandidato(candidato)} · ${formatNumber(votacao.candidato.total)} votos até agora no estado. O mapa mostra os votos dele por escola, zona e seção.`}
+                : `${rotuloDoCandidato(candidato)} · ${textoDosTotais(votacao.candidato)}. O mapa mostra os votos dele por escola, zona e seção.`}
           </p>
           <AndamentoAoVivo
             className="mb-0"

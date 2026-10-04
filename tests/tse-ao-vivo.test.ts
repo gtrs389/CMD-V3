@@ -32,22 +32,34 @@ describe('arquivos da apuração do TSE', () => {
     );
   });
 
-  it('lê a lista de seções da UF', () => {
+  it('lê a lista de seções da UF, com o sinal de chegada do boletim; agregada fica de fora', () => {
     const json = {
       abr: [
         {
           cd: 'AL',
           mu: [
-            { cd: '27855', zon: [{ cd: '0010', sec: [{ ns: '0096' }, { ns: '0097', nsa: ['0099'] }] }] },
+            {
+              cd: '27855',
+              zon: [
+                {
+                  cd: '0010',
+                  sec: [
+                    { ns: '0096', da: '04/10/2026', ha: '17:31:26' },
+                    { ns: '0097', nsa: ['0099'] },
+                    { ns: '0099' },
+                  ],
+                },
+              ],
+            },
             { cd: '27030', zon: [{ cd: '0028', sec: [{ ns: '0010' }] }] },
           ],
         },
       ],
     };
     expect(secoesDaLista(json)).toEqual([
-      { municipio: '27855', zona: '0010', secao: '0096' },
-      { municipio: '27855', zona: '0010', secao: '0097' },
-      { municipio: '27030', zona: '0028', secao: '0010' },
+      { municipio: '27855', zona: '0010', secao: '0096', chegada: '04/10/2026 17:31:26' },
+      { municipio: '27855', zona: '0010', secao: '0097', chegada: null },
+      { municipio: '27030', zona: '0028', secao: '0010', chegada: null },
     ]);
     expect(secoesDaLista(null)).toEqual([]);
   });
@@ -79,7 +91,7 @@ describe('arquivos da apuração do TSE', () => {
           agr: [
             {
               par: [
-                { n: '15', sg: 'MDB', cand: [{ n: '15123', nmu: 'FULANO DE TAL' }] },
+                { n: '15', sg: 'MDB', cand: [{ n: '15123', nmu: 'FULANO DE TAL', vap: '12345' }] },
                 { n: '13', sg: 'PT', cand: [{ n: '13456', nmu: 'MARIA LIMA' }] },
               ],
             },
@@ -88,13 +100,15 @@ describe('arquivos da apuração do TSE', () => {
       ],
     };
     expect(nomesDoCargo(json, 7)).toEqual([
-      { cargo: 7, numero: '15', nome: 'MDB', partido: 'MDB', tipo: 'LEGENDA' },
-      { cargo: 7, numero: '15123', nome: 'FULANO DE TAL', partido: 'MDB', tipo: 'CANDIDATO' },
-      { cargo: 7, numero: '13', nome: 'PT', partido: 'PT', tipo: 'LEGENDA' },
-      { cargo: 7, numero: '13456', nome: 'MARIA LIMA', partido: 'PT', tipo: 'CANDIDATO' },
+      { cargo: 7, numero: '15', nome: 'MDB', partido: 'MDB', tipo: 'LEGENDA', votosOficiais: null },
+      { cargo: 7, numero: '15123', nome: 'FULANO DE TAL', partido: 'MDB', tipo: 'CANDIDATO', votosOficiais: 12345 },
+      { cargo: 7, numero: '13', nome: 'PT', partido: 'PT', tipo: 'LEGENDA', votosOficiais: null },
+      { cargo: 7, numero: '13456', nome: 'MARIA LIMA', partido: 'PT', tipo: 'CANDIDATO', votosOficiais: null },
     ]);
     // Governador: "13" e o candidato, nao a legenda.
     const gov = { carg: [{ agr: [{ par: [{ n: '13', sg: 'PT', cand: [{ n: '13', nmu: 'FULANA' }] }] }] }] };
-    expect(nomesDoCargo(gov, 3)).toEqual([{ cargo: 3, numero: '13', nome: 'FULANA', partido: 'PT', tipo: 'CANDIDATO' }]);
+    expect(nomesDoCargo(gov, 3)).toEqual([
+      { cargo: 3, numero: '13', nome: 'FULANA', partido: 'PT', tipo: 'CANDIDATO', votosOficiais: null },
+    ]);
   });
 });
