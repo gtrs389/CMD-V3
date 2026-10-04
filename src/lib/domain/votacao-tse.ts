@@ -417,21 +417,42 @@ const paraBusca = (texto: string) =>
     .trim();
 
 /**
+ * Chave do favorito: ano, estado, cargo e numero — sem o turno, para quem
+ * foi favorito no 1o turno continuar favorito no 2o.
+ */
+export function chaveDoFavorito(c: Pick<CandidatoDaVotacao, 'ano' | 'uf' | 'cargoCodigo' | 'numero'>): string {
+  return `${c.ano}:${c.uf}:${c.cargoCodigo}:${c.numero}`;
+}
+
+/**
  * O que o seletor mostra: turno e cargo escolhidos, busca por nome ou
- * numero, do mais votado para o menos votado. Legenda, branco e nulo so
- * entram quando pedidos — quem procura "quem eu quiser" procura gente.
+ * numero; os favoritos primeiro, depois do mais votado para o menos votado.
+ * Legenda, branco e nulo so entram quando pedidos — quem procura "quem eu
+ * quiser" procura gente.
  */
 export function filtrarCandidatos(
   lista: readonly CandidatoDaVotacao[],
-  filtro: { turno: number | null; cargoCodigo: number | null; busca: string; todos?: boolean },
+  filtro: {
+    turno: number | null;
+    cargoCodigo: number | null;
+    busca: string;
+    todos?: boolean;
+    favoritos?: ReadonlySet<string>;
+    soFavoritos?: boolean;
+  },
 ): CandidatoDaVotacao[] {
   const busca = paraBusca(filtro.busca);
+  const favorito = (c: CandidatoDaVotacao) => Boolean(filtro.favoritos?.has(chaveDoFavorito(c)));
   return lista
-    .filter((c) => (filtro.todos ? true : c.tipo === 'CANDIDATO'))
+    .filter((c) => (filtro.soFavoritos ? favorito(c) : true))
+    .filter((c) => (filtro.todos || filtro.soFavoritos ? true : c.tipo === 'CANDIDATO'))
     .filter((c) => filtro.turno === null || c.turno === filtro.turno)
     .filter((c) => filtro.cargoCodigo === null || c.cargoCodigo === filtro.cargoCodigo)
     .filter((c) => !busca || paraBusca(c.nome).includes(busca) || c.numero.startsWith(busca))
-    .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'));
+    .sort(
+      (a, b) =>
+        Number(favorito(b)) - Number(favorito(a)) || b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'),
+    );
 }
 
 /** Os cargos que vieram na planilha, na ordem do TSE. */

@@ -603,7 +603,9 @@ export default function MapCanvas({
       // proprio mapa (tela cheia, filtros, ranking). Embaixo a direita ele
       // ainda fica na altura do polegar no celular.
       zoomControl={false}
-      className="h-full w-full"
+      // `isolate`: as camadas do Leaflet (z 400 a 1000) nunca passam por
+      // cima de uma janela aberta na pagina.
+      className="isolate h-full w-full"
     >
       <ZoomControl position="bottomright" />
       <TileLayer url={TILE_URL} maxZoom={19} />

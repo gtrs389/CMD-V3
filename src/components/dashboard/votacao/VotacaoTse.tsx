@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Upload, Vote, X } from 'lucide-react';
+import { Star, Upload, Vote, X } from 'lucide-react';
 import {
   cargosDaVotacao,
+  chaveDoFavorito,
   filtrarCandidatos,
   type CandidatoDaVotacao,
 } from '@/lib/domain/votacao-tse';
@@ -98,11 +99,9 @@ function SeletorDaVotacao({
   onClose: () => void;
   onSelect: (candidato: CandidatoDaVotacao) => void;
 }) {
-  const loader = useCallback(
-    () => api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao').then((r) => r.candidatos),
-    [],
-  );
-  const { data: lista, error, reload } = useRepositoryQuery(loader);
+  const loader = useCallback(() => api<{ candidatos: CandidatoDaVotacao[]; favoritos?: string[] }>('/api/votacao'), []);
+  const { data, error, reload } = useRepositoryQuery(loader);
+  const lista = data?.candidatos ?? null;
   const erro = error ? 'Não foi possível carregar a votação.' : null;
   // Com a janela aberta, a apuracao anda: boletim novo recarrega a lista.
   const { situacao, coletando, erro: erroAoVivo } = useVotacaoAoVivo(true, reload);
@@ -112,14 +111,40 @@ function SeletorDaVotacao({
   const [busca, setBusca] = useState('');
   const [todos, setTodos] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [soFavoritos, setSoFavoritos] = useState(false);
+
+  /**
+   * Favoritos da pessoa (migration 057). A marcacao aparece na hora; a
+   * resposta do servidor confirma, e uma falha desfaz.
+   */
+  const [marcados, setMarcados] = useState<string[] | null>(null);
+  const favoritos = useMemo(() => new Set(marcados ?? data?.favoritos ?? []), [marcados, data]);
+  const [erroFavorito, setErroFavorito] = useState<string | null>(null);
+
+  function alternarFavorito(c: CandidatoDaVotacao) {
+    const chave = chaveDoFavorito(c);
+    const antes = [...favoritos];
+    const favorito = !favoritos.has(chave);
+    setMarcados(favorito ? [...antes, chave] : antes.filter((k) => k !== chave));
+    setErroFavorito(null);
+    api<{ favoritos: string[] }>('/api/votacao/favoritos', {
+      method: 'POST',
+      body: { ano: c.ano, uf: c.uf, cargoCodigo: c.cargoCodigo, numero: c.numero, favorito },
+    })
+      .then((r) => setMarcados(r.favoritos))
+      .catch((e: unknown) => {
+        setMarcados(antes);
+        setErroFavorito(e instanceof Error ? e.message : 'Não foi possível salvar o favorito.');
+      });
+  }
 
   const turnos = useMemo(() => [...new Set((lista ?? []).map((c) => c.turno))].sort(), [lista]);
   const cargos = useMemo(() => cargosDaVotacao(lista ?? []), [lista]);
   // Comeca no 1o turno: sem isso, o mesmo nome apareceria duas vezes.
   const turnoAtivo = turno ?? turnos[0] ?? null;
   const achados = useMemo(
-    () => filtrarCandidatos(lista ?? [], { turno: turnoAtivo, cargoCodigo: cargo, busca, todos }),
-    [lista, turnoAtivo, cargo, busca, todos],
+    () => filtrarCandidatos(lista ?? [], { turno: turnoAtivo, cargoCodigo: cargo, busca, todos, favoritos, soFavoritos }),
+    [lista, turnoAtivo, cargo, busca, todos, favoritos, soFavoritos],
   );
 
   return (
@@ -169,6 +194,18 @@ function SeletorDaVotacao({
                   </button>
                 ))
               : null}
+            <button
+              type="button"
+              aria-pressed={soFavoritos}
+              onClick={() => setSoFavoritos((atual) => !atual)}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3 text-xs font-semibold',
+                soFavoritos ? 'border-accent-600 bg-accent-500 text-navy-900' : 'border-line bg-surface text-ink-700 hover:bg-ink-50',
+              )}
+            >
+              <Star aria-hidden="true" className={cn('size-3.5', soFavoritos && 'fill-current')} />
+              Favoritos ({favoritos.size})
+            </button>
             <Select
               aria-label="Cargo"
               value={cargo === null ? '' : String(cargo)}
@@ -197,40 +234,63 @@ function SeletorDaVotacao({
             Mostrar também voto de legenda, branco e nulo
           </label>
 
+          {erroFavorito ? (
+            <p className="rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-xs text-danger-700" role="alert">
+              {erroFavorito}
+            </p>
+          ) : null}
+
           <ul className="max-h-[45vh] divide-y divide-line overflow-y-auto rounded-control border border-line">
             {achados.length === 0 ? (
-              <li className="px-3 py-6 text-center text-sm text-ink-500">Ninguém encontrado com essa busca.</li>
+              <li className="px-3 py-6 text-center text-sm text-ink-500">
+                {soFavoritos
+                  ? 'Nenhum favorito aqui ainda. Toque na estrela ao lado de um candidato para favoritar.'
+                  : 'Ninguém encontrado com essa busca.'}
+              </li>
             ) : (
-              achados.slice(0, NA_TELA).map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(c)}
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-brand-50"
-                  >
-                    <span className="flex min-w-14 justify-center rounded-control bg-ink-100 px-1.5 py-1 text-xs font-bold text-ink-700 tabular-nums">
-                      {c.numero}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-ink-900">{c.nome}</span>
-                      <span className="block text-xs text-ink-500">
-                        {c.cargo} · {c.turno}º turno · {c.uf}
+              achados.slice(0, NA_TELA).map((c) => {
+                const favorito = favoritos.has(chaveDoFavorito(c));
+                return (
+                  <li key={c.id} className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => alternarFavorito(c)}
+                      aria-pressed={favorito}
+                      aria-label={favorito ? `Tirar ${c.nome} dos favoritos` : `Favoritar ${c.nome}`}
+                      title={favorito ? 'Tirar dos favoritos' : 'Favoritar'}
+                      className="flex size-11 shrink-0 items-center justify-center text-ink-400 transition-colors hover:text-accent-600"
+                    >
+                      <Star aria-hidden="true" className={cn('size-5', favorito && 'fill-accent-500 text-accent-600')} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(c)}
+                      className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3 text-left transition-colors hover:bg-brand-50"
+                    >
+                      <span className="flex min-w-14 justify-center rounded-control bg-ink-100 px-1.5 py-1 text-xs font-bold text-ink-700 tabular-nums">
+                        {c.numero}
                       </span>
-                    </span>
-                    <span className="shrink-0 text-right tabular-nums">
-                      <span className="block text-sm font-bold text-brand-800">
-                        {formatNumber(c.total)} <span className="text-xs font-normal text-ink-500">votos</span>
-                      </span>
-                      {/* O total oficial do TSE anda na frente durante a apuracao. */}
-                      {c.totalOficial !== null && c.totalOficial > c.total ? (
-                        <span className="block text-[0.6875rem] text-ink-500">
-                          TSE no estado: {formatNumber(c.totalOficial)}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-ink-900">{c.nome}</span>
+                        <span className="block text-xs text-ink-500">
+                          {c.cargo} · {c.turno}º turno · {c.uf}
                         </span>
-                      ) : null}
-                    </span>
-                  </button>
-                </li>
-              ))
+                      </span>
+                      <span className="shrink-0 text-right tabular-nums">
+                        <span className="block text-sm font-bold text-brand-800">
+                          {formatNumber(c.total)} <span className="text-xs font-normal text-ink-500">votos</span>
+                        </span>
+                        {/* O total oficial do TSE anda na frente durante a apuracao. */}
+                        {c.totalOficial !== null && c.totalOficial > c.total ? (
+                          <span className="block text-[0.6875rem] text-ink-500">
+                            TSE no estado: {formatNumber(c.totalOficial)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
             )}
           </ul>
           {achados.length > NA_TELA ? (

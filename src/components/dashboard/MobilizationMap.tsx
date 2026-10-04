@@ -592,7 +592,11 @@ export function MobilizationMap({
               : 'h-[360px] overflow-hidden sm:h-[420px] lg:h-[520px]',
         )}
       >
-        <div className="relative min-h-0 flex-1 overflow-hidden">
+        {/* `isolate`: as camadas do Leaflet e os controles do mapa (z 400 a
+            1200) ficam presos AQUI dentro. Sem isso, no cartao, elas
+            disputavam com a pagina inteira e o mapa aparecia por cima de
+            qualquer janela aberta (z 50). */}
+        <div className="relative isolate min-h-0 flex-1 overflow-hidden">
           {loading ? (
             // Esta e a espera longa: o mapa le os integrantes, os vinculos e
             // as coordenadas de todos eles. Uma palavra basta — a lista do
