@@ -25,7 +25,7 @@ vi.mock('@/lib/supabase/rest', () => ({
   }),
 }));
 
-const { coletarAoVivo } = await import('@/lib/server/votacao-ao-vivo.service');
+const { coletarAoVivo, motivoDaRecusa } = await import('@/lib/server/votacao-ao-vivo.service');
 
 /** Um boletim de verdade (exemplo do TSE): zona 8, secao 1. */
 const BU = readFileSync(join(__dirname, 'fixtures', 'bu', 's02100-0112000080001.bu'));
@@ -120,5 +120,16 @@ describe('coleta ao vivo dos boletins de urna', () => {
     expect(atualizadas.some((a) => 'paused_until' in a.valores)).toBe(true);
     expect(atualizadas.at(-1)?.valores.last_error).toMatch(/pausou/);
     expect(chamadas.map((c) => c.fn)).toEqual(['cmd_tse_live_lock']);
+  });
+
+  it('se o TSE recusa a lista de seções, o motivo fica guardado e explica o que fazer', async () => {
+    tse({ [`${BASE}/arquivo-urna/3220/config/al/al-p003220-cs.json`]: 403 });
+    const r = await coletarAoVivo(10_000);
+    expect(r.coletou).toBe(true);
+    expect(atualizadas.at(-1)?.valores.last_error).toMatch(/fora do Brasil.*gru1/);
+    expect(chamadas.map((c) => c.fn)).toEqual(['cmd_tse_live_lock']);
+
+    expect(motivoDaRecusa(0)).toMatch(/não respondeu/);
+    expect(motivoDaRecusa(404)).toMatch(/ainda não publicou/);
   });
 });

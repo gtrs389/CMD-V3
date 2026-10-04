@@ -460,6 +460,7 @@ export function MobilizationMap({
             texto={textoDoAndamento(aoVivo.situacao)}
             coletando={aoVivo.coletando}
             pausadoAte={aoVivo.situacao?.pausadoAte ?? null}
+            erro={aoVivo.erro}
           />
         </div>
       ) : null}
