@@ -415,28 +415,44 @@ function PlaceImage({ place }: { place: PollingPlacePin }) {
  * primeiro e grande; a divisao por genero fica embaixo, como composicao. O
  * rodape diz de que o numero e feito para ninguem ler como projecao.
  */
-function PlaceVotes({ place }: { place: PollingPlacePin }) {
+/**
+ * Pinos da votacao oficial do TSE, no lugar da estimativa da campanha.
+ *
+ * O numero muda de nome (sao votos apurados, nao cadastros), a quebra por
+ * genero some (a urna nao tem genero) e a lista de pessoas tambem: nao ha
+ * pessoa nenhuma por tras desse numero.
+ */
+export interface ModoVotacao {
+  /** "Votos de Fulano (15123)". */
+  rotulo: string;
+  /** Rodape do balao: de onde o numero vem. */
+  nota: string;
+}
+
+function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: ModoVotacao }) {
   return (
     <section className="rounded-control border border-brand-100 bg-brand-50 px-2.5 py-2">
       <p className="text-[0.6875rem] font-semibold tracking-wide text-brand-800 uppercase">
-        {ESTIMATED_VOTES_LABEL}
+        {votacao?.rotulo ?? ESTIMATED_VOTES_LABEL}
       </p>
       <p className="text-2xl leading-tight font-semibold text-brand-900">
         {formatNumber(estimatedVotes(place))}
       </p>
 
-      <dl className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-ink-500">
-        {voteBreakdown(place).map((item) => (
-          <div key={item.label} className="flex gap-1">
-            <dt>{item.label}:</dt>
-            <dd className="font-semibold text-ink-900">{formatNumber(item.value)}</dd>
-          </div>
-        ))}
-      </dl>
+      {votacao ? null : (
+        <dl className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-ink-500">
+          {voteBreakdown(place).map((item) => (
+            <div key={item.label} className="flex gap-1">
+              <dt>{item.label}:</dt>
+              <dd className="font-semibold text-ink-900">{formatNumber(item.value)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
 
       <PlaceSections place={place} compact limite={4} />
 
-      <p className="mt-1 text-[0.625rem] text-ink-500 italic">{ESTIMATED_VOTES_HINT}</p>
+      <p className="mt-1 text-[0.625rem] text-ink-500 italic">{votacao?.nota ?? ESTIMATED_VOTES_HINT}</p>
     </section>
   );
 }
@@ -452,8 +468,11 @@ function PlaceMarker({
   onOpen,
   onDownload,
   onReady,
+  votacao,
 }: {
   place: PollingPlacePin;
+  /** Pino da votacao do TSE: outro rotulo, e sem lista de pessoas. */
+  votacao?: ModoVotacao;
   onOpen: (place: PollingPlacePin) => void;
   /** Baixa o PDF da escola (arquivo de verdade). */
   onDownload?: (place: PollingPlacePin) => Promise<void>;
@@ -482,18 +501,20 @@ function PlaceMarker({
             {[place.city, place.state].filter(Boolean).join('/') || '--'}
           </p>
 
-          <PlaceVotes place={place} />
+          <PlaceVotes place={place} votacao={votacao} />
 
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => onOpen(place)}
-              className="inline-flex min-h-9 flex-1 items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
-            >
-              Ver pessoas
-            </button>
-            {onDownload ? <BotaoDePdf onClick={() => onDownload(place)} rotulo="PDF" titulo="Baixar o PDF desta escola" /> : null}
-          </div>
+          {votacao ? null : (
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => onOpen(place)}
+                className="inline-flex min-h-9 flex-1 items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
+              >
+                Ver pessoas
+              </button>
+              {onDownload ? <BotaoDePdf onClick={() => onDownload(place)} rotulo="PDF" titulo="Baixar o PDF desta escola" /> : null}
+            </div>
+          )}
         </div>
       </Popup>
     </Marker>
@@ -525,6 +546,7 @@ export default function MapCanvas({
   focusPlace = null,
   resizeKey,
   fallbackCenter,
+  votacao,
 }: {
   pins: MapPin[];
   places?: PollingPlacePin[];
@@ -553,6 +575,8 @@ export default function MapCanvas({
    * Time DEMO abrir em Alagoas, e nao a meio caminho de outro estado.
    */
   fallbackCenter?: { latitude: number; longitude: number };
+  /** Os pinos de escola sao da votacao oficial do TSE, nao da campanha. */
+  votacao?: ModoVotacao;
 }) {
   const [zoom, setZoom] = useState(4);
   const markers = useRef(new Map<string, L.Marker>());
@@ -605,6 +629,7 @@ export default function MapCanvas({
           place={place}
           onOpen={onOpenPlace ?? (() => {})}
           onDownload={onDownloadPlace}
+          votacao={votacao}
           onReady={(marker) => {
             if (marker) markers.current.set(place.locationId, marker);
             else markers.current.delete(place.locationId);

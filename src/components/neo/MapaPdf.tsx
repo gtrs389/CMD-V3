@@ -333,30 +333,45 @@ export interface PdfDoRankingDeVotosProps {
   /** O recorte do mapa, em palavras ("Zona 10 · Palmeira dos Índios"). Vazio: tudo. */
   filtro: string | null;
   geradoEm: string;
+  /**
+   * O ranking e da votacao oficial do TSE, e nao da estimativa da campanha:
+   * "Fulano (15123) · Deputado Estadual · 1º turno".
+   */
+  votacao?: string;
 }
 
-export function PdfDoRankingDeVotos({ ranking, filtro }: PdfDoRankingDeVotosProps) {
+export function PdfDoRankingDeVotos({ ranking, filtro, votacao }: PdfDoRankingDeVotosProps) {
   const { escolas, zonas, secoes, total } = ranking;
   const maiorZona = Math.max(1, ...zonas.map((z) => z.votos));
+  const nome = votacao ? 'Votação por local, zona e seção' : 'Onde você tem mais votos';
   return (
-    <Document title="Onde você tem mais votos" author={s(appConfig.name)} language="pt-BR">
+    <Document title={s(nome)} author={s(appConfig.name)} language="pt-BR">
       <Page size="A4" style={st.page}>
-        <Cabecalho esquerda="Onde você tem mais votos" direita={appConfig.shortName} />
-        <Rodape texto={AVISO} />
+        <Cabecalho esquerda={nome} direita={appConfig.shortName} />
+        <Rodape texto={votacao ? 'Resultado oficial do TSE · votação por seção eleitoral (dados abertos).' : AVISO} />
 
         <Titulo
-          kicker="ONDE VOCÊ TEM MAIS VOTOS"
-          titulo={`${num(total)} ${total === 1 ? 'voto' : 'votos'} em ${num(escolas.length)} ${escolas.length === 1 ? 'local' : 'locais'}`}
+          kicker={votacao ? 'VOTAÇÃO OFICIAL · TSE' : 'ONDE VOCÊ TEM MAIS VOTOS'}
+          titulo={votacao ?? `${num(total)} ${total === 1 ? 'voto' : 'votos'} em ${num(escolas.length)} ${escolas.length === 1 ? 'local' : 'locais'}`}
+          sub={votacao ? `${votos(total)} em ${num(escolas.length)} ${escolas.length === 1 ? 'local' : 'locais'}` : undefined}
           chips={[
             { texto: filtro ? `Recorte: ${filtro}` : 'Todo o mapa', cor: C.navy, fundo: C.bg },
-            { texto: 'Uma pessoa cadastrada que vota no local, um voto', cor: C.muted, fundo: C.bg },
+            votacao
+              ? { texto: 'Votos apurados pelo TSE, seção por seção', cor: C.muted, fundo: C.bg }
+              : { texto: 'Uma pessoa cadastrada que vota no local, um voto', cor: C.muted, fundo: C.bg },
           ]}
         />
 
-        <ComoLer texto="cada pessoa cadastrada que vota num local é 1 voto para esse local. Ex.: 72 votos = 72 pessoas cadastradas votam ali." />
+        <ComoLer
+          texto={
+            votacao
+              ? 'são os votos que o TSE apurou em cada seção eleitoral. A seção mostra onde o voto saiu; o local é a escola onde a seção funciona.'
+              : 'cada pessoa cadastrada que vota num local é 1 voto para esse local. Ex.: 72 votos = 72 pessoas cadastradas votam ali.'
+          }
+        />
 
         <LinhaDeKpis>
-          <Kpi valor={num(total)} rotulo="votos estimados" tom={C.navy} />
+          <Kpi valor={num(total)} rotulo={votacao ? 'votos apurados' : 'votos estimados'} tom={C.navy} />
           <Kpi valor={num(escolas.length)} rotulo="locais de votação" tom={C.blue} />
           <Kpi valor={num(zonas.length)} rotulo={zonas.length === 1 ? 'zona' : 'zonas'} tom={C.gold} />
           <Kpi valor={num(ranking.totalDeSecoes)} rotulo="seções com votos" tom={C.success} />

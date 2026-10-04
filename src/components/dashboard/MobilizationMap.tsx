@@ -8,17 +8,25 @@ import {
   activeFilterCount,
   applyMapQuery,
   mapOptions,
+  placeVotes,
   type MapQuery,
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
-import type { MapFocus } from './MapCanvas';
+import { rotuloDoCandidato, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
+import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
 import { MapRanking } from './MapRanking';
 import { MemberSheetPanel } from './MemberSheetPanel';
 import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { MapaCarregando } from './MapaCarregando';
-import { baixarPdfDaEscola, baixarPdfDasPessoasPorEscola, baixarPdfDoRankingDeVotos } from './pdf-do-mapa';
+import {
+  baixarPdfDaEscola,
+  baixarPdfDaVotacao,
+  baixarPdfDasPessoasPorEscola,
+  baixarPdfDoRankingDeVotos,
+} from './pdf-do-mapa';
+import { BotaoDaVotacao } from './votacao/VotacaoTse';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
@@ -153,15 +161,70 @@ export function MobilizationMap({
    */
   const colunaCelular = useRef<HTMLDivElement | null>(null);
 
-  const options = useMemo(() => mapOptions(data, query.state), [data, query.state]);
-  const selection = useMemo(() => applyMapQuery(data, query), [data, query]);
+  /**
+   * Votacao oficial do TSE de um candidato (2026).
+   *
+   * Escolhido um candidato, os pinos de escola passam a ser os votos DELE,
+   * apurados secao por secao — e nao a estimativa da campanha. Filtros,
+   * ranking e PDF continuam os mesmos, sobre esses numeros. Fechar volta ao
+   * mapa da campanha.
+   */
+  const [candidato, setCandidato] = useState<CandidatoDaVotacao | null>(null);
+  const loaderDaVotacao = useCallback(
+    () =>
+      candidato
+        ? api<VotacaoNoMapa>(`/api/votacao/${encodeURIComponent(candidato.id)}`)
+        : Promise.resolve(null),
+    [candidato],
+  );
+  const consultaDaVotacao = useRepositoryQuery<VotacaoNoMapa | null>(loaderDaVotacao);
+  // Trocando de candidato, a resposta do anterior ainda esta ali ate a nova
+  // chegar: so vale a que e do candidato escolhido.
+  const votacao =
+    candidato && consultaDaVotacao.data?.candidato.id === candidato.id ? consultaDaVotacao.data : null;
+  const erroVotacao = Boolean(candidato && !votacao && consultaDaVotacao.error);
+
+  function escolherCandidato(escolhido: CandidatoDaVotacao | null) {
+    setCandidato(escolhido);
+    setFocusPlace(null);
+    setOpenPlace(null);
+    // Cidade, estado e busca da campanha nao valem para a votacao (os nomes
+    // vem escritos de outro jeito na planilha do TSE): o recorte recomeca.
+    setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
+  }
+
+  const modoVotacao: ModoVotacao | undefined = candidato
+    ? {
+        rotulo: `Votos de ${candidato.nome} (${candidato.numero})`,
+        nota: 'Resultado oficial do TSE, seção por seção',
+      }
+    : undefined;
+
+  /** O que o mapa desenha: a campanha, ou a votacao do candidato escolhido. */
+  const fonte = useMemo(
+    () => (candidato ? { pins: [], pollingPlaces: votacao?.noMapa ?? [] } : data),
+    [candidato, votacao, data],
+  );
+  /** Na votacao nao ha pessoa no mapa: so escolas. */
+  const recorte = useMemo<MapQuery>(
+    () => (candidato ? { ...query, kind: 'POLLING_PLACE' } : query),
+    [candidato, query],
+  );
+  const options = useMemo(() => mapOptions(fonte, query.state), [fonte, query.state]);
+  const selection = useMemo(() => applyMapQuery(fonte, recorte), [fonte, recorte]);
+  /** Escolas da votacao sem coordenada, no mesmo recorte: so na conta e no PDF. */
+  const foraDoMapa = useMemo(
+    () => (votacao ? applyMapQuery({ pins: [], pollingPlaces: votacao.foraDoMapa }, recorte).places : []),
+    [votacao, recorte],
+  );
+  const votosForaDoMapa = foraDoMapa.reduce((soma, place) => soma + placeVotes(place, recorte.zone), 0);
 
   const totals = data?.totals;
   const pendentes = (totals?.pending ?? 0) + (totals?.notFound ?? 0);
   /** Sem local de votacao na visao, o ranking nao teria o que ordenar. */
-  const rankingDisponivel = query.kind !== 'RESIDENCE';
+  const rankingDisponivel = recorte.kind !== 'RESIDENCE';
   const comRanking = rankingDisponivel && (fullscreen ? showRankingFull : showRanking);
-  const pronto = !loading && !error;
+  const pronto = !loading && !error && (!candidato || votacao !== null || erroVotacao);
 
   // Tela cheia: a pagina atras nao rola, e Escape fecha. Sem isso, arrastar o
   // mapa no celular acabaria rolando o painel embaixo dele.
@@ -234,7 +297,24 @@ export function MobilizationMap({
     setFullscreen((atual) => !atual);
   }
 
-  const painelRanking = (
+  const painelRanking = candidato ? (
+    <MapRanking
+      places={selection.places}
+      zone={query.zone}
+      activeId={focusPlace?.locationId ?? null}
+      onFocus={focar}
+      titulo={`Onde ${candidato.nome} teve mais votos`}
+      nota="Resultado oficial do TSE, seção por seção. O PDF traz também os locais sem ponto no mapa."
+      onDownload={() =>
+        baixarPdfDaVotacao([...selection.places, ...foraDoMapa], query, {
+          rotulo: rotuloDoCandidato(candidato),
+          nome: candidato.nome,
+          numero: candidato.numero,
+        })
+      }
+      className="w-full"
+    />
+  ) : (
     <MapRanking
       places={selection.places}
       zone={query.zone}
@@ -276,7 +356,26 @@ export function MobilizationMap({
   /** Em tela cheia ha um painel flutuante so: nao ha copia a evitar. */
   const colunaLateral = painelFicha ?? (comRanking ? painelRanking : null);
 
-  const contagem = totals ? (
+  const contagem = candidato ? (
+    <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
+      <div className="flex gap-1">
+        <dt>Votos no filtro:</dt>
+        <dd className="font-semibold text-brand-800">{formatNumber(selection.votes + votosForaDoMapa)}</dd>
+      </div>
+      <div className="flex gap-1">
+        <dt>Locais no mapa:</dt>
+        <dd className="font-semibold text-ink-900">{formatNumber(selection.placeCount)}</dd>
+      </div>
+      {foraDoMapa.length > 0 ? (
+        <div className="flex gap-1">
+          <dt>Locais sem ponto no mapa:</dt>
+          <dd className="font-semibold text-ink-900">
+            {formatNumber(foraDoMapa.length)} ({formatNumber(votosForaDoMapa)} votos)
+          </dd>
+        </div>
+      ) : null}
+    </dl>
+  ) : totals ? (
     <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
       {/* O primeiro numero e o do RECORTE: e ele que responde "quanto voto
           tem aqui dentro". Os totais do time vem depois. */}
@@ -302,12 +401,20 @@ export function MobilizationMap({
   /** No destaque, a contagem vira quatro numeros grandes que correm ate o valor. */
   const contagemDestaque = totals ? (
     <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {[
-        { rotulo: 'Votos no filtro', valor: selection.votes, forte: true },
-        { rotulo: 'Pessoas no mapa', valor: selection.pins.length },
-        { rotulo: 'Locais de votação', valor: selection.placeCount },
-        { rotulo: 'Sem localização', valor: pendentes },
-      ].map((item, i) => (
+      {(candidato
+        ? [
+            { rotulo: `Votos de ${candidato.nome}`, valor: selection.votes + votosForaDoMapa, forte: true },
+            { rotulo: 'Locais no mapa', valor: selection.placeCount },
+            { rotulo: 'Seções com voto', valor: [...selection.places, ...foraDoMapa].reduce((s, p) => s + p.sections.length, 0) },
+            { rotulo: 'Locais sem ponto', valor: foraDoMapa.length },
+          ]
+        : [
+            { rotulo: 'Votos no filtro', valor: selection.votes, forte: true },
+            { rotulo: 'Pessoas no mapa', valor: selection.pins.length },
+            { rotulo: 'Locais de votação', valor: selection.placeCount },
+            { rotulo: 'Sem localização', valor: pendentes },
+          ]
+      ).map((item, i) => (
         <div
           key={item.rotulo}
           className={cn(
@@ -324,6 +431,28 @@ export function MobilizationMap({
       ))}
     </dl>
   ) : null;
+
+
+  /** Botao da votacao e, com um candidato escolhido, a faixa que diz o que o mapa mostra. */
+  const barraDaVotacao = (
+    <div className="flex flex-wrap items-center gap-2">
+      <BotaoDaVotacao
+        selecionado={candidato}
+        onSelect={escolherCandidato}
+        onClear={() => escolherCandidato(null)}
+        podeEnviar={podeLocalizar}
+      />
+      {candidato ? (
+        <p className="text-xs text-ink-700" role="status">
+          {erroVotacao
+            ? 'Não foi possível carregar a votação deste candidato.'
+            : votacao === null
+              ? 'Carregando a votação…'
+              : `${rotuloDoCandidato(candidato)} · ${formatNumber(candidato.total)} votos no estado. O mapa mostra os votos dele por escola, zona e seção.`}
+        </p>
+      ) : null}
+    </div>
+  );
 
   return (
     <section
@@ -432,6 +561,8 @@ export function MobilizationMap({
             </div>
           </div>
 
+          {barraDaVotacao}
+
           <MapFiltersBar query={query} onChange={setQuery} options={options} dense />
 
           {destaque ? null : contagem}
@@ -467,8 +598,9 @@ export function MobilizationMap({
               <MapCanvas
                 pins={selection.pins}
                 places={selection.places}
-                onOpenPlace={setOpenPlace}
-                onDownloadPlace={(place) => baixarPdfDaEscola(place, clientId)}
+                onOpenPlace={candidato ? undefined : setOpenPlace}
+                onDownloadPlace={candidato ? undefined : (place) => baixarPdfDaEscola(place, clientId)}
+                votacao={modoVotacao}
                 onOpenMember={abrirFicha}
                 renderLiderActions={renderLiderActions}
                 focusPlace={focusPlace}
@@ -538,6 +670,7 @@ export function MobilizationMap({
               </div>
 
               <div className="min-h-0 space-y-3 overflow-y-auto p-3">
+                {barraDaVotacao}
                 <MapFiltersBar query={query} onChange={setQuery} options={options} />
 
                 {podeLocalizar && pendentes > 0 ? (

@@ -28,6 +28,9 @@ export const TABLES = {
   mapLocations: 'cmd_map_locations',
   memberLocations: 'cmd_member_locations',
   pollingPlaces: 'cmd_polling_places',
+  /** Votacao por secao do TSE (migration 054). */
+  electionSections: 'cmd_election_sections',
+  electionVotes: 'cmd_election_votes',
   settings: 'cmd_settings',
   inviteEvents: 'cmd_invite_events',
   inviteAccessDevices: 'cmd_invite_access_devices',
@@ -753,6 +756,37 @@ export interface PollingPlaceRow {
   section_count: number | null;
   sections: number[];
   created_at: string;
+  updated_at: string;
+}
+
+/** Secao eleitoral da votacao por secao do TSE (migration 054). */
+export interface ElectionSectionRow {
+  id: string;
+  year: number;
+  uf: string;
+  zone: number;
+  section: number;
+  city_code: number | null;
+  city: string | null;
+  place_number: number | null;
+  place_name: string | null;
+  place_address: string | null;
+}
+
+/** Votos de um candidato, secao a secao (migration 054). */
+export interface ElectionVotesRow {
+  id: string;
+  year: number;
+  round: number;
+  uf: string;
+  office_code: number;
+  office: string;
+  number: string;
+  name: string;
+  kind: 'CANDIDATO' | 'LEGENDA' | 'BRANCO' | 'NULO';
+  total_votes: number;
+  /** [[zona, secao, votos], ...] */
+  sections: [number, number, number][];
   updated_at: string;
 }
 
