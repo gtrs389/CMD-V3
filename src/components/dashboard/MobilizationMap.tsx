@@ -26,7 +26,8 @@ import {
   baixarPdfDasPessoasPorEscola,
   baixarPdfDoRankingDeVotos,
 } from './pdf-do-mapa';
-import { BotaoDaVotacao } from './votacao/VotacaoTse';
+import { AndamentoAoVivo, BotaoDaVotacao } from './votacao/VotacaoTse';
+import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
@@ -183,6 +184,9 @@ export function MobilizationMap({
   const votacao =
     candidato && consultaDaVotacao.data?.candidato.id === candidato.id ? consultaDaVotacao.data : null;
   const erroVotacao = Boolean(candidato && !votacao && consultaDaVotacao.error);
+  // Enquanto a votacao estiver na tela, a apuracao anda: boletim novo
+  // redesenha os pinos sozinho.
+  const aoVivo = useVotacaoAoVivo(candidato !== null, consultaDaVotacao.reload);
 
   function escolherCandidato(escolhido: CandidatoDaVotacao | null) {
     setCandidato(escolhido);
@@ -443,13 +447,21 @@ export function MobilizationMap({
         podeEnviar={podeLocalizar}
       />
       {candidato ? (
-        <p className="text-xs text-ink-700" role="status">
-          {erroVotacao
-            ? 'Não foi possível carregar a votação deste candidato.'
-            : votacao === null
-              ? 'Carregando a votação…'
-              : `${rotuloDoCandidato(candidato)} · ${formatNumber(candidato.total)} votos no estado. O mapa mostra os votos dele por escola, zona e seção.`}
-        </p>
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-xs text-ink-700">
+            {erroVotacao
+              ? 'Não foi possível carregar a votação deste candidato.'
+              : votacao === null
+                ? 'Carregando a votação…'
+                : `${rotuloDoCandidato(candidato)} · ${formatNumber(votacao.candidato.total)} votos até agora no estado. O mapa mostra os votos dele por escola, zona e seção.`}
+          </p>
+          <AndamentoAoVivo
+            className="mb-0"
+            texto={textoDoAndamento(aoVivo.situacao)}
+            coletando={aoVivo.coletando}
+            pausadoAte={aoVivo.situacao?.pausadoAte ?? null}
+          />
+        </div>
       ) : null}
     </div>
   );

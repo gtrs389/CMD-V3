@@ -132,3 +132,32 @@ Enviar de novo (por exemplo, com o 2º turno) atualiza sem duplicar. O
 boletim de urna (`bweb_...`) também é aceito: as colunas são achadas pelo
 nome. A escola de cada seção vem da tabela `cmd_polling_places`; seção cujo
 local não tem coordenada entra no PDF, mas não vira pino.
+
+## Ao vivo, durante a apuração (boletins de urna)
+
+Não precisa enviar nada: o próprio sistema busca no TSE o **boletim de urna**
+de cada seção assim que ele é publicado, e o mapa se atualiza sozinho.
+
+1. Rode a migration `055_votacao_ao_vivo.sql` no SQL Editor do Supabase
+   (depois da `054`).
+2. Abra o mapa e clique em **Votação 2026 (TSE)**. Enquanto a janela ou um
+   candidato estiver na tela, o sistema busca boletins novos a cada minuto e
+   mostra quantas seções já chegaram.
+
+Para a apuração andar **mesmo sem ninguém com o mapa aberto**, cadastre a
+variável `CRON_SECRET` na Vercel e programe um agendador (por exemplo,
+cron-job.org) para chamar a cada minuto:
+
+```
+GET https://<seu-endereco>/api/votacao/ao-vivo
+Authorization: Bearer <CRON_SECRET>
+```
+
+Por padrão a coleta é do **1º turno de 2026 em Alagoas**. Outro estado:
+`TSE_UF`. No 2º turno, o TSE usa outros códigos; informe-os em `TSE_PLEITO`,
+`TSE_ELEICAO_FEDERAL`, `TSE_ELEICAO_ESTADUAL` e `TSE_TURNO=2`.
+
+O TSE bloqueia por cerca de 10 minutos quem consulta demais. Por isso a
+coleta faz no máximo 3 consultas ao mesmo tempo, uma coleta por vez em todo
+o sistema, espera alguns minutos antes de consultar de novo uma seção sem
+boletim e pausa sozinha por 11 minutos se o TSE recusar várias seguidas.

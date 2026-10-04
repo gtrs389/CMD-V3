@@ -9,6 +9,7 @@ import {
 } from '@/lib/domain/votacao-tse';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
+import { textoDoAndamento, useVotacaoAoVivo } from './use-votacao-ao-vivo';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
 import { Modal } from '@/components/ui/Modal';
@@ -103,6 +104,9 @@ function SeletorDaVotacao({
   );
   const { data: lista, error, reload } = useRepositoryQuery(loader);
   const erro = error ? 'Não foi possível carregar a votação.' : null;
+  // Com a janela aberta, a apuracao anda: boletim novo recarrega a lista.
+  const { situacao, coletando } = useVotacaoAoVivo(true, reload);
+  const andamento = textoDoAndamento(situacao);
   const [turno, setTurno] = useState<number | null>(null);
   const [cargo, setCargo] = useState<number | null>(null);
   const [busca, setBusca] = useState('');
@@ -127,6 +131,8 @@ function SeletorDaVotacao({
       title="Votação 2026 · resultado do TSE"
       description="Escolha um candidato para ver no mapa onde ele teve voto: escola, zona e seção."
     >
+      <AndamentoAoVivo texto={andamento} coletando={coletando} pausadoAte={situacao?.pausadoAte ?? null} />
+
       {erro ? (
         <p className="rounded-control border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700">{erro}</p>
       ) : lista === null ? (
@@ -135,8 +141,8 @@ function SeletorDaVotacao({
         </div>
       ) : lista.length === 0 ? (
         <p className="rounded-control border border-line bg-ink-50 px-3 py-4 text-center text-sm text-ink-700">
-          Nenhuma votação carregada ainda.
-          {podeEnviar ? ' Envie a planilha do TSE abaixo.' : ' O administrador do sistema precisa enviar a planilha do TSE.'}
+          Ainda não chegou nenhum boletim de urna. A lista se atualiza sozinha a cada minuto, conforme o TSE
+          publica as seções.
         </p>
       ) : (
         <div className="space-y-3">
@@ -303,5 +309,34 @@ function EnvioDaPlanilha({ onEnviando, onFim }: { onEnviando: (sim: boolean) => 
         </p>
       ) : null}
     </section>
+  );
+}
+
+/** "● Ao vivo · 1.234 de 7.000 seções com boletim (18%) · atualizado às 19:42". */
+export function AndamentoAoVivo({
+  texto,
+  coletando,
+  pausadoAte,
+  className,
+}: {
+  texto: string | null;
+  coletando: boolean;
+  pausadoAte: string | null;
+  className?: string;
+}) {
+  return (
+    <p className={cn('mb-3 flex items-center gap-2 text-xs text-ink-700', className)} role="status">
+      <span className="relative flex size-2 shrink-0">
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-success-400 opacity-75" />
+        <span className="relative inline-flex size-2 rounded-full bg-success-600" />
+      </span>
+      <span>
+        <b>Ao vivo</b> ·{' '}
+        {pausadoAte
+          ? `o TSE pediu uma pausa; a coleta volta às ${new Date(pausadoAte).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+          : (texto ?? 'buscando os boletins de urna no TSE…')}
+        {coletando && texto ? ' · buscando novos boletins…' : ''}
+      </span>
+    </p>
   );
 }
