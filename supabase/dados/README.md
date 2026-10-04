@@ -174,3 +174,10 @@ boletins terminam de ser publicados.
 
 A coleta relê a lista de seções a cada 2 minutos: ela diz quais boletins já
 chegaram, e só esses são buscados.
+
+### Favoritos
+
+Cada pessoa pode favoritar candidatos com a estrela no seletor da votação;
+eles aparecem primeiro, e o botão **Favoritos** mostra só eles. Rode a
+migration `057_favoritos_da_votacao.sql` para ligar. O favorito vale para o
+cargo e o número, então continua marcado no 2º turno.

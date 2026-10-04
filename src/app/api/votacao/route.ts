@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { LOTE_DE_CANDIDATOS, LOTE_DE_SECOES } from '@/lib/domain/votacao-tse';
 import { requirePermission } from '@/lib/server/guard';
 import { jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
-import { candidatosDaVotacao, gravarCandidatos, gravarSecoes } from '@/lib/server/votacao.service';
+import { candidatosDaVotacao, favoritosDe, gravarCandidatos, gravarSecoes } from '@/lib/server/votacao.service';
 
 /**
  * Votacao oficial do TSE (migration 054).
@@ -16,8 +16,9 @@ import { candidatosDaVotacao, gravarCandidatos, gravarSecoes } from '@/lib/serve
  */
 export async function GET() {
   try {
-    await requirePermission('map.view');
-    return jsonOk({ candidatos: await candidatosDaVotacao() });
+    const user = await requirePermission('map.view');
+    const [candidatos, favoritos] = await Promise.all([candidatosDaVotacao(), favoritosDe(user.id)]);
+    return jsonOk({ candidatos, favoritos });
   } catch (error) {
     return toErrorResponse(error);
   }

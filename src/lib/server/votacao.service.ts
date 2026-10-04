@@ -6,7 +6,7 @@ import {
   type VotacaoDoCandidato,
   type VotacaoNoMapa,
 } from '@/lib/domain/votacao-tse';
-import { selectOne, selectRows, upsertRows } from '@/lib/supabase/rest';
+import { deleteRows, selectOne, selectRows, upsertRows } from '@/lib/supabase/rest';
 import { TABLES, type ElectionSectionRow, type ElectionVotesRow } from '@/lib/supabase/tables';
 import { notFound } from './http';
 import { pollingPlacesOfZones } from './polling-place.service';
@@ -85,6 +85,45 @@ export async function candidatosDaVotacao(): Promise<CandidatoDaVotacao[]> {
     order: 'year.desc,round.asc,office_code.asc,total_votes.desc',
   });
   return rows.map(candidato);
+}
+
+/* -------------------------------------------------------------------------
+   Favoritos (migration 057)
+   ------------------------------------------------------------------------- */
+
+const FAVORITOS = 'cmd_election_favorites';
+
+/**
+ * Os favoritos da pessoa, como chaves "ano:uf:cargo:numero".
+ *
+ * Sem a migration 057, a votacao continua funcionando — so sem favoritos.
+ */
+export async function favoritosDe(userId: string): Promise<string[]> {
+  const rows = await selectRows<{ year: number; uf: string; office_code: number; number: string }>(FAVORITOS, {
+    select: 'year,uf,office_code,number',
+    filters: { user_id: `eq.${userId}` },
+    order: 'created_at.asc',
+  }).catch(() => []);
+  return rows.map((r) => `${r.year}:${r.uf}:${r.office_code}:${r.number}`);
+}
+
+export async function marcarFavorito(
+  userId: string,
+  c: { ano: number; uf: string; cargoCodigo: number; numero: string },
+  favorito: boolean,
+): Promise<void> {
+  const chave = { user_id: userId, year: c.ano, uf: c.uf, office_code: c.cargoCodigo, number: c.numero };
+  if (favorito) {
+    await upsertRows(FAVORITOS, [chave], 'user_id,year,uf,office_code,number');
+    return;
+  }
+  await deleteRows(FAVORITOS, {
+    user_id: `eq.${userId}`,
+    year: `eq.${c.ano}`,
+    uf: `eq.${c.uf}`,
+    office_code: `eq.${c.cargoCodigo}`,
+    number: `eq.${c.numero}`,
+  }, 'user_id');
 }
 
 /** Os votos de um candidato, escola por escola, zona e secao. */

@@ -2,18 +2,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const escritas: { tabela: string; linhas: Record<string, unknown>[]; chave: string }[] = [];
 const linhas: Record<string, Record<string, unknown>[]> = {};
+const apagadas: { tabela: string; filtros: Record<string, string> }[] = [];
+let falhaNosFavoritos = false;
 
 vi.mock('@/lib/supabase/rest', () => ({
   upsertRows: vi.fn(async (tabela: string, valores: Record<string, unknown>[], chave: string) => {
     escritas.push({ tabela, linhas: valores, chave });
   }),
-  selectRows: vi.fn(async (tabela: string) => linhas[tabela] ?? []),
+  selectRows: vi.fn(async (tabela: string) => {
+    if (tabela === 'cmd_election_favorites' && falhaNosFavoritos) throw new Error('relation does not exist');
+    return linhas[tabela] ?? [];
+  }),
+  deleteRows: vi.fn(async (tabela: string, filtros: Record<string, string>) => {
+    apagadas.push({ tabela, filtros });
+    return [];
+  }),
   selectOne: vi.fn(async (tabela: string, opcoes: { filters: { id: string } }) =>
     (linhas[tabela] ?? []).find((l) => `eq.${l.id}` === opcoes.filters.id) ?? null,
   ),
 }));
 
-const { gravarCandidatos, gravarSecoes, votacaoNoMapa } = await import('@/lib/server/votacao.service');
+const { favoritosDe, gravarCandidatos, gravarSecoes, marcarFavorito, votacaoNoMapa } = await import('@/lib/server/votacao.service');
 
 beforeEach(() => {
   escritas.length = 0;
@@ -50,5 +59,31 @@ describe('votação do TSE no servidor', () => {
 
   it('candidato que não existe é 404', async () => {
     await expect(votacaoNoMapa('nao-existe')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('favoritos: marcar grava pela chave, desmarcar apaga, e sem a migration a votação segue sem eles', async () => {
+    apagadas.length = 0;
+    falhaNosFavoritos = false;
+    const fulano = { ano: 2026, uf: 'AL', cargoCodigo: 7, numero: '15123' };
+
+    await marcarFavorito('u1', fulano, true);
+    expect(escritas.at(-1)).toMatchObject({
+      tabela: 'cmd_election_favorites',
+      chave: 'user_id,year,uf,office_code,number',
+      linhas: [{ user_id: 'u1', year: 2026, uf: 'AL', office_code: 7, number: '15123' }],
+    });
+
+    await marcarFavorito('u1', fulano, false);
+    expect(apagadas.at(-1)).toEqual({
+      tabela: 'cmd_election_favorites',
+      filtros: { user_id: 'eq.u1', year: 'eq.2026', uf: 'eq.AL', office_code: 'eq.7', number: 'eq.15123' },
+    });
+
+    linhas.cmd_election_favorites = [{ year: 2026, uf: 'AL', office_code: 7, number: '15123' }];
+    expect(await favoritosDe('u1')).toEqual(['2026:AL:7:15123']);
+
+    falhaNosFavoritos = true;
+    expect(await favoritosDe('u1')).toEqual([]);
+    falhaNosFavoritos = false;
   });
 });

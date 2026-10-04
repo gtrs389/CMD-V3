@@ -4,6 +4,7 @@ import {
   PlanilhaInvalida,
   camposDaLinha,
   cargosDaVotacao,
+  chaveDoFavorito,
   escolasDoCandidato,
   filtrarCandidatos,
   indiceDeColunas,
@@ -175,5 +176,30 @@ describe('os dois totais do candidato', () => {
     );
     expect(textoDosTotais({ total: 5678, totalOficial: 5678 })).toBe('5.678 votos (todos já no mapa)');
     expect(textoDosTotais({ total: 300, totalOficial: null })).toBe('300 votos');
+  });
+});
+
+describe('favoritos no seletor', () => {
+  const c = (id: string, nome: string, numero: string, total: number, turno = 1) => ({
+    id, ano: 2026, turno, uf: 'AL', cargoCodigo: 7, cargo: 'Deputado Estadual', numero, nome,
+    tipo: 'CANDIDATO' as const, total, totalOficial: null,
+  });
+  const LISTA = [c('1', 'ANA', '15123', 900), c('2', 'BIA', '13456', 300), c('3', 'CAIO', '22111', 500)];
+  const favoritos = new Set([chaveDoFavorito(LISTA[1])]);
+
+  it('a chave ignora o turno: o favorito do 1º turno continua no 2º', () => {
+    expect(chaveDoFavorito(LISTA[1])).toBe('2026:AL:7:13456');
+    expect(chaveDoFavorito(c('9', 'BIA', '13456', 1, 2))).toBe('2026:AL:7:13456');
+  });
+
+  it('favoritos vêm primeiro; "só favoritos" mostra só eles', () => {
+    expect(filtrarCandidatos(LISTA, { turno: 1, cargoCodigo: null, busca: '', favoritos }).map((x) => x.nome)).toEqual([
+      'BIA',
+      'ANA',
+      'CAIO',
+    ]);
+    expect(
+      filtrarCandidatos(LISTA, { turno: 1, cargoCodigo: null, busca: '', favoritos, soFavoritos: true }).map((x) => x.nome),
+    ).toEqual(['BIA']);
   });
 });
