@@ -639,6 +639,23 @@ describe('as escolas do mapa contam a Equipe da planilha', () => {
     expect(escritas).toEqual([]);
   });
 
+  it('no mapa do time, "Ver pessoas" fecha com o número do pino: gente de outro time fica de fora', async () => {
+    // O mesmo Lider no time oficial, votando na mesma escola.
+    tabela('cmd_member_locations').push({
+      id: 'loc-oficial',
+      client_id: OFICIAL,
+      member_id: 'of-lider',
+      location_kind: 'POLLING_PLACE',
+      status: 'SUCCESS',
+      location_id: 'ml-escola',
+      updated_at: '2026-09-30T00:00:00.000Z',
+    });
+    const [mapa, lista] = await Promise.all([mapOverview(COPIA), placeMembers('ml-escola', { clientId: COPIA })]);
+
+    expect(lista.total).toBe(mapa.pollingPlaces[0].total);
+    expect(lista.items.every((pessoa) => pessoa.clientId === COPIA)).toBe(true);
+  });
+
   it('com a planilha ligada, a Equipe do banco da cópia não aparece em "Ver pessoas"', async () => {
     tabela('cmd_members').find((m) => m.id === 'cp-equipe')!.zone = '10';
     tabela('cmd_member_locations').push({
