@@ -48,7 +48,7 @@ export function MobileNav() {
             className="text-ink-900"
           />
           <Logo withName={false} size="sm" />
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
+          <span className="min-w-0 flex-1 wrap-break-word text-sm font-semibold text-ink-900">
             Central de mobilização
           </span>
 

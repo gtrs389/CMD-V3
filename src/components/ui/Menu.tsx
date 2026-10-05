@@ -199,7 +199,7 @@ export function Menu({ actions, label = 'Mais ações', align = 'right' }: MenuP
                   )}
                 >
                   {action.icon}
-                  <span className="truncate">{action.label}</span>
+                  <span className="wrap-break-word">{action.label}</span>
                 </button>
               ))}
             </div>,

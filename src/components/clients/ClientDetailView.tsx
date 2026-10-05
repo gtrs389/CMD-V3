@@ -324,7 +324,7 @@ export function ClientDetailView({
             {client.isCopy && client.copyOf && user?.role === 'ADMIN' ? (
               <p className="mt-1 flex items-center gap-1.5 text-[0.8125rem] text-ink-500">
                 <Copy aria-hidden="true" className="size-3.5 shrink-0" />
-                <span className="truncate">
+                <span className="wrap-break-word">
                   Cópia de{' '}
                   <Link
                     href={`/candidatos/${client.copyOf.id}`}
@@ -345,7 +345,7 @@ export function ClientDetailView({
             {client.stateUf ? (
               <p className="mt-1 flex items-center gap-1.5 text-[0.8125rem] text-ink-500">
                 <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
-                <span className="truncate">
+                <span className="wrap-break-word">
                   {client.stateUf}
                   {client.cities.length > 0 ? ` · ${client.cities.join(', ')}` : ''}
                 </span>
@@ -376,7 +376,7 @@ export function ClientDetailView({
                     </li>
                   ))}
                 </ul>
-                <span className="truncate text-[0.8125rem] text-ink-500">
+                <span className="wrap-break-word text-[0.8125rem] text-ink-500">
                   {client.people.length}{' '}
                   {client.people.length === 1
                     ? 'administrador do time'
@@ -384,7 +384,7 @@ export function ClientDetailView({
                 </span>
               </div>
             ) : (
-              <p className="mt-1 truncate text-[0.8125rem] text-ink-500">
+              <p className="mt-1 wrap-break-word text-[0.8125rem] text-ink-500">
                 Nenhum administrador cadastrado.
               </p>
             )}

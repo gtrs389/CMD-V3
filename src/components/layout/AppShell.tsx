@@ -23,7 +23,7 @@ interface AppShellProps {
 export function AppShell({ children, withSidebar = true }: AppShellProps) {
   if (!withSidebar) {
     return (
-      <div className="min-h-dvh bg-canvas">
+      <div className="relative min-h-dvh overflow-clip bg-canvas">
         <header className="safe-top sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur">
           <div className="safe-x mx-auto flex h-14 w-full max-w-[76rem] items-center gap-2 px-4 sm:px-6">
             <Logo size="sm" />
@@ -40,8 +40,16 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
     );
   }
 
+  /*
+   * `relative overflow-clip`: a pagina termina onde o conteudo termina.
+   * Nenhum elemento solto — um brilho desfocado, uma lista posicionada, um
+   * enfeite girando — consegue esticar a rolagem alem do fim e deixar um
+   * vao cinza "sem fim" embaixo. `clip` (e nao `hidden`) nao cria area de
+   * rolagem propria: o cabecalho e as barras grudadas (sticky) continuam
+   * funcionando, e o que e `fixed` (menu lateral, janelas) nao e cortado.
+   */
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="relative min-h-dvh overflow-clip bg-canvas">
       <Sidebar />
       <MobileNav />
 

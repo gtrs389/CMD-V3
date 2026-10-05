@@ -19,8 +19,8 @@ interface RecruitedByProps {
  * depois que o usuario responsavel e excluido. Sem evidencia nenhuma, mostra
  * "Cadastro anterior ao rastreamento" em vez de atribuir a alguem.
  *
- * O bloco inteiro encolhe com `truncate`: no celular a informacao continua
- * visivel sem rolagem horizontal.
+ * O texto quebra linha em vez de ser cortado: no celular a informacao
+ * continua inteira e visivel, sem rolagem horizontal.
  */
 export function RecruitedBy({ recruiter, withLabel = false, className }: RecruitedByProps) {
   const texto = recruiterText(recruiter);
@@ -45,7 +45,7 @@ export function RecruitedBy({ recruiter, withLabel = false, className }: Recruit
         {withLabel ? (
           <span className="block text-[0.6875rem] text-ink-400">{RECRUITED_BY_LABEL}</span>
         ) : null}
-        <span className="block truncate text-xs text-ink-500" title={texto}>
+        <span className="block wrap-break-word text-xs text-ink-500" title={texto}>
           {texto}
         </span>
       </span>

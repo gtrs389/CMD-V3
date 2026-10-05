@@ -10,6 +10,7 @@ import { formatNumber, initials, matchesSearch } from '@/lib/utils/text';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
 import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from '@/components/dashboard/votacao/cores';
 import { Spinner } from '@/components/ui/Spinner';
+import { CarregandoVotacao } from '@/components/dashboard/votacao/CarregandoVotacao';
 import { FotoDoCandidato } from './FotoDoCandidato';
 
 /**
@@ -58,6 +59,11 @@ interface CentralDoTimeProps {
   marcados: CandidatoMarcado[];
   fallbackCenter?: { latitude: number; longitude: number };
   mapaRef: RefObject<HTMLDivElement | null>;
+  /**
+   * Candidatos a caminho do mapa: a espera animada cobre o mapa desde o
+   * clique em "Ver no mapa", antes mesmo da votacao chegar.
+   */
+  preparando?: CandidatoDaVotacao[] | null;
 }
 
 export function CentralDoTime({
@@ -70,6 +76,7 @@ export function CentralDoTime({
   marcados,
   fallbackCenter,
   mapaRef,
+  preparando = null,
 }: CentralDoTimeProps) {
   const passo = !time ? 1 : marcados.length === 0 && !pedido?.candidatos.length ? 2 : 3;
 
@@ -129,7 +136,7 @@ export function CentralDoTime({
                 >
                   {feito ? <Check aria-hidden="true" className="size-4" strokeWidth={3} /> : p.icone}
                 </span>
-                <span className="min-w-0 truncate">
+                <span className="min-w-0 wrap-break-word">
                   <span className="sr-only">Passo {p.n}: </span>
                   {p.texto}
                 </span>
@@ -160,16 +167,26 @@ export function CentralDoTime({
               </p>
             ) : null}
             {/* Um mapa por time: trocar de time recomeca o recorte. */}
-            <MobilizationMap
-              key={time.id}
-              clientId={time.id}
-              clientName={time.nome}
-              destaque
-              naSala
-              pedidoDeVotacao={pedido}
-              onCandidatosChange={onCandidatosDoMapa}
-              fallbackCenter={fallbackCenter}
-            />
+            <div className="relative">
+              {preparando?.length ? (
+                <div className="absolute inset-0 z-[46] overflow-hidden rounded-card">
+                  <CarregandoVotacao
+                    candidatos={preparando}
+                    cores={preparando.map((_, i) => (preparando.length > 1 ? CORES_DOS_CANDIDATOS[i] : '#e0a426'))}
+                  />
+                </div>
+              ) : null}
+              <MobilizationMap
+                key={time.id}
+                clientId={time.id}
+                clientName={time.nome}
+                destaque
+                naSala
+                pedidoDeVotacao={pedido}
+                onCandidatosChange={onCandidatosDoMapa}
+                fallbackCenter={fallbackCenter}
+              />
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-card border-2 border-dashed border-line px-6 py-10 text-center">
@@ -252,17 +269,19 @@ function SeletorDeTime({
       ) : times.length === 0 ? (
         <p className="py-4 text-sm text-ink-500">{busca ? 'Nenhum time com esse nome.' : 'Nenhum time cadastrado.'}</p>
       ) : (
-        <ul className="-mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pt-1 pb-2" aria-label="Times">
+        // Grade, e nao fila com rolagem lateral: todo time aparece, com o nome
+        // inteiro, e os cartoes de cada linha ficam da mesma altura.
+        <ul className="grid gap-2.5 pt-1 sm:grid-cols-2 xl:grid-cols-3" aria-label="Times">
           {times.map((c, i) => {
             const ligado = escolhido?.id === c.id;
             return (
-              <li key={c.id} className="cmd-cascata snap-start" style={{ '--cmd-atraso': `${Math.min(i, 10) * 40}ms` } as CSSProperties}>
+              <li key={c.id} className="cmd-cascata flex" style={{ '--cmd-atraso': `${Math.min(i, 10) * 40}ms` } as CSSProperties}>
                 <button
                   type="button"
                   aria-pressed={ligado}
                   onClick={() => onEscolher(ligado ? null : comoTime(c))}
                   className={cn(
-                    'group relative flex w-56 items-center gap-3 overflow-hidden rounded-card border p-3 text-left transition-all duration-300',
+                    'group relative flex h-full w-full items-center gap-3 overflow-hidden rounded-card border p-3 text-left transition-all duration-300',
                     ligado
                       ? 'border-accent-600 bg-gradient-to-br from-accent-600 to-[#1e3a8a] text-white shadow-[0_14px_30px_-14px_rgba(37,99,235,0.9)]'
                       : 'border-line bg-surface hover:-translate-y-0.5 hover:border-accent-100 hover:shadow-raised',
@@ -286,7 +305,7 @@ function SeletorDeTime({
                     </span>
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{c.name}</span>
+                    <span className="block wrap-break-word text-sm font-semibold">{c.name}</span>
                     <span className={cn('block text-xs', ligado ? 'text-white/75' : 'text-ink-500')}>
                       {formatNumber(c.memberCount)} integrantes
                       {c.isDemo ? ' · DEMO' : c.isCopy ? ' · duplicado' : ''}
@@ -336,7 +355,7 @@ function TimeDaSessao({
       </span>
       <div className="min-w-0">
         <p className="text-[0.6875rem] font-semibold tracking-wide text-accent-700 uppercase">Seu time</p>
-        <p className="truncate text-sm font-semibold text-ink-900">{nome}</p>
+        <p className="wrap-break-word text-sm font-semibold text-ink-900">{nome}</p>
       </div>
     </div>
   );
@@ -372,20 +391,19 @@ export function BandejaDoMapa({
       <div
         role="region"
         aria-label="Candidatos marcados para o mapa"
-        className="cmd-bandeja pointer-events-auto flex w-full max-w-3xl flex-col gap-2 rounded-card border border-white/10 bg-navy-900/95 p-2.5 text-white shadow-[0_24px_50px_-12px_rgba(15,30,53,0.7)] backdrop-blur-md sm:flex-row sm:items-center"
+        // Os nomes inteiros numa linha (quebrando quando precisa) e as acoes
+        // na de baixo: nome comprido nunca empurra nem esconde o botao.
+        className="cmd-bandeja pointer-events-auto flex w-full max-w-3xl flex-col gap-2 rounded-card border border-white/10 bg-navy-900/95 p-2.5 text-white shadow-[0_24px_50px_-12px_rgba(15,30,53,0.7)] backdrop-blur-md"
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="hidden shrink-0 pl-1 text-[0.6875rem] font-semibold tracking-wide text-navy-300 uppercase sm:block">
-            {marcados.length}/{MAXIMO_DE_CANDIDATOS}
-          </span>
-          <ul className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto" aria-label="Marcados">
+        <div className="flex min-w-0 items-center gap-2">
+          <ul className="flex min-w-0 flex-1 flex-wrap gap-1.5" aria-label="Marcados">
             {marcados.map((c, i) => (
-              <li key={c.chave} className="cmd-chip-entra shrink-0">
+              <li key={c.chave} className="cmd-chip-entra max-w-full">
                 <button
                   type="button"
                   onClick={() => onTirar(c.chave)}
                   title={`Tirar ${c.nome}`}
-                  className="inline-flex min-h-9 max-w-52 items-center gap-1.5 rounded-pill border border-white/15 bg-white/10 py-0.5 pr-2 pl-0.5 text-xs font-semibold transition-colors hover:bg-white/20"
+                  className="inline-flex min-h-9 items-center text-left gap-1.5 rounded-pill border border-white/15 bg-white/10 py-0.5 pr-2 pl-0.5 text-xs font-semibold transition-colors hover:bg-white/20"
                 >
                   <FotoDoCandidato cargo={c.cargo} sqcand={c.sqcand} nome={c.nome} tamanho="xs" />
                   <span
@@ -393,7 +411,7 @@ export function BandejaDoMapa({
                     className="size-2 shrink-0 rounded-full ring-2 ring-white/20"
                     style={{ background: CORES_DOS_CANDIDATOS[i] }}
                   />
-                  <span className="truncate">{c.nome}</span>
+                  <span className="wrap-break-word">{c.nome}</span>
                   <X aria-hidden="true" className="size-3 shrink-0 text-white/60" />
                 </button>
               </li>
@@ -401,7 +419,11 @@ export function BandejaDoMapa({
           </ul>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2 border-t border-white/10 pt-2">
+          <span className="pl-1 text-[0.6875rem] font-semibold tracking-wide text-navy-300 uppercase tabular-nums">
+            {marcados.length}/{MAXIMO_DE_CANDIDATOS} no mapa
+          </span>
+          <span className="flex-1" />
           <button
             type="button"
             onClick={onLimpar}

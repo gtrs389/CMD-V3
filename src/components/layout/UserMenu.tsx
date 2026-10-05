@@ -73,7 +73,7 @@ export function UserMenu() {
             {initials(user.name)}
           </span>
         )}
-        <span className="hidden max-w-36 truncate sm:block">{user.name}</span>
+        <span className="hidden max-w-56 wrap-break-word sm:block">{user.name}</span>
         <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-ink-500" />
       </button>
 
@@ -83,9 +83,9 @@ export function UserMenu() {
           className="absolute right-0 z-50 mt-1 w-60 animate-scale-in overflow-hidden rounded-control border border-line bg-surface py-1 shadow-overlay"
         >
           <div className="border-b border-line px-3 py-2">
-            <p className="truncate text-sm font-semibold text-ink-900">{user.name}</p>
+            <p className="wrap-break-word text-sm font-semibold text-ink-900">{user.name}</p>
             {user.email ? (
-              <p className="truncate text-xs text-ink-500">{user.email}</p>
+              <p className="break-all text-xs text-ink-500">{user.email}</p>
             ) : null}
             <p className="mt-1 text-xs font-medium text-ink-700">{roleLabel(user.role, user.tier)}</p>
           </div>

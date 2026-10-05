@@ -438,7 +438,7 @@ function PinDetails({
         {pin.phone ? (
           <p className="text-xs text-ink-500">{formatPhone(pin.phone)}</p>
         ) : null}
-        {pin.email ? <p className="truncate text-xs text-ink-500">{pin.email}</p> : null}
+        {pin.email ? <p className="break-all text-xs text-ink-500">{pin.email}</p> : null}
 
         {local ? <p className="text-xs text-ink-700">{local}</p> : null}
         {municipio ? <p className="text-xs text-ink-500">{municipio}</p> : null}
@@ -635,7 +635,7 @@ function LideresNoBalao({ place }: { place: PollingPlacePin }) {
         {mostrar.map((l) => (
           <li key={l.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
             <span className="min-w-0">
-              <span className="block truncate text-xs font-medium text-ink-900">{l.name}</span>
+              <span className="block wrap-break-word text-xs font-medium text-ink-900">{l.name}</span>
               <span className="mt-0.5 block h-1 overflow-hidden rounded-pill bg-white">
                 <span className="block h-full rounded-pill bg-navy-800" style={{ width: `${Math.max(6, (l.total / maior) * 100)}%` }} />
               </span>

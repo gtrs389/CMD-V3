@@ -207,7 +207,7 @@ export function Modal({
                 className="-ml-1 mb-1 inline-flex min-h-8 max-w-full items-center gap-1 rounded-control px-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
               >
                 <ArrowLeft aria-hidden="true" className="size-3.5 shrink-0" />
-                <span className="truncate">Voltar{backLabel ? ` para ${backLabel}` : ''}</span>
+                <span className="wrap-break-word">Voltar{backLabel ? ` para ${backLabel}` : ''}</span>
               </button>
             ) : null}
             {header ?? (

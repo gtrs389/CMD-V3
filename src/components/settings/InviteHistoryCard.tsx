@@ -366,10 +366,10 @@ export function InviteHistoryCard() {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-ink-900">
+                        <p className="wrap-break-word text-sm font-semibold text-ink-900">
                           {row.ownerName}
                         </p>
-                        <p className="flex flex-wrap items-center gap-1.5 truncate text-xs text-ink-500">
+                        <p className="flex flex-wrap items-center gap-1.5 wrap-break-word text-xs text-ink-500">
                           <span>
                             {row.ownerRole ? ROLE_LABELS[row.ownerRole] : '--'} · {row.clientName}
                           </span>
@@ -429,7 +429,7 @@ function Line({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-ink-500">{label}</dt>
-      <dd className="truncate font-medium text-ink-900">{value}</dd>
+      <dd className="wrap-break-word font-medium text-ink-900">{value}</dd>
     </div>
   );
 }

@@ -33,6 +33,7 @@ import {
 import { AndamentoAoVivo, BotaoDaVotacao } from './votacao/VotacaoTse';
 import { RaioXDaEscola, type CandidatoNoRaioX } from './votacao/RaioXDaEscola';
 import { PlacarDosCandidatos } from './votacao/PlacarDosCandidatos';
+import { CarregandoVotacao } from './votacao/CarregandoVotacao';
 import { MenuDoPdf, type OpcaoDoPdf } from './votacao/MenuDoPdf';
 import { CORES_DOS_CANDIDATOS } from './votacao/cores';
 import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
@@ -581,7 +582,7 @@ export function MobilizationMap({
         </span>
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">Líder</p>
-          <p className="truncate text-sm font-semibold text-ink-900">{liderEscolhido.name}</p>
+          <p className="wrap-break-word text-sm font-semibold text-ink-900">{liderEscolhido.name}</p>
         </div>
       </div>
       <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-500">
@@ -602,7 +603,7 @@ export function MobilizationMap({
         {maisForte ? (
           <div className="flex max-w-full min-w-0 items-baseline gap-1">
             <dt className="shrink-0">Mais forte em</dt>
-            <dd className="max-w-56 min-w-0 truncate font-semibold text-ink-900">
+            <dd className="min-w-0 wrap-break-word font-semibold text-ink-900">
               {maisForte.title ?? 'local de votação'} ({formatNumber(maisForte.total)})
             </dd>
           </div>
@@ -644,7 +645,7 @@ export function MobilizationMap({
           )}
           style={{ animationDelay: `${120 + i * 70}ms` }}
         >
-          <dt className="truncate text-[0.6875rem] font-medium tracking-wide text-white/70 uppercase">{item.rotulo}</dt>
+          <dt className="wrap-break-word text-[0.6875rem] font-medium tracking-wide text-white/70 uppercase">{item.rotulo}</dt>
           <dd className={cn('font-semibold text-white', item.forte ? 'text-2xl' : 'text-xl')}>
             <Contador valor={item.valor} />
           </dd>
@@ -940,6 +941,12 @@ export function MobilizationMap({
               ) : null}
             </>
           )}
+
+          {/* "Ver no mapa": enquanto a votacao dos escolhidos chega, a espera
+              animada cobre o mapa (que ainda nao tem o que mostrar). */}
+          {candidato && votacao === null && !erroVotacao && !loading && !error ? (
+            <CarregandoVotacao candidatos={candidatos} cores={candidatos.map((_, i) => corDo(i))} />
+          ) : null}
 
           {/* CONTROLES DO MAPA, sobre os tiles. */}
           {pronto ? (

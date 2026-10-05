@@ -35,7 +35,7 @@ export function TagDoLider({
   const origem =
     member.tier === 'LIDER' ? 'Tag do Líder' : `Tag do Líder ${member.recruitedBy?.name ?? ''}`.trim();
   const classes = cn(
-    'inline-flex max-w-full shrink-0 items-center gap-1 rounded-pill bg-accent-50 px-2 py-0.5 align-middle text-[0.6875rem] font-semibold tracking-wide whitespace-nowrap text-accent-700',
+    'inline-flex max-w-full shrink-0 items-center gap-1 rounded-pill bg-accent-50 px-2 py-0.5 align-middle text-[0.6875rem] font-semibold tracking-wide text-accent-700',
     onClick && 'transition-colors hover:bg-accent-100',
     className,
   );
@@ -43,7 +43,7 @@ export function TagDoLider({
     <>
       <Tag aria-hidden="true" className="size-3 shrink-0" />
       <span className="sr-only">Tag: </span>
-      <span className="truncate">{tag}</span>
+      <span className="wrap-break-word">{tag}</span>
     </>
   );
 
@@ -81,7 +81,7 @@ export function NomeComTag({
 }) {
   return (
     <span className={cn('flex min-w-0 items-center gap-1.5', className)}>
-      <span className={cn('min-w-0 truncate', nomeClassName)}>{member.name}</span>
+      <span className={cn('min-w-0 wrap-break-word', nomeClassName)}>{member.name}</span>
       <TagDoLider member={member} />
     </span>
   );

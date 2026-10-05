@@ -137,7 +137,7 @@ export function RecruitView() {
               <Avatar name={client.name} src={client.photo} size="md" />
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.9375rem] font-semibold text-ink-900">
+                <p className="wrap-break-word text-[0.9375rem] font-semibold text-ink-900">
                   {client.name}
                 </p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-500">

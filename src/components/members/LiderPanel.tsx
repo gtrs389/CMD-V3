@@ -312,7 +312,7 @@ export function LiderPanel({
                       <Avatar name={m.name} src={m.photo} size="sm" />
                       <span className="min-w-0 flex-1">
                         <NomeComTag member={m} nomeClassName="text-sm font-medium text-ink-900" />
-                        <span className="block truncate text-xs text-ink-500">
+                        <span className="block wrap-break-word text-xs text-ink-500">
                           {m.phone ? formatPhone(m.phone) : 'sem telefone'}
                           {m.semDataDeCadastro ? '' : ` · ${formatDate(m.createdAt)}`}
                           {m.district ? ` · ${m.district}` : ''}
@@ -439,7 +439,7 @@ function Barras({ itens, cor }: { itens: { rotulo: string; quantidade: number }[
     <ul className="space-y-1.5">
       {itens.map((item) => (
         <li key={item.rotulo} className="grid grid-cols-[7rem_1fr_2rem] items-center gap-2 text-sm">
-          <span className="truncate text-ink-700 first-letter:uppercase">{item.rotulo}</span>
+          <span className="wrap-break-word text-ink-700 first-letter:uppercase">{item.rotulo}</span>
           <span className="h-2 overflow-hidden rounded-pill bg-ink-100">
             <span className={cn('block h-full rounded-pill', cor)} style={{ width: `${Math.max(4, (item.quantidade / maior) * 100)}%` }} />
           </span>

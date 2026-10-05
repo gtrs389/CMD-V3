@@ -223,13 +223,13 @@ export function BatchLinksModal({ open, client, onClose }: BatchLinksModalProps)
                       </span>
 
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
+                        <span className="block wrap-break-word text-sm font-medium">
                           Link {indice + 1}
                         </span>
                         {/* O endereco fica a vista aqui de proposito: sao
                             varios, e quem distribui precisa distinguir um do
                             outro para saber o que ja mandou. */}
-                        <span className="block truncate text-xs text-ink-500">
+                        <span className="block wrap-break-word text-xs text-ink-500">
                           {link.url ?? 'Endereço indisponível'}
                         </span>
                       </span>

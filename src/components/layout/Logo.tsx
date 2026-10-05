@@ -45,10 +45,10 @@ export function Logo({ className, withName = true, size = 'md' }: LogoProps) {
 
       {withName ? (
         <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold text-ink-900">
+          <span className="block wrap-break-word text-sm font-semibold text-ink-900">
             {displayName}
           </span>
-          <span className="block truncate text-xs text-ink-500">{appConfig.tagline}</span>
+          <span className="block wrap-break-word text-xs text-ink-500">{appConfig.tagline}</span>
         </span>
       ) : null}
     </span>

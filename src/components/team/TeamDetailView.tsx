@@ -124,7 +124,7 @@ export function TeamDetailView() {
             </div>
 
             {profile.email ? (
-              <p className="mt-1 truncate text-[0.8125rem] text-ink-500">{profile.email}</p>
+              <p className="mt-1 break-all text-[0.8125rem] text-ink-500">{profile.email}</p>
             ) : null}
             <p className="mt-0.5 text-xs text-ink-400">
               {tier === 'EQUIPE' ? 'Equipe' : 'Líder'} em {profile.candidateName} desde{' '}

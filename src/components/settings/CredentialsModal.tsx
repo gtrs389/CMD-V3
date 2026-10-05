@@ -142,7 +142,7 @@ function Linha({
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">
         <dt className="text-xs text-ink-500">{label}</dt>
-        <dd className="truncate font-mono text-sm text-ink-900">{value}</dd>
+        <dd className="break-all font-mono text-sm text-ink-900">{value}</dd>
       </div>
       <button
         type="button"
