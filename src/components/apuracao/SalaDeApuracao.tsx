@@ -9,11 +9,8 @@ import {
   Check,
   Crown,
   Flag,
-  MapPin,
-  Maximize,
-  Minimize,
   Plus,
-  Sparkles,
+  UserRound,
   Star,
   Trophy,
   Zap,
@@ -156,26 +153,6 @@ export function SalaDeApuracao() {
       .catch(() => setMarcados(antes));
   }
 
-  // Modo telao: a Sala ocupa a tela inteira, para a TV do comite.
-  const raiz = useRef<HTMLDivElement>(null);
-  const [telao, setTelao] = useState(false);
-  useEffect(() => {
-    // Esc ou o botao do navegador tambem saem do telao.
-    const mudou = () => setTelao(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', mudou);
-    return () => document.removeEventListener('fullscreenchange', mudou);
-  }, []);
-  function alternarTelao() {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().finally(() => setTelao(false));
-    } else {
-      void raiz.current
-        ?.requestFullscreen()
-        .then(() => setTelao(true))
-        .catch(() => undefined);
-    }
-  }
-
   /* --- O time no mapa ------------------------------------------------- */
 
   const [time, setTime] = useState<TimeDaSala | null>(null);
@@ -303,16 +280,12 @@ export function SalaDeApuracao() {
 
   return (
     <div
-      ref={raiz}
-      className={cn('space-y-5', telao && 'overflow-y-auto bg-canvas p-5', paraOMapa.length > 0 && 'pb-28 sm:pb-24')}
+      className={cn('space-y-5', paraOMapa.length > 0 && 'pb-28 sm:pb-24')}
     >
       <Cabecalho
         sala={sala}
         cargo={cargoAtivo}
         aoVivo={aoVivo}
-        telao={telao}
-        onTelao={alternarTelao}
-        onMapa={irParaOMapa}
       />
 
       <CentralDoTime
@@ -335,9 +308,7 @@ export function SalaDeApuracao() {
         <div className="flex items-center justify-center gap-2 rounded-card border border-line bg-surface py-16 text-sm text-ink-500">
           <Spinner className="size-4" /> Abrindo a Sala de Apuração…
         </div>
-      ) : sala.cargos.length === 0 ? (
-        <AguardandoTse />
-      ) : (
+      ) : sala.cargos.length === 0 ? null : (
         <>
           <Favoritos
             sala={sala}
@@ -410,16 +381,10 @@ function Cabecalho({
   sala,
   cargo,
   aoVivo,
-  telao,
-  onTelao,
-  onMapa,
 }: {
   sala: Sala | null;
   cargo: ResultadoDoCargo | null;
   aoVivo: ReturnType<typeof useVotacaoAoVivo>;
-  telao: boolean;
-  onTelao: () => void;
-  onMapa: () => void;
 }) {
   const secoes = cargo?.secoes.pct ?? 0;
   const final = cargo?.final ?? false;
@@ -475,25 +440,9 @@ function Cabecalho({
           ) : null}
         </div>
 
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3 pb-5">
           <AnelDeSecoes pct={secoes} totalizadas={cargo?.secoes.totalizadas ?? 0} total={cargo?.secoes.total ?? 0} />
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={onMapa}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-white/25 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
-            >
-              <MapPin aria-hidden="true" className="size-3.5" /> Mapa do time
-            </button>
-            <button
-              type="button"
-              onClick={onTelao}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-white/25 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
-            >
-              {telao ? <Minimize aria-hidden="true" className="size-3.5" /> : <Maximize aria-hidden="true" className="size-3.5" />}
-              {telao ? 'Sair do telão' : 'Modo telão'}
-            </button>
-          </div>
+
         </div>
       </div>
 
@@ -555,21 +504,6 @@ function AnelDeSecoes({ pct: valor, totalizadas, total }: { pct: number; totaliz
   );
 }
 
-function AguardandoTse() {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-card border border-line bg-surface px-6 py-14 text-center shadow-card">
-      <span className="relative flex size-12 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-        <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-200 opacity-60" />
-        <Zap aria-hidden="true" className="relative size-6" />
-      </span>
-      <h2 className="text-lg font-semibold text-ink-900">Aguardando o primeiro resultado do TSE</h2>
-      <p className="max-w-md text-sm text-ink-500">
-        Assim que o TSE publicar, os candidatos aparecem aqui com foto, votos e porcentagem — e a tela se atualiza
-        sozinha a cada meio minuto.
-      </p>
-    </div>
-  );
-}
 
 /* -------------------------------------------------------------------------
    Pecas
@@ -1000,7 +934,7 @@ function Favoritos({
   return (
     <section aria-label="Seus favoritos" className="space-y-2">
       <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-        <Sparkles aria-hidden="true" className="size-4 text-gold-600" /> Seus candidatos
+        <UserRound aria-hidden="true" className="size-4 text-gold-600" /> Seus candidatos
       </h2>
       <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
         {meus.map(({ r, c }) => (

@@ -179,8 +179,8 @@ export function CentralDoTime({
             </span>
             <p className="text-base font-semibold text-ink-900">Escolha um time para abrir o mapa</p>
             <p className="max-w-md text-sm text-ink-500">
-              O mapa mostra onde o time tem mais votos. Depois é só marcar os candidatos da apuração e tocar em
-              <b> Ver no mapa</b>.
+              O mapa mostra onde o time tem mais votos. Depois é só tocar em <b>Votação 2026</b> e escolher os
+              candidatos para ver onde cada um teve voto.
             </p>
           </div>
         )}
