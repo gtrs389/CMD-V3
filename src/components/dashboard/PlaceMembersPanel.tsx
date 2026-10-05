@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 export function PlaceMembersPanel({
   place,
   clientId,
+  leaderId,
   onOpenMember,
   onClose,
 }: {
@@ -35,6 +36,8 @@ export function PlaceMembersPanel({
    * tambem quem vota ali e esta na planilha do Sheets do time duplicado (052).
    */
   clientId?: string;
+  /** Filtro "Lider" do mapa: a lista traz so quem ele cadastrou, como o pino. */
+  leaderId?: string | null;
   /**
    * Abre a ficha da pessoa na coluna lateral do mapa, sem sair dele. Fecha
    * esta lista junto: ela cobre a tela, e a ficha nasceria atras dela.
@@ -56,6 +59,7 @@ export function PlaceMembersPanel({
   const params = new URLSearchParams({ pagina: String(page), tamanho: '20' });
   if (term.trim()) params.set('busca', term.trim());
   if (clientId) params.set('time', clientId);
+  if (leaderId) params.set('lider', leaderId);
   const key = `${place.locationId}?${params}#${tick}`;
 
   useEffect(() => {

@@ -35,6 +35,12 @@ export interface MapQuery {
   zone: string | null;
   /** Esconde local de votacao abaixo deste tamanho. */
   minVotes: number;
+  /**
+   * So as pessoas que este Lider cadastrou (chave de `leaderKey`). A escola
+   * passa a contar so a Equipe dele, secao por secao, e some do mapa onde
+   * ele nao cadastrou ninguem.
+   */
+  leader: string | null;
 }
 
 export const DEFAULT_MAP_QUERY: MapQuery = {
@@ -44,6 +50,7 @@ export const DEFAULT_MAP_QUERY: MapQuery = {
   city: null,
   zone: null,
   minVotes: 0,
+  leader: null,
 };
 
 /** Cortes de tamanho oferecidos na tela. */
@@ -84,7 +91,30 @@ export function placeVotes(place: PollingPlacePin, zone: string | null): number 
    Recorte
    ------------------------------------------------------------------------- */
 
+/**
+ * A escola vista pelo Lider: total, genero e secoes so com quem ele
+ * cadastrou ali. Nulo quando ele nao cadastrou ninguem nela.
+ *
+ * O resto do mapa (contagem, ranking, balao, PDFs) le o pino como sempre;
+ * por isso o recorte do Lider troca o pino, em vez de cada tela ter de
+ * saber do filtro.
+ */
+export function placeOfLeader(place: PollingPlacePin, leader: string): PollingPlacePin | null {
+  const dele = place.leaders?.find((row) => row.id === leader);
+  if (!dele || dele.total <= 0) return null;
+  return {
+    ...place,
+    total: dele.total,
+    men: dele.men,
+    women: dele.women,
+    others: dele.others,
+    sections: dele.sections,
+    leaders: [dele],
+  };
+}
+
 function matchesPin(pin: MapPin, query: MapQuery): boolean {
+  if (query.leader && pin.leaderId !== query.leader) return false;
   if (query.state && normalizeSearch(pin.state) !== normalizeSearch(query.state)) return false;
   if (query.city && normalizeSearch(pin.city) !== normalizeSearch(query.city)) return false;
   if (query.zone && normalizeZone(pin.zone) !== normalizeZone(query.zone)) return false;
@@ -143,7 +173,9 @@ export function applyMapQuery(
   const places =
     query.kind === 'RESIDENCE'
       ? []
-      : (payload?.pollingPlaces ?? []).filter((place) => matchesPlace(place, query));
+      : (payload?.pollingPlaces ?? [])
+          .map((place) => (query.leader ? placeOfLeader(place, query.leader) : place))
+          .filter((place): place is PollingPlacePin => place !== null && matchesPlace(place, query));
 
   return {
     pins,
@@ -162,6 +194,17 @@ export interface MapOptions {
   /** Somente as cidades do estado escolhido: opcao morta confunde. */
   cities: string[];
   zones: string[];
+  /** Os Lideres com gente cadastrada que vota em alguma escola do mapa. */
+  leaders: LeaderOption[];
+}
+
+export interface LeaderOption {
+  id: string;
+  name: string;
+  /** Pessoas que ele cadastrou, somadas em todas as escolas do mapa. */
+  people: number;
+  /** Escolas onde ele tem alguem. */
+  places: number;
 }
 
 function sortText(values: Iterable<string>): string[] {
@@ -204,7 +247,21 @@ export function mapOptions(
     }
   }
 
-  return { states: sortText(states), cities: sortText(cities), zones: sortText(zones) };
+  // Os Lideres saem das escolas (todas, nao so as do estado escolhido): o
+  // filtro de Lider responde "onde ele tem gente", e a resposta pode estar
+  // em outro estado.
+  const lideres = new Map<string, LeaderOption>();
+  for (const place of places) {
+    for (const row of place.leaders ?? []) {
+      const atual = lideres.get(row.id) ?? { id: row.id, name: row.name, people: 0, places: 0 };
+      atual.people += row.total;
+      atual.places += 1;
+      lideres.set(row.id, atual);
+    }
+  }
+  const leaders = [...lideres.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  return { states: sortText(states), cities: sortText(cities), zones: sortText(zones), leaders };
 }
 
 /* -------------------------------------------------------------------------
@@ -268,6 +325,7 @@ export function activeFilterCount(query: MapQuery): number {
   if (query.city) total += 1;
   if (query.zone) total += 1;
   if (query.minVotes > 0) total += 1;
+  if (query.leader) total += 1;
   return total;
 }
 

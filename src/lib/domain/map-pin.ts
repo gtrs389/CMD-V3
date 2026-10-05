@@ -30,6 +30,8 @@ export interface MapPin {
   email: string | null;
   /** Lider ou Equipe. O pino de Lider abre as acoes do Lider no mapa. */
   tier?: 'LIDER' | 'EQUIPE';
+  /** Quem e da Equipe: o Lider que cadastrou (chave de `leaderKey`). */
+  leaderId?: string | null;
 }
 
 /**
@@ -64,6 +66,65 @@ export interface PollingPlacePin {
    * cadastro entra em uma linha propria, em vez de sumir da conta.
    */
   sections: SectionVotes[];
+  /**
+   * A mesma estimativa, quebrada pelo Lider que cadastrou cada pessoa da
+   * Equipe. Quem e Lider (cadastrado pelo Administrador) nao entra: a
+   * pergunta e "quantas pessoas o Lider cadastrou aqui". Ausente nos pinos
+   * da votacao oficial do TSE, que nao tem cadastro por tras.
+   */
+  leaders?: LeaderVotes[];
+}
+
+/** As pessoas que um Lider cadastrou e que votam no local. */
+export interface LeaderVotes {
+  /** Chave do Lider (`leaderKey`): o usuario dele, ou o nome, sem usuario. */
+  id: string;
+  name: string;
+  total: number;
+  men: number;
+  women: number;
+  others: number;
+  sections: SectionVotes[];
+}
+
+/**
+ * Chave do Lider: o usuario que cadastrou. Cadastro antigo, sem o usuario
+ * gravado, cai no nome — normalizado, para "JOSÉ" e "José" serem o mesmo.
+ */
+export function leaderKey(userId: string | null | undefined, name: string | null | undefined): string | null {
+  if (userId?.trim()) return userId.trim();
+  const nome = (name ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  return nome ? `nome:${nome}` : null;
+}
+
+/**
+ * Soma uma pessoa da Equipe no Lider dela, dentro do local: total, genero e
+ * secao, como a escola faz com a estimativa inteira.
+ */
+export function addToLeader(
+  place: Pick<PollingPlacePin, 'leaders'>,
+  leader: { id: string; name: string },
+  gender: 'men' | 'women' | 'others',
+  zone: string | null,
+  section: string | null,
+): void {
+  const leaders = (place.leaders ??= []);
+  let entry = leaders.find((row) => row.id === leader.id);
+  if (!entry) {
+    entry = { id: leader.id, name: leader.name, total: 0, men: 0, women: 0, others: 0, sections: [] };
+    leaders.push(entry);
+  }
+  entry.total += 1;
+  entry[gender] += 1;
+  const chave = sectionKey({ zone, section });
+  const existente = entry.sections.find((row) => sectionKey(row) === chave);
+  if (existente) existente.total += 1;
+  else entry.sections.push({ zone, section, total: 1 });
 }
 
 /** Votos de uma secao eleitoral dentro de um local de votacao. */

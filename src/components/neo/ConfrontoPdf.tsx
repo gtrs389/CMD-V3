@@ -3,7 +3,6 @@ import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
 import { appConfig } from '@/config/app.config';
 import {
   conversao,
-  fraseDoLider,
   leitura,
   lideresDoTime,
   type Confronto,
@@ -95,64 +94,30 @@ const CINZA = '#c3ccd6';
 const TRILHO = '#edf1f5';
 
 /**
- * A barra do lider: o comprimento e quanto ele cadastrou (relativo ao maior
- * da lista); dentro dela, ouro = quem pode ter votado, vermelho = quem
- * certamente nao votou no candidato, cinza = sem secao no cadastro.
+ * A barra do lider: o comprimento e quanto ele cadastrou, relativo ao maior
+ * da lista. Azul-marinho, a cor da estimativa no relatorio inteiro.
  */
-function BarraDoLider({ l, escala }: { l: Pick<LiderNaEscola, 'cadastrados' | 'noMaximo' | 'perda' | 'semSecao'>; escala: number }) {
-  const total = Math.max(1, l.cadastrados);
-  const comprimento = l.cadastrados > 0 ? Math.max(4, (l.cadastrados / Math.max(1, escala)) * 100) : 0;
-  const pedacos = [
-    { valor: l.noMaximo, cor: OURO },
-    { valor: l.perda, cor: VERMELHO },
-    { valor: l.semSecao, cor: CINZA },
-  ].filter((p) => p.valor > 0);
+function BarraDoLider({ cadastrados, escala }: { cadastrados: number; escala: number }) {
+  const comprimento = cadastrados > 0 ? Math.max(4, (cadastrados / Math.max(1, escala)) * 100) : 0;
   return (
-    <View style={{ height: 7, backgroundColor: TRILHO, borderRadius: 2 }}>
-      <View style={{ width: `${comprimento}%`, height: 7, flexDirection: 'row', borderRadius: 2, overflow: 'hidden' }}>
-        {pedacos.map((p, i) => (
-          <View
-            key={p.cor}
-            style={{ width: `${(p.valor / total) * 100}%`, height: 7, backgroundColor: p.cor, borderLeftWidth: i > 0 ? 0.8 : 0, borderLeftColor: C.white }}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-/** Legenda das barras dos lideres, sempre com o nome escrito ao lado da cor. */
-function LegendaDosLideres() {
-  const itens = [
-    { cor: OURO, texto: 'votaram (no máximo)' },
-    { cor: VERMELHO, texto: 'não votaram (no mínimo)' },
-    { cor: CINZA, texto: 'sem seção no cadastro' },
-  ];
-  return (
-    <View style={{ flexDirection: 'row', marginBottom: 6 }}>
-      {itens.map((i) => (
-        <View key={i.cor} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
-          <View style={{ width: 9, height: 5, borderRadius: 1, backgroundColor: i.cor, marginRight: 4 }} />
-          <Text style={{ fontSize: 6.8, color: C.muted }}>{s(i.texto)}</Text>
-        </View>
-      ))}
+    <View style={{ height: 6, backgroundColor: TRILHO, borderRadius: 2 }}>
+      <View style={{ width: `${comprimento}%`, height: 6, backgroundColor: C.navy, borderRadius: 2 }} />
     </View>
   );
 }
 
 /** Colunas dos lideres: as mesmas no cartao da escola e no ranking do time. */
-const COL = { cadastrou: 54, votaram: 66, naoVotaram: 82, barra: 112, escolas: 40 };
+const COL = { cadastrou: 64, parte: 70, barra: 150, escolas: 48 };
 const rotuloDaColuna = { fontSize: 5.8, fontFamily: 'Helvetica-Bold', color: C.faint, letterSpacing: 0.5 } as const;
 
-function CabecalhoDosLideres({ comEscolas = false }: { comEscolas?: boolean }) {
+function CabecalhoDosLideres({ parteDe, comEscolas = false }: { parteDe: string; comEscolas?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
       <Text style={[rotuloDaColuna, { flex: 1 }]}>{s('LÍDER')}</Text>
       {comEscolas ? <Text style={[rotuloDaColuna, { width: COL.escolas, textAlign: 'right' }]}>ESCOLAS</Text> : null}
       <Text style={[rotuloDaColuna, { width: COL.cadastrou, textAlign: 'right' }]}>CADASTROU</Text>
-      <Text style={[rotuloDaColuna, { width: COL.votaram, textAlign: 'right' }]}>{s('VOTARAM (MÁX.)')}</Text>
-      <Text style={[rotuloDaColuna, { width: COL.naoVotaram, textAlign: 'right' }]}>{s('NÃO VOTARAM (MÍN.)')}</Text>
-      <View style={{ width: COL.barra, paddingLeft: 12 }} />
+      <Text style={[rotuloDaColuna, { width: COL.parte, textAlign: 'right' }]}>{s(parteDe.toUpperCase())}</Text>
+      <View style={{ width: COL.barra, paddingLeft: 14 }} />
     </View>
   );
 }
@@ -160,11 +125,14 @@ function CabecalhoDosLideres({ comEscolas = false }: { comEscolas?: boolean }) {
 function LinhaDoLider({
   l,
   escala,
+  total,
   posicao,
   ultima,
 }: {
-  l: Omit<LiderNaEscola, 'secoes'> & { escolas?: number };
+  l: Pick<LiderNaEscola, 'lider' | 'cadastrados' | 'semSecao'> & { escolas?: number };
   escala: number;
+  /** A estimativa de que o lider e parte: a da escola, ou a do time. */
+  total: number;
   posicao?: number;
   ultima: boolean;
 }) {
@@ -190,12 +158,9 @@ function LinhaDoLider({
       </View>
       {l.escolas !== undefined ? <Text style={{ width: COL.escolas, textAlign: 'right', fontSize: 8.5, color: C.ink2 }}>{num(l.escolas)}</Text> : null}
       <Text style={{ width: COL.cadastrou, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text>
-      <Text style={{ width: COL.votaram, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(l.noMaximo)}</Text>
-      <Text style={{ width: COL.naoVotaram, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: l.perda > 0 ? VERMELHO : CINZA }}>
-        {l.perda > 0 ? num(l.perda) : '0'}
-      </Text>
-      <View style={{ width: COL.barra, paddingLeft: 12 }}>
-        <BarraDoLider l={l} escala={escala} />
+      <Text style={{ width: COL.parte, textAlign: 'right', fontSize: 8.5, color: C.ink2 }}>{pct(total > 0 ? (l.cadastrados / total) * 100 : null)}</Text>
+      <View style={{ width: COL.barra, paddingLeft: 14 }}>
+        <BarraDoLider cadastrados={l.cadastrados} escala={escala} />
       </View>
     </View>
   );
@@ -263,31 +228,14 @@ function CartaoDaEscola({ e, posicao, lideres }: { e: EscolaNoConfronto; posicao
       </View>
       {lideres.length > 0 ? (
         <View>
-          <CabecalhoDosLideres />
+          <CabecalhoDosLideres parteDe="da escola" />
           {lideres.map((x, i) => (
-            <LinhaDoLider key={x.lider} l={x} escala={escala} ultima={i === lideres.length - 1} />
+            <LinhaDoLider key={x.lider} l={x} escala={escala} total={e.estimativa} ultima={i === lideres.length - 1} />
           ))}
         </View>
       ) : (
         <Text style={{ fontSize: 7, color: C.faint, paddingVertical: 5, paddingHorizontal: 9 }}>{s('Sem líder informado nos cadastros desta escola.')}</Text>
       )}
-    </View>
-  );
-}
-
-/** O que os numeros dizem, lider a lider, quando os votos ficaram abaixo do cadastro. */
-function FrasesDosLideres({ lideres, candidato }: { lideres: LiderNaEscola[]; candidato: string }) {
-  const frases = lideres
-    .map((l) => fraseDoLider({ ...l, lider: nomeProprio(l.lider) }, nomeProprio(candidato)))
-    .filter((f): f is string => f !== null);
-  if (frases.length === 0) return null;
-  return (
-    <View wrap={false} style={{ backgroundColor: '#fdf3f2', borderLeftWidth: 2.5, borderLeftColor: VERMELHO, paddingVertical: 5, paddingHorizontal: 8, marginTop: 2 }}>
-      {frases.map((f, i) => (
-        <Text key={f} style={{ fontSize: 7.1, color: C.ink2, lineHeight: 1.4, marginTop: i ? 2.5 : 0 }}>
-          {s(f)}
-        </Text>
-      ))}
     </View>
   );
 }
@@ -400,7 +348,9 @@ export interface PdfDoConfrontoProps {
 export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = {}, geradoEm }: PdfDoConfrontoProps) {
   const { doTime, estimativaTotal, apuradoNasEscolasDoTime, apuradoTotal } = confronto;
   const nome = candidatoNome ?? candidato.split(' (')[0];
-  const doTimeTodo = lideresDoTime(doTime.map((e) => lideres[e.chave] ?? []));
+  const doTimeTodo = lideresDoTime(doTime.map((e) => lideres[e.chave] ?? [])).sort(
+    (a, b) => b.cadastrados - a.cadastrados || a.lider.localeCompare(b.lider, 'pt-BR'),
+  );
   const conv = estimativaTotal > 0 ? (apuradoNasEscolasDoTime / estimativaTotal) * 100 : null;
   const zeradas = doTime.filter((e) => leitura(e) === 'ZERADA').length;
   const acima = doTime.filter((e) => leitura(e) === 'ACIMA').length;
@@ -441,9 +391,9 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
         <Parte
           numero={1}
           titulo="As escolas do time"
-          texto="Da escola com a maior estimativa para a menor. Em cada uma, os líderes que cadastraram gente ali: quantos cadastrou e quantos votaram no candidato. O voto é secreto; o número exato ninguém sabe, mas o teto é certo: em cada seção, no máximo o menor entre os cadastrados do líder e os votos da seção."
+          texto="Da escola com a maior estimativa para a menor. Em cada uma, os líderes que cadastraram gente ali: quantas pessoas cada um cadastrou e quanto isso é da estimativa da escola."
         />
-        {doTime.length > 0 ? <LegendaDosLideres /> : <Text style={{ fontSize: 8.5, color: C.faint }}>{s('O time não tem estimativa em nenhuma escola deste recorte.')}</Text>}
+        {doTime.length > 0 ? null : <Text style={{ fontSize: 8.5, color: C.faint }}>{s('O time não tem estimativa em nenhuma escola deste recorte.')}</Text>}
         {doTime.map((e, i) => (
           <CartaoDaEscola key={e.chave} e={e} posicao={i + 1} lideres={lideres[e.chave] ?? []} />
         ))}
@@ -453,11 +403,11 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
             <Parte
               numero={2}
               titulo="Os líderes do time"
-              texto="Quantas pessoas cada líder cadastrou nas escolas do time, e quantas, no máximo, podem ter votado no candidato: em cada seção, o menor entre o que o líder cadastrou e os votos da seção. O voto é secreto; o número exato ninguém sabe, mas o teto é certo. Da maior perda para a menor."
+              texto="Quantas pessoas cada líder cadastrou nas escolas do time, em quantas escolas, e quanto isso é da estimativa do time. Do maior cadastro para o menor."
             />
             <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, overflow: 'hidden' }}>
               <View fixed>
-                <CabecalhoDosLideres comEscolas />
+                <CabecalhoDosLideres parteDe="do time" comEscolas />
               </View>
               {doTimeTodo.map((l, i) => (
                 <LinhaDoLider
@@ -465,6 +415,7 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
                   l={l}
                   posicao={i + 1}
                   escala={Math.max(1, ...doTimeTodo.map((x) => x.cadastrados))}
+                  total={estimativaTotal}
                   ultima={i === doTimeTodo.length - 1}
                 />
               ))}
@@ -545,7 +496,6 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
                 ]}
               />
               <GradeDeLideres escola={e} lideres={lideres[e.chave] ?? []} candidato={nome} />
-              <FrasesDosLideres lideres={lideres[e.chave] ?? []} candidato={nome} />
             </Fragment>
           );
         })}
