@@ -96,13 +96,6 @@ function atrasoDeEntrada(chave: string): number | null {
 interface OpcoesDoPino {
   lider?: boolean;
   atraso?: number | null;
-  /**
-   * Votacao do TSE: a estimativa do time nesta escola. Com ela, o pino fica
-   * dourado e ganha o selo "★ N" — e onde o time tinha gente.
-   */
-  destaque?: number | null;
-  /** Votacao do TSE com destaques: as outras escolas recuam. */
-  apagado?: boolean;
 }
 
 function pinElement(
@@ -111,7 +104,7 @@ function pinElement(
   label: string | null,
   opcoes: OpcoesDoPino = {},
 ): HTMLElement {
-  const color = opcoes.lider || opcoes.destaque != null ? LIDER_COLOR : COLORS[kind];
+  const color = opcoes.lider ? LIDER_COLOR : COLORS[kind];
 
   // Raiz: a queda (uma vez). Corpo: o realce do mouse. Separados porque a
   // animacao, terminada, prenderia o `transform` e o hover nao subiria.
@@ -123,11 +116,8 @@ function pinElement(
 
   const corpo = document.createElement('span');
   corpo.className = opcoes.lider ? 'cmd-pin-corpo cmd-pin-lider' : 'cmd-pin-corpo';
-  // O recuo das escolas fora do time fica no CORPO: na raiz, a animacao de
-  // entrada devolveria a opacidade cheia.
   corpo.style.cssText = `position:relative;display:block;width:100%;height:100%;` +
-    `filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))` +
-    (opcoes.apagado ? ' saturate(0.35);opacity:0.5' : '');
+    `filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))`;
 
   const frame = document.createElement('span');
   frame.style.cssText =
@@ -174,17 +164,6 @@ function pinElement(
     corpo.append(selo);
   }
 
-  // Selo da estimativa: "★ 23" sobre o pino. So numero entra aqui.
-  if (opcoes.destaque != null) {
-    const selo = document.createElement('span');
-    selo.style.cssText =
-      'position:absolute;left:50%;top:-14px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;' +
-      'padding:1px 6px;border-radius:9999px;background:#0b1b33;color:#f2c14e;border:2px solid #fff;' +
-      'font-size:10px;font-weight:800;line-height:14px;white-space:nowrap;box-shadow:0 1px 3px rgb(16 24 40 / 0.35)';
-    selo.textContent = `\u2605 ${Math.round(opcoes.destaque)}`;
-    corpo.append(selo);
-  }
-
   root.append(corpo);
   return root;
 }
@@ -203,6 +182,148 @@ function markerIcon(
     iconAnchor: [PIN_SIZE / 2, PIN_SIZE + PIN_TIP],
     popupAnchor: [0, -(PIN_SIZE + PIN_TIP - 2)],
     html: pinElement(kind, src, label, opcoes),
+  });
+}
+
+/* -------------------------------------------------------------------------
+   Pino da escola: uma etiqueta com o numero
+   ------------------------------------------------------------------------- */
+
+/** Medalhas das tres maiores escolas do recorte: ouro, prata, bronze. */
+const MEDALHAS = ['#e0a426', '#9aa7b4', '#b8743c'] as const;
+
+/** "1.234" ate 9.999; dai em diante "12,3 mil". */
+function numeroDoPino(n: number): string {
+  if (n < 10_000) return n.toLocaleString('pt-BR');
+  return `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+}
+
+interface OpcoesDaEscola {
+  /** O numero da escola no recorte: estimativa da campanha ou votos do candidato. */
+  valor: number;
+  /** De 0 a 1, relativo a maior escola do recorte: o tamanho da etiqueta. */
+  forca: number;
+  /** 1, 2 ou 3: a medalha. */
+  posicao: number | null;
+  /** Escola do time na votacao: estimativa e apurado. */
+  destaque?: { estimativa: number; apurado: number } | null;
+  /** Votacao: estimativa da campanha ou votos oficiais. */
+  votacao: boolean;
+  apagado?: boolean;
+  atraso?: number | null;
+  /** Nome da escola: aparece quando o mouse passa por cima. */
+  titulo: string | null;
+  foto: string | null;
+}
+
+/**
+ * A escola como uma etiqueta presa ao chao por uma haste: a foto da fachada
+ * (ou o predio) e o NUMERO, grande — quem olha o mapa le onde esta a forca
+ * sem abrir nada. O tamanho cresce com a escola, as tres maiores ganham
+ * medalha, e passar o mouse revela o nome.
+ *
+ * Tres tons, sempre com o numero escrito: azul-marinho na campanha (a
+ * estimativa); ouro nas escolas do time durante a votacao, com a conversao
+ * ao lado; branco nas outras escolas da votacao.
+ *
+ * O no e montado no DOM, nunca por texto: o nome da escola entra como
+ * `textContent` e a foto como atributo `src`.
+ */
+function escolaElement(o: OpcoesDaEscola): HTMLElement {
+  const time = o.destaque != null;
+  const tema = time
+    ? { fundo: 'linear-gradient(135deg,#f8d878 0%,#e0a426 100%)', borda: '#ffffff', numero: '#0f1e35', icone: '#0f1e35', glifo: '#f2c14e', haste: '#b7801a' }
+    : o.votacao
+      ? { fundo: '#ffffff', borda: '#c3cdd7', numero: '#0f1e35', icone: '#8ea6c4', glifo: '#ffffff', haste: '#7b8d9d' }
+      : { fundo: 'linear-gradient(135deg,#1d3050 0%,#0f1e35 100%)', borda: o.forca >= 0.66 ? '#f2c14e' : '#ffffff', numero: '#ffffff', icone: '#c2610a', glifo: '#ffffff', haste: '#0f1e35' };
+  const fonte = Math.round(12 + o.forca * 4);
+  const lado = Math.round(22 + o.forca * 8);
+
+  // Raiz sem tamanho, na coordenada: a etiqueta se apoia nela pela haste.
+  const root = document.createElement('span');
+  root.className = o.atraso != null ? 'cmd-pin cmd-pin-entra' : 'cmd-pin';
+  if (o.atraso != null) root.style.setProperty('--cmd-atraso', `${o.atraso}ms`);
+  root.style.cssText += ';position:relative;display:block;width:0;height:0';
+
+  const corpo = document.createElement('span');
+  corpo.className = 'cmd-escola';
+  if (o.apagado) corpo.style.cssText = 'filter:saturate(0.3);opacity:0.5';
+
+  const capsula = document.createElement('span');
+  capsula.className = 'cmd-escola-capsula';
+  capsula.style.cssText =
+    `background:${tema.fundo};border-color:${tema.borda};color:${tema.numero};` +
+    `padding:3px ${Math.round(8 + o.forca * 3)}px 3px 3px`;
+
+  const icone = document.createElement('span');
+  icone.className = 'cmd-escola-icone';
+  icone.style.cssText = `width:${lado}px;height:${lado}px;background:${tema.icone}`;
+  icone.innerHTML = PLACE_GLYPH.replace('stroke="white"', `stroke="${tema.glifo}"`).replace(/width="20" height="20"/, `width="${Math.round(lado * 0.62)}" height="${Math.round(lado * 0.62)}"`);
+  if (o.foto) {
+    const foto = document.createElement('img');
+    foto.alt = '';
+    foto.decoding = 'async';
+    foto.addEventListener('error', () => foto.remove());
+    foto.src = o.foto;
+    icone.append(foto);
+  }
+
+  const numero = document.createElement('span');
+  numero.className = 'cmd-escola-numero';
+  numero.style.fontSize = `${fonte}px`;
+  numero.textContent = numeroDoPino(o.valor);
+
+  capsula.append(icone, numero);
+
+  // Escola do time na votacao: a conversao (apurado / estimativa) colada no numero.
+  if (o.destaque && o.destaque.estimativa > 0) {
+    const conv = Math.round((o.destaque.apurado / o.destaque.estimativa) * 100);
+    const chip = document.createElement('span');
+    chip.className = 'cmd-escola-chip';
+    chip.style.color = conv >= 100 ? '#4ade80' : conv >= 80 ? '#f2c14e' : '#f87171';
+    chip.textContent = `${conv}%`;
+    capsula.append(chip);
+  }
+
+  const nome = document.createElement('span');
+  nome.className = 'cmd-escola-nome';
+  nome.textContent = o.titulo ?? 'Local de votação';
+  capsula.append(nome);
+
+  if (o.posicao !== null && o.posicao <= 3) {
+    const medalha = document.createElement('span');
+    medalha.className = 'cmd-escola-medalha';
+    medalha.style.background = MEDALHAS[o.posicao - 1];
+    medalha.textContent = String(o.posicao);
+    capsula.append(medalha);
+  }
+
+  const haste = document.createElement('span');
+  haste.className = 'cmd-escola-haste';
+  haste.style.background = tema.haste;
+
+  const chao = document.createElement('span');
+  chao.className = time || o.posicao === 1 ? 'cmd-escola-chao cmd-escola-pulsa' : 'cmd-escola-chao';
+  chao.style.setProperty('--cmd-cor', time ? '#e0a426' : '#c2610a');
+
+  corpo.append(capsula, haste, chao);
+  root.append(corpo);
+
+  // Leitura para quem passa o mouse ou usa leitor de tela.
+  const partes = [o.titulo ?? 'Local de votação', `${o.valor.toLocaleString('pt-BR')} ${o.votacao ? 'votos' : 'votos estimados'}`];
+  if (o.destaque) partes.push(`estimativa do time ${o.destaque.estimativa.toLocaleString('pt-BR')}`);
+  root.title = partes.join(' · ');
+  return root;
+}
+
+function escolaIcon(o: OpcoesDaEscola): L.DivIcon {
+  const altura = Math.round(22 + o.forca * 8) + 6 + 14;
+  return L.divIcon({
+    className: '',
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+    popupAnchor: [0, -(altura + 4)],
+    html: escolaElement(o),
   });
 }
 
@@ -462,6 +583,13 @@ export interface ModoVotacao {
   onRaioX?: (locationId: string) => void;
 }
 
+/** O numero de cada escola no recorte e a posicao dela: tamanho e medalha do pino. */
+interface MedidaDaEscola {
+  valor: number;
+  forca: number;
+  posicao: number;
+}
+
 function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: ModoVotacao }) {
   return (
     <section className="rounded-control border border-brand-100 bg-brand-50 px-2.5 py-2">
@@ -551,12 +679,15 @@ function ConfrontoNoBalao({ estimativa, apurado }: { estimativa: number; apurado
  */
 function PlaceMarker({
   place,
+  medida,
   onOpen,
   onDownload,
   onReady,
   votacao,
 }: {
   place: PollingPlacePin;
+  /** Numero, tamanho e medalha da etiqueta. */
+  medida: MedidaDaEscola;
   /** Pino da votacao do TSE: outro rotulo, e sem lista de pessoas. */
   votacao?: ModoVotacao;
   onOpen: (place: PollingPlacePin) => void;
@@ -573,19 +704,36 @@ function PlaceMarker({
    */
   const raioX = destaque && votacao?.onRaioX ? votacao.onRaioX : null;
   const eventos = useMemo(() => (raioX ? { click: () => raioX(place.locationId) } : undefined), [raioX, place.locationId]);
-  // A fachada da escola no lugar do desenho; sem foto, fica o predio.
+  // A etiqueta da escola: fachada (ou predio), numero, medalha e nome.
   const icon = useMemo(
     () =>
-      markerIcon('POLLING_PLACE', place.imageUrl, null, {
-        atraso: atrasoDeEntrada(`local:${place.locationId}`),
-        destaque: destaque?.estimativa ?? null,
+      escolaIcon({
+        valor: medida.valor,
+        forca: medida.forca,
+        posicao: medida.posicao,
+        destaque,
+        votacao: Boolean(votacao),
         apagado,
+        atraso: atrasoDeEntrada(`local:${place.locationId}`),
+        titulo: place.title,
+        foto: place.imageUrl,
       }),
-    [place.imageUrl, place.locationId, destaque?.estimativa, apagado],
+    // `destaque` muda de objeto a cada leitura: entram os numeros dele.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [medida.valor, medida.forca, medida.posicao, destaque?.estimativa, destaque?.apurado, votacao, apagado, place.locationId, place.title, place.imageUrl],
   );
 
   return (
-    <Marker ref={onReady} position={[place.latitude, place.longitude]} icon={icon} eventHandlers={eventos}>
+    <Marker
+      ref={onReady}
+      position={[place.latitude, place.longitude]}
+      icon={icon}
+      eventHandlers={eventos}
+      // A etiqueta sob o mouse passa por cima das vizinhas (o nome se abre).
+      riseOnHover
+      // As maiores escolas ficam por cima das menores quando se encostam.
+      zIndexOffset={Math.round(medida.forca * 400) + (destaque ? 500 : 0)}
+    >
       {/* Balao com teto de altura: escola com muitas secoes rola por dentro,
           em vez de cobrir o mapa (principalmente em tela cheia). */}
       {raioX ? null : (
@@ -651,6 +799,7 @@ export default function MapCanvas({
   resizeKey,
   fallbackCenter,
   votacao,
+  valorDoLocal,
 }: {
   pins: MapPin[];
   places?: PollingPlacePin[];
@@ -681,8 +830,23 @@ export default function MapCanvas({
   fallbackCenter?: { latitude: number; longitude: number };
   /** Os pinos de escola sao da votacao oficial do TSE, nao da campanha. */
   votacao?: ModoVotacao;
+  /**
+   * O numero de cada escola no recorte (com zona, so as secoes dela). Sem
+   * ele, o total da escola.
+   */
+  valorDoLocal?: (place: PollingPlacePin) => number;
 }) {
   const [zoom, setZoom] = useState(4);
+  // Numero, tamanho (relativo a maior) e posicao de cada escola do recorte.
+  const medidas = useMemo(() => {
+    const valores = places.map((p) => ({ id: p.locationId, valor: valorDoLocal ? valorDoLocal(p) : estimatedVotes(p) }));
+    const maior = Math.max(1, ...valores.map((v) => v.valor));
+    const ordem = [...valores].sort((a, b) => b.valor - a.valor);
+    const posicao = new Map(ordem.map((v, i) => [v.id, v.valor > 0 ? i + 1 : Number.POSITIVE_INFINITY]));
+    return new Map(
+      valores.map((v) => [v.id, { valor: v.valor, forca: Math.sqrt(v.valor / maior), posicao: posicao.get(v.id) ?? Number.POSITIVE_INFINITY }]),
+    );
+  }, [places, valorDoLocal]);
   const markers = useRef(new Map<string, L.Marker>());
   const clusters = useMemo(() => clusterPins(pins, zoom), [pins, zoom]);
   const focus = useMemo(
@@ -733,6 +897,7 @@ export default function MapCanvas({
         <PlaceMarker
           key={place.locationId}
           place={place}
+          medida={medidas.get(place.locationId) ?? { valor: estimatedVotes(place), forca: 0, posicao: Number.POSITIVE_INFINITY }}
           onOpen={onOpenPlace ?? (() => {})}
           onDownload={onDownloadPlace}
           votacao={votacao}

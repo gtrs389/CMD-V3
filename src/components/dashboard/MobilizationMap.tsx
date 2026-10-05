@@ -305,6 +305,8 @@ export function MobilizationMap({
     [candidato, query],
   );
   const options = useMemo(() => mapOptions(fonte, query.state), [fonte, query.state]);
+  /** O numero de cada escola no pino: com zona escolhida, so as secoes dela. */
+  const valorDoLocal = useCallback((place: PollingPlacePin) => placeVotes(place, recorte.zone), [recorte.zone]);
   const selection = useMemo(() => applyMapQuery(fonte, recorte), [fonte, recorte]);
   /** Escolas da votacao sem coordenada, no mesmo recorte: so na conta e no PDF. */
   const foraDoMapa = useMemo(
@@ -886,6 +888,7 @@ export function MobilizationMap({
                 onOpenPlace={candidato ? undefined : setOpenPlace}
                 onDownloadPlace={candidato ? undefined : (place) => baixarPdfDaEscola(place, clientId, recorte.leader)}
                 votacao={modoVotacao}
+                valorDoLocal={valorDoLocal}
                 onOpenMember={abrirFicha}
                 renderLiderActions={renderLiderActions}
                 focusPlace={focusPlace}
