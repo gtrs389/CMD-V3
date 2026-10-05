@@ -76,54 +76,310 @@ function Parte({ numero, titulo, texto, quebra = false }: { numero: number; titu
   );
 }
 
+/** Nomes nunca quebram com hifen ("Sil-va"): ou cabem, ou viram reticencias. */
+const semHifen = (palavra: string) => [palavra];
+
+/** "FÉLIX SILVA DE TARGINO" -> "Félix Silva de Targino". Nomes ja escritos a mao ficam como estao. */
+const MIUDAS = new Set(['da', 'das', 'de', 'do', 'dos', 'e']);
+function nomeProprio(nome: string): string {
+  if (nome !== nome.toUpperCase()) return nome;
+  return nome
+    .toLocaleLowerCase('pt-BR')
+    .split(' ')
+    .map((p, i) => (i > 0 && MIUDAS.has(p) ? p : p.replace(/\p{L}/u, (l) => l.toLocaleUpperCase('pt-BR'))))
+    .join(' ')
+    .replace('(líder)', '(Líder)');
+}
+
+const CINZA = '#c3ccd6';
+const TRILHO = '#edf1f5';
+
 /**
- * Os lideres dentro de uma escola: quanto cada um cadastrou ali, em quais
- * secoes, e o teto de quem pode ter votado. Embaixo, a frase de cada lider
- * cujos votos ficaram abaixo do que ele cadastrou.
+ * A barra do lider: o comprimento e quanto ele cadastrou (relativo ao maior
+ * da lista); dentro dela, ouro = quem pode ter votado, vermelho = quem
+ * certamente nao votou no candidato, cinza = sem secao no cadastro.
  */
-function LideresNaEscola({ lideres, candidato }: { lideres: LiderNaEscola[]; candidato: string }) {
-  if (lideres.length === 0) return null;
-  const frases = lideres.map((l) => fraseDoLider(l, candidato)).filter((f): f is string => f !== null);
+function BarraDoLider({ l, escala }: { l: Pick<LiderNaEscola, 'cadastrados' | 'noMaximo' | 'perda' | 'semSecao'>; escala: number }) {
+  const total = Math.max(1, l.cadastrados);
+  const comprimento = l.cadastrados > 0 ? Math.max(4, (l.cadastrados / Math.max(1, escala)) * 100) : 0;
+  const pedacos = [
+    { valor: l.noMaximo, cor: OURO },
+    { valor: l.perda, cor: VERMELHO },
+    { valor: l.semSecao, cor: CINZA },
+  ].filter((p) => p.valor > 0);
   return (
-    <View style={{ marginTop: 5 }}>
-      <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 3 }}>{s('Líderes nesta escola')}</Text>
-      <Tabela
-        linhas={lideres}
-        chave={(l) => l.lider}
-        colunas={[
-          { titulo: 'Líder', largura: '30%', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(l.lider)}</Text> },
-          { titulo: 'Cadastrou', largura: '11%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text> },
-          {
-            titulo: 'Por seção',
-            largura: '33%',
-            celula: (l) => (
-              <Text style={{ fontSize: 7, color: C.muted, paddingLeft: 6 }}>
-                {s(
-                  [
-                    ...l.secoes.map((x) => `Seção ${x.secao}: ${num(x.cadastrados)} (${num(x.apurado)} ${x.apurado === 1 ? 'voto' : 'votos'})`),
-                    l.semSecao ? `sem seção: ${num(l.semSecao)}` : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · '),
-                )}
-              </Text>
-            ),
-          },
-          { titulo: 'No máx. votaram', largura: '14%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(l.noMaximo)}</Text> },
-          {
-            titulo: 'Não votaram (mín.)',
-            largura: '12%',
-            alinhar: 'right',
-            celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: l.perda > 0 ? VERMELHO : C.muted }}>{num(l.perda)}</Text>,
-          },
-        ]}
-      />
-      {frases.map((f) => (
-        <View key={f} wrap={false} style={{ flexDirection: 'row', marginTop: 3, paddingLeft: 2 }}>
-          <Text style={{ fontSize: 7.2, color: VERMELHO, marginRight: 4 }}>•</Text>
-          <Text style={{ flex: 1, fontSize: 7.2, color: C.ink2, lineHeight: 1.35 }}>{s(f)}</Text>
+    <View style={{ height: 7, backgroundColor: TRILHO, borderRadius: 2 }}>
+      <View style={{ width: `${comprimento}%`, height: 7, flexDirection: 'row', borderRadius: 2, overflow: 'hidden' }}>
+        {pedacos.map((p, i) => (
+          <View
+            key={p.cor}
+            style={{ width: `${(p.valor / total) * 100}%`, height: 7, backgroundColor: p.cor, borderLeftWidth: i > 0 ? 0.8 : 0, borderLeftColor: C.white }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Legenda das barras dos lideres, sempre com o nome escrito ao lado da cor. */
+function LegendaDosLideres() {
+  const itens = [
+    { cor: OURO, texto: 'votaram (no máximo)' },
+    { cor: VERMELHO, texto: 'não votaram (no mínimo)' },
+    { cor: CINZA, texto: 'sem seção no cadastro' },
+  ];
+  return (
+    <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+      {itens.map((i) => (
+        <View key={i.cor} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+          <View style={{ width: 9, height: 5, borderRadius: 1, backgroundColor: i.cor, marginRight: 4 }} />
+          <Text style={{ fontSize: 6.8, color: C.muted }}>{s(i.texto)}</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+/** Colunas dos lideres: as mesmas no cartao da escola e no ranking do time. */
+const COL = { cadastrou: 54, votaram: 66, naoVotaram: 82, barra: 112, escolas: 40 };
+const rotuloDaColuna = { fontSize: 5.8, fontFamily: 'Helvetica-Bold', color: C.faint, letterSpacing: 0.5 } as const;
+
+function CabecalhoDosLideres({ comEscolas = false }: { comEscolas?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
+      <Text style={[rotuloDaColuna, { flex: 1 }]}>{s('LÍDER')}</Text>
+      {comEscolas ? <Text style={[rotuloDaColuna, { width: COL.escolas, textAlign: 'right' }]}>ESCOLAS</Text> : null}
+      <Text style={[rotuloDaColuna, { width: COL.cadastrou, textAlign: 'right' }]}>CADASTROU</Text>
+      <Text style={[rotuloDaColuna, { width: COL.votaram, textAlign: 'right' }]}>{s('VOTARAM (MÁX.)')}</Text>
+      <Text style={[rotuloDaColuna, { width: COL.naoVotaram, textAlign: 'right' }]}>{s('NÃO VOTARAM (MÍN.)')}</Text>
+      <View style={{ width: COL.barra, paddingLeft: 12 }} />
+    </View>
+  );
+}
+
+function LinhaDoLider({
+  l,
+  escala,
+  posicao,
+  ultima,
+}: {
+  l: Omit<LiderNaEscola, 'secoes'> & { escolas?: number };
+  escala: number;
+  posicao?: number;
+  ultima: boolean;
+}) {
+  const semLider = l.lider === 'Sem líder informado';
+  return (
+    <View
+      wrap={false}
+      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4.5, paddingHorizontal: 9, borderBottomWidth: ultima ? 0 : 0.5, borderBottomColor: '#e6ebf0' }}
+    >
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 6 }}>
+        {posicao !== undefined ? <Text style={{ width: 16, fontSize: 7, color: C.faint, fontFamily: 'Helvetica-Bold' }}>{posicao}</Text> : null}
+        <View style={{ flex: 1 }}>
+          <Text
+            hyphenationCallback={semHifen}
+            style={{ fontSize: 8.2, fontFamily: semLider ? 'Helvetica-Oblique' : 'Helvetica-Bold', color: semLider ? C.muted : C.ink, maxLines: 1, textOverflow: 'ellipsis' }}
+          >
+            {s(nomeProprio(l.lider))}
+          </Text>
+          {l.semSecao > 0 ? (
+            <Text style={{ fontSize: 6.2, color: C.faint, marginTop: 1 }}>{s(`${num(l.semSecao)} sem seção no cadastro`)}</Text>
+          ) : null}
+        </View>
+      </View>
+      {l.escolas !== undefined ? <Text style={{ width: COL.escolas, textAlign: 'right', fontSize: 8.5, color: C.ink2 }}>{num(l.escolas)}</Text> : null}
+      <Text style={{ width: COL.cadastrou, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text>
+      <Text style={{ width: COL.votaram, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(l.noMaximo)}</Text>
+      <Text style={{ width: COL.naoVotaram, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: l.perda > 0 ? VERMELHO : CINZA }}>
+        {l.perda > 0 ? num(l.perda) : '0'}
+      </Text>
+      <View style={{ width: COL.barra, paddingLeft: 12 }}>
+        <BarraDoLider l={l} escala={escala} />
+      </View>
+    </View>
+  );
+}
+
+/** Um numero grande com o rotulo em cima: o placar do cartao da escola. */
+function Placar({ rotulo, valor, cor, largura = 58 }: { rotulo: string; valor: string; cor: string; largura?: number }) {
+  return (
+    <View style={{ width: largura, alignItems: 'flex-end' }}>
+      <Text style={rotuloDaColuna}>{s(rotulo)}</Text>
+      <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: cor, marginTop: 1.5 }}>{valor}</Text>
+    </View>
+  );
+}
+
+const corDaConversao = (c: number | null) => (c === null ? C.faint : c >= 100 ? VERDE : c >= 80 ? OURO_TEXTO : VERMELHO);
+
+/**
+ * O cartao da escola na parte 1: o placar (estimativa, apurado, conversao)
+ * e, logo abaixo, os lideres que cadastraram gente ali.
+ */
+function CartaoDaEscola({ e, posicao, lideres }: { e: EscolaNoConfronto; posicao: number; lideres: LiderNaEscola[] }) {
+  const c = conversao(e);
+  const secoes = e.secoes.filter((x) => x.zona || x.secao).length;
+  const escala = Math.max(1, ...lideres.map((l) => l.cadastrados));
+  const l = LEITURA[leitura(e)];
+  return (
+    <View
+      wrap={lideres.length > 14}
+      style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, marginBottom: 8, overflow: 'hidden' }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f6f8fb', paddingVertical: 8, paddingLeft: 9, paddingRight: 10 }}>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.navy, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: OURO }}>{posicao}</Text>
+        </View>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text hyphenationCallback={semHifen} style={{ fontSize: 9.6, fontFamily: 'Helvetica-Bold', color: C.navy, maxLines: 2, textOverflow: 'ellipsis' }}>
+            {s(e.titulo)}
+          </Text>
+          <Text style={{ fontSize: 6.8, color: C.faint, marginTop: 2 }}>
+            {s(
+              [
+                e.cidade,
+                `Zona ${zonasDe(e)}`,
+                secoes ? `${num(secoes)} ${secoes === 1 ? 'seção' : 'seções'}` : null,
+                lideres.length ? `${num(lideres.length)} ${lideres.length === 1 ? 'líder' : 'líderes'}` : null,
+              ]
+                .filter(Boolean)
+                .join('  ·  '),
+            )}
+          </Text>
+        </View>
+        <Placar rotulo="ESTIMATIVA" valor={num(e.estimativa)} cor={C.navy} />
+        <Placar rotulo="APURADO" valor={num(e.apurado)} cor={OURO_TEXTO} />
+        <Placar rotulo="CONVERSÃO" valor={pct(c)} cor={corDaConversao(c)} largura={62} />
+        <View style={{ width: 52, alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: l.cor, backgroundColor: l.fundo, paddingVertical: 2, paddingHorizontal: 5, borderRadius: 3 }}>
+            {s(l.texto.toUpperCase())}
+          </Text>
+        </View>
+      </View>
+      {/* A conversao como uma linha fina sob o placar: cheia em 100%. */}
+      <View style={{ height: 2.2, backgroundColor: TRILHO }}>
+        <View style={{ width: `${Math.min(100, c ?? 0)}%`, height: 2.2, backgroundColor: corDaConversao(c) }} />
+      </View>
+      {lideres.length > 0 ? (
+        <View>
+          <CabecalhoDosLideres />
+          {lideres.map((x, i) => (
+            <LinhaDoLider key={x.lider} l={x} escala={escala} ultima={i === lideres.length - 1} />
+          ))}
+        </View>
+      ) : (
+        <Text style={{ fontSize: 7, color: C.faint, paddingVertical: 5, paddingHorizontal: 9 }}>{s('Sem líder informado nos cadastros desta escola.')}</Text>
+      )}
+    </View>
+  );
+}
+
+/** O que os numeros dizem, lider a lider, quando os votos ficaram abaixo do cadastro. */
+function FrasesDosLideres({ lideres, candidato }: { lideres: LiderNaEscola[]; candidato: string }) {
+  const frases = lideres
+    .map((l) => fraseDoLider({ ...l, lider: nomeProprio(l.lider) }, nomeProprio(candidato)))
+    .filter((f): f is string => f !== null);
+  if (frases.length === 0) return null;
+  return (
+    <View wrap={false} style={{ backgroundColor: '#fdf3f2', borderLeftWidth: 2.5, borderLeftColor: VERMELHO, paddingVertical: 5, paddingHorizontal: 8, marginTop: 2 }}>
+      {frases.map((f, i) => (
+        <Text key={f} style={{ fontSize: 7.1, color: C.ink2, lineHeight: 1.4, marginTop: i ? 2.5 : 0 }}>
+          {s(f)}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Lideres x secoes, dentro da escola: quantas pessoas cada lider cadastrou
+ * em cada secao, e na ultima linha os votos do candidato na secao. Em
+ * vermelho, a celula em que o lider cadastrou mais gente do que os votos que
+ * o candidato teve ali — parte dessa gente certamente nao votou nele.
+ */
+const POR_BLOCO = 10;
+function GradeDeLideres({ escola, lideres, candidato }: { escola: EscolaNoConfronto; lideres: LiderNaEscola[]; candidato: string }) {
+  const secoes = escola.secoes.filter((x) => x.zona && x.secao);
+  const comSecao = lideres.filter((l) => l.secoes.length > 0);
+  if (comSecao.length === 0 || secoes.length === 0) return null;
+  const variasZonas = new Set(secoes.map((x) => x.zona)).size > 1;
+  const blocos: (typeof secoes)[] = [];
+  for (let i = 0; i < secoes.length; i += POR_BLOCO) blocos.push(secoes.slice(i, i + POR_BLOCO));
+  const celula = { width: 34, textAlign: 'right' as const };
+
+  return (
+    <View style={{ marginTop: 6 }}>
+      {blocos.map((bloco, b) => {
+        const ultimo = b === blocos.length - 1;
+        return (
+          // O titulo vai junto do primeiro bloco: nunca fica sozinho no pe da pagina.
+          <View key={b} wrap={false}>
+            {b === 0 ? (
+              <>
+                <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 1 }}>{s('Líderes × seções')}</Text>
+                <Text style={{ fontSize: 6.6, color: C.faint, marginBottom: 3 }}>
+                  {s(`Pessoas que cada líder cadastrou em cada seção. Em vermelho: mais cadastrados do que os votos de ${nomeProprio(candidato)} na seção.`)}
+                </Text>
+              </>
+            ) : null}
+          <View style={{ borderWidth: 0.6, borderColor: C.line, borderRadius: 3, marginBottom: 4, overflow: 'hidden' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#f6f8fb', paddingVertical: 3.5, paddingHorizontal: 7 }}>
+              <Text style={[rotuloDaColuna, { flex: 1 }]}>{s('LÍDER')}</Text>
+              {bloco.map((x) => (
+                <View key={`${x.zona}/${x.secao}`} style={{ width: celula.width, alignItems: 'flex-end' }}>
+                  {variasZonas ? <Text style={{ fontSize: 5.2, color: C.faint }}>{s(`Z ${x.zona}`)}</Text> : null}
+                  <Text style={rotuloDaColuna}>{s(`SEÇ. ${x.secao}`)}</Text>
+                </View>
+              ))}
+              {ultimo ? <Text style={[rotuloDaColuna, { width: 40, textAlign: 'right' }]}>TOTAL</Text> : null}
+            </View>
+            {comSecao.map((l, i) => {
+              const minha = new Map(l.secoes.map((x) => [`${x.zona}/${x.secao}`, x.cadastrados]));
+              return (
+                <View key={l.lider} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3, paddingHorizontal: 7, backgroundColor: i % 2 ? '#fafbfc' : C.white }}>
+                  <Text hyphenationCallback={semHifen} style={{ flex: 1, fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.ink, maxLines: 1, textOverflow: 'ellipsis', paddingRight: 4 }}>
+                    {s(nomeProprio(l.lider))}
+                  </Text>
+                  {bloco.map((x) => {
+                    const n = minha.get(`${x.zona}/${x.secao}`) ?? 0;
+                    const acima = n > x.apurado;
+                    return (
+                      <Text
+                        key={`${x.zona}/${x.secao}`}
+                        style={[celula, { fontSize: 7.8, fontFamily: n > 0 ? 'Helvetica-Bold' : 'Helvetica', color: n === 0 ? CINZA : acima ? VERMELHO : C.ink2 }]}
+                      >
+                        {n > 0 ? num(n) : '·'}
+                      </Text>
+                    );
+                  })}
+                  {ultimo ? (
+                    <Text style={{ width: 40, textAlign: 'right', fontSize: 7.8, fontFamily: 'Helvetica-Bold', color: C.navy }}>
+                      {num(l.cadastrados - l.semSecao)}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })}
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 3.5, paddingHorizontal: 7, backgroundColor: OURO_FUNDO, borderTopWidth: 0.6, borderTopColor: '#efd9a4' }}>
+              <Text hyphenationCallback={semHifen} style={{ flex: 1, fontSize: 7, fontFamily: 'Helvetica-Bold', color: OURO_TEXTO, maxLines: 1, textOverflow: 'ellipsis', paddingRight: 4 }}>
+                {s(`Votos de ${nomeProprio(candidato)}`)}
+              </Text>
+              {bloco.map((x) => (
+                <Text key={`${x.zona}/${x.secao}`} style={[celula, { fontSize: 7.8, fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }]}>
+                  {num(x.apurado)}
+                </Text>
+              ))}
+              {ultimo ? (
+                <Text style={{ width: 40, textAlign: 'right', fontSize: 7.8, fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>
+                  {num(secoes.reduce((t, x) => t + x.apurado, 0))}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -149,7 +405,6 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
   const zeradas = doTime.filter((e) => leitura(e) === 'ZERADA').length;
   const acima = doTime.filter((e) => leitura(e) === 'ACIMA').length;
   const fora = confronto.escolas.filter((e) => e.estimativa === 0).slice(0, 40);
-  const maiorEscola = Math.max(1, ...doTime.map((e) => Math.max(e.estimativa, e.apurado)));
   const quando = new Date(geradoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
   return (
@@ -178,45 +433,20 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
               'a estimativa é o número de pessoas cadastradas pelo time que votam na escola (uma pessoa, um voto). O apurado são os votos do candidato contados pelo TSE, seção por seção. A conversão é o apurado dividido pela estimativa: passa de 100% quando o candidato tem voto de quem não está no cadastro. ',
             )}
             {apuradoTotal > apuradoNasEscolasDoTime
-              ? s(`Fora das escolas do time, o candidato teve mais ${num(apuradoTotal - apuradoNasEscolasDoTime)} votos (parte 3).`)
+              ? s(`Fora das escolas do time, o candidato teve mais ${num(apuradoTotal - apuradoNasEscolasDoTime)} votos (parte ${(doTimeTodo.length > 0 ? 3 : 2) + (doTime.length > 0 ? 1 : 0)}).`)
               : ''}
           </Text>
         </View>
 
-        <Parte numero={1} titulo="As escolas do time" texto="Da escola com a maior estimativa para a menor. Barras: azul-marinho = estimativa, ouro = apurado." />
-        <Tabela
-          linhas={doTime}
-          chave={(e) => e.chave}
-          vazio="O time não tem estimativa em nenhuma escola deste recorte."
-          colunas={[
-            { titulo: '#', largura: '5%', celula: (_e, i) => String(i + 1) },
-            {
-              titulo: 'Escola',
-              largura: '35%',
-              celula: (e) => (
-                <View>
-                  <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(e.titulo)}</Text>
-                  <Text style={{ fontSize: 6.6, color: C.faint, marginTop: 1 }}>
-                    {s([e.cidade, `Zona ${zonasDe(e)}`].filter(Boolean).join(' · '))}
-                  </Text>
-                </View>
-              ),
-            },
-            { titulo: 'Estimativa', largura: '11%', alinhar: 'right', celula: (e) => <Text style={{ fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(e.estimativa)}</Text> },
-            { titulo: 'Apurado', largura: '11%', alinhar: 'right', celula: (e) => <Text style={{ fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(e.apurado)}</Text> },
-            {
-              titulo: 'Comparação',
-              largura: '18%',
-              celula: (e) => (
-                <View style={{ width: '100%', paddingLeft: 6 }}>
-                  <BarrasDuplas estimativa={e.estimativa} apurado={e.apurado} maior={maiorEscola} />
-                </View>
-              ),
-            },
-            { titulo: 'Conv.', largura: '9%', alinhar: 'right', celula: (e) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{pct(conversao(e))}</Text> },
-            { titulo: 'Leitura', largura: '11%', alinhar: 'center', celula: (e) => <Leitura e={e} /> },
-          ]}
+        <Parte
+          numero={1}
+          titulo="As escolas do time"
+          texto="Da escola com a maior estimativa para a menor. Em cada uma, os líderes que cadastraram gente ali: quantos cadastrou e quantos votaram no candidato. O voto é secreto; o número exato ninguém sabe, mas o teto é certo: em cada seção, no máximo o menor entre os cadastrados do líder e os votos da seção."
         />
+        {doTime.length > 0 ? <LegendaDosLideres /> : <Text style={{ fontSize: 8.5, color: C.faint }}>{s('O time não tem estimativa em nenhuma escola deste recorte.')}</Text>}
+        {doTime.map((e, i) => (
+          <CartaoDaEscola key={e.chave} e={e} posicao={i + 1} lideres={lideres[e.chave] ?? []} />
+        ))}
 
         {doTimeTodo.length > 0 ? (
           <>
@@ -225,24 +455,20 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
               titulo="Os líderes do time"
               texto="Quantas pessoas cada líder cadastrou nas escolas do time, e quantas, no máximo, podem ter votado no candidato: em cada seção, o menor entre o que o líder cadastrou e os votos da seção. O voto é secreto; o número exato ninguém sabe, mas o teto é certo. Da maior perda para a menor."
             />
-            <Tabela
-              linhas={doTimeTodo}
-              chave={(l) => l.lider}
-              colunas={[
-                { titulo: '#', largura: '5%', celula: (_l, i) => String(i + 1) },
-                { titulo: 'Líder', largura: '35%', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(l.lider)}</Text> },
-                { titulo: 'Escolas', largura: '10%', alinhar: 'right', celula: (l) => num(l.escolas) },
-                { titulo: 'Cadastrou', largura: '12%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text> },
-                { titulo: 'No máx. votaram', largura: '15%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(l.noMaximo)}</Text> },
-                {
-                  titulo: 'Não votaram (mín.)',
-                  largura: '15%',
-                  alinhar: 'right',
-                  celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: l.perda > 0 ? VERMELHO : C.muted }}>{num(l.perda)}</Text>,
-                },
-                { titulo: 'Sem seção', largura: '8%', alinhar: 'right', celula: (l) => <Text style={{ color: C.faint }}>{num(l.semSecao)}</Text> },
-              ]}
-            />
+            <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, overflow: 'hidden' }}>
+              <View fixed>
+                <CabecalhoDosLideres comEscolas />
+              </View>
+              {doTimeTodo.map((l, i) => (
+                <LinhaDoLider
+                  key={l.lider}
+                  l={l}
+                  posicao={i + 1}
+                  escala={Math.max(1, ...doTimeTodo.map((x) => x.cadastrados))}
+                  ultima={i === doTimeTodo.length - 1}
+                />
+              ))}
+            </View>
           </>
         ) : null}
 
@@ -250,7 +476,7 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
           <Parte
             numero={doTimeTodo.length > 0 ? 3 : 2}
             titulo="Escola por escola, seção por seção"
-            texto="Em cada escola do time: a estimativa e o apurado de cada seção (diferença = apurado - estimativa), e quem cada líder cadastrou ali."
+            texto="Em cada escola do time: a estimativa e o apurado de cada seção (diferença = apurado - estimativa) e, na grade, quantas pessoas cada líder cadastrou em cada seção."
             quebra
           />
         ) : null}
@@ -318,7 +544,8 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
                   },
                 ]}
               />
-              <LideresNaEscola lideres={lideres[e.chave] ?? []} candidato={nome} />
+              <GradeDeLideres escola={e} lideres={lideres[e.chave] ?? []} candidato={nome} />
+              <FrasesDosLideres lideres={lideres[e.chave] ?? []} candidato={nome} />
             </Fragment>
           );
         })}
