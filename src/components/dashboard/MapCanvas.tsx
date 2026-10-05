@@ -93,13 +93,25 @@ function atrasoDeEntrada(chave: string): number | null {
   return Math.min(ordemDeEntrada * 22, 700);
 }
 
+interface OpcoesDoPino {
+  lider?: boolean;
+  atraso?: number | null;
+  /**
+   * Votacao do TSE: a estimativa do time nesta escola. Com ela, o pino fica
+   * dourado e ganha o selo "★ N" — e onde o time tinha gente.
+   */
+  destaque?: number | null;
+  /** Votacao do TSE com destaques: as outras escolas recuam. */
+  apagado?: boolean;
+}
+
 function pinElement(
   kind: MapPin['locationKind'],
   src: string | null,
   label: string | null,
-  opcoes: { lider?: boolean; atraso?: number | null } = {},
+  opcoes: OpcoesDoPino = {},
 ): HTMLElement {
-  const color = opcoes.lider ? LIDER_COLOR : COLORS[kind];
+  const color = opcoes.lider || opcoes.destaque != null ? LIDER_COLOR : COLORS[kind];
 
   // Raiz: a queda (uma vez). Corpo: o realce do mouse. Separados porque a
   // animacao, terminada, prenderia o `transform` e o hover nao subiria.
@@ -111,8 +123,11 @@ function pinElement(
 
   const corpo = document.createElement('span');
   corpo.className = opcoes.lider ? 'cmd-pin-corpo cmd-pin-lider' : 'cmd-pin-corpo';
+  // O recuo das escolas fora do time fica no CORPO: na raiz, a animacao de
+  // entrada devolveria a opacidade cheia.
   corpo.style.cssText = `position:relative;display:block;width:100%;height:100%;` +
-    `filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))`;
+    `filter:drop-shadow(0 2px 3px rgb(16 24 40 / 0.35))` +
+    (opcoes.apagado ? ' saturate(0.35);opacity:0.5' : '');
 
   const frame = document.createElement('span');
   frame.style.cssText =
@@ -159,6 +174,17 @@ function pinElement(
     corpo.append(selo);
   }
 
+  // Selo da estimativa: "★ 23" sobre o pino. So numero entra aqui.
+  if (opcoes.destaque != null) {
+    const selo = document.createElement('span');
+    selo.style.cssText =
+      'position:absolute;left:50%;top:-14px;transform:translateX(-50%);display:flex;align-items:center;gap:2px;' +
+      'padding:1px 6px;border-radius:9999px;background:#0b1b33;color:#f2c14e;border:2px solid #fff;' +
+      'font-size:10px;font-weight:800;line-height:14px;white-space:nowrap;box-shadow:0 1px 3px rgb(16 24 40 / 0.35)';
+    selo.textContent = `\u2605 ${Math.round(opcoes.destaque)}`;
+    corpo.append(selo);
+  }
+
   root.append(corpo);
   return root;
 }
@@ -168,7 +194,7 @@ function markerIcon(
   src: string | null,
   /** Iniciais da pessoa. Nulo na escola: la a reserva e o predio. */
   label: string | null = null,
-  opcoes: { lider?: boolean; atraso?: number | null } = {},
+  opcoes: OpcoesDoPino = {},
 ): L.DivIcon {
   return L.divIcon({
     className: '',
@@ -427,6 +453,13 @@ export interface ModoVotacao {
   rotulo: string;
   /** Rodape do balao: de onde o numero vem. */
   nota: string;
+  /**
+   * Escolas onde o time tinha estimativa (pino -> estimativa e apurado). Elas
+   * ficam douradas; as outras recuam.
+   */
+  destaques?: ReadonlyMap<string, { estimativa: number; apurado: number }>;
+  /** Abre o raio-x da escola: estimativa x apuracao, secao por secao. */
+  onRaioX?: (locationId: string) => void;
 }
 
 function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: ModoVotacao }) {
@@ -457,6 +490,24 @@ function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: Modo
   );
 }
 
+/** No balao da votacao: o que o time esperava ali, e quanto virou voto. */
+function ConfrontoNoBalao({ estimativa, apurado }: { estimativa: number; apurado: number }) {
+  const conversao = estimativa > 0 ? Math.round((apurado / estimativa) * 100) : null;
+  return (
+    <section className="rounded-control border border-gold-500/40 bg-gold-50 px-2.5 py-2">
+      <p className="text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">★ Escola do time</p>
+      <p className="mt-0.5 text-xs text-ink-700">
+        Estimativa: <b className="text-ink-900">{formatNumber(estimativa)}</b> · Apurado: <b className="text-ink-900">{formatNumber(apurado)}</b>
+      </p>
+      {conversao !== null ? (
+        <p className="text-xs text-ink-700">
+          Conversão: <b className={conversao >= 100 ? 'text-success-700' : conversao >= 80 ? 'text-gold-700' : 'text-danger-700'}>{conversao}%</b>
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * Pino do local de votacao.
  *
@@ -479,10 +530,17 @@ function PlaceMarker({
   /** Entrega o marcador ao mapa, para o ranking conseguir abri-lo. */
   onReady?: (marker: L.Marker | null) => void;
 }) {
+  const destaque = votacao?.destaques?.get(place.locationId) ?? null;
+  const apagado = Boolean(votacao?.destaques?.size) && !destaque;
   // A fachada da escola no lugar do desenho; sem foto, fica o predio.
   const icon = useMemo(
-    () => markerIcon('POLLING_PLACE', place.imageUrl, null, { atraso: atrasoDeEntrada(`local:${place.locationId}`) }),
-    [place.imageUrl, place.locationId],
+    () =>
+      markerIcon('POLLING_PLACE', place.imageUrl, null, {
+        atraso: atrasoDeEntrada(`local:${place.locationId}`),
+        destaque: destaque?.estimativa ?? null,
+        apagado,
+      }),
+    [place.imageUrl, place.locationId, destaque?.estimativa, apagado],
   );
 
   return (
@@ -500,6 +558,18 @@ function PlaceMarker({
           <p className="text-xs text-ink-500">
             {[place.city, place.state].filter(Boolean).join('/') || '--'}
           </p>
+
+          {/* O confronto vem primeiro: e por ele que se clica na escola do time. */}
+          {destaque ? <ConfrontoNoBalao estimativa={destaque.estimativa} apurado={destaque.apurado} /> : null}
+          {votacao?.onRaioX ? (
+            <button
+              type="button"
+              onClick={() => votacao.onRaioX?.(place.locationId)}
+              className="inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-control bg-navy-900 px-3 text-xs font-semibold text-gold-400 transition-colors hover:bg-navy-800"
+            >
+              Raio-X: estimativa × apuração
+            </button>
+          ) : null}
 
           <PlaceVotes place={place} votacao={votacao} />
 
