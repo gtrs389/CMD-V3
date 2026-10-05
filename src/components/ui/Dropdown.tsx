@@ -443,7 +443,7 @@ export const Dropdown = forwardRef<HTMLButtonElement, DropdownProps>(function Dr
         {loading ? <Spinner className="size-4 shrink-0 text-ink-500" /> : null}
         <span
           className={cn(
-            'min-w-0 flex-1 truncate text-[0.9375rem] font-semibold',
+            'min-w-0 flex-1 wrap-break-word text-[0.9375rem] font-semibold',
             escolhida && !loading ? 'text-ink-900' : 'font-medium text-ink-400',
             bloqueado && 'text-ink-500',
           )}

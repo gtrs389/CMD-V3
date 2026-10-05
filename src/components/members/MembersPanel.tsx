@@ -713,7 +713,7 @@ function ListaDoTime({
                           <button
                             type="button"
                             onClick={() => abrir(member)}
-                            className="block min-w-0 truncate text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
+                            className="block min-w-0 wrap-break-word text-left text-sm font-semibold text-ink-900 hover:text-brand-700"
                           >
                             {member.name}
                           </button>
@@ -721,10 +721,10 @@ function ListaDoTime({
                         </span>
                         {!somenteBasico ? <SeloDaLinha member={member} /> : null}
                         <AchadoEm campos={achadoEm.get(member.id)} />
-                        <p className="mt-1 truncate text-sm text-ink-500 tabular-nums">
+                        <p className="mt-1 wrap-break-word text-sm text-ink-500 tabular-nums">
                           {member.phone ? formatPhone(member.phone) : 'Sem telefone'}
                         </p>
-                        {member.email ? <p className="truncate text-xs text-ink-500">{member.email}</p> : null}
+                        {member.email ? <p className="break-all text-xs text-ink-500">{member.email}</p> : null}
                       </div>
                     </div>
 
@@ -744,7 +744,7 @@ function ListaDoTime({
                         </div>
                         <div className="min-w-0">
                           <dt className="text-ink-500">Referência</dt>
-                          <dd className="mt-0.5 truncate font-medium text-ink-900">{member.reference || <Vazio />}</dd>
+                          <dd className="mt-0.5 wrap-break-word font-medium text-ink-900">{member.reference || <Vazio />}</dd>
                         </div>
                         <div className="min-w-0">
                           <dt className="text-ink-500">Verificado por foto</dt>
@@ -833,7 +833,7 @@ function ListaDoTime({
                             <button
                               type="button"
                               onClick={() => abrir(member)}
-                              className="block min-w-0 truncate text-left font-semibold text-ink-900 hover:text-brand-700 hover:underline"
+                              className="block min-w-0 wrap-break-word text-left font-semibold text-ink-900 hover:text-brand-700 hover:underline"
                               title={member.tier === 'LIDER' && !somenteBasico ? 'Abrir o painel do Líder' : 'Abrir a ficha'}
                             >
                               {member.name}
@@ -842,7 +842,7 @@ function ListaDoTime({
                           </span>
                           {!somenteBasico ? <SeloDaLinha member={member} /> : null}
                           {!somenteBasico && member.email ? (
-                            <span className="block truncate text-xs text-ink-500">{member.email}</span>
+                            <span className="block break-all text-xs text-ink-500">{member.email}</span>
                           ) : null}
                           <AchadoEm campos={achadoEm.get(member.id)} />
                         </span>
@@ -883,7 +883,7 @@ function ListaDoTime({
                                 if (opcao) setReferencia(opcao.valor);
                               }}
                               title={`Filtrar pela referência ${member.reference}`}
-                              className="block max-w-full truncate rounded-pill bg-ink-100 px-2 py-0.5 text-left text-xs font-medium text-ink-700 transition-colors hover:bg-accent-50 hover:text-accent-700"
+                              className="block max-w-full wrap-break-word rounded-pill bg-ink-100 px-2 py-0.5 text-left text-xs font-medium text-ink-700 transition-colors hover:bg-accent-50 hover:text-accent-700"
                             >
                               {member.reference}
                             </button>
@@ -1039,7 +1039,7 @@ function FiltroEmCaixa({
       <span
         id={`${id}-rotulo`}
         className={cn(
-          'truncate text-[0.6875rem] font-semibold tracking-[0.08em] uppercase',
+          'wrap-break-word text-[0.6875rem] font-semibold tracking-[0.08em] uppercase',
           ligado ? 'text-accent-700' : 'text-ink-500',
         )}
       >

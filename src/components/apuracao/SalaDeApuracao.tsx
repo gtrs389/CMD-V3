@@ -192,6 +192,7 @@ export function SalaDeApuracao() {
   /** As chaves que estao no mapa agora: a bandeja diz se ha algo novo para mandar. */
   const [noMapa, setNoMapa] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [preparando, setPreparando] = useState<CandidatoDaVotacao[] | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   useEffect(() => {
     if (!aviso) return;
@@ -234,6 +235,25 @@ export function SalaDeApuracao() {
     }
     if (enviando) return;
     setEnviando(true);
+    // A espera aparece ja no clique: a pagina desce ate o mapa e os
+    // escolhidos entram em orbita enquanto a votacao e buscada.
+    setPreparando(
+      paraOMapa.map((m) => ({
+        id: m.chave,
+        ano: sala?.ano ?? new Date().getFullYear(),
+        turno: sala?.turno ?? 1,
+        uf: sala?.uf ?? '',
+        cargoCodigo: m.cargo,
+        cargo: m.nomeDoCargo,
+        numero: m.numero,
+        nome: m.nome,
+        tipo: 'CANDIDATO' as const,
+        total: 0,
+        totalOficial: null,
+        sqcand: m.sqcand,
+      })),
+    );
+    requestAnimationFrame(irParaOMapa);
     try {
       const { candidatos } = await api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao');
       const turno = sala?.turno ?? 0;
@@ -258,6 +278,7 @@ export function SalaDeApuracao() {
       setAviso('Não foi possível carregar a votação por seção. Tente de novo em instantes.');
     } finally {
       setEnviando(false);
+      setPreparando(null);
     }
   }
 
@@ -298,6 +319,7 @@ export function SalaDeApuracao() {
         marcados={jaNoMapa ? [] : paraOMapa}
         fallbackCenter={sala?.uf === 'AL' || !sala ? ALAGOAS_CENTER : undefined}
         mapaRef={mapaRef}
+        preparando={preparando}
       />
 
       {error ? (
@@ -651,7 +673,7 @@ function AbasDosCargos({ cargos, ativo, onEscolher }: { cargos: ResultadoDoCargo
             {lider ? <FotoDoCandidato cargo={c.cargo} sqcand={lider.sqcand} nome={lider.nome} tamanho="sm" /> : null}
             <span className="min-w-0">
               <span className="block text-sm font-semibold">{c.nomeDoCargo}</span>
-              <span className={cn('block truncate text-[0.6875rem]', ligado ? 'text-white/75' : 'text-ink-500')}>
+              <span className={cn('block wrap-break-word text-[0.6875rem]', ligado ? 'text-white/75' : 'text-ink-500')}>
                 {lider ? `${lider.nome.split(' ')[0]} lidera · ${pct(lider.pct, 1)}` : 'sem votos ainda'}
               </span>
             </span>
@@ -738,7 +760,7 @@ function Disputa({
 
                 <div className="min-w-0 flex-1 pr-8 sm:pr-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h3 className={cn('font-semibold text-ink-900 sm:truncate', primeiro ? 'text-lg' : 'text-base')}>
+                    <h3 className={cn('font-semibold text-ink-900 sm:wrap-break-word', primeiro ? 'text-lg' : 'text-base')}>
                       <span className="text-ink-400 sm:hidden">{c.posicao}º </span>
                       {c.nome}
                     </h3>
@@ -867,7 +889,7 @@ function Ranking({
             <FotoDoCandidato cargo={r.cargo} sqcand={c.sqcand} nome={c.nome} situacao={c.situacao} tamanho="md" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <span className="truncate text-sm font-semibold text-ink-900">{c.nome}</span>
+                <span className="wrap-break-word text-sm font-semibold text-ink-900">{c.nome}</span>
                 <SeloDaSituacao c={c} />
                 <Andou v={deltas.get(c.numero)} />
               </div>
@@ -944,7 +966,7 @@ function Favoritos({
           >
             <FotoDoCandidato cargo={r.cargo} sqcand={c.sqcand} nome={c.nome} situacao={c.situacao} tamanho="lg" />
             <button type="button" onClick={() => onEscolher(r.cargo)} className="min-w-0 flex-1 pr-6 text-left">
-              <p className="truncate text-sm font-semibold text-ink-900">{c.nome}</p>
+              <p className="wrap-break-word text-sm font-semibold text-ink-900">{c.nome}</p>
               <p className="text-[0.6875rem] text-ink-500">
                 {r.nomeDoCargo} · {c.posicao}º de {formatNumber(r.candidatos.length)}
               </p>

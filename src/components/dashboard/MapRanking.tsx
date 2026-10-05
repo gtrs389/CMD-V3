@@ -127,7 +127,7 @@ export function MapRanking({
 
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className="min-w-0 truncate text-[0.8125rem] font-semibold text-ink-900">
+                      <span className="min-w-0 wrap-break-word text-[0.8125rem] font-semibold text-ink-900">
                         {item.place.title ?? 'Local de votação'}
                       </span>
                       <span className="shrink-0 text-sm font-bold text-brand-800 tabular-nums">
@@ -136,7 +136,7 @@ export function MapRanking({
                     </span>
 
                     <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-500">
-                      <span className="truncate">{[item.place.city, item.place.state].filter(Boolean).join('/') || '--'}</span>
+                      <span className="wrap-break-word">{[item.place.city, item.place.state].filter(Boolean).join('/') || '--'}</span>
                       {destaques?.get(item.place.locationId) ? (
                         <span className="shrink-0 rounded-pill bg-navy-900 px-1.5 py-px text-[0.625rem] font-bold text-gold-400">
                           ★ est. {formatNumber(destaques.get(item.place.locationId)!.estimativa)}

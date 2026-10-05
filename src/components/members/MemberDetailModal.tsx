@@ -333,7 +333,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
               {/* E-mail historico: a linha nao aparece quando esta vazio,
                   e nenhum cadastro novo tem endereco. */}
               {member.email ? (
-                <p className="truncate text-sm text-ink-500">{member.email}</p>
+                <p className="break-all text-sm text-ink-500">{member.email}</p>
               ) : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <TierBadge tier={member.tier} />

@@ -107,11 +107,11 @@ export function PlaceMembersPanel({
         <header className="space-y-2 border-b border-line p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold text-ink-900">
+              <h3 className="wrap-break-word text-sm font-semibold text-ink-900">
                 {place.title ?? 'Local de votação'}
               </h3>
               {place.address ? (
-                <p className="truncate text-xs text-ink-500">{place.address}</p>
+                <p className="wrap-break-word text-xs text-ink-500">{place.address}</p>
               ) : null}
               <p className="text-xs text-ink-500">
                 {[place.city, place.state].filter(Boolean).join('/') || '--'}
@@ -268,12 +268,12 @@ function PersonRow({
       )}
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-ink-900">{member.name}</p>
-        <p className="truncate text-xs text-ink-500">
+        <p className="wrap-break-word text-sm font-medium text-ink-900">{member.name}</p>
+        <p className="wrap-break-word text-xs text-ink-500">
           {member.clientName}
         </p>
 
-        {member.email ? <p className="truncate text-xs text-ink-500">{member.email}</p> : null}
+        {member.email ? <p className="break-all text-xs text-ink-500">{member.email}</p> : null}
         {member.phone ? (
           <p className="flex items-center gap-1 text-xs text-ink-500">
             <Phone aria-hidden="true" className="size-3" />
@@ -288,7 +288,7 @@ function PersonRow({
         ) : null}
 
         {member.cadastradoPor ? (
-          <p className="truncate text-xs text-ink-500">
+          <p className="wrap-break-word text-xs text-ink-500">
             Cadastrado por <span className="font-medium text-ink-700">{member.cadastradoPor}</span>
           </p>
         ) : null}

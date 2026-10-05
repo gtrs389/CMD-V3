@@ -55,7 +55,7 @@ export function MemberSheetPanel({ memberId, onClose, className }: MemberSheetPa
             <UserRound aria-hidden="true" className="size-4 text-brand-700" />
             Ficha do integrante
           </h3>
-          <p className="mt-0.5 truncate text-xs text-ink-500">
+          <p className="mt-0.5 wrap-break-word text-xs text-ink-500">
             {pronta ? pronta.member.name : loading ? 'Carregando...' : 'Não foi possível abrir'}
           </p>
         </div>

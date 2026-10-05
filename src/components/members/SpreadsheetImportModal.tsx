@@ -382,7 +382,7 @@ export function SpreadsheetImportModal({
           {arquivo ? (
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-ink-500">
               <FileSpreadsheet aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="truncate">{arquivo}</span>
+              <span className="break-all">{arquivo}</span>
             </span>
           ) : null}
         </div>

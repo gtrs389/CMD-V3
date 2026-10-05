@@ -402,7 +402,7 @@ export function SettingsView() {
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-900">
+                  <p className="wrap-break-word text-sm font-semibold text-ink-900">
                     {row.name}
                     {row.self ? (
                       <span className="ml-1.5 text-[0.6875rem] font-medium text-ink-500">
@@ -410,8 +410,8 @@ export function SettingsView() {
                       </span>
                     ) : null}
                   </p>
-                  <p className="truncate text-xs text-ink-500">{row.contact}</p>
-                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 truncate text-xs text-ink-500">
+                  <p className="break-all text-xs text-ink-500">{row.contact}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 wrap-break-word text-xs text-ink-500">
                     <span>
                       {roleLabel(row.role, row.tier)}
                       {row.candidate ? ` · ${row.candidate.name}` : ''}
@@ -421,7 +421,7 @@ export function SettingsView() {
                     {row.isDemo ? <DemoBadge /> : null}
                   </p>
                   {row.recruitedBy ? (
-                    <p className="mt-0.5 truncate text-xs text-ink-400">
+                    <p className="mt-0.5 wrap-break-word text-xs text-ink-400">
                       {RECRUITED_BY_LABEL}: {recruiterText(row.recruitedBy)}
                     </p>
                   ) : null}
@@ -589,7 +589,7 @@ function DeviceLine({ device }: { device: AdminDeviceInfo | null }) {
       <p className="flex items-center gap-1.5 text-xs text-success-600">
         <Smartphone aria-hidden="true" className="size-3.5 shrink-0" />
         Aparelho vinculado
-        {identificacao ? <span className="truncate text-ink-500">{identificacao}</span> : null}
+        {identificacao ? <span className="wrap-break-word text-ink-500">{identificacao}</span> : null}
       </p>
       <p className="mt-0.5 text-[0.6875rem] text-ink-400">
         Primeiro acesso: {formatDateTime(device.firstSeenAt)} · Último acesso:{' '}

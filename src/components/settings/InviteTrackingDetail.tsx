@@ -157,8 +157,8 @@ function Conteudo({ entry }: { entry: InviteTrackingEntry }) {
           <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
             <Avatar name={member.name} src={member.photoUrl} size="lg" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-ink-900">{member.name}</p>
-              <p className="truncate text-sm text-ink-500">{formatPhone(member.phone)}</p>
+              <p className="wrap-break-word text-sm font-semibold text-ink-900">{member.name}</p>
+              <p className="wrap-break-word text-sm text-ink-500">{formatPhone(member.phone)}</p>
             </div>
             <Link
               href={`/candidatos/${member.clientId}?integrante=${member.id}`}
@@ -244,7 +244,7 @@ function Mini({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-ink-500">{label}</dt>
-      <dd className="truncate font-medium text-ink-900">{value}</dd>
+      <dd className="wrap-break-word font-medium text-ink-900">{value}</dd>
     </div>
   );
 }
@@ -300,7 +300,7 @@ function Linha({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-ink-500">{label}</dt>
-      <dd className="truncate text-sm font-medium text-ink-900">{value}</dd>
+      <dd className="wrap-break-word text-sm font-medium text-ink-900">{value}</dd>
     </div>
   );
 }

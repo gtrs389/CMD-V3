@@ -342,11 +342,11 @@ export function DashboardView() {
                     <li key={member.id} className="flex items-start gap-2.5 py-3">
                       <Avatar name={member.name} src={member.photo} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[0.8125rem] font-medium text-ink-900">
+                        <p className="wrap-break-word text-[0.8125rem] font-medium text-ink-900">
                           {member.name}
                         </p>
-                        <p className="truncate text-xs text-ink-700">{cliente?.name ?? '--'}</p>
-                        <p className="mt-0.5 truncate text-xs text-ink-500">
+                        <p className="wrap-break-word text-xs text-ink-700">{cliente?.name ?? '--'}</p>
+                        <p className="mt-0.5 wrap-break-word text-xs text-ink-500">
                           {location(member)} · {shortDateTime(member.createdAt, now)}
                         </p>
                       </div>
@@ -377,7 +377,7 @@ export function DashboardView() {
                         <td className="py-2.5 pr-3">
                           <div className="flex min-w-0 items-center gap-2.5">
                             <Avatar name={member.name} src={member.photo} size="sm" />
-                            <span className="truncate text-[0.8125rem] font-medium text-ink-900">
+                            <span className="wrap-break-word text-[0.8125rem] font-medium text-ink-900">
                               {member.name}
                             </span>
                           </div>
@@ -441,7 +441,7 @@ export function DashboardView() {
                     <Avatar name={client.name} src={client.photo} size="sm" />
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.8125rem] font-medium text-ink-900">
+                      <p className="wrap-break-word text-[0.8125rem] font-medium text-ink-900">
                         {client.name}
                       </p>
                       <p className="text-xs text-ink-500">
@@ -498,7 +498,7 @@ function AtalhoCard({ href, icon, value, label, hint, loading }: AtalhoCardProps
           </p>
         )}
         <p className="mt-1 text-[0.8125rem] font-medium text-ink-900">{label}</p>
-        <p className="mt-0.5 truncate text-xs text-ink-500">{hint}</p>
+        <p className="mt-0.5 wrap-break-word text-xs text-ink-500">{hint}</p>
       </div>
 
       <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-ink-400" />

@@ -210,7 +210,7 @@ export function FiltroDeDadosCard({
                       className="group grid w-full grid-cols-1 gap-x-4 gap-y-0.5 py-2.5 text-left sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-ink-900 group-hover:text-brand-700">
+                        <span className="block wrap-break-word text-sm font-medium text-ink-900 group-hover:text-brand-700">
                           {member.name}
                         </span>
                         <span className="block text-xs text-ink-500 tabular-nums">
@@ -218,7 +218,7 @@ export function FiltroDeDadosCard({
                         </span>
                       </span>
                       <span className="text-xs text-danger-600">{motivos.join(', ')}</span>
-                      <span className="truncate text-xs text-ink-500">
+                      <span className="wrap-break-word text-xs text-ink-500">
                         por {recruiterText(member.recruitedBy)} · {formatDate(member.createdAt)}
                       </span>
                       <ArrowRight

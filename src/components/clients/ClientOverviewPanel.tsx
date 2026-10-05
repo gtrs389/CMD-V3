@@ -560,7 +560,7 @@ function StatCard({
             <span className="text-xs font-semibold text-success-600">{badge}</span>
           ) : null}
         </span>
-        <span className="mt-1 block truncate text-[0.6875rem] text-ink-500">{hint}</span>
+        <span className="mt-1 block wrap-break-word text-[0.6875rem] text-ink-500">{hint}</span>
       </span>
 
       <ChevronRight
@@ -789,7 +789,7 @@ function RecentMembersCard({
                             {initials(member.name)}
                           </span>
                         )}
-                        <span className="truncate text-xs font-semibold text-ink-900">
+                        <span className="wrap-break-word text-xs font-semibold text-ink-900">
                           {member.name}
                         </span>
                       </span>
@@ -797,7 +797,7 @@ function RecentMembersCard({
                     <td className="px-3 py-2.5">
                       <RelationshipTag member={member} options={options} />
                     </td>
-                    <td className="truncate px-3 py-2.5 text-xs text-ink-500">
+                    <td className="wrap-break-word px-3 py-2.5 text-xs text-ink-500">
                       {memberPlace(member)}
                     </td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap text-ink-500">
@@ -829,8 +829,8 @@ function RecentMembersCard({
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-900">{member.name}</p>
-                  <p className="mt-0.5 truncate text-xs text-ink-500">{memberPlace(member)}</p>
+                  <p className="wrap-break-word text-sm font-semibold text-ink-900">{member.name}</p>
+                  <p className="mt-0.5 wrap-break-word text-xs text-ink-500">{memberPlace(member)}</p>
                   <p className="mt-0.5 text-xs text-ink-500">
                     {formatLastActivity(member.createdAt)}
                   </p>
@@ -972,7 +972,7 @@ function RankingCard({
 
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-900">
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 wrap-break-word">
                     {row.name}
                     {row.userId && row.userId === currentUserId ? (
                       <span className="ml-1.5 text-[0.6875rem] font-medium text-ink-500">(você)</span>

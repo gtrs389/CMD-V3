@@ -286,7 +286,7 @@ export function InconsistenciasPanel({
                       aria-label={`Tirar ${rotuloDe(chave)} da seleção`}
                       className="inline-flex max-w-full items-center gap-1 rounded-pill bg-accent-50 py-1 pr-1.5 pl-2.5 text-xs font-semibold text-accent-700 transition-colors hover:bg-accent-100"
                     >
-                      <span className="truncate">{rotuloDe(chave).split(' · ')[0]}</span>
+                      <span className="wrap-break-word">{rotuloDe(chave).split(' · ')[0]}</span>
                       <X aria-hidden="true" className="size-3.5 shrink-0" />
                     </button>
                   ))}
@@ -758,7 +758,7 @@ function CartaoRepetido({
             )}
           >
             <Fingerprint aria-hidden="true" className="size-4 shrink-0" />
-            <span className="truncate">
+            <span className="wrap-break-word">
               {EVIDENCIA_INFO[evidencia].rotulo}
             </span>
           </span>
@@ -807,7 +807,7 @@ function CartaoRepetido({
                 <button
                   type="button"
                   onClick={() => onOpenMember(member.id)}
-                  className="truncate text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
+                  className="wrap-break-word text-sm font-semibold text-brand-700 underline-offset-2 hover:underline"
                 >
                   {member.name}
                 </button>
@@ -856,7 +856,7 @@ function Dado({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 gap-1">
       <dt className="shrink-0 text-ink-400">{rotulo}:</dt>
-      <dd className="truncate text-ink-700">{children}</dd>
+      <dd className="wrap-break-word text-ink-700">{children}</dd>
     </div>
   );
 }
@@ -895,7 +895,7 @@ function Incompletos({
           <ul className="space-y-2">
             {porCampo.map(([campo, quantidade]) => (
               <li key={campo} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2 text-sm">
-                <span className="truncate text-ink-700 first-letter:uppercase">{campo}</span>
+                <span className="wrap-break-word text-ink-700 first-letter:uppercase">{campo}</span>
                 <span className="h-2 overflow-hidden rounded-pill bg-ink-100">
                   <span
                     className="block h-full rounded-pill bg-warning-600"
@@ -918,7 +918,7 @@ function Incompletos({
             <ul className="divide-y divide-line">
               {diagnostico.incompletos.porResponsavel.slice(0, 6).map((linha) => (
                 <li key={linha.chave} className="flex items-center gap-3 py-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate text-ink-700">{linha.responsavel}</span>
+                  <span className="min-w-0 flex-1 wrap-break-word text-ink-700">{linha.responsavel}</span>
                   <span className="shrink-0 text-xs text-ink-500 tabular-nums">
                     {formatNumber(linha.incompletos)} de {formatNumber(linha.total)}
                   </span>
@@ -983,13 +983,13 @@ function LinhaDaPessoa({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-ink-900 group-hover:text-brand-700">
+          <span className="wrap-break-word text-sm font-medium text-ink-900 group-hover:text-brand-700">
             {member.name}
           </span>
           <TierBadge tier={member.tier} className="px-1.5 py-0 text-[0.625rem]" />
           <LiderDesativado member={member} className="px-1.5 py-0 text-[0.625rem]" />
         </span>
-        <span className="block truncate text-xs">
+        <span className="block wrap-break-word text-xs">
           {children}
           <span className="text-ink-400"> · {recruiterText(member.recruitedBy)}</span>
         </span>

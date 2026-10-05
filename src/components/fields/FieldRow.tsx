@@ -78,7 +78,7 @@ export function FieldRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="min-w-0 truncate text-sm font-semibold text-ink-900">
+          <p className="min-w-0 wrap-break-word text-sm font-semibold text-ink-900">
             {field.label || 'Campo sem título'}
           </p>
           {system ? (
@@ -103,7 +103,7 @@ export function FieldRow({
         </div>
 
         {field.helpText ? (
-          <p className="mt-1.5 truncate text-xs text-ink-500">{field.helpText}</p>
+          <p className="mt-1.5 wrap-break-word text-xs text-ink-500">{field.helpText}</p>
         ) : null}
       </div>
 

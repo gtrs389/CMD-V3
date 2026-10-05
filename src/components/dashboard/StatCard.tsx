@@ -15,7 +15,7 @@ export function StatCard({ label, value, hint, icon, loading }: StatCardProps) {
     <div className="rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-ink-500">{label}</p>
+          <p className="wrap-break-word text-sm font-medium text-ink-500">{label}</p>
           {loading ? (
             <Skeleton className="mt-2 h-8 w-16" />
           ) : (

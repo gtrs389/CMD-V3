@@ -114,7 +114,7 @@ export function InviteOwnerBanner({ owner, fallbackName, className }: OwnerProps
         <p className="text-[0.5625rem] font-bold tracking-[0.18em] text-navy-300 uppercase">
           Convite de
         </p>
-        <p className="mt-0.5 truncate text-base leading-tight font-extrabold tracking-tight text-white uppercase">
+        <p className="mt-0.5 wrap-break-word text-base leading-tight font-extrabold tracking-tight text-white uppercase">
           {name}
         </p>
         <p className="mt-2.5 text-[0.9375rem] leading-snug font-bold text-balance text-white">

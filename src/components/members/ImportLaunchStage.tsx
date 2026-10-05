@@ -329,7 +329,7 @@ export function ImportLaunchStage({
               className="animate-fade-up mx-auto mt-1 flex max-w-full items-center justify-center gap-2 text-base font-semibold sm:text-lg"
             >
               <UserRound aria-hidden="true" className="size-4 shrink-0 text-accent-400" />
-              <span className="truncate">{atual?.nome ?? 'Preparando…'}</span>
+              <span className="wrap-break-word">{atual?.nome ?? 'Preparando…'}</span>
             </p>
           </>
         )}
@@ -367,7 +367,7 @@ export function ImportLaunchStage({
             )}
             {terminou ? 'Ritmo' : 'Falta'}
           </dt>
-          <dd className="mt-0.5 truncate text-lg font-bold text-white tabular-nums">
+          <dd className="mt-0.5 wrap-break-word text-lg font-bold text-white tabular-nums">
             {terminou
               ? porMinuto !== null
                 ? `${porMinuto}/min`
@@ -403,7 +403,7 @@ export function ImportLaunchStage({
                   <X aria-hidden="true" className="size-3" strokeWidth={3} />
                 )}
               </span>
-              <span className="min-w-0 flex-1 truncate">{item.nome}</span>
+              <span className="min-w-0 flex-1 wrap-break-word">{item.nome}</span>
               <span className={cn('shrink-0 text-[0.6875rem]', item.ok ? 'text-success-400' : 'text-danger-200')}>
                 {item.ok ? 'cadastrada' : 'falhou'}
               </span>

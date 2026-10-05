@@ -45,7 +45,7 @@ export function SidebarContent({ onNavigate }: SidebarProps) {
               {appConfig.shortName}
               <span aria-hidden="true" className="size-1.5 rounded-full bg-gold-400" />
             </span>
-            <span className="mt-1 block truncate text-[0.625rem] font-medium tracking-wide text-navy-300">
+            <span className="mt-1 block wrap-break-word text-[0.625rem] font-medium tracking-wide text-navy-300">
               {appConfig.wordmarkTagline}
             </span>
           </span>
@@ -93,7 +93,7 @@ export function SidebarContent({ onNavigate }: SidebarProps) {
                       active ? 'text-accent-600' : 'text-navy-300 group-hover:text-white',
                     )}
                   />
-                  <span className="truncate">{item.label}</span>
+                  <span className="wrap-break-word">{item.label}</span>
                 </Link>
               </li>
             );

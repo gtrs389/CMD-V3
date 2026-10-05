@@ -50,8 +50,8 @@ export function FormPreview({
           <div className="flex items-center gap-3 border-b border-line pb-4">
             <Avatar name={teamName} src={photo} size="md" />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-ink-900">{teamName}</p>
-              <p className="truncate text-xs text-ink-500">{subtitle}</p>
+              <p className="wrap-break-word text-sm font-semibold text-ink-900">{teamName}</p>
+              <p className="wrap-break-word text-xs text-ink-500">{subtitle}</p>
             </div>
           </div>
 

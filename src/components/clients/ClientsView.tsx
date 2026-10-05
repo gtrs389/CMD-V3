@@ -551,7 +551,7 @@ function Indicador({
         <span className="flex size-6 items-center justify-center rounded-full bg-white/10 text-accent-400 transition-transform duration-300 group-hover:scale-110">
           {icone}
         </span>
-        <span className="truncate">{rotulo}</span>
+        <span className="wrap-break-word">{rotulo}</span>
       </dt>
       <dd className="mt-2 flex items-end justify-between gap-2">
         <span className={cn('leading-none font-bold tracking-tight', forte ? 'text-3xl' : 'text-2xl')}>
@@ -560,7 +560,7 @@ function Indicador({
         </span>
         {progresso !== undefined ? <AnelPequeno fracao={progresso} /> : null}
       </dd>
-      <dd className="mt-1 truncate text-[0.6875rem] text-white/60">{nota}</dd>
+      <dd className="mt-1 wrap-break-word text-[0.6875rem] text-white/60">{nota}</dd>
     </div>
   );
 }
@@ -620,7 +620,7 @@ function DestaqueDaSemana({ client }: { client: ClientSummary }) {
         <span className="block text-[0.625rem] font-bold tracking-[0.14em] text-gold-400 uppercase">
           Destaque da semana
         </span>
-        <span className="block truncate text-sm font-semibold text-white">{client.name}</span>
+        <span className="block wrap-break-word text-sm font-semibold text-white">{client.name}</span>
         <span className="mt-0.5 flex items-center gap-1 text-xs text-white/75">
           <ArrowUpRight aria-hidden="true" className="size-3.5 text-success-400" />
           <b className="text-success-400 tabular-nums">+{formatNumber(client.memberCountLast7Days)}</b> em 7 dias
@@ -700,7 +700,7 @@ function ListaDeTimes({
                 <div className="min-w-0">
                   <Link
                     href={`/candidatos/${client.id}`}
-                    className="block truncate text-sm font-semibold text-ink-900 hover:text-accent-700"
+                    className="block wrap-break-word text-sm font-semibold text-ink-900 hover:text-accent-700"
                   >
                     {posicao !== undefined ? (
                       <span className="mr-1 text-gold-600" aria-label={`${posicao + 1}º maior time`}>
@@ -736,7 +736,7 @@ function ListaDeTimes({
               >
                 {client.memberCountLast7Days > 0 ? `+${formatNumber(client.memberCountLast7Days)}` : '0'}
               </span>
-              <span className="hidden truncate text-xs text-ink-500 md:block">
+              <span className="hidden wrap-break-word text-xs text-ink-500 md:block">
                 {client.lastMemberAt ? formatLastActivity(client.lastMemberAt) : 'Nenhum'}
               </span>
               <Menu
@@ -794,7 +794,7 @@ function SortMenu({ value, onChange }: { value: SortId; onChange: (value: SortId
         className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-control border border-line bg-surface px-3 text-sm font-medium text-ink-700 transition-colors hover:bg-ink-50"
       >
         <CalendarRange aria-hidden="true" className="size-4 shrink-0 text-ink-500" />
-        <span className="truncate">{current.label}</span>
+        <span className="wrap-break-word">{current.label}</span>
         <ChevronDown
           aria-hidden="true"
           className={cn('size-4 shrink-0 text-ink-500 transition-transform duration-200', open && 'rotate-180')}

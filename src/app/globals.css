@@ -956,6 +956,33 @@ textarea {
 }
 
 /* ==========================================================================
+   CARREGANDO A VOTACAO (por cima do mapa)
+   ==========================================================================
+   Os escolhidos orbitam a urna: a orbita gira e cada foto gira ao contrario,
+   para continuar de pe. A barra indeterminada corre de ponta a ponta.
+   ========================================================================== */
+.cmd-orbita {
+  --cmd-raio: 76px;
+  animation: cmd-orbita 9s linear infinite;
+}
+@media (min-width: 640px) {
+  .cmd-orbita { --cmd-raio: 108px; }
+}
+.cmd-orbita__item {
+  animation: cmd-orbita 9s linear infinite reverse;
+}
+@keyframes cmd-orbita {
+  to { transform: rotate(1turn); }
+}
+.cmd-barra-indeterminada {
+  animation: cmd-barra-indeterminada 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes cmd-barra-indeterminada {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}
+
+/* ==========================================================================
    SALA DE APURACAO: passos e selecao para o mapa
    ========================================================================== */
 .cmd-passo-ativo {

@@ -99,8 +99,8 @@ export function PlacarDosCandidatos({
                   <span aria-hidden="true" className="absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full ring-2 ring-surface" style={{ background: cor }} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-ink-900">{c.nome}</span>
-                  <span className="block truncate text-[0.6875rem] text-ink-500">
+                  <span className="block wrap-break-word text-sm font-semibold text-ink-900">{c.nome}</span>
+                  <span className="block wrap-break-word text-[0.6875rem] text-ink-500">
                     {c.numero} · {c.cargo}
                   </span>
                   <span className="mt-1 flex flex-wrap items-baseline gap-x-2">

@@ -38,7 +38,7 @@ export function PlaceSections({
             key={sectionLabel(linha)}
             className="flex items-baseline justify-between gap-3 text-xs"
           >
-            <dt className="min-w-0 truncate text-ink-500">{sectionLabel(linha)}</dt>
+            <dt className="min-w-0 wrap-break-word text-ink-500">{sectionLabel(linha)}</dt>
             <dd className="shrink-0 font-semibold text-ink-900 tabular-nums">
               {formatNumber(linha.total)}
             </dd>

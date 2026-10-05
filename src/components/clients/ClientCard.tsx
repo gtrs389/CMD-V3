@@ -202,7 +202,7 @@ export function ClientCard({
           </div>
 
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base leading-tight font-semibold text-ink-900 transition-colors group-hover:text-accent-700">
+            <h3 className="wrap-break-word text-base leading-tight font-semibold text-ink-900 transition-colors group-hover:text-accent-700">
               {client.name}
             </h3>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -335,7 +335,7 @@ export function ClientCard({
             <Clock3 aria-hidden="true" className="size-4 shrink-0 text-ink-400" />
             <div className="min-w-0">
               <p className="text-[0.6875rem] leading-none text-ink-500">Último cadastro</p>
-              <p className="mt-1 truncate text-[0.6875rem] leading-none font-medium text-ink-700">
+              <p className="mt-1 wrap-break-word text-[0.6875rem] leading-none font-medium text-ink-700">
                 {client.lastMemberAt ? formatLastActivity(client.lastMemberAt) : 'Nenhum'}
               </p>
             </div>

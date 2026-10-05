@@ -60,7 +60,7 @@ export function MenuDoPdf({ opcoes, rotulo, titulo }: { opcoes: OpcaoDoPdf[]; ro
           {opcoes.map((o) => (
             <div key={o.rotulo} role="menuitem" className="flex items-center justify-between gap-3 rounded-control px-2 py-1.5 hover:bg-ink-50">
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-ink-900">{o.rotulo}</span>
+                <span className="block wrap-break-word text-sm font-semibold text-ink-900">{o.rotulo}</span>
                 {o.detalhe ? <span className="block text-[0.6875rem] text-ink-500">{o.detalhe}</span> : null}
               </span>
               <BotaoDePdf onClick={o.onClick} rotulo="Baixar" />

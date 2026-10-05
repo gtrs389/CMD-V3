@@ -129,7 +129,7 @@ function Placar({ estimativa, apurado, candidato }: { estimativa: number; apurad
           <p className="mt-1 text-4xl leading-none font-bold text-gold-400 tabular-nums">
             <Contador valor={apurado} />
           </p>
-          <p className="mt-1 truncate text-xs text-white/60">votos de {candidato}</p>
+          <p className="mt-1 wrap-break-word text-xs text-white/60">votos de {candidato}</p>
         </div>
         <div className="col-span-2 flex flex-col items-center sm:col-span-1">
           <Medidor valor={c} />
@@ -213,8 +213,8 @@ function PlacarComparado({ escola, candidatos }: { escola: EscolaNoComparativo; 
               >
                 <FotoDoCandidato cargo={c.cargo} sqcand={null} src={c.foto} nome={c.nome} tamanho="md" className="ring-2 ring-white/20" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{c.nome}</p>
-                  <p className="truncate text-[0.6875rem] text-white/55">{c.rotulo.split(' · ').slice(1).join(' · ') || c.rotulo}</p>
+                  <p className="wrap-break-word text-sm font-semibold">{c.nome}</p>
+                  <p className="wrap-break-word text-[0.6875rem] text-white/55">{c.rotulo.split(' · ').slice(1).join(' · ') || c.rotulo}</p>
                   <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <span className="text-2xl leading-none font-bold tabular-nums">
                       <Contador valor={votos} />
@@ -238,7 +238,7 @@ function PlacarComparado({ escola, candidatos }: { escola: EscolaNoComparativo; 
         {[{ rotulo: 'Estimativa', valor: escola.estimativa, cor: 'rgb(255 255 255 / 0.85)' }, ...candidatos.map((c, i) => ({ rotulo: c.nome, valor: escola.apurado[i] ?? 0, cor: c.cor }))].map(
           (b) => (
             <div key={b.rotulo} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_3rem] items-center gap-2">
-              <span className="truncate text-[0.6875rem] text-white/70">{b.rotulo}</span>
+              <span className="wrap-break-word text-[0.6875rem] text-white/70">{b.rotulo}</span>
               <span className="h-2.5 overflow-hidden rounded-pill bg-white/10">
                 <span
                   className="block h-full rounded-pill transition-[width] duration-1000 ease-out"
@@ -328,7 +328,7 @@ function Lideres({
                     {initials(l.nome)}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-ink-900">{l.nome}</span>
+                    <span className="block wrap-break-word text-sm font-semibold text-ink-900">{l.nome}</span>
                     <span className="mt-1 block h-1.5 overflow-hidden rounded-pill bg-ink-100">
                       <span
                         className={cn('block h-full rounded-pill transition-[width] duration-700 ease-out', ativo ? 'bg-gold-500' : 'bg-navy-800')}
@@ -558,7 +558,7 @@ export function RaioXDaEscola({
         <div className="min-w-0">
           <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-navy-900 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400">
             <span aria-hidden="true">★</span>
-            <span className="truncate">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
+            <span className="wrap-break-word">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
           </p>
           <h2 className="mt-2 text-lg leading-tight font-bold text-ink-900 sm:text-xl">{escola.titulo}</h2>
           {onde ? <p className="mt-0.5 text-sm text-ink-500">{onde}</p> : null}
