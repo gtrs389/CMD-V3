@@ -200,7 +200,7 @@ function SeletorDaVotacao({
               onClick={() => setSoFavoritos((atual) => !atual)}
               className={cn(
                 'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3 text-xs font-semibold',
-                soFavoritos ? 'border-accent-600 bg-accent-500 text-navy-900' : 'border-line bg-surface text-ink-700 hover:bg-ink-50',
+                soFavoritos ? 'border-gold-600 bg-gold-500 text-navy-900' : 'border-line bg-surface text-ink-700 hover:bg-ink-50',
               )}
             >
               <Star aria-hidden="true" className={cn('size-3.5', soFavoritos && 'fill-current')} />
@@ -258,9 +258,9 @@ function SeletorDaVotacao({
                       aria-pressed={favorito}
                       aria-label={favorito ? `Tirar ${c.nome} dos favoritos` : `Favoritar ${c.nome}`}
                       title={favorito ? 'Tirar dos favoritos' : 'Favoritar'}
-                      className="flex size-11 shrink-0 items-center justify-center text-ink-400 transition-colors hover:text-accent-600"
+                      className="flex size-11 shrink-0 items-center justify-center text-ink-400 transition-colors hover:text-gold-600"
                     >
-                      <Star aria-hidden="true" className={cn('size-5', favorito && 'fill-accent-500 text-accent-600')} />
+                      <Star aria-hidden="true" className={cn('size-5', favorito && 'fill-gold-500 text-gold-600')} />
                     </button>
                     <button
                       type="button"

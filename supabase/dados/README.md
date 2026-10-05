@@ -181,3 +181,17 @@ Cada pessoa pode favoritar candidatos com a estrela no seletor da votação;
 eles aparecem primeiro, e o botão **Favoritos** mostra só eles. Rode a
 migration `057_favoritos_da_votacao.sql` para ligar. O favorito vale para o
 cargo e o número, então continua marcado no 2º turno.
+
+## Sala de Apuração
+
+Página `/apuracao` (menu **Sala de Apuração**, ou o botão de mesmo nome no
+mapa): o resultado do TSE ao vivo, cargo por cargo, com foto oficial dos
+candidatos, votos, porcentagem dos válidos, situação (eleito, 2º turno),
+seções totalizadas, comparecimento, brancos e nulos; o gráfico da noite (a
+porcentagem dos líderes conforme a apuração anda), a linha do tempo das
+viradas, os favoritos no topo, o **modo telão** para a TV do comitê e o
+**Ver no mapa** de cada candidato, que abre o mapa com os votos dele por
+escola, zona e seção.
+
+Rode a migration `058_sala_de_apuracao.sql`. Os dados vêm da mesma coleta ao
+vivo do mapa: com a Sala aberta, ela se atualiza a cada 30 segundos.

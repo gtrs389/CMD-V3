@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users } from 'lucide-react';
+import { LayoutDashboard, Users, Vote } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Permission } from '@/lib/permissions';
 
@@ -22,6 +22,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Times',
     icon: Users,
     permission: 'client.list',
+  },
+  {
+    href: '/apuracao',
+    label: 'Sala de Apuração',
+    icon: Vote,
+    permission: 'map.view',
   },
 ];
 

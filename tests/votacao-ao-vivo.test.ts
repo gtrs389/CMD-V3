@@ -23,6 +23,10 @@ vi.mock('@/lib/supabase/rest', () => ({
   upsertRows: vi.fn(async (tabela: string, linhas: Record<string, unknown>[]) => {
     gravadas.push({ tabela, linhas });
   }),
+  insertRows: vi.fn(async (tabela: string, linhas: Record<string, unknown>[]) => {
+    gravadas.push({ tabela, linhas });
+    return [];
+  }),
   updateRows: vi.fn(async (tabela: string, _f: unknown, valores: Record<string, unknown>) => {
     atualizadas.push({ tabela, valores });
     return [];
@@ -143,5 +147,26 @@ describe('coleta ao vivo dos boletins de urna', () => {
 
     expect(motivoDaRecusa(0)).toMatch(/não respondeu/);
     expect(motivoDaRecusa(404)).toMatch(/ainda não publicou/);
+  });
+
+  it('guarda o resultado de cada cargo, o retrato da noite e a linha do tempo; mesma versão não regrava', async () => {
+    estado = { sections_total: 2, sections_done: 0, names_at: null, list_at: new Date().toISOString(), paused_until: null };
+    fila = [];
+    const senado = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'tse', 'senador-sp-u.json'), 'utf8'));
+    tse({ [`${BASE}/6259/dados/al/al-c0005-e006259-u.json`]: senado });
+
+    await coletarAoVivo(10_000);
+
+    const resultado = gravadas.find((g) => g.tabela === 'cmd_tse_live_results')!;
+    expect(resultado.linhas[0]).toMatchObject({ pleito: 3220, uf: 'AL', office_code: 5, version: '176953242' });
+    expect((resultado.linhas[0].payload as { candidatos: unknown[] }).candidatos.length).toBeGreaterThan(5);
+    const retrato = gravadas.find((g) => g.tabela === 'cmd_tse_live_history')!;
+    expect(retrato.linhas[0]).toMatchObject({ office_code: 5, pct_sections: 100, tse_time: '16:44' });
+    const eventos = gravadas.filter((g) => g.tabela === 'cmd_tse_live_events').flatMap((g) => g.linhas);
+    expect(eventos).toContainEqual(expect.objectContaining({ kind: 'MARCO', text: 'Senador: todas as seções totalizadas' }));
+    // Os nomes tambem saem do mesmo arquivo, com o total oficial.
+    expect(gravadas.filter((g) => g.tabela === 'cmd_tse_live_candidates').flatMap((g) => g.linhas)).toContainEqual(
+      expect.objectContaining({ office_code: 5, number: '862', official_votes: 2057170 }),
+    );
   });
 });
