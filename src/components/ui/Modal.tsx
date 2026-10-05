@@ -6,12 +6,14 @@ import { ArrowLeft, X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { IconButton } from './IconButton';
 
-type Size = 'sm' | 'md' | 'lg';
+type Size = 'sm' | 'md' | 'lg' | 'xl';
 
 const SIZES: Record<Size, string> = {
   sm: 'sm:max-w-md',
   md: 'sm:max-w-xl',
   lg: 'sm:max-w-3xl',
+  /** Paineis de leitura com duas colunas (raio-x da escola). */
+  xl: 'sm:max-w-5xl',
 };
 
 interface ModalProps {
@@ -19,6 +21,11 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   description?: string;
+  /**
+   * Cabecalho proprio no lugar do titulo e da descricao (o X continua). O
+   * `title` segue como nome do dialogo para o leitor de tela.
+   */
+  header?: ReactNode;
   size?: Size;
   children: ReactNode;
   footer?: ReactNode;
@@ -66,6 +73,7 @@ export function Modal({
   onClose,
   title,
   description,
+  header,
   size = 'md',
   children,
   footer,
@@ -202,8 +210,12 @@ export function Modal({
                 <span className="truncate">Voltar{backLabel ? ` para ${backLabel}` : ''}</span>
               </button>
             ) : null}
-            <h2 className="text-base font-semibold text-ink-900">{title}</h2>
-            {description ? <p className="mt-1 text-sm text-ink-500">{description}</p> : null}
+            {header ?? (
+              <>
+                <h2 className="text-base font-semibold text-ink-900">{title}</h2>
+                {description ? <p className="mt-1 text-sm text-ink-500">{description}</p> : null}
+              </>
+            )}
           </div>
           <IconButton
             label="Fechar"

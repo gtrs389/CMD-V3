@@ -1,13 +1,16 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Star, Upload, Vote, X } from 'lucide-react';
+import { Check, Star, Upload, Vote, X } from 'lucide-react';
 import {
   cargosDaVotacao,
   chaveDoFavorito,
   filtrarCandidatos,
+  fotoDoCandidatoUrl,
   type CandidatoDaVotacao,
 } from '@/lib/domain/votacao-tse';
+import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
+import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from './cores';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { textoDoAndamento, useVotacaoAoVivo } from './use-votacao-ao-vivo';
@@ -33,19 +36,21 @@ import { importarVotacao, type Andamento, type ResumoDoEnvio } from './importar-
 const NA_TELA = 80;
 
 export function BotaoDaVotacao({
-  selecionado,
-  onSelect,
+  selecionados,
+  onChange,
   onClear,
   podeEnviar,
   className,
 }: {
-  selecionado: CandidatoDaVotacao | null;
-  onSelect: (candidato: CandidatoDaVotacao) => void;
+  /** Ate quatro candidatos de uma vez (a dobradinha, por exemplo). */
+  selecionados: CandidatoDaVotacao[];
+  onChange: (candidatos: CandidatoDaVotacao[]) => void;
   onClear: () => void;
   podeEnviar: boolean;
   className?: string;
 }) {
   const [aberto, setAberto] = useState(false);
+  const selecionado = selecionados[0] ?? null;
 
   return (
     <>
@@ -61,7 +66,11 @@ export function BotaoDaVotacao({
           )}
         >
           <Vote aria-hidden="true" className="size-3.5" />
-          {selecionado ? `Votação: ${selecionado.nome}` : 'Votação 2026 (TSE)'}
+          {selecionados.length > 1
+            ? `Votação: ${selecionados.length} candidatos`
+            : selecionado
+              ? `Votação: ${selecionado.nome}`
+              : 'Votação 2026 (TSE)'}
         </button>
         {selecionado ? (
           <button
@@ -79,9 +88,10 @@ export function BotaoDaVotacao({
       {aberto ? (
         <SeletorDaVotacao
           podeEnviar={podeEnviar}
+          selecionados={selecionados}
           onClose={() => setAberto(false)}
-          onSelect={(c) => {
-            onSelect(c);
+          onConfirm={(lista) => {
+            onChange(lista);
             setAberto(false);
           }}
         />
@@ -92,13 +102,23 @@ export function BotaoDaVotacao({
 
 function SeletorDaVotacao({
   podeEnviar,
+  selecionados,
   onClose,
-  onSelect,
+  onConfirm,
 }: {
   podeEnviar: boolean;
+  selecionados: CandidatoDaVotacao[];
   onClose: () => void;
-  onSelect: (candidato: CandidatoDaVotacao) => void;
+  onConfirm: (candidatos: CandidatoDaVotacao[]) => void;
 }) {
+  /** A escolha em andamento: so vai para o mapa no "Ver no mapa". */
+  const [escolhidos, setEscolhidos] = useState<CandidatoDaVotacao[]>(selecionados);
+  const cheio = escolhidos.length >= MAXIMO_DE_CANDIDATOS;
+  function alternar(c: CandidatoDaVotacao) {
+    setEscolhidos((atual) =>
+      atual.some((x) => x.id === c.id) ? atual.filter((x) => x.id !== c.id) : atual.length >= MAXIMO_DE_CANDIDATOS ? atual : [...atual, c],
+    );
+  }
   const loader = useCallback(() => api<{ candidatos: CandidatoDaVotacao[]; favoritos?: string[] }>('/api/votacao'), []);
   const { data, error, reload } = useRepositoryQuery(loader);
   const lista = data?.candidatos ?? null;
@@ -154,7 +174,41 @@ function SeletorDaVotacao({
       busy={enviando}
       size="lg"
       title="Votação 2026 · resultado do TSE"
-      description="Escolha um candidato para ver no mapa onde ele teve voto: escola, zona e seção."
+      description={`Escolha até ${MAXIMO_DE_CANDIDATOS} candidatos para ver no mapa onde cada um teve voto, contra a estimativa do time: escola, zona e seção.`}
+      footer={
+        <div className="flex w-full flex-wrap items-center gap-2">
+          <ul className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" aria-label="Candidatos escolhidos">
+            {escolhidos.length === 0 ? (
+              <li className="text-xs text-ink-500">Nenhum candidato escolhido.</li>
+            ) : (
+              escolhidos.map((c, i) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => alternar(c)}
+                    title={`Tirar ${c.nome}`}
+                    className="inline-flex min-h-8 max-w-56 items-center gap-1.5 rounded-pill border border-line bg-surface py-0.5 pr-2 pl-0.5 text-xs font-semibold text-ink-900 hover:bg-ink-50"
+                  >
+                    <FotoDoCandidato cargo={c.cargoCodigo} sqcand={null} src={fotoDoCandidatoUrl(c)} nome={c.nome} tamanho="xs" />
+                    <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ background: CORES_DOS_CANDIDATOS[i] }} />
+                    <span className="truncate">{c.nome}</span>
+                    <X aria-hidden="true" className="size-3 shrink-0 text-ink-400" />
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+          <button
+            type="button"
+            onClick={() => onConfirm(escolhidos)}
+            disabled={escolhidos.length === 0 && selecionados.length === 0}
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-control bg-navy-900 px-4 text-sm font-semibold text-gold-400 transition-colors hover:bg-navy-800 disabled:opacity-50"
+          >
+            <Vote aria-hidden="true" className="size-4" />
+            {escolhidos.length === 0 ? 'Voltar ao mapa da campanha' : `Ver no mapa (${escolhidos.length})`}
+          </button>
+        </div>
+      }
     >
       <AndamentoAoVivo
         texto={andamento}
@@ -239,6 +293,11 @@ function SeletorDaVotacao({
               {erroFavorito}
             </p>
           ) : null}
+          {cheio ? (
+            <p className="rounded-control border border-gold-500/40 bg-gold-50 px-3 py-2 text-xs text-gold-700">
+              Já são {MAXIMO_DE_CANDIDATOS} candidatos: tire um para escolher outro.
+            </p>
+          ) : null}
 
           <ul className="max-h-[45vh] divide-y divide-line overflow-y-auto rounded-control border border-line">
             {achados.length === 0 ? (
@@ -250,8 +309,10 @@ function SeletorDaVotacao({
             ) : (
               achados.slice(0, NA_TELA).map((c) => {
                 const favorito = favoritos.has(chaveDoFavorito(c));
+                const posicao = escolhidos.findIndex((x) => x.id === c.id);
+                const escolhido = posicao >= 0;
                 return (
-                  <li key={c.id} className="flex items-center">
+                  <li key={c.id} className={cn('flex items-center transition-colors', escolhido && 'bg-brand-50')}>
                     <button
                       type="button"
                       onClick={() => alternarFavorito(c)}
@@ -264,8 +325,10 @@ function SeletorDaVotacao({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onSelect(c)}
-                      className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3 text-left transition-colors hover:bg-brand-50"
+                      onClick={() => alternar(c)}
+                      aria-pressed={escolhido}
+                      disabled={!escolhido && cheio}
+                      className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3 text-left transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <span className="flex min-w-14 justify-center rounded-control bg-ink-100 px-1.5 py-1 text-xs font-bold text-ink-700 tabular-nums">
                         {c.numero}
@@ -286,6 +349,17 @@ function SeletorDaVotacao({
                             TSE no estado: {formatNumber(c.totalOficial)}
                           </span>
                         ) : null}
+                      </span>
+                      {/* A marca da escolha, na cor que o candidato tera no mapa e no PDF. */}
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                          escolhido ? 'border-transparent text-white' : 'border-ink-200',
+                        )}
+                        style={escolhido ? { background: CORES_DOS_CANDIDATOS[posicao] } : undefined}
+                      >
+                        {escolhido ? <Check className="size-3.5" strokeWidth={3} /> : null}
                       </span>
                     </button>
                   </li>

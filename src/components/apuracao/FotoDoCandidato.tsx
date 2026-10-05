@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils/cn';
  * buraco.
  */
 const TAMANHOS = {
+  xs: 'size-7 text-[0.625rem]',
   sm: 'size-9 text-xs',
   md: 'size-12 text-sm',
   lg: 'size-16 text-lg',
@@ -29,10 +30,13 @@ export function FotoDoCandidato({
   nome,
   situacao,
   tamanho = 'md',
+  src,
   className,
 }: {
   cargo: number;
   sqcand: string | null;
+  /** Endereco da foto pronto (pelo numero de urna), no lugar do sequencial. */
+  src?: string;
   nome: string;
   situacao?: SituacaoNaApuracao;
   tamanho?: keyof typeof TAMANHOS;
@@ -56,11 +60,11 @@ export function FotoDoCandidato({
       )}
     >
       <span aria-hidden="true">{iniciais(nome)}</span>
-      {sqcand && !falhou ? (
+      {(src || sqcand) && !falhou ? (
         // A foto vem do TSE, pelo proprio servidor: next/image nao ajudaria aqui.
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={`/api/votacao/foto/${cargo}/${sqcand}`}
+          src={src ?? `/api/votacao/foto/${cargo}/${sqcand}`}
           alt={`Foto de ${nome}`}
           loading="lazy"
           onError={() => setFalhou(true)}

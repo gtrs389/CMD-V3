@@ -342,3 +342,153 @@ export function lideresDoTime(porEscola: readonly LiderNaEscola[][]): (Omit<Lide
   }
   return [...soma.values()].sort((a, b) => b.perda - a.perda || b.cadastrados - a.cadastrados);
 }
+
+/* -------------------------------------------------------------------------
+   Lideres no raio-x da escola
+   ------------------------------------------------------------------------- */
+
+export interface LiderNoRaioX {
+  /** Chave do Lider (`leaderKey`). */
+  id: string;
+  nome: string;
+  /** Pessoas que ele cadastrou e que votam na escola. */
+  cadastrados: number;
+  /** Secao (`chaveDaSecao`) -> pessoas dele ali. */
+  porSecao: Record<string, number>;
+}
+
+/** A mesma chave de secao do confronto: zona e secao sem zero a esquerda. */
+export const chaveDaSecao = (zona: string | null, secao: string | null) => sectionKey({ zone: zona, section: secao });
+
+/**
+ * Quem cadastrou a estimativa da escola: os Lideres dos pinos da campanha
+ * que caem nela, somados (uma escola pode ter mais de um pino), do maior
+ * cadastro para o menor. `diretos` fecha a conta com a estimativa: quem e
+ * Lider (cadastrado pelo Administrador) ou nao tem Lider registrado.
+ */
+export function lideresNoRaioX(
+  escola: Pick<EscolaNoConfronto, 'pinosDaCampanha' | 'estimativa'>,
+  campanha: readonly PollingPlacePin[],
+): { lideres: LiderNoRaioX[]; diretos: number } {
+  const pinos = new Set(escola.pinosDaCampanha);
+  const porLider = new Map<string, LiderNoRaioX>();
+  for (const pin of campanha) {
+    if (!pinos.has(pin.locationId)) continue;
+    for (const l of pin.leaders ?? []) {
+      const atual = porLider.get(l.id) ?? { id: l.id, nome: l.name, cadastrados: 0, porSecao: {} };
+      atual.cadastrados += l.total;
+      for (const s of l.sections) {
+        const k = chaveDaSecao(s.zone, s.section);
+        atual.porSecao[k] = (atual.porSecao[k] ?? 0) + s.total;
+      }
+      porLider.set(l.id, atual);
+    }
+  }
+  const lideres = [...porLider.values()].sort(
+    (a, b) => b.cadastrados - a.cadastrados || a.nome.localeCompare(b.nome, 'pt-BR'),
+  );
+  const somados = lideres.reduce((t, l) => t + l.cadastrados, 0);
+  return { lideres, diretos: Math.max(0, escola.estimativa - somados) };
+}
+
+/* -------------------------------------------------------------------------
+   Varios candidatos de uma vez
+   ------------------------------------------------------------------------- */
+
+export interface SecaoNoComparativo {
+  zona: string | null;
+  secao: string | null;
+  estimativa: number;
+  /** Votos de cada candidato na secao, na ordem dos candidatos. */
+  apurado: number[];
+}
+
+export interface EscolaNoComparativo extends Omit<EscolaNoConfronto, 'apurado' | 'secoes'> {
+  apurado: number[];
+  secoes: SecaoNoComparativo[];
+}
+
+export interface Comparativo {
+  /** As escolas do time, da maior estimativa para a menor. */
+  escolas: EscolaNoComparativo[];
+  estimativaTotal: number;
+  /** Votos de cada candidato nas escolas do time. */
+  apuradoNasEscolasDoTime: number[];
+  /** Votos de cada candidato no recorte inteiro. */
+  apuradoTotal: number[];
+}
+
+/**
+ * O mesmo time contra varios candidatos (a dobradinha de federal e estadual,
+ * por exemplo): a estimativa e uma so — as pessoas cadastradas que votam na
+ * escola —, e cada candidato tem o proprio apurado, escola, zona e secao.
+ *
+ * As escolas saem do confronto do primeiro candidato. Os votos dos outros
+ * entram pela secao (zona e secao sao unicas no estado), e as secoes que so
+ * eles tem na escola entram pelos pinos da campanha que as duas escolas
+ * dividem. Assim nenhum voto conta duas vezes.
+ */
+export function compararCandidatos(confrontos: readonly Confronto[]): Comparativo {
+  const n = confrontos.length;
+  if (n === 0) return { escolas: [], estimativaTotal: 0, apuradoNasEscolasDoTime: [], apuradoTotal: [] };
+
+  // Secao -> votos, candidato a candidato (o recorte inteiro).
+  const votosDa = confrontos.map((c) => {
+    const m = new Map<string, number>();
+    for (const e of c.escolas) for (const s of e.secoes) if (s.zona || s.secao) m.set(chaveDaSecao(s.zona, s.secao), s.apurado);
+    return m;
+  });
+
+  const escolas = confrontos[0].doTime.map((base): EscolaNoComparativo => {
+    const pinos = new Set(base.pinosDaCampanha);
+    const linhas = new Map<string, SecaoNoComparativo>();
+    const linha = (zona: string | null, secao: string | null) => {
+      const k = chaveDaSecao(zona, secao);
+      const atual = linhas.get(k) ?? { zona, secao, estimativa: 0, apurado: Array<number>(n).fill(0) };
+      linhas.set(k, atual);
+      return atual;
+    };
+    for (const s of base.secoes) linha(s.zona, s.secao).estimativa = s.estimativa;
+    // Secoes da mesma escola que so os outros candidatos tem.
+    confrontos.slice(1).forEach((c) => {
+      for (const e of c.escolas) {
+        if (!e.pinosDaCampanha.some((p) => pinos.has(p))) continue;
+        for (const s of e.secoes) {
+          const l = linha(s.zona, s.secao);
+          l.estimativa = Math.max(l.estimativa, s.estimativa);
+        }
+      }
+    });
+    for (const l of linhas.values()) {
+      if (!l.zona && !l.secao) continue;
+      const k = chaveDaSecao(l.zona, l.secao);
+      l.apurado = votosDa.map((m) => m.get(k) ?? 0);
+    }
+    const secoes = [...linhas.values()].sort((a, b) => {
+      const semA = !a.zona && !a.secao;
+      const semB = !b.zona && !b.secao;
+      if (semA !== semB) return semA ? 1 : -1;
+      return (
+        (a.zona ?? '').localeCompare(b.zona ?? '', 'pt-BR', { numeric: true }) ||
+        (a.secao ?? '').localeCompare(b.secao ?? '', 'pt-BR', { numeric: true })
+      );
+    });
+    return {
+      ...base,
+      secoes,
+      apurado: Array.from({ length: n }, (_, i) => secoes.reduce((t, s) => t + s.apurado[i], 0)),
+    };
+  });
+
+  return {
+    escolas,
+    estimativaTotal: escolas.reduce((t, e) => t + e.estimativa, 0),
+    apuradoNasEscolasDoTime: Array.from({ length: n }, (_, i) => escolas.reduce((t, e) => t + e.apurado[i], 0)),
+    apuradoTotal: confrontos.map((c) => c.apuradoTotal),
+  };
+}
+
+/** Um candidato so, no mesmo formato do comparativo (o raio-x e o PDF leem um formato). */
+export function comoComparativo(e: EscolaNoConfronto): EscolaNoComparativo {
+  return { ...e, apurado: [e.apurado], secoes: e.secoes.map((s) => ({ ...s, apurado: [s.apurado] })) };
+}

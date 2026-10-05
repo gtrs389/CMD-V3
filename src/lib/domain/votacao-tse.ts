@@ -477,3 +477,8 @@ export function textoDosTotais(c: Pick<CandidatoDaVotacao, 'total' | 'totalOfici
   const pct = Math.floor((c.total / c.totalOficial) * 100);
   return `${n(c.total)} votos contados nas seções · ${n(c.totalOficial)} no total do TSE (${pct}% já no mapa)`;
 }
+
+/** Foto oficial do candidato pelo numero de urna (o servidor busca no TSE). */
+export function fotoDoCandidatoUrl(c: Pick<CandidatoDaVotacao, 'cargoCodigo' | 'numero' | 'ano'>): string {
+  return `/api/votacao/foto/${c.cargoCodigo}/numero/${encodeURIComponent(c.numero)}?ano=${c.ano}`;
+}

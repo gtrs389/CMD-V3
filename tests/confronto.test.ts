@@ -137,3 +137,68 @@ describe('os líderes em cada escola', () => {
     expect(time[0]).toMatchObject({ lider: 'JOSÉ', escolas: 2, cadastrados: 12, noMaximo: 6, perda: 4 });
   });
 });
+
+describe('lideresNoRaioX', () => {
+  it('soma os Lideres dos pinos da campanha na escola, secao por secao, e fecha com a estimativa', async () => {
+    const { lideresNoRaioX, chaveDaSecao } = await import('@/lib/domain/confronto');
+    const lider = (id: string, name: string, sections: { zone: string; section: string; total: number }[]) => ({
+      id,
+      name,
+      total: sections.reduce((t, s) => t + s.total, 0),
+      men: 0,
+      women: 0,
+      others: 0,
+      sections,
+    });
+    const pino = (locationId: string, leaders: ReturnType<typeof lider>[]) =>
+      ({ locationId, leaders }) as unknown as import('@/lib/domain/map-pin').PollingPlacePin;
+    const campanha = [
+      pino('p1', [lider('u1', 'José', [{ zone: '010', section: '0096', total: 4 }]), lider('u2', 'Maria', [{ zone: '10', section: '97', total: 2 }])]),
+      pino('p2', [lider('u1', 'José', [{ zone: '10', section: '97', total: 3 }])]),
+      pino('outra', [lider('u3', 'Ana', [{ zone: '10', section: '1', total: 9 }])]),
+    ];
+    const { lideres, diretos } = lideresNoRaioX({ pinosDaCampanha: ['p1', 'p2'], estimativa: 12 }, campanha);
+    expect(lideres.map((l) => [l.nome, l.cadastrados])).toEqual([
+      ['José', 7],
+      ['Maria', 2],
+    ]);
+    expect(lideres[0].porSecao[chaveDaSecao('10', '96')]).toBe(4);
+    expect(lideres[0].porSecao[chaveDaSecao('10', '97')]).toBe(3);
+    expect(diretos).toBe(3);
+  });
+});
+
+describe('compararCandidatos', () => {
+  it('a mesma estimativa contra dois candidatos, escola, zona e seção, sem voto contado duas vezes', async () => {
+    const { compararCandidatos } = await import('@/lib/domain/confronto');
+    // O segundo candidato tem voto numa seção que o primeiro não teve (99) e
+    // nenhum no Cristo Redentor, que vira "campanha:" nos dois.
+    const OUTRO = [
+      pino('tse2:h', 'COLÉGIO ESTADUAL HUMBERTO MENDES', [['10', '96', 5], ['10', '99', 11]], [-9.41, -36.61]),
+      pino('tse2:x', 'ESCOLA SEM TIME', [['28', '10', 3]], [-9.5, -36.5]),
+    ];
+    const c = compararCandidatos([confrontar(CAMPANHA, VOTACAO), confrontar(CAMPANHA, OUTRO)]);
+    const h = c.escolas.find((e) => e.titulo.includes('HUMBERTO'))!;
+    expect(h.estimativa).toBe(23);
+    expect(h.apurado).toEqual([39, 16]);
+    expect(h.secoes).toEqual([
+      { zona: '10', secao: '96', estimativa: 12, apurado: [30, 5] },
+      { zona: '10', secao: '97', estimativa: 8, apurado: [2, 0] },
+      { zona: '10', secao: '98', estimativa: 0, apurado: [7, 0] },
+      { zona: '10', secao: '99', estimativa: 0, apurado: [0, 11] },
+      { zona: null, secao: null, estimativa: 3, apurado: [0, 0] },
+    ]);
+    const cristo = c.escolas.find((e) => e.titulo.includes('CRISTO'))!;
+    expect(cristo.apurado).toEqual([0, 0]);
+    expect(c.estimativaTotal).toBe(37);
+    expect(c.apuradoNasEscolasDoTime).toEqual([43, 16]);
+    expect(c.apuradoTotal).toEqual([93, 19]);
+  });
+
+  it('um candidato só é o próprio confronto', async () => {
+    const { compararCandidatos } = await import('@/lib/domain/confronto');
+    const r = confrontar(CAMPANHA, VOTACAO);
+    const c = compararCandidatos([r]);
+    expect(c.escolas.map((e) => [e.chave, e.estimativa, e.apurado[0]])).toEqual(r.doTime.map((e) => [e.chave, e.estimativa, e.apurado]));
+  });
+});

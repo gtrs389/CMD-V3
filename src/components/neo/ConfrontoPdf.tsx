@@ -11,6 +11,7 @@ import {
   type LiderNaEscola,
 } from '@/lib/domain/confronto';
 import { C, Cabecalho, Kpi, LinhaDeKpis, Rodape, Tabela, num, s, st } from './pdf-base';
+import { FotoNoPdf } from './FotoNoPdf';
 
 /**
  * Relatorio "Estimativa x apuracao": todas as escolas do time com o
@@ -21,11 +22,11 @@ import { C, Cabecalho, Kpi, LinhaDeKpis, Rodape, Tabela, num, s, st } from './pd
  * Montado no navegador, como os outros PDFs do mapa.
  */
 
-const OURO = '#e0a426';
-const OURO_TEXTO = '#7a5410';
-const OURO_FUNDO = '#fdf6e3';
-const VERDE = '#166534';
-const VERMELHO = '#b42318';
+export const OURO = '#e0a426';
+export const OURO_TEXTO = '#7a5410';
+export const OURO_FUNDO = '#fdf6e3';
+export const VERDE = '#166534';
+export const VERMELHO = '#b42318';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v).toLocaleString('pt-BR')}%`);
 
@@ -61,7 +62,7 @@ function BarrasDuplas({ estimativa, apurado, maior }: { estimativa: number; apur
   );
 }
 
-function Parte({ numero, titulo, texto, quebra = false }: { numero: number; titulo: string; texto: string; quebra?: boolean }) {
+export function Parte({ numero, titulo, texto, quebra = false }: { numero: number; titulo: string; texto: string; quebra?: boolean }) {
   return (
     <View break={quebra} wrap={false} minPresenceAhead={60} style={{ marginTop: quebra ? 0 : 14, marginBottom: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -76,11 +77,11 @@ function Parte({ numero, titulo, texto, quebra = false }: { numero: number; titu
 }
 
 /** Nomes nunca quebram com hifen ("Sil-va"): ou cabem, ou viram reticencias. */
-const semHifen = (palavra: string) => [palavra];
+export const semHifen = (palavra: string) => [palavra];
 
 /** "FÉLIX SILVA DE TARGINO" -> "Félix Silva de Targino". Nomes ja escritos a mao ficam como estao. */
 const MIUDAS = new Set(['da', 'das', 'de', 'do', 'dos', 'e']);
-function nomeProprio(nome: string): string {
+export function nomeProprio(nome: string): string {
   if (nome !== nome.toUpperCase()) return nome;
   return nome
     .toLocaleLowerCase('pt-BR')
@@ -91,7 +92,7 @@ function nomeProprio(nome: string): string {
 }
 
 const CINZA = '#c3ccd6';
-const TRILHO = '#edf1f5';
+export const TRILHO = '#edf1f5';
 
 /**
  * A barra do lider: o comprimento e quanto ele cadastrou, relativo ao maior
@@ -108,9 +109,9 @@ function BarraDoLider({ cadastrados, escala }: { cadastrados: number; escala: nu
 
 /** Colunas dos lideres: as mesmas no cartao da escola e no ranking do time. */
 const COL = { cadastrou: 64, parte: 70, barra: 150, escolas: 48 };
-const rotuloDaColuna = { fontSize: 5.8, fontFamily: 'Helvetica-Bold', color: C.faint, letterSpacing: 0.5 } as const;
+export const rotuloDaColuna = { fontSize: 5.8, fontFamily: 'Helvetica-Bold', color: C.faint, letterSpacing: 0.5 } as const;
 
-function CabecalhoDosLideres({ parteDe, comEscolas = false }: { parteDe: string; comEscolas?: boolean }) {
+export function CabecalhoDosLideres({ parteDe, comEscolas = false }: { parteDe: string; comEscolas?: boolean }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
       <Text style={[rotuloDaColuna, { flex: 1 }]}>{s('LÍDER')}</Text>
@@ -122,7 +123,7 @@ function CabecalhoDosLideres({ parteDe, comEscolas = false }: { parteDe: string;
   );
 }
 
-function LinhaDoLider({
+export function LinhaDoLider({
   l,
   escala,
   total,
@@ -176,7 +177,7 @@ function Placar({ rotulo, valor, cor, largura = 58 }: { rotulo: string; valor: s
   );
 }
 
-const corDaConversao = (c: number | null) => (c === null ? C.faint : c >= 100 ? VERDE : c >= 80 ? OURO_TEXTO : VERMELHO);
+export const corDaConversao = (c: number | null) => (c === null ? C.faint : c >= 100 ? VERDE : c >= 80 ? OURO_TEXTO : VERMELHO);
 
 /**
  * O cartao da escola na parte 1: o placar (estimativa, apurado, conversao)
@@ -342,10 +343,12 @@ export interface PdfDoConfrontoProps {
   candidatoNome?: string;
   /** Escola (chave) -> quem cada Lider cadastrou ali, secao por secao. */
   lideres?: Record<string, LiderNaEscola[]>;
+  /** Foto oficial do candidato (data URL); sem ela, as iniciais. */
+  foto?: string | null;
   geradoEm: string;
 }
 
-export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = {}, geradoEm }: PdfDoConfrontoProps) {
+export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = {}, foto = null, geradoEm }: PdfDoConfrontoProps) {
   const { doTime, estimativaTotal, apuradoNasEscolasDoTime, apuradoTotal } = confronto;
   const nome = candidatoNome ?? candidato.split(' (')[0];
   const doTimeTodo = lideresDoTime(doTime.map((e) => lideres[e.chave] ?? [])).sort(
@@ -364,9 +367,12 @@ export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = 
         <Rodape texto={`Estimativa: cadastros do time. Apurado: TSE, seção por seção. Gerado em ${quando}.`} />
 
         {/* Capa: a faixa escura com o candidato e o time. */}
-        <View style={{ backgroundColor: C.navy, borderRadius: 6, padding: 14, marginBottom: 12 }}>
-          <Text style={{ fontSize: 7.5, letterSpacing: 1.5, color: OURO, fontFamily: 'Helvetica-Bold' }}>{s('ESTIMATIVA × APURAÇÃO · TSE')}</Text>
-          <Text style={{ fontSize: 17, color: C.white, fontFamily: 'Helvetica-Bold', marginTop: 4, lineHeight: 1.2 }}>{s(candidato)}</Text>
+        <View style={{ backgroundColor: C.navy, borderRadius: 6, padding: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+          <FotoNoPdf src={foto} nome={nome} tamanho={54} anel={OURO} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={{ fontSize: 7.5, letterSpacing: 1.5, color: OURO, fontFamily: 'Helvetica-Bold' }}>{s('ESTIMATIVA × APURAÇÃO · TSE')}</Text>
+            <Text style={{ fontSize: 17, color: C.white, fontFamily: 'Helvetica-Bold', marginTop: 4, lineHeight: 1.2 }}>{s(candidato)}</Text>
+          </View>
         </View>
 
         <LinhaDeKpis>
