@@ -73,15 +73,10 @@ export interface PdfDoConfrontoProps {
   confronto: Confronto;
   /** "Fulano (15123) · Deputado Estadual · 1º turno". */
   candidato: string;
-  time: string;
-  /** O recorte do mapa, em palavras. Vazio: tudo. */
-  filtro: string | null;
-  /** "73% das seções com boletim" — a apuracao ainda pode andar. */
-  andamento: string | null;
   geradoEm: string;
 }
 
-export function PdfDoConfronto({ confronto, candidato, time, filtro, andamento, geradoEm }: PdfDoConfrontoProps) {
+export function PdfDoConfronto({ confronto, candidato, geradoEm }: PdfDoConfrontoProps) {
   const { doTime, estimativaTotal, apuradoNasEscolasDoTime, apuradoTotal } = confronto;
   const conv = estimativaTotal > 0 ? (apuradoNasEscolasDoTime / estimativaTotal) * 100 : null;
   const zeradas = doTime.filter((e) => leitura(e) === 'ZERADA').length;
@@ -100,9 +95,6 @@ export function PdfDoConfronto({ confronto, candidato, time, filtro, andamento, 
         <View style={{ backgroundColor: C.navy, borderRadius: 6, padding: 14, marginBottom: 12 }}>
           <Text style={{ fontSize: 7.5, letterSpacing: 1.5, color: OURO, fontFamily: 'Helvetica-Bold' }}>{s('ESTIMATIVA × APURAÇÃO · TSE')}</Text>
           <Text style={{ fontSize: 17, color: C.white, fontFamily: 'Helvetica-Bold', marginTop: 4, lineHeight: 1.2 }}>{s(candidato)}</Text>
-          <Text style={{ fontSize: 8.5, color: C.navy3, marginTop: 3 }}>
-            {s([time, filtro ? `Recorte: ${filtro}` : 'Todo o mapa', andamento].filter(Boolean).join('  ·  '))}
-          </Text>
         </View>
 
         <LinhaDeKpis>
