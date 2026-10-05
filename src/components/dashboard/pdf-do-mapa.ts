@@ -2,6 +2,7 @@ import type { Member } from '@/lib/types';
 import type { MapOverviewPayload, PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import type { MapQuery } from '@/lib/domain/map-filters';
 import { pessoasPorEscola, rankingDeLideres, rankingDeVotos } from '@/lib/domain/votos-por-lideranca';
+import type { Confronto } from '@/lib/domain/confronto';
 import { api } from '@/lib/repositories/http/api';
 import { baixarArquivo } from '@/lib/utils/download';
 
@@ -161,4 +162,33 @@ export async function baixarPdfDoRankingDeLideres({
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`ranking-dos-lideres_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
+}
+
+/**
+ * Estimativa x apuracao: todas as escolas do time com o candidato escolhido
+ * — o que o time esperava e o que o candidato teve, escola, zona e secao.
+ */
+export async function baixarPdfDoConfronto({
+  confronto,
+  candidato,
+  time,
+  query,
+  andamento,
+}: {
+  confronto: Confronto;
+  candidato: { rotulo: string; nome: string; numero: string };
+  time: string;
+  query: MapQuery | null;
+  andamento: string | null;
+}): Promise<void> {
+  const { gerarPdfDoConfronto } = await import('@/components/neo/ConfrontoPdf');
+  const blob = await gerarPdfDoConfronto({
+    confronto,
+    candidato: candidato.rotulo,
+    time,
+    filtro: recorteEmPalavras(query),
+    andamento,
+    geradoEm: new Date().toISOString(),
+  });
+  baixarArquivo(`estimativa-x-apuracao_${slug(candidato.nome)}-${candidato.numero}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
 }

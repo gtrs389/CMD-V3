@@ -40,6 +40,8 @@ interface MapRankingProps {
   titulo?: string;
   /** Rodape: de onde o numero vem. */
   nota?: string;
+  /** Votacao do TSE: escolas onde o time tinha estimativa (pino -> estimativa). */
+  destaques?: ReadonlyMap<string, { estimativa: number }>;
   className?: string;
 }
 
@@ -52,6 +54,7 @@ export function MapRanking({
   onDownloadPeople,
   titulo = 'Onde você tem mais votos',
   nota = ESTIMATED_VOTES_HINT,
+  destaques,
   className,
 }: MapRankingProps) {
   const ranking = rankPlaces(places, zone).filter((item) => item.votes > 0);
@@ -132,8 +135,13 @@ export function MapRanking({
                       </span>
                     </span>
 
-                    <span className="mt-0.5 block truncate text-xs text-ink-500">
-                      {[item.place.city, item.place.state].filter(Boolean).join('/') || '--'}
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-500">
+                      <span className="truncate">{[item.place.city, item.place.state].filter(Boolean).join('/') || '--'}</span>
+                      {destaques?.get(item.place.locationId) ? (
+                        <span className="shrink-0 rounded-pill bg-navy-900 px-1.5 py-px text-[0.625rem] font-bold text-gold-400">
+                          ★ est. {formatNumber(destaques.get(item.place.locationId)!.estimativa)}
+                        </span>
+                      ) : null}
                     </span>
 
                     {/* A barra e comparativa, nao percentual: ela mede este

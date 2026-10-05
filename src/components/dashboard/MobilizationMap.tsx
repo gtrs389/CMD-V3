@@ -14,6 +14,7 @@ import {
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import { rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
+import { confrontar, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
 import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
@@ -23,11 +24,14 @@ import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { MapaCarregando } from './MapaCarregando';
 import {
   baixarPdfDaEscola,
+  baixarPdfDoConfronto,
   baixarPdfDaVotacao,
   baixarPdfDasPessoasPorEscola,
   baixarPdfDoRankingDeVotos,
 } from './pdf-do-mapa';
 import { AndamentoAoVivo, BotaoDaVotacao } from './votacao/VotacaoTse';
+import { RaioXDaEscola } from './votacao/RaioXDaEscola';
+import { BotaoDePdf } from './BotaoDePdf';
 import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
@@ -225,17 +229,36 @@ export function MobilizationMap({
     setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
   }
 
+  /**
+   * Estimativa x apuracao: as escolas da campanha (o que o time esperava)
+   * casadas com as da votacao (o que o candidato teve). As escolas do time
+   * ficam douradas no mapa; o raio-x abre a escola secao por secao.
+   */
+  const confronto = useMemo(
+    () => (votacao ? confrontar(data?.pollingPlaces ?? [], [...votacao.noMapa, ...votacao.foraDoMapa]) : null),
+    [votacao, data],
+  );
+  const pinosDaVotacao = useMemo(() => (confronto ? pinosDoConfronto(confronto) : null), [confronto]);
+  const destaques = useMemo(
+    () => new Map((confronto?.doTime ?? []).map((e) => [e.chave, { estimativa: e.estimativa, apurado: e.apurado }])),
+    [confronto],
+  );
+  const [raioX, setRaioX] = useState<string | null>(null);
+  const escolaDoRaioX = raioX ? (confronto?.escolas.find((e) => e.chave === raioX) ?? null) : null;
+
   const modoVotacao: ModoVotacao | undefined = candidato
     ? {
         rotulo: `Votos de ${candidato.nome} (${candidato.numero})`,
         nota: 'Resultado oficial do TSE, seção por seção',
+        destaques,
+        onRaioX: setRaioX,
       }
     : undefined;
 
   /** O que o mapa desenha: a campanha, ou a votacao do candidato escolhido. */
   const fonte = useMemo(
-    () => (candidato ? { pins: [], pollingPlaces: votacao?.noMapa ?? [] } : data),
-    [candidato, votacao, data],
+    () => (candidato ? { pins: [], pollingPlaces: pinosDaVotacao?.noMapa ?? [] } : data),
+    [candidato, pinosDaVotacao, data],
   );
   /** Na votacao nao ha pessoa no mapa: so escolas. */
   const recorte = useMemo<MapQuery>(
@@ -246,8 +269,14 @@ export function MobilizationMap({
   const selection = useMemo(() => applyMapQuery(fonte, recorte), [fonte, recorte]);
   /** Escolas da votacao sem coordenada, no mesmo recorte: so na conta e no PDF. */
   const foraDoMapa = useMemo(
-    () => (votacao ? applyMapQuery({ pins: [], pollingPlaces: votacao.foraDoMapa }, recorte).places : []),
-    [votacao, recorte],
+    () => (pinosDaVotacao ? applyMapQuery({ pins: [], pollingPlaces: pinosDaVotacao.foraDoMapa }, recorte).places : []),
+    [pinosDaVotacao, recorte],
+  );
+  /** O confronto so com as escolas do recorte da tela: e o que o PDF leva. */
+  const confrontoNoRecorte = useMemo(
+    () =>
+      confronto ? recortar(confronto, new Set([...selection.places, ...foraDoMapa].map((p) => p.locationId))) : null,
+    [confronto, selection.places, foraDoMapa],
   );
   const votosForaDoMapa = foraDoMapa.reduce((soma, place) => soma + placeVotes(place, recorte.zone), 0);
 
@@ -336,6 +365,7 @@ export function MobilizationMap({
       activeId={focusPlace?.locationId ?? null}
       onFocus={focar}
       titulo={`Onde ${candidato.nome} teve mais votos`}
+      destaques={destaques}
       nota="Resultado oficial do TSE, seção por seção. O PDF traz também os locais sem ponto no mapa."
       onDownload={() =>
         baixarPdfDaVotacao([...selection.places, ...foraDoMapa], query, {
@@ -466,6 +496,18 @@ export function MobilizationMap({
 
 
   /** Botao da votacao e, com um candidato escolhido, a faixa que diz o que o mapa mostra. */
+  /** O relatorio do time: todas as escolas, estimativa x apuracao. */
+  const baixarRelatorio = async () => {
+    if (!candidato || !confrontoNoRecorte) return;
+    await baixarPdfDoConfronto({
+      confronto: confrontoNoRecorte,
+      candidato: { rotulo: rotuloDoCandidato(candidato), nome: candidato.nome, numero: candidato.numero },
+      time: clientName ?? 'Mapa da mobilização',
+      query,
+      andamento: textoDoAndamento(aoVivo.situacao),
+    });
+  };
+
   const barraDaVotacao = (
     <div className="flex flex-wrap items-center gap-2">
       <BotaoDaVotacao
@@ -498,6 +540,12 @@ export function MobilizationMap({
             erro={aoVivo.erro}
           />
         </div>
+      ) : null}
+      {candidato && votacao && confrontoNoRecorte ? (
+        <PainelDoConfronto
+          confronto={confrontoNoRecorte}
+          onPdf={baixarRelatorio}
+        />
       ) : null}
     </div>
   );
@@ -788,6 +836,25 @@ export function MobilizationMap({
         </div>
       ) : null}
 
+      {escolaDoRaioX && candidato ? (
+        <RaioXDaEscola
+          escola={escolaDoRaioX}
+          candidato={{ nome: candidato.nome, rotulo: rotuloDoCandidato(candidato) }}
+          onClose={() => setRaioX(null)}
+          onVerPessoas={
+            escolaDoRaioX.pinosDaCampanha.length
+              ? () => {
+                  const pino = data?.pollingPlaces.find((p) => p.locationId === escolaDoRaioX.pinosDaCampanha[0]);
+                  if (!pino) return;
+                  setRaioX(null);
+                  setOpenPlace(pino);
+                }
+              : undefined
+          }
+          onPdf={baixarRelatorio}
+        />
+      ) : null}
+
       {openPlace ? (
         <PlaceMembersPanel
           place={openPlace}
@@ -797,5 +864,71 @@ export function MobilizationMap({
         />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * A faixa do confronto, logo abaixo do candidato: quanto o time esperava nas
+ * escolas dele, quanto virou voto, e o relatorio em PDF.
+ */
+function PainelDoConfronto({
+  confronto,
+  onPdf,
+}: {
+  confronto: NonNullable<ReturnType<typeof recortar>>;
+  onPdf: () => Promise<void>;
+}) {
+  const { doTime, estimativaTotal, apuradoNasEscolasDoTime } = confronto;
+  const conversao = estimativaTotal > 0 ? Math.round((apuradoNasEscolasDoTime / estimativaTotal) * 100) : null;
+  const zeradas = doTime.filter((e) => e.apurado === 0).length;
+
+  if (doTime.length === 0) {
+    return (
+      <p className="basis-full rounded-control border border-line bg-ink-50 px-3 py-2 text-xs text-ink-700">
+        Este time não tinha estimativa de votos em nenhuma escola deste recorte. O mapa mostra só a apuração.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex basis-full flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-gold-500/40 bg-gradient-to-r from-gold-50 to-surface px-3 py-2.5">
+      <p className="flex items-center gap-2 text-xs font-semibold text-gold-700">
+        <span className="flex size-6 items-center justify-center rounded-full bg-navy-900 text-[0.6875rem] text-gold-400">★</span>
+        {formatNumber(doTime.length)} {doTime.length === 1 ? 'escola do time' : 'escolas do time'} em destaque
+      </p>
+      <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-700">
+        <div className="flex gap-1">
+          <dt>Estimativa:</dt>
+          <dd className="font-bold text-navy-900 tabular-nums">{formatNumber(estimativaTotal)}</dd>
+        </div>
+        <div className="flex gap-1">
+          <dt>Apurado nelas:</dt>
+          <dd className="font-bold text-ink-900 tabular-nums">{formatNumber(apuradoNasEscolasDoTime)}</dd>
+        </div>
+        {conversao !== null ? (
+          <div className="flex gap-1">
+            <dt>Conversão:</dt>
+            <dd
+              className={cn(
+                'font-bold tabular-nums',
+                conversao >= 100 ? 'text-success-700' : conversao >= 80 ? 'text-gold-700' : 'text-danger-700',
+              )}
+            >
+              {conversao}%
+            </dd>
+          </div>
+        ) : null}
+        {zeradas > 0 ? (
+          <div className="flex gap-1">
+            <dt>Zeradas:</dt>
+            <dd className="font-bold text-danger-700 tabular-nums">{formatNumber(zeradas)}</dd>
+          </div>
+        ) : null}
+      </dl>
+      <span className="ml-auto flex items-center gap-2">
+        <span className="hidden text-[0.6875rem] text-ink-500 lg:inline">Clique numa escola dourada para o raio-x</span>
+        <BotaoDePdf onClick={onPdf} rotulo="Estimativa × apuração (PDF)" titulo="Todas as escolas do time, escola, zona e seção" variante="cheio" />
+      </span>
+    </div>
   );
 }
