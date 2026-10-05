@@ -25,6 +25,9 @@ export const PROTECTED_PREFIXES = [
   '/primeiro-acesso',
   '/clientes',
   '/minha-mobilizacao',
+  // Sala de Apuracao: sem ela aqui, recarregar a Sala dentro da moldura
+  // voltava para a pagina inicial, e o login nao lembrava de voltar a ela.
+  '/apuracao',
 ] as const;
 
 export const LOGIN_PATH = '/login';

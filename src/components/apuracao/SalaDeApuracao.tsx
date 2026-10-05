@@ -1,17 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import {
   Activity,
   ArrowDown,
   ArrowUp,
   Award,
+  Check,
   Crown,
   Flag,
   MapPin,
   Maximize,
   Minimize,
+  Plus,
   Sparkles,
   Star,
   Trophy,
@@ -27,7 +28,8 @@ import {
   type RetratoDaApuracao,
   type SituacaoNaApuracao,
 } from '@/lib/domain/apuracao';
-import { chaveDoFavorito } from '@/lib/domain/votacao-tse';
+import { chaveDoFavorito, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
+import { ALAGOAS_CENTER } from '@/lib/domain/demo-catalog';
 import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
@@ -37,8 +39,17 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { Spinner } from '@/components/ui/Spinner';
 import { AndamentoAoVivo } from '@/components/dashboard/votacao/VotacaoTse';
 import { textoDoAndamento, useVotacaoAoVivo, type SituacaoAoVivo } from '@/components/dashboard/votacao/use-votacao-ao-vivo';
+import { useSession } from '@/components/layout/SessionProvider';
+import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from '@/components/dashboard/votacao/cores';
 import { FotoDoCandidato } from './FotoDoCandidato';
 import { GraficoDaNoite } from './GraficoDaNoite';
+import {
+  BandejaDoMapa,
+  CentralDoTime,
+  chaveDoMarcado,
+  type CandidatoMarcado,
+  type TimeDaSala,
+} from './CentralDoTime';
 
 /**
  * Sala de Apuracao: o resultado da eleicao ao vivo, cargo por cargo.
@@ -49,8 +60,12 @@ import { GraficoDaNoite } from './GraficoDaNoite';
  * TSE, a tela mostra o que andou (votos a mais, quem subiu), redesenha a
  * linha da noite e narra as viradas na linha do tempo.
  *
- * Os favoritos (os mesmos do seletor do mapa) ficam no topo, e cada
- * candidato leva direto ao mapa com os votos dele por escola, zona e secao.
+ * Os favoritos (os mesmos do seletor do mapa) ficam no topo.
+ *
+ * O TIME NO MAPA: escolhido o time, o mapa dele abre aqui mesmo, com "Onde
+ * voce tem mais votos". Cada candidato do resultado pode ser MARCADO (ate
+ * quatro); a bandeja de baixo manda os marcados para o mapa, e cada um
+ * aparece com a sua cor, escola por escola, contra a estimativa do time.
  */
 
 interface EventoDaApuracao extends MudancaNaApuracao {
@@ -72,6 +87,16 @@ interface Sala {
 
 type Variacao = Map<string, { votos: number; posicoes: number }>;
 
+/** Marcar candidatos para o mapa: a posicao (a cor) e o botao. */
+interface Marcacao {
+  indice: (cargo: number, numero: string) => number;
+  alternar: (r: ResultadoDoCargo, c: CandidatoNaApuracao) => void;
+  cheio: boolean;
+}
+
+/** O ultimo time aberto na Sala: conveniencia deste navegador. */
+const CHAVE_DO_TIME = 'cmd:sala:time';
+
 const UF_NOME: Record<string, string> = { AL: 'Alagoas' };
 const pct = (n: number, casas = 2) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
 /** O Contador so corre inteiros: a porcentagem corre em centesimos. */
@@ -80,7 +105,9 @@ const centesimos = (n: number) => pct(n / 100);
 /** Disputa em cards (poucos nomes, poucas vagas); o resto vira ranking. */
 const ehDisputa = (r: ResultadoDoCargo) => r.vagas <= 2 && r.candidatos.length <= 16;
 
-export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
+export function SalaDeApuracao() {
+  const { user } = useSession();
+  const podeEscolherTime = user?.role === 'ADMIN';
   // A versao anterior de cada cargo, para mostrar o que andou desde ela.
   const ultimo = useRef(new Map<number, ResultadoDoCargo>());
   const anterior = useRef(new Map<number, ResultadoDoCargo>());
@@ -149,13 +176,135 @@ export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
     }
   }
 
-  const linkDoMapa = (cargo: number, numero: string) =>
-    mapaHref ? `${mapaHref}?votacao=${encodeURIComponent(`${cargo}:${numero}`)}` : null;
+  /* --- O time no mapa ------------------------------------------------- */
+
+  const [time, setTime] = useState<TimeDaSala | null>(null);
+  const escolherTime = useCallback(
+    (novo: TimeDaSala | null) => {
+      setTime((atual) =>
+        atual && novo && atual.id === novo.id && atual.nome === novo.nome && atual.foto === novo.foto ? atual : novo,
+      );
+      if (!podeEscolherTime) return;
+      try {
+        if (novo) window.localStorage.setItem(CHAVE_DO_TIME, JSON.stringify(novo));
+        else window.localStorage.removeItem(CHAVE_DO_TIME);
+      } catch {
+        // Sem armazenamento: o time vale ate recarregar.
+      }
+    },
+    [podeEscolherTime],
+  );
+  // O ADMIN volta para o ultimo time que abriu.
+  useEffect(() => {
+    if (!podeEscolherTime) return;
+    try {
+      const salvo = JSON.parse(window.localStorage.getItem(CHAVE_DO_TIME) ?? 'null') as TimeDaSala | null;
+      if (salvo?.id && salvo.nome) {
+        const quadro = requestAnimationFrame(() => setTime((atual) => atual ?? salvo));
+        return () => cancelAnimationFrame(quadro);
+      }
+    } catch {
+      // Valor estragado ou sem armazenamento: comeca sem time.
+    }
+    return undefined;
+  }, [podeEscolherTime]);
+
+  const mapaRef = useRef<HTMLDivElement>(null);
+  const [paraOMapa, setParaOMapa] = useState<CandidatoMarcado[]>([]);
+  const [pedido, setPedido] = useState<{ candidatos: CandidatoDaVotacao[]; vez: number } | null>(null);
+  /** As chaves que estao no mapa agora: a bandeja diz se ha algo novo para mandar. */
+  const [noMapa, setNoMapa] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  useEffect(() => {
+    if (!aviso) return;
+    const t = window.setTimeout(() => setAviso(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [aviso]);
+
+  const marcacao: Marcacao = {
+    indice: (cargo, numero) => paraOMapa.findIndex((m) => m.chave === chaveDoMarcado(cargo, numero)),
+    cheio: paraOMapa.length >= MAXIMO_DE_CANDIDATOS,
+    alternar: (r, c) => {
+      const chaveNova = chaveDoMarcado(r.cargo, c.numero);
+      const ja = paraOMapa.some((m) => m.chave === chaveNova);
+      if (!ja && paraOMapa.length >= MAXIMO_DE_CANDIDATOS) {
+        setAviso(`Até ${MAXIMO_DE_CANDIDATOS} candidatos de uma vez: tire um para marcar outro.`);
+        return;
+      }
+      setParaOMapa((atual) =>
+        atual.some((m) => m.chave === chaveNova)
+          ? atual.filter((m) => m.chave !== chaveNova)
+          : [
+              ...atual,
+              { chave: chaveNova, cargo: r.cargo, numero: c.numero, nome: c.nome, nomeDoCargo: r.nomeDoCargo, sqcand: c.sqcand },
+            ].slice(0, MAXIMO_DE_CANDIDATOS),
+      );
+    },
+  };
+
+  const irParaOMapa = () => {
+    const alvo = mapaRef.current ?? document.getElementById('mapa-do-time');
+    alvo?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  /** Manda os marcados para o mapa: cada um vira a votacao dele, secao por secao. */
+  async function verNoMapa() {
+    if (!time) {
+      setAviso('Escolha um time primeiro: é o mapa dele que mostra os votos.');
+      document.getElementById('mapa-do-time')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (enviando) return;
+    setEnviando(true);
+    try {
+      const { candidatos } = await api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao');
+      const turno = sala?.turno ?? 0;
+      const achados = paraOMapa.map(
+        (m) =>
+          candidatos
+            .filter((c) => c.cargoCodigo === m.cargo && c.numero === m.numero)
+            // O turno da apuracao primeiro; sem ele, o mais recente.
+            .sort((a, b) => Number(b.turno === turno) - Number(a.turno === turno) || b.turno - a.turno)[0] ?? null,
+      );
+      const prontos = achados.filter((c): c is CandidatoDaVotacao => c !== null);
+      const faltam = paraOMapa.filter((_, i) => achados[i] === null).map((m) => m.nome.split(' ')[0]);
+      if (prontos.length === 0) {
+        setAviso('Ainda não chegaram os votos por seção desses candidatos. O mapa se atualiza sozinho conforme o TSE publica.');
+        return;
+      }
+      setPedido({ candidatos: prontos, vez: Date.now() });
+      setNoMapa(prontos.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
+      if (faltam.length) setAviso(`Ainda sem votos por seção: ${faltam.join(', ')}. Os outros já estão no mapa.`);
+      requestAnimationFrame(irParaOMapa);
+    } catch {
+      setAviso('Não foi possível carregar a votação por seção. Tente de novo em instantes.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  /** O mapa mudou a escolha por dentro (o placar, o seletor dele): a bandeja acompanha. */
+  const candidatosDoMapa = useCallback((lista: CandidatoDaVotacao[]) => {
+    setParaOMapa(
+      lista.map((c) => ({
+        chave: chaveDoMarcado(c.cargoCodigo, c.numero),
+        cargo: c.cargoCodigo,
+        numero: c.numero,
+        nome: c.nome,
+        nomeDoCargo: c.cargo,
+        sqcand: c.sqcand ?? null,
+      })),
+    );
+    setNoMapa(lista.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
+  }, []);
+
+  const jaNoMapa = paraOMapa.length > 0 && paraOMapa.map((m) => m.chave).join('|') === noMapa;
 
   return (
     <div
       ref={raiz}
-      className={cn('space-y-5', telao && 'overflow-y-auto bg-canvas p-5')}
+      className={cn('space-y-5', telao && 'overflow-y-auto bg-canvas p-5', paraOMapa.length > 0 && 'pb-28 sm:pb-24')}
     >
       <Cabecalho
         sala={sala}
@@ -163,7 +312,19 @@ export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
         aoVivo={aoVivo}
         telao={telao}
         onTelao={alternarTelao}
-        mapaHref={mapaHref}
+        onMapa={irParaOMapa}
+      />
+
+      <CentralDoTime
+        podeEscolher={podeEscolherTime}
+        timeDaSessao={podeEscolherTime ? null : (user?.candidateId ?? null)}
+        time={time}
+        onTime={escolherTime}
+        pedido={pedido}
+        onCandidatosDoMapa={candidatosDoMapa}
+        marcados={jaNoMapa ? [] : paraOMapa}
+        fallbackCenter={sala?.uf === 'AL' || !sala ? ALAGOAS_CENTER : undefined}
+        mapaRef={mapaRef}
       />
 
       {error ? (
@@ -184,6 +345,7 @@ export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
             deltas={data?.deltas ?? {}}
             onEscolher={(cargo) => setCargoEscolhido(cargo)}
             onFavorito={alternarFavorito}
+            marcacao={marcacao}
           />
 
           <AbasDosCargos cargos={sala.cargos} ativo={cargoAtivo?.cargo ?? null} onEscolher={setCargoEscolhido} />
@@ -197,7 +359,7 @@ export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
                     deltas={data?.deltas[cargoAtivo.cargo] ?? new Map()}
                     favorito={(n) => favoritos.has(chave(cargoAtivo.cargo, n))}
                     onFavorito={(n) => alternarFavorito(cargoAtivo.cargo, n)}
-                    linkDoMapa={(n) => linkDoMapa(cargoAtivo.cargo, n)}
+                    marcacao={marcacao}
                   />
                 ) : (
                   <Ranking
@@ -206,7 +368,7 @@ export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
                     deltas={data?.deltas[cargoAtivo.cargo] ?? new Map()}
                     favorito={(n) => favoritos.has(chave(cargoAtivo.cargo, n))}
                     onFavorito={(n) => alternarFavorito(cargoAtivo.cargo, n)}
-                    linkDoMapa={(n) => linkDoMapa(cargoAtivo.cargo, n)}
+                    marcacao={marcacao}
                   />
                 )}
                 <Cartao
@@ -225,6 +387,17 @@ export function SalaDeApuracao({ mapaHref }: { mapaHref: string | null }) {
           ) : null}
         </>
       )}
+
+      <BandejaDoMapa
+        marcados={paraOMapa}
+        time={time}
+        enviando={enviando}
+        aviso={aviso}
+        jaNoMapa={jaNoMapa}
+        onTirar={(k) => setParaOMapa((atual) => atual.filter((m) => m.chave !== k))}
+        onLimpar={() => setParaOMapa([])}
+        onVerNoMapa={() => (jaNoMapa ? irParaOMapa() : void verNoMapa())}
+      />
     </div>
   );
 }
@@ -239,14 +412,14 @@ function Cabecalho({
   aoVivo,
   telao,
   onTelao,
-  mapaHref,
+  onMapa,
 }: {
   sala: Sala | null;
   cargo: ResultadoDoCargo | null;
   aoVivo: ReturnType<typeof useVotacaoAoVivo>;
   telao: boolean;
   onTelao: () => void;
-  mapaHref: string | null;
+  onMapa: () => void;
 }) {
   const secoes = cargo?.secoes.pct ?? 0;
   const final = cargo?.final ?? false;
@@ -305,14 +478,13 @@ function Cabecalho({
         <div className="flex flex-col items-center gap-3">
           <AnelDeSecoes pct={secoes} totalizadas={cargo?.secoes.totalizadas ?? 0} total={cargo?.secoes.total ?? 0} />
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {mapaHref ? (
-              <Link
-                href={mapaHref}
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-white/25 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
-              >
-                <MapPin aria-hidden="true" className="size-3.5" /> Mapa por seção
-              </Link>
-            ) : null}
+            <button
+              type="button"
+              onClick={onMapa}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-white/25 bg-white/10 px-3 text-xs font-semibold text-white hover:bg-white/20"
+            >
+              <MapPin aria-hidden="true" className="size-3.5" /> Mapa do time
+            </button>
             <button
               type="button"
               onClick={onTelao}
@@ -477,16 +649,51 @@ function BotaoFavorito({ ativo, nome, onClick }: { ativo: boolean; nome: string;
   );
 }
 
-function LinkDoMapa({ href }: { href: string | null }) {
-  if (!href) return null;
+/** Marca o candidato para o mapa, na cor que ele tera la. */
+function MarcarParaMapa({
+  r,
+  c,
+  marcacao,
+  compacto = false,
+}: {
+  r: ResultadoDoCargo;
+  c: CandidatoNaApuracao;
+  marcacao: Marcacao;
+  compacto?: boolean;
+}) {
+  const indice = marcacao.indice(r.cargo, c.numero);
+  const marcado = indice >= 0;
+  const bloqueado = !marcado && marcacao.cheio;
   return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1 rounded-pill border border-line px-2 py-1 text-[0.6875rem] font-semibold text-brand-800 transition-colors hover:border-brand-400 hover:bg-brand-50"
-      title="Ver os votos por escola, zona e seção no mapa"
+    <button
+      type="button"
+      onClick={() => marcacao.alternar(r, c)}
+      aria-pressed={marcado}
+      disabled={bloqueado}
+      title={
+        marcado
+          ? `Tirar ${c.nome} do mapa`
+          : bloqueado
+            ? `Até ${MAXIMO_DE_CANDIDATOS} candidatos de uma vez`
+            : `Marcar ${c.nome} para ver no mapa`
+      }
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-pill border text-[0.6875rem] font-semibold transition-all duration-200',
+        compacto ? 'min-h-8 px-2' : 'min-h-8 px-2.5',
+        marcado
+          ? 'border-transparent text-white shadow-[0_6px_14px_-6px_rgba(15,30,53,0.6)]'
+          : 'border-line bg-surface text-brand-800 hover:-translate-y-0.5 hover:border-accent-600 hover:bg-accent-50',
+        bloqueado && 'cursor-not-allowed opacity-50 hover:translate-y-0',
+      )}
+      style={marcado ? { background: CORES_DOS_CANDIDATOS[indice] } : undefined}
     >
-      <MapPin aria-hidden="true" className="size-3" /> Ver no mapa
-    </Link>
+      {marcado ? (
+        <Check aria-hidden="true" className="cmd-chip-entra size-3.5" strokeWidth={3} />
+      ) : (
+        <Plus aria-hidden="true" className="size-3.5" />
+      )}
+      <span className={cn(compacto && 'max-sm:sr-only')}>{marcado ? 'No mapa' : 'Marcar p/ mapa'}</span>
+    </button>
   );
 }
 
@@ -530,13 +737,13 @@ function Disputa({
   deltas,
   favorito,
   onFavorito,
-  linkDoMapa,
+  marcacao,
 }: {
   r: ResultadoDoCargo;
   deltas: Variacao;
   favorito: (numero: string) => boolean;
   onFavorito: (numero: string) => void;
-  linkDoMapa: (numero: string) => string | null;
+  marcacao: Marcacao;
 }) {
   const v = vantagem(r);
   const maior = Math.max(1, ...r.candidatos.map((c) => c.pct));
@@ -625,7 +832,7 @@ function Disputa({
                     <span className="text-xs text-ink-500 tabular-nums">{formatNumber(c.votos)} votos</span>
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <LinkDoMapa href={linkDoMapa(c.numero)} />
+                    <MarcarParaMapa r={r} c={c} marcacao={marcacao} />
                   </div>
                 </div>
 
@@ -660,13 +867,13 @@ function Ranking({
   deltas,
   favorito,
   onFavorito,
-  linkDoMapa,
+  marcacao,
 }: {
   r: ResultadoDoCargo;
   deltas: Variacao;
   favorito: (numero: string) => boolean;
   onFavorito: (numero: string) => void;
-  linkDoMapa: (numero: string) => string | null;
+  marcacao: Marcacao;
 }) {
   const [busca, setBusca] = useState('');
   const [soFavoritos, setSoFavoritos] = useState(false);
@@ -737,9 +944,7 @@ function Ranking({
                 <div className="h-full rounded-pill bg-brand-600 transition-[width] duration-1000 ease-out" style={{ width: `${Math.max(1, (c.pct / maior) * 100)}%` }} />
               </div>
             </div>
-            <div className="hidden sm:block">
-              <LinkDoMapa href={linkDoMapa(c.numero)} />
-            </div>
+            <MarcarParaMapa r={r} c={c} marcacao={marcacao} compacto />
             <div className="w-24 shrink-0 text-right">
               <p className="text-sm font-bold text-ink-900 tabular-nums">{pct(c.pct)}</p>
               <p className="text-[0.6875rem] text-ink-500 tabular-nums">{formatNumber(c.votos)} votos</p>
@@ -776,12 +981,14 @@ function Favoritos({
   deltas,
   onEscolher,
   onFavorito,
+  marcacao,
 }: {
   sala: Sala;
   favoritos: Set<string>;
   deltas: Record<number, Variacao>;
   onEscolher: (cargo: number) => void;
   onFavorito: (cargo: number, numero: string) => void;
+  marcacao: Marcacao;
 }) {
   const meus = sala.cargos.flatMap((r) =>
     r.candidatos
@@ -817,6 +1024,9 @@ function Favoritos({
                 <SeloDaSituacao c={c} />
               </span>
             </button>
+            <span className="absolute right-2 bottom-2">
+              <MarcarParaMapa r={r} c={c} marcacao={marcacao} compacto />
+            </span>
             <span className="absolute top-1 right-1">
               <BotaoFavorito ativo nome={c.nome} onClick={() => onFavorito(r.cargo, c.numero)} />
             </span>

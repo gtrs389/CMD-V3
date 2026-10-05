@@ -328,6 +328,12 @@
   animation: badge-in .9s .52s var(--ease) both, badge-glow 3.4s 1.5s ease-in-out infinite;
 }
 
+.badge-mark {
+  width: 62%;
+  height: auto;
+  filter: drop-shadow(0 8px 18px rgba(13, 118, 255, .45));
+}
+
 .badge-word {
   position: relative;
   font-size: 30px;

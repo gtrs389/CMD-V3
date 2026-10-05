@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/env';
 import { getCurrentUser } from '@/lib/auth/server';
 import { homePathFor } from '@/lib/auth/constants';
 import { LoginForm } from '@/components/auth/LoginForm';
+import { BrandMark } from '@/components/layout/BrandMark';
 import styles from '@/components/auth/login.module.css';
 
 export const metadata: Metadata = {
@@ -122,7 +123,7 @@ export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
 
         <div className={styles['login-card']}>
           <div className={styles['brand-badge']} aria-hidden="true">
-            <span className={styles['badge-word']}>CMD</span>
+            <BrandMark animated className={styles['badge-mark']} />
           </div>
 
           <h1 id="login-title">Bem-vindo de volta</h1>

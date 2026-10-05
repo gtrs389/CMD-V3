@@ -10,14 +10,15 @@ export const metadata: Metadata = {
 };
 
 /**
- * Sala de Apuracao: o resultado do TSE ao vivo, cargo por cargo.
+ * Sala de Apuracao: o resultado do TSE ao vivo, cargo por cargo, e o mapa do
+ * time logo abaixo — onde os candidatos marcados aparecem secao por secao.
  *
- * Abre para quem ve o mapa (ADMIN e Administrador do time). O "Ver no mapa"
- * de cada candidato leva a pagina inicial da pessoa, onde o mapa esta.
+ * Abre para quem ve o mapa (ADMIN e Administrador do time). O ADMIN escolhe
+ * o time; o Administrador do time ja entra no seu.
  */
 export default async function ApuracaoPage() {
   const user = await requirePageUser();
   if (!can(user, 'map.view')) redirect(homePathFor(user));
 
-  return <SalaDeApuracao mapaHref={homePathFor(user)} />;
+  return <SalaDeApuracao />;
 }
