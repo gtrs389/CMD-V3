@@ -24,11 +24,17 @@ function slug(texto: string): string {
 }
 
 /** Todas as pessoas que votam no local, pagina por pagina (o servidor limita a 50). */
-async function todasAsPessoas(place: Pick<PollingPlacePin, 'locationId'>, clientId?: string): Promise<PlaceMember[]> {
+async function todasAsPessoas(
+  place: Pick<PollingPlacePin, 'locationId'>,
+  clientId?: string,
+  /** Filtro "Lider" do mapa: so quem ele cadastrou. */
+  leaderId?: string | null,
+): Promise<PlaceMember[]> {
   const pessoas: PlaceMember[] = [];
   for (let pagina = 1; pagina <= 200; pagina += 1) {
     const params = new URLSearchParams({ pagina: String(pagina), tamanho: '50' });
     if (clientId) params.set('time', clientId);
+    if (leaderId) params.set('lider', leaderId);
     const lote = await api<PlaceMembersPayload>(`/api/mapa/locais/${place.locationId}/integrantes?${params}`);
     pessoas.push(...lote.items);
     if (pessoas.length >= lote.total || lote.items.length === 0) break;
@@ -37,9 +43,9 @@ async function todasAsPessoas(place: Pick<PollingPlacePin, 'locationId'>, client
 }
 
 /** "escola-estadual-prof-elza-soares.pdf": o nome da escola no arquivo. */
-export async function baixarPdfDaEscola(place: PollingPlacePin, clientId?: string): Promise<void> {
+export async function baixarPdfDaEscola(place: PollingPlacePin, clientId?: string, leaderId?: string | null): Promise<void> {
   const [pessoas, { gerarPdfDaEscola }] = await Promise.all([
-    todasAsPessoas(place, clientId),
+    todasAsPessoas(place, clientId, leaderId),
     import('@/components/neo/MapaPdf'),
   ]);
   const blob = await gerarPdfDaEscola({ escola: place, pessoas, geradoEm: new Date().toISOString() });
@@ -47,9 +53,12 @@ export async function baixarPdfDaEscola(place: PollingPlacePin, clientId?: strin
 }
 
 /** O recorte do mapa em palavras, para o PDF dizer de que pedaco ele fala. */
-function recorteEmPalavras(query: MapQuery | null): string | null {
+function recorteEmPalavras(query: MapQuery | null, places: readonly PollingPlacePin[] = []): string | null {
   if (!query) return null;
+  // Com o filtro de Lider, cada pino ja vem so com ele em `leaders`.
+  const lider = query.leader ? places.find((p) => p.leaders?.length)?.leaders?.[0]?.name : null;
   const partes = [
+    lider ? `Líder ${lider}` : null,
     query.zone ? `Zona ${query.zone}` : null,
     query.city,
     query.state,
@@ -70,7 +79,7 @@ export async function baixarPdfDoRankingDeVotos(
   const { gerarPdfDoRankingDeVotos } = await import('@/components/neo/MapaPdf');
   const blob = await gerarPdfDoRankingDeVotos({
     ranking: rankingDeVotos(places, query?.zone ?? null),
-    filtro: recorteEmPalavras(query),
+    filtro: recorteEmPalavras(query, places),
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`onde-tem-mais-votos_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
@@ -110,12 +119,12 @@ export async function baixarPdfDasPessoasPorEscola(
 ): Promise<void> {
   const ranking = rankingDeVotos(places, query?.zone ?? null);
   const [porLocal, { gerarPdfDasPessoasPorEscola }] = await Promise.all([
-    pessoasDosLocais(ranking.escolas.map((e) => e.place), clientId),
+    pessoasDosLocais(ranking.escolas.map((e) => e.place), clientId, query?.leader),
     import('@/components/neo/MapaPdf'),
   ]);
   const blob = await gerarPdfDasPessoasPorEscola({
     lista: pessoasPorEscola(ranking, porLocal, query?.zone ?? null),
-    filtro: recorteEmPalavras(query),
+    filtro: recorteEmPalavras(query, places),
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`quem-vota-em-cada-local_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
@@ -125,6 +134,7 @@ export async function baixarPdfDasPessoasPorEscola(
 async function pessoasDosLocais(
   places: readonly Pick<PollingPlacePin, 'locationId'>[],
   clientId?: string,
+  leaderId?: string | null,
   simultaneos = 6,
 ): Promise<Map<string, PlaceMember[]>> {
   const porLocal = new Map<string, PlaceMember[]>();
@@ -133,7 +143,7 @@ async function pessoasDosLocais(
     while (proximo < places.length) {
       const place = places[proximo];
       proximo += 1;
-      porLocal.set(place.locationId, await todasAsPessoas(place, clientId));
+      porLocal.set(place.locationId, await todasAsPessoas(place, clientId, leaderId));
     }
   }
   await Promise.all(Array.from({ length: Math.min(simultaneos, places.length) }, trabalhar));

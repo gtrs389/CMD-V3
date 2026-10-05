@@ -12,7 +12,9 @@ import {
   type MapPlace,
 } from '@/lib/domain/map-location';
 import {
+  addToLeader,
   genderBucket,
+  leaderKey,
   pollingPlaceKey,
   sectionKey,
   type MapOverviewPayload,
@@ -748,6 +750,10 @@ function somarPlanilha(
     const existente = pin.sections.find((row) => sectionKey(row) === chaveSecao);
     if (existente) existente.total += 1;
     else pin.sections.push({ zone: zona, section: secao, total: 1 });
+
+    // A planilha so traz Equipe: cada pessoa conta no Lider que a cadastrou.
+    const lider = liderDaEquipe(member.recruitedBy?.userId, member.recruitedBy?.name);
+    if (lider) addToLeader(pin, lider, genderBucket(member.gender), zona, secao);
   }
 
   return {
@@ -782,6 +788,21 @@ async function pessoasDaPlanilhaNaEscola(locationId: string, clientId: string): 
     title: local.title,
   });
   return planilha.pessoas.filter((row) => row.key === chave).map((row) => row.member);
+}
+
+/** O Lider de quem e da Equipe: chave e nome, como o filtro do mapa usa. */
+function liderDaEquipe(userId: string | null | undefined, name: string | null | undefined): { id: string; name: string } | null {
+  const nome = name?.trim();
+  const id = leaderKey(userId, nome);
+  return id && nome ? { id, name: nome } : null;
+}
+
+/** Quem e Lider nao tem Lider acima: so a Equipe entra na conta de alguem. */
+function liderDoIntegrante(
+  member: Pick<MemberRow, 'recruited_by_role' | 'recruited_by_user_id' | 'recruited_by_name'>,
+): { id: string; name: string } | null {
+  if (tierOf(member.recruited_by_role) !== 'EQUIPE') return null;
+  return liderDaEquipe(member.recruited_by_user_id, member.recruited_by_name);
 }
 
 /**
@@ -831,7 +852,8 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
       filters: { id: inFilter(locationIds) },
     }),
     selectRows<MemberRow>(TABLES.members, {
-      select: 'id,client_id,name,phone,gender,photo_path,street,district,city,state,zone,section,recruited_by_role',
+      select:
+        'id,client_id,name,phone,gender,photo_path,street,district,city,state,zone,section,recruited_by_role,recruited_by_user_id,recruited_by_name',
       filters: { id: inFilter(memberIds) },
     }),
   ]);
@@ -895,6 +917,7 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
         // Pino de Lider abre as acoes dele no mapa (Equipe, inconsistencias,
         // PDFs).
         tier: tierOf(member.recruited_by_role),
+        leaderId: liderDoIntegrante(member)?.id ?? null,
       });
       continue;
     }
@@ -948,6 +971,10 @@ export async function mapOverview(clientId?: string): Promise<MapOverviewPayload
     if (existente) existente.total += 1;
     else secoes.push({ zone: zona, section: secao, total: 1 });
 
+    // E por Lider: quantas pessoas cada um cadastrou nesta escola.
+    const lider = liderDoIntegrante(member);
+    if (lider) addToLeader(current, lider, genderBucket(member.gender), zona, secao);
+
     grouped.set(key, current);
   }
 
@@ -982,6 +1009,8 @@ export async function placeMembers(
      * E como o ADMIN geral, que ve todos os times, pede o mapa de um time.
      */
     sheetClientId?: string;
+    /** So a Equipe deste Lider (chave de `leaderKey`): o filtro "Lider" do mapa. */
+    leaderId?: string;
   } = {},
 ): Promise<PlaceMembersPayload> {
   const page = Math.max(1, Math.trunc(options.page ?? 1));
@@ -1050,8 +1079,16 @@ export async function placeMembers(
   const nomeDe = (linha: Linha) => (linha.tipo === 'banco' ? linha.row.name : linha.member.name);
   if (daPlanilha.length > 0) todas.sort((a, b) => nomeDe(a).localeCompare(nomeDe(b), 'pt-BR'));
 
+  const liderDe = (linha: Linha) =>
+    linha.tipo === 'banco'
+      ? liderDoIntegrante(linha.row)?.id
+      : linha.member.tier === 'EQUIPE'
+        ? liderDaEquipe(linha.member.recruitedBy?.userId, linha.member.recruitedBy?.name)?.id
+        : undefined;
+  const doLider = options.leaderId ? todas.filter((linha) => liderDe(linha) === options.leaderId) : todas;
+
   const term = normalizeQuery(options.search ?? '');
-  const matched = term ? todas.filter((linha) => normalizeQuery(nomeDe(linha)).includes(term)) : todas;
+  const matched = term ? doLider.filter((linha) => normalizeQuery(nomeDe(linha)).includes(term)) : doLider;
 
   const total = matched.length;
   const slice = matched.slice((page - 1) * pageSize, page * pageSize);

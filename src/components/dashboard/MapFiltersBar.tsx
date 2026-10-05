@@ -10,6 +10,8 @@ import {
 } from '@/lib/domain/map-filters';
 import { MAP_FILTERS, MAP_FILTER_LABELS } from '@/lib/domain/map-pin';
 import { cn } from '@/lib/utils/cn';
+import { formatNumber } from '@/lib/utils/text';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 
@@ -18,7 +20,9 @@ import { Select } from '@/components/ui/Select';
  *
  * Duas linhas, e a ordem e a da pergunta que a campanha faz: primeiro O QUE
  * aparece (pessoas, locais de votacao ou os dois), depois ONDE (estado,
- * cidade, zona) e por fim QUANTO (tamanho minimo do local).
+ * cidade, zona) e por fim QUANTO (tamanho minimo do local). O Lider fica ao
+ * lado da busca: escolhido, o mapa inteiro passa a contar so quem ele
+ * cadastrou, escola por escola.
  *
  * As opcoes de estado, cidade e zona nao sao listas fixas: vem dos proprios
  * dados, entao nenhum filtro daqui pode devolver mapa vazio por escolha
@@ -87,6 +91,24 @@ export function MapFiltersBar({ query, onChange, options, dense = false }: MapFi
           onChange={(search) => onChange({ ...query, search })}
           className="col-span-2 sm:col-span-4 lg:col-span-2"
         />
+
+        {options.leaders.length > 0 ? (
+          <Dropdown
+            aria-label="Líder"
+            value={query.leader ?? ''}
+            highlighted={Boolean(query.leader)}
+            searchPlaceholder="Buscar líder"
+            options={[
+              { value: '', label: 'Todos os líderes' },
+              ...options.leaders.map((l) => ({
+                value: l.id,
+                label: `${l.name} · ${formatNumber(l.people)} ${l.people === 1 ? 'pessoa' : 'pessoas'} em ${formatNumber(l.places)} ${l.places === 1 ? 'escola' : 'escolas'}`,
+              })),
+            ]}
+            onChange={(leader) => onChange({ ...query, leader: leader || null })}
+            className="col-span-2 sm:col-span-4 lg:col-span-2"
+          />
+        ) : null}
 
         <Select
           aria-label="Estado"

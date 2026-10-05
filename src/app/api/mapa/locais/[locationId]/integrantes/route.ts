@@ -32,6 +32,8 @@ export async function GET(
         search: params.get('busca') ?? '',
         page: Number(params.get('pagina') ?? '1'),
         pageSize: Number(params.get('tamanho') ?? '20'),
+        // Filtro "Lider" do mapa: a lista bate com o numero do pino.
+        leaderId: params.get('lider') || undefined,
         // Fora do ADMIN, o recorte vem da sessao, nunca do endereco. O ADMIN
         // geral ve qualquer time; no mapa de UM time, a lista e so daquele
         // time — o mesmo recorte do pino. Sem isso a escola dizia 198 votos e

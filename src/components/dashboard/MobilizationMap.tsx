@@ -37,7 +37,7 @@ import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
-import { formatNumber } from '@/lib/utils/text';
+import { formatNumber, initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/components/layout/SessionProvider';
 import { Spinner } from '@/components/ui/Spinner';
@@ -77,6 +77,12 @@ interface MobilizationMapProps {
    * cabecalho em azul-marinho.
    */
   destaque?: boolean;
+}
+
+/** "José Carlos da Silva" -> "José Silva": cabe no titulo do ranking. */
+function nomeCurto(nome: string): string {
+  const partes = nome.trim().split(/\s+/);
+  return partes.length > 2 ? `${partes[0]} ${partes[partes.length - 1]}` : nome.trim();
 }
 
 /**
@@ -260,9 +266,12 @@ export function MobilizationMap({
     () => (candidato ? { pins: [], pollingPlaces: pinosDaVotacao?.noMapa ?? [] } : data),
     [candidato, pinosDaVotacao, data],
   );
-  /** Na votacao nao ha pessoa no mapa: so escolas. */
+  /**
+   * Na votacao nao ha pessoa no mapa: so escolas. E nao ha Lider: o voto do
+   * TSE nao tem cadastro por tras.
+   */
   const recorte = useMemo<MapQuery>(
-    () => (candidato ? { ...query, kind: 'POLLING_PLACE' } : query),
+    () => (candidato ? { ...query, kind: 'POLLING_PLACE', leader: null } : query),
     [candidato, query],
   );
   const options = useMemo(() => mapOptions(fonte, query.state), [fonte, query.state]);
@@ -278,6 +287,8 @@ export function MobilizationMap({
       confronto ? recortar(confronto, new Set([...selection.places, ...foraDoMapa].map((p) => p.locationId))) : null,
     [confronto, selection.places, foraDoMapa],
   );
+  /** O Lider escolhido no filtro, com o que ele cadastrou no mapa inteiro. */
+  const liderEscolhido = recorte.leader ? (options.leaders.find((l) => l.id === recorte.leader) ?? null) : null;
   const votosForaDoMapa = foraDoMapa.reduce((soma, place) => soma + placeVotes(place, recorte.zone), 0);
 
   const totals = data?.totals;
@@ -382,6 +393,8 @@ export function MobilizationMap({
       zone={query.zone}
       activeId={focusPlace?.locationId ?? null}
       onFocus={focar}
+      titulo={liderEscolhido ? `Escolas de ${nomeCurto(liderEscolhido.name)}` : undefined}
+      nota={liderEscolhido ? `Só as pessoas que ${liderEscolhido.name} cadastrou, escola por escola, zona e seção.` : undefined}
       onDownload={() => baixarPdfDoRankingDeVotos(selection.places, query, clientName ?? 'Mapa da mobilização')}
       onDownloadPeople={() =>
         baixarPdfDasPessoasPorEscola(selection.places, query, clientName ?? 'Mapa da mobilização', clientId)
@@ -458,6 +471,64 @@ export function MobilizationMap({
         <dd className="font-semibold text-ink-900">{formatNumber(pendentes)}</dd>
       </div>
     </dl>
+  ) : null;
+
+  /**
+   * O Lider escolhido no filtro: quem e, quantas pessoas cadastrou e em
+   * quantas escolas, e a escola onde ele e mais forte. O numero "no filtro"
+   * so aparece quando outro recorte (cidade, zona...) corta parte da gente
+   * dele — senao seria o mesmo numero duas vezes.
+   */
+  const maisForte = liderEscolhido
+    ? selection.places.reduce<PollingPlacePin | null>((m, p) => (!m || p.total > m.total ? p : m), null)
+    : null;
+  const faixaDoLider = liderEscolhido ? (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-gold-500/40 bg-gradient-to-r from-gold-50 to-surface px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-navy-900 text-xs font-bold text-gold-400"
+        >
+          {initials(liderEscolhido.name)}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">Líder</p>
+          <p className="truncate text-sm font-semibold text-ink-900">{liderEscolhido.name}</p>
+        </div>
+      </div>
+      <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-500">
+        <div className="flex items-baseline gap-1">
+          <dd className="text-lg leading-none font-bold text-navy-900 tabular-nums">{formatNumber(liderEscolhido.people)}</dd>
+          <dt>{liderEscolhido.people === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'}</dt>
+        </div>
+        <div className="flex items-baseline gap-1">
+          <dd className="text-lg leading-none font-bold text-navy-900 tabular-nums">{formatNumber(liderEscolhido.places)}</dd>
+          <dt>{liderEscolhido.places === 1 ? 'escola' : 'escolas'}</dt>
+        </div>
+        {selection.votes !== liderEscolhido.people ? (
+          <div className="flex items-baseline gap-1">
+            <dd className="text-lg leading-none font-bold text-brand-800 tabular-nums">{formatNumber(selection.votes)}</dd>
+            <dt>no filtro</dt>
+          </div>
+        ) : null}
+        {maisForte ? (
+          <div className="flex max-w-full min-w-0 items-baseline gap-1">
+            <dt className="shrink-0">Mais forte em</dt>
+            <dd className="max-w-56 min-w-0 truncate font-semibold text-ink-900">
+              {maisForte.title ?? 'local de votação'} ({formatNumber(maisForte.total)})
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+      <button
+        type="button"
+        onClick={() => setQuery({ ...query, leader: null })}
+        className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-pill border border-line bg-surface px-2.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
+      >
+        <X aria-hidden="true" className="size-3.5" />
+        Todos os líderes
+      </button>
+    </div>
   ) : null;
 
   /** No destaque, a contagem vira quatro numeros grandes que correm ate o valor. */
@@ -661,6 +732,8 @@ export function MobilizationMap({
 
           <MapFiltersBar query={query} onChange={setQuery} options={options} dense />
 
+          {faixaDoLider}
+
           {destaque ? null : contagem}
         </header>
       ) : null}
@@ -699,7 +772,7 @@ export function MobilizationMap({
                 pins={selection.pins}
                 places={selection.places}
                 onOpenPlace={candidato ? undefined : setOpenPlace}
-                onDownloadPlace={candidato ? undefined : (place) => baixarPdfDaEscola(place, clientId)}
+                onDownloadPlace={candidato ? undefined : (place) => baixarPdfDaEscola(place, clientId, recorte.leader)}
                 votacao={modoVotacao}
                 onOpenMember={abrirFicha}
                 renderLiderActions={renderLiderActions}
@@ -772,6 +845,7 @@ export function MobilizationMap({
               <div className="min-h-0 space-y-3 overflow-y-auto p-3">
                 {barraDaVotacao}
                 <MapFiltersBar query={query} onChange={setQuery} options={options} />
+                {faixaDoLider}
 
                 {podeLocalizar && pendentes > 0 ? (
                   <Button variant="secondary" onClick={localizar} disabled={resolving} fullWidth>
@@ -858,6 +932,7 @@ export function MobilizationMap({
         <PlaceMembersPanel
           place={openPlace}
           clientId={clientId}
+          leaderId={recorte.leader}
           onOpenMember={abrirFicha}
           onClose={() => setOpenPlace(null)}
         />
