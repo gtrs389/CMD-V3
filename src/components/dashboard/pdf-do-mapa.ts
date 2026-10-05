@@ -172,22 +172,16 @@ export async function baixarPdfDoConfronto({
   confronto,
   candidato,
   time,
-  query,
-  andamento,
 }: {
   confronto: Confronto;
   candidato: { rotulo: string; nome: string; numero: string };
+  /** So no nome do arquivo. */
   time: string;
-  query: MapQuery | null;
-  andamento: string | null;
 }): Promise<void> {
   const { gerarPdfDoConfronto } = await import('@/components/neo/ConfrontoPdf');
   const blob = await gerarPdfDoConfronto({
     confronto,
     candidato: candidato.rotulo,
-    time,
-    filtro: recorteEmPalavras(query),
-    andamento,
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`estimativa-x-apuracao_${slug(candidato.nome)}-${candidato.numero}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);

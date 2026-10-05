@@ -503,8 +503,6 @@ export function MobilizationMap({
       confronto: confrontoNoRecorte,
       candidato: { rotulo: rotuloDoCandidato(candidato), nome: candidato.nome, numero: candidato.numero },
       time: clientName ?? 'Mapa da mobilização',
-      query,
-      andamento: textoDoAndamento(aoVivo.situacao),
     });
   };
 
