@@ -2,7 +2,14 @@ import type { Member } from '@/lib/types';
 import type { MapOverviewPayload, PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import type { MapQuery } from '@/lib/domain/map-filters';
 import { pessoasPorEscola, rankingDeLideres, rankingDeVotos } from '@/lib/domain/votos-por-lideranca';
-import { lideresDaEscola, type Confronto, type LiderNaEscola } from '@/lib/domain/confronto';
+import {
+  lideresDaEscola,
+  lideresNoRaioX,
+  type Comparativo,
+  type Confronto,
+  type LiderNaEscola,
+} from '@/lib/domain/confronto';
+import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import { api } from '@/lib/repositories/http/api';
 import { baixarArquivo } from '@/lib/utils/download';
 
@@ -183,6 +190,7 @@ export async function baixarPdfDoConfronto({
   candidato,
   time,
   clientId,
+  fotoDe,
 }: {
   confronto: Confronto;
   candidato: { rotulo: string; nome: string; numero: string };
@@ -190,13 +198,16 @@ export async function baixarPdfDoConfronto({
   time: string;
   /** O time do mapa: a lista de pessoas de cada escola fica nele. */
   clientId?: string;
+  /** Para a foto oficial na capa (pelo numero de urna). */
+  fotoDe?: Pick<CandidatoDaVotacao, 'cargoCodigo' | 'numero' | 'ano'>;
 }): Promise<void> {
   // Quem cada Lider cadastrou em cada escola do time: a mesma lista do
   // "Ver pessoas", lida escola por escola (poucas de cada vez).
   const pinos = [...new Set(confronto.doTime.flatMap((e) => e.pinosDaCampanha))].map((locationId) => ({ locationId }));
-  const [porPino, { gerarPdfDoConfronto }] = await Promise.all([
+  const [porPino, { gerarPdfDoConfronto }, foto] = await Promise.all([
     pessoasDosLocais(pinos, clientId),
     import('@/components/neo/ConfrontoPdf'),
+    fotoDe ? fotoComoDataUrl(fotoDe) : Promise.resolve(null),
   ]);
   const lideres: Record<string, LiderNaEscola[]> = {};
   for (const escola of confronto.doTime) {
@@ -211,7 +222,64 @@ export async function baixarPdfDoConfronto({
     candidato: candidato.rotulo,
     candidatoNome: candidato.nome,
     lideres,
+    foto,
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`estimativa-x-apuracao_${slug(candidato.nome)}-${candidato.numero}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
+}
+
+/**
+ * A foto oficial do candidato como data URL, pronta para o PDF. Nula quando
+ * nao ha foto (outro ano, cargo sem foto, TSE fora): o PDF usa as iniciais.
+ */
+async function fotoComoDataUrl(c: Pick<CandidatoDaVotacao, 'cargoCodigo' | 'numero' | 'ano'>): Promise<string | null> {
+  try {
+    const resposta = await fetch(fotoDoCandidatoUrl(c), { credentials: 'same-origin' });
+    const tipo = resposta.headers.get('content-type') ?? '';
+    // O gerador do PDF so le JPEG e PNG.
+    if (!resposta.ok || !/image\/(jpe?g|png)/.test(tipo)) return null;
+    const blob = await resposta.blob();
+    return await new Promise<string | null>((resolve) => {
+      const leitor = new FileReader();
+      leitor.onload = () => resolve(typeof leitor.result === 'string' ? leitor.result : null);
+      leitor.onerror = () => resolve(null);
+      leitor.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Varios candidatos no mesmo PDF: a estimativa do time contra os votos de
+ * cada um, escola, zona e secao, com quantas pessoas cada Lider cadastrou em
+ * cada escola e secao (os pinos da campanha ja trazem isso) e a foto oficial
+ * de cada candidato.
+ */
+export async function baixarPdfDoComparativo({
+  comparativo,
+  candidatos,
+  campanha,
+  time,
+}: {
+  comparativo: Comparativo;
+  candidatos: { candidato: CandidatoDaVotacao; cor: string }[];
+  /** As escolas da campanha (sem filtro): e delas que saem os Lideres. */
+  campanha: readonly PollingPlacePin[];
+  /** So no nome do arquivo. */
+  time: string;
+}): Promise<void> {
+  const [{ gerarPdfDoComparativo }, fotos] = await Promise.all([
+    import('@/components/neo/ComparativoPdf'),
+    Promise.all(candidatos.map(({ candidato }) => fotoComoDataUrl(candidato))),
+  ]);
+  const lideres = Object.fromEntries(comparativo.escolas.map((e) => [e.chave, lideresNoRaioX(e, campanha)]));
+  const blob = await gerarPdfDoComparativo({
+    comparativo,
+    candidatos: candidatos.map(({ candidato: c, cor }, i) => ({ nome: c.nome, numero: c.numero, cargo: c.cargo, cor, foto: fotos[i] })),
+    lideres,
+    geradoEm: new Date().toISOString(),
+  });
+  const nomes = candidatos.map(({ candidato: c }) => `${slug(c.nome)}-${c.numero}`).join('_x_');
+  baixarArquivo(`estimativa-x-apuracao_${nomes}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
 }

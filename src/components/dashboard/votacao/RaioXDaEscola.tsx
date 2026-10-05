@@ -6,6 +6,7 @@ import {
   chaveDaSecao,
   conversao,
   leitura,
+  type EscolaNoComparativo,
   type EscolaNoConfronto,
   type LeituraDoConfronto,
   type LiderNoRaioX,
@@ -14,7 +15,7 @@ import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { Modal } from '@/components/ui/Modal';
 import { Contador } from '@/components/ui/Contador';
-import { BotaoDePdf } from '../BotaoDePdf';
+import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -23,8 +24,9 @@ import { BotaoDePdf } from '../BotaoDePdf';
  * escola, zona e secao.
  *
  * Duas cores fixas, com nome escrito do lado (nunca so a cor): azul-marinho
- * e a estimativa, ouro e a apuracao. Tocar um Lider acende, em cada secao, a
- * parte da estimativa que e dele.
+ * e a estimativa, ouro e a apuracao. Com varios candidatos, cada um tem a
+ * propria cor (a mesma do placar e do PDF), sempre com o nome ao lado. Tocar
+ * um Lider acende, em cada secao, a parte da estimativa que e dele.
  */
 
 const LEITURA: Record<LeituraDoConfronto, { texto: string; classe: string; icone: React.ReactNode } | null> = {
@@ -86,11 +88,25 @@ function Medidor({ valor }: { valor: number | null }) {
   );
 }
 
-/** O placar: estimativa contra apurado, em numeros grandes e em duas barras. */
-function Placar({ escola, candidato }: { escola: EscolaNoConfronto; candidato: string }) {
-  const c = conversao(escola);
-  const maior = Math.max(1, escola.estimativa, escola.apurado);
-  const diferenca = escola.apurado - escola.estimativa;
+
+/** Um candidato no raio-x: nome, rotulo, cor e foto (pelo numero de urna). */
+export interface CandidatoNoRaioX {
+  nome: string;
+  /** "Fulano (15123) · Deputado Estadual". */
+  rotulo: string;
+  /** Cor do candidato (a mesma do placar e do PDF). */
+  cor: string;
+  cargo: number;
+  foto?: string;
+}
+
+const pct = (estimativa: number, apurado: number) => conversao({ estimativa, apurado });
+
+/** O placar de um candidato: estimativa contra apurado, em numeros grandes e em duas barras. */
+function Placar({ estimativa, apurado, candidato }: { estimativa: number; apurado: number; candidato: string }) {
+  const c = pct(estimativa, apurado);
+  const maior = Math.max(1, estimativa, apurado);
+  const diferenca = apurado - estimativa;
   return (
     <section
       aria-label="Estimativa e apuração"
@@ -102,7 +118,7 @@ function Placar({ escola, candidato }: { escola: EscolaNoConfronto; candidato: s
             <span aria-hidden="true" className="size-2 rounded-sm bg-white/80" /> Estimativa do time
           </p>
           <p className="mt-1 text-4xl leading-none font-bold tabular-nums">
-            <Contador valor={escola.estimativa} />
+            <Contador valor={estimativa} />
           </p>
           <p className="mt-1 text-xs text-white/60">pessoas cadastradas que votam aqui</p>
         </div>
@@ -111,7 +127,7 @@ function Placar({ escola, candidato }: { escola: EscolaNoConfronto; candidato: s
             <span aria-hidden="true" className="size-2 rounded-sm bg-gold-400" /> Apurado (TSE)
           </p>
           <p className="mt-1 text-4xl leading-none font-bold text-gold-400 tabular-nums">
-            <Contador valor={escola.apurado} />
+            <Contador valor={apurado} />
           </p>
           <p className="mt-1 truncate text-xs text-white/60">votos de {candidato}</p>
         </div>
@@ -124,8 +140,8 @@ function Placar({ escola, candidato }: { escola: EscolaNoConfronto; candidato: s
       {/* As duas barras na mesma escala: a distancia entre elas e a historia. */}
       <div className="mt-4 space-y-1.5">
         {[
-          { rotulo: 'estimativa', valor: escola.estimativa, cor: 'bg-white/85' },
-          { rotulo: 'apurado', valor: escola.apurado, cor: 'bg-gold-400' },
+          { rotulo: 'estimativa', valor: estimativa, cor: 'bg-white/85' },
+          { rotulo: 'apurado', valor: apurado, cor: 'bg-gold-400' },
         ].map((b) => (
           <div key={b.rotulo} className="h-2.5 overflow-hidden rounded-pill bg-white/10" title={`${b.rotulo}: ${formatNumber(b.valor)}`}>
             <div
@@ -135,23 +151,119 @@ function Placar({ escola, candidato }: { escola: EscolaNoConfronto; candidato: s
           </div>
         ))}
       </div>
-      {escola.estimativa > 0 ? (
-        <p
-          className={cn(
-            'mt-3 inline-flex items-center gap-1 rounded-pill px-2.5 py-1 text-xs font-semibold',
-            diferenca > 0 ? 'bg-success-400/15 text-success-400' : diferenca < 0 ? 'bg-danger-600/30 text-danger-200' : 'bg-white/10 text-white',
-          )}
-        >
-          {diferenca > 0 ? <ArrowUpRight className="size-3.5" /> : diferenca < 0 ? <ArrowDownRight className="size-3.5" /> : <Minus className="size-3.5" />}
-          {diferenca > 0
-            ? `${formatNumber(diferenca)} ${diferenca === 1 ? 'voto' : 'votos'} acima da estimativa`
-            : diferenca < 0
-              ? `${formatNumber(-diferenca)} ${diferenca === -1 ? 'voto' : 'votos'} abaixo da estimativa`
-              : 'Exatamente a estimativa'}
-        </p>
-      ) : null}
+      {estimativa > 0 ? <SeloDaDiferenca diferenca={diferenca} /> : null}
     </section>
   );
+}
+
+function SeloDaDiferenca({ diferenca, compacto = false }: { diferenca: number; compacto?: boolean }) {
+  return (
+    <p
+      className={cn(
+        'inline-flex items-center gap-1 rounded-pill font-semibold',
+        compacto ? 'px-2 py-0.5 text-[0.6875rem]' : 'mt-3 px-2.5 py-1 text-xs',
+        diferenca > 0 ? 'bg-success-400/15 text-success-400' : diferenca < 0 ? 'bg-danger-600/30 text-danger-200' : 'bg-white/10 text-white',
+      )}
+    >
+      {diferenca > 0 ? <ArrowUpRight className="size-3.5" /> : diferenca < 0 ? <ArrowDownRight className="size-3.5" /> : <Minus className="size-3.5" />}
+      {compacto
+        ? diferenca > 0
+          ? `+${formatNumber(diferenca)}`
+          : formatNumber(diferenca)
+        : diferenca > 0
+          ? `${formatNumber(diferenca)} ${diferenca === 1 ? 'voto' : 'votos'} acima da estimativa`
+          : diferenca < 0
+            ? `${formatNumber(-diferenca)} ${diferenca === -1 ? 'voto' : 'votos'} abaixo da estimativa`
+            : 'Exatamente a estimativa'}
+    </p>
+  );
+}
+
+/**
+ * Varios candidatos: a estimativa do time de um lado e, do outro, cada
+ * candidato com foto, votos, conversao e quanto ficou acima ou abaixo. As
+ * barras embaixo, todas na mesma escala, contam a historia de uma vez.
+ */
+function PlacarComparado({ escola, candidatos }: { escola: EscolaNoComparativo; candidatos: CandidatoNoRaioX[] }) {
+  const maior = Math.max(1, escola.estimativa, ...escola.apurado);
+  return (
+    <section
+      aria-label="Estimativa e apuração de cada candidato"
+      className="animate-fade-up overflow-hidden rounded-card bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 p-4 text-white sm:p-5"
+    >
+      <div className="grid gap-4 md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+        <div className="md:border-r md:border-white/10 md:pr-4">
+          <p className="flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-white/60 uppercase">
+            <span aria-hidden="true" className="size-2 rounded-sm bg-white/80" /> Estimativa do time
+          </p>
+          <p className="mt-1 text-5xl leading-none font-bold tabular-nums">
+            <Contador valor={escola.estimativa} />
+          </p>
+          <p className="mt-1.5 text-xs text-white/60">pessoas cadastradas que votam aqui: a mesma conta para todos os candidatos</p>
+        </div>
+        <ul className={cn('grid gap-2', candidatos.length > 1 && 'sm:grid-cols-2')}>
+          {candidatos.map((c, i) => {
+            const votos = escola.apurado[i] ?? 0;
+            const conv = pct(escola.estimativa, votos);
+            return (
+              <li
+                key={c.rotulo}
+                className="flex min-w-0 animate-fade-up items-center gap-3 rounded-control border border-white/10 bg-white/[0.06] p-2.5"
+                style={{ animationDelay: `${80 + i * 70}ms`, borderLeft: `3px solid ${c.cor}` }}
+              >
+                <FotoDoCandidato cargo={c.cargo} sqcand={null} src={c.foto} nome={c.nome} tamanho="md" className="ring-2 ring-white/20" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{c.nome}</p>
+                  <p className="truncate text-[0.6875rem] text-white/55">{c.rotulo.split(' · ').slice(1).join(' · ') || c.rotulo}</p>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-2xl leading-none font-bold tabular-nums">
+                      <Contador valor={votos} />
+                    </span>
+                    <span className="text-[0.6875rem] text-white/60">votos</span>
+                    {conv !== null ? (
+                      <span className="text-xs font-bold tabular-nums" style={{ color: corDaConversao(conv) }}>
+                        {Math.round(conv)}%
+                      </span>
+                    ) : null}
+                    {escola.estimativa > 0 ? <SeloDaDiferenca diferenca={votos - escola.estimativa} compacto /> : null}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="mt-4 space-y-1.5">
+        {[{ rotulo: 'Estimativa', valor: escola.estimativa, cor: 'rgb(255 255 255 / 0.85)' }, ...candidatos.map((c, i) => ({ rotulo: c.nome, valor: escola.apurado[i] ?? 0, cor: c.cor }))].map(
+          (b) => (
+            <div key={b.rotulo} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_3rem] items-center gap-2">
+              <span className="truncate text-[0.6875rem] text-white/70">{b.rotulo}</span>
+              <span className="h-2.5 overflow-hidden rounded-pill bg-white/10">
+                <span
+                  className="block h-full rounded-pill transition-[width] duration-1000 ease-out"
+                  style={{ width: `${b.valor > 0 ? Math.max(2, (b.valor / maior) * 100) : 0}%`, background: b.cor }}
+                />
+              </span>
+              <span className="text-right text-xs font-semibold tabular-nums">{formatNumber(b.valor)}</span>
+            </div>
+          ),
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** A frase da escola com varios candidatos: quanto cada um teve da estimativa. */
+function fraseComparada(e: EscolaNoComparativo, candidatos: CandidatoNoRaioX[]): string {
+  const partes = candidatos.map((c, i) => {
+    const conv = pct(e.estimativa, e.apurado[i] ?? 0);
+    return `${c.nome} teve ${formatNumber(e.apurado[i] ?? 0)}${conv !== null ? ` (${Math.round(conv)}%)` : ''}`;
+  });
+  const lista = partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : partes[0];
+  return e.estimativa > 0
+    ? `${lista}, contra ${formatNumber(e.estimativa)} votos estimados pelo time nesta escola.`
+    : `${lista}. O time não tinha estimativa aqui.`;
 }
 
 /** Os Lideres que cadastraram a estimativa da escola. Tocar um acende a parte dele nas secoes. */
@@ -161,23 +273,22 @@ function Lideres({
   diretos,
   foco,
   onFoco,
-  candidato,
+  candidatos,
 }: {
-  escola: EscolaNoConfronto;
+  escola: EscolaNoComparativo;
   lideres: LiderNoRaioX[];
   diretos: number;
   foco: string | null;
   onFoco: (id: string | null) => void;
-  candidato: string;
+  candidatos: CandidatoNoRaioX[];
 }) {
   const maior = Math.max(1, ...lideres.map((l) => l.cadastrados));
   const escolhido = lideres.find((l) => l.id === foco) ?? null;
-  // Votos do candidato nas secoes onde a gente do Lider escolhido vota.
-  const votosNasSecoesDele = escolhido
-    ? escola.secoes
-        .filter((s) => (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) > 0 && (s.zona || s.secao))
-        .reduce((t, s) => t + s.apurado, 0)
-    : 0;
+  // Votos de cada candidato nas secoes onde a gente do Lider escolhido vota.
+  const secoesDoEscolhido = escolhido
+    ? escola.secoes.filter((s) => (s.zona || s.secao) && (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) > 0)
+    : [];
+  const votosNasSecoesDele = candidatos.map((_, i) => secoesDoEscolhido.reduce((t, s) => t + (s.apurado[i] ?? 0), 0));
   const secoesDele = escolhido ? Object.keys(escolhido.porSecao).filter((k) => k !== chaveDaSecao(null, null)).length : 0;
 
   return (
@@ -250,8 +361,16 @@ function Lideres({
           <p>
             <b className="text-ink-900">{escolhido.nome}</b> cadastrou {formatNumber(escolhido.cadastrados)}{' '}
             {escolhido.cadastrados === 1 ? 'pessoa' : 'pessoas'}
-            {secoesDele ? ` em ${formatNumber(secoesDele)} ${secoesDele === 1 ? 'seção' : 'seções'}` : ''}. Nessas seções, {candidato} teve{' '}
-            <b className="text-gold-700">{formatNumber(votosNasSecoesDele)}</b> {votosNasSecoesDele === 1 ? 'voto' : 'votos'}.
+            {secoesDele ? ` em ${formatNumber(secoesDele)} ${secoesDele === 1 ? 'seção' : 'seções'}` : ''}. Nessas seções,{' '}
+            {candidatos.map((c, i) => (
+              <span key={c.rotulo}>
+                {i > 0 ? (i === candidatos.length - 1 ? ' e ' : ', ') : ''}
+                {c.nome} teve <b style={{ color: candidatos.length > 1 ? c.cor : undefined }} className={candidatos.length > 1 ? undefined : 'text-gold-700'}>
+                  {formatNumber(votosNasSecoesDele[i])}
+                </b>
+              </span>
+            ))}{' '}
+            {candidatos.length === 1 && votosNasSecoesDele[0] === 1 ? 'voto' : 'votos'}.
           </p>
         ) : lideres.length > 0 ? (
           <p>Toque em um líder para ver, seção por seção, onde está a gente dele.</p>
@@ -261,9 +380,18 @@ function Lideres({
   );
 }
 
-/** Secao por secao: a estimativa (com a parte do Lider em foco) e o apurado. */
-function Secoes({ escola, escolhido }: { escola: EscolaNoConfronto; escolhido: LiderNoRaioX | null }) {
-  const maior = Math.max(1, ...escola.secoes.map((s) => Math.max(s.estimativa, s.apurado)));
+/** Secao por secao: a estimativa (com a parte do Lider em foco) e o apurado de cada candidato. */
+function Secoes({
+  escola,
+  candidatos,
+  escolhido,
+}: {
+  escola: EscolaNoComparativo;
+  candidatos: CandidatoNoRaioX[];
+  escolhido: LiderNoRaioX | null;
+}) {
+  const varios = candidatos.length > 1;
+  const maior = Math.max(1, ...escola.secoes.map((s) => Math.max(s.estimativa, ...s.apurado)));
   const comNumero = escola.secoes.filter((s) => s.zona || s.secao);
   const zonas = [...new Set(comNumero.map((s) => s.zona).filter(Boolean))];
   const largura = (v: number) => `${v > 0 ? Math.max(2, (v / maior) * 100) : 0}%`;
@@ -284,9 +412,17 @@ function Secoes({ escola, escolhido }: { escola: EscolaNoConfronto; escolhido: L
               <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-gold-600" /> de {escolhido.nome.split(' ')[0]}
             </span>
           ) : null}
-          <span className="flex items-center gap-1">
-            <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-gold-400" /> apurado
-          </span>
+          {varios ? (
+            candidatos.map((c) => (
+              <span key={c.rotulo} className="flex items-center gap-1">
+                <span aria-hidden="true" className="h-2 w-3 rounded-sm" style={{ background: c.cor }} /> {c.nome.split(' ')[0]}
+              </span>
+            ))
+          ) : (
+            <span className="flex items-center gap-1">
+              <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-gold-400" /> apurado
+            </span>
+          )}
         </p>
       </header>
 
@@ -295,12 +431,13 @@ function Secoes({ escola, escolhido }: { escola: EscolaNoConfronto; escolhido: L
           const comSecao = Boolean(s.zona || s.secao);
           const dele = escolhido ? (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) : 0;
           const apagada = escolhido !== null && dele === 0;
-          const diferenca = s.apurado - s.estimativa;
+          const diferenca = (s.apurado[0] ?? 0) - s.estimativa;
           return (
             <li
               key={`${s.zona}/${s.secao}/${i}`}
               className={cn(
-                'grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 transition-opacity duration-300',
+                'grid items-center gap-3 px-4 py-2.5 transition-opacity duration-300',
+                varios ? 'grid-cols-[5.5rem_minmax(0,1fr)]' : 'grid-cols-[5.5rem_minmax(0,1fr)_auto]',
                 apagada && 'opacity-35',
               )}
             >
@@ -337,34 +474,43 @@ function Secoes({ escola, escolhido }: { escola: EscolaNoConfronto; escolhido: L
                     )}
                   </span>
                 </div>
-                <div className="flex items-center gap-2" title={`apurado: ${formatNumber(s.apurado)}`}>
-                  <div className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
-                    <div className="h-full rounded-pill bg-gold-400 transition-[width] duration-700 ease-out" style={{ width: largura(s.apurado) }} />
+                {candidatos.map((c, k) => (
+                  <div key={c.rotulo} className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(s.apurado[k] ?? 0)}`}>
+                    <div className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
+                      <div
+                        className={cn('h-full rounded-pill transition-[width] duration-700 ease-out', !varios && 'bg-gold-400')}
+                        style={{ width: largura(s.apurado[k] ?? 0), background: varios ? c.cor : undefined }}
+                      />
+                    </div>
+                    <span className={cn('w-12 text-right text-xs font-semibold tabular-nums', varios ? 'text-ink-900' : 'text-gold-700')}>
+                      {formatNumber(s.apurado[k] ?? 0)}
+                    </span>
                   </div>
-                  <span className="w-12 text-right text-xs font-semibold text-gold-700 tabular-nums">{formatNumber(s.apurado)}</span>
-                </div>
+                ))}
               </div>
 
-              <div className="flex w-14 justify-end sm:w-auto">
-                {/* Sem secao no cadastro, nao ha apuracao para comparar. */}
-                {!comSecao ? (
-                  <span className="text-[0.6875rem] text-ink-400">—</span>
-                ) : (
-                  <>
-                    <span
-                      className={cn(
-                        'text-sm font-bold tabular-nums sm:hidden',
-                        diferenca > 0 ? 'text-success-700' : diferenca < 0 ? 'text-danger-700' : 'text-ink-500',
-                      )}
-                    >
-                      {diferenca > 0 ? `+${formatNumber(diferenca)}` : formatNumber(diferenca)}
-                    </span>
-                    <span className="hidden sm:inline-flex">
-                      <SeloDaLeitura estimativa={s.estimativa} apurado={s.apurado} />
-                    </span>
-                  </>
-                )}
-              </div>
+              {varios ? null : (
+                <div className="flex w-14 justify-end sm:w-auto">
+                  {/* Sem secao no cadastro, nao ha apuracao para comparar. */}
+                  {!comSecao ? (
+                    <span className="text-[0.6875rem] text-ink-400">—</span>
+                  ) : (
+                    <>
+                      <span
+                        className={cn(
+                          'text-sm font-bold tabular-nums sm:hidden',
+                          diferenca > 0 ? 'text-success-700' : diferenca < 0 ? 'text-danger-700' : 'text-ink-500',
+                        )}
+                      >
+                        {diferenca > 0 ? `+${formatNumber(diferenca)}` : formatNumber(diferenca)}
+                      </span>
+                      <span className="hidden sm:inline-flex">
+                        <SeloDaLeitura estimativa={s.estimativa} apurado={s.apurado[0] ?? 0} />
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}
@@ -375,16 +521,17 @@ function Secoes({ escola, escolhido }: { escola: EscolaNoConfronto; escolhido: L
 
 export function RaioXDaEscola({
   escola,
-  candidato,
+  candidatos,
   lideres = [],
   diretos = 0,
   onClose,
   onVerPessoas,
-  onPdf,
+  pdf,
 }: {
-  escola: EscolaNoConfronto;
-  /** "Fulano (15123) · Deputado Estadual". */
-  candidato: { nome: string; rotulo: string };
+  /** A escola com o apurado de cada candidato (um so: `comoComparativo`). */
+  escola: EscolaNoComparativo;
+  /** Um ou mais candidatos, na ordem do apurado. */
+  candidatos: CandidatoNoRaioX[];
   /** Quem cadastrou a estimativa da escola, Lider a Lider. */
   lideres?: LiderNoRaioX[];
   /** O resto da estimativa: Lideres e cadastros sem Lider registrado. */
@@ -392,12 +539,14 @@ export function RaioXDaEscola({
   onClose: () => void;
   /** Abre a lista de quem vota aqui (pinos da campanha). */
   onVerPessoas?: () => void;
-  /** Baixa o relatorio de estimativa x apuracao do time. */
-  onPdf?: () => Promise<void>;
+  /** O botao do relatorio do time (um candidato ou todos juntos). */
+  pdf?: React.ReactNode;
 }) {
   const [foco, setFoco] = useState<string | null>(null);
   const escolhido = lideres.find((l) => l.id === foco) ?? null;
   const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
+  const varios = candidatos.length > 1;
+  const um = candidatos[0];
 
   return (
     <Modal
@@ -409,7 +558,7 @@ export function RaioXDaEscola({
         <div className="min-w-0">
           <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-navy-900 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400">
             <span aria-hidden="true">★</span>
-            <span className="truncate">Raio-X · {candidato.rotulo}</span>
+            <span className="truncate">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
           </p>
           <h2 className="mt-2 text-lg leading-tight font-bold text-ink-900 sm:text-xl">{escola.titulo}</h2>
           {onde ? <p className="mt-0.5 text-sm text-ink-500">{onde}</p> : null}
@@ -417,15 +566,21 @@ export function RaioXDaEscola({
       }
     >
       <div className="space-y-4">
-        <Placar escola={escola} candidato={candidato.nome} />
+        {varios ? (
+          <PlacarComparado escola={escola} candidatos={candidatos} />
+        ) : (
+          <Placar estimativa={escola.estimativa} apurado={escola.apurado[0] ?? 0} candidato={um?.nome ?? ''} />
+        )}
 
         <p className="rounded-control border-l-4 border-gold-500 bg-gold-50 px-3 py-2 text-sm text-ink-900">
-          {fraseDaEscola(escola, candidato.nome)}
+          {varios
+            ? fraseComparada(escola, candidatos)
+            : fraseDaEscola({ estimativa: escola.estimativa, apurado: escola.apurado[0] ?? 0 }, um?.nome ?? '')}
         </p>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <Lideres escola={escola} lideres={lideres} diretos={diretos} foco={foco} onFoco={setFoco} candidato={candidato.nome} />
-          <Secoes escola={escola} escolhido={escolhido} />
+          <Lideres escola={escola} lideres={lideres} diretos={diretos} foco={foco} onFoco={setFoco} candidatos={candidatos} />
+          <Secoes escola={escola} candidatos={candidatos} escolhido={escolhido} />
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
@@ -447,7 +602,7 @@ export function RaioXDaEscola({
               <Users aria-hidden="true" className="size-3.5" /> Ver quem vota aqui
             </button>
           ) : null}
-          {onPdf ? <BotaoDePdf onClick={onPdf} rotulo="Relatório do time (PDF)" titulo="Todas as escolas do time: estimativa x apuração" variante="cheio" /> : null}
+          {pdf}
         </div>
       </div>
     </Modal>

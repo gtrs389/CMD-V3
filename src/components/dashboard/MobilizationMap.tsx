@@ -13,8 +13,8 @@ import {
   type MapQuery,
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
-import { rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
-import { confrontar, lideresNoRaioX, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
+import { fotoDoCandidatoUrl, rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
+import { compararCandidatos, comoComparativo, confrontar, lideresNoRaioX, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
 import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
@@ -24,14 +24,17 @@ import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { MapaCarregando } from './MapaCarregando';
 import {
   baixarPdfDaEscola,
+  baixarPdfDoComparativo,
   baixarPdfDoConfronto,
   baixarPdfDaVotacao,
   baixarPdfDasPessoasPorEscola,
   baixarPdfDoRankingDeVotos,
 } from './pdf-do-mapa';
 import { AndamentoAoVivo, BotaoDaVotacao } from './votacao/VotacaoTse';
-import { RaioXDaEscola } from './votacao/RaioXDaEscola';
-import { BotaoDePdf } from './BotaoDePdf';
+import { RaioXDaEscola, type CandidatoNoRaioX } from './votacao/RaioXDaEscola';
+import { PlacarDosCandidatos } from './votacao/PlacarDosCandidatos';
+import { MenuDoPdf, type OpcaoDoPdf } from './votacao/MenuDoPdf';
+import { CORES_DOS_CANDIDATOS } from './votacao/cores';
 import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
@@ -181,19 +184,32 @@ export function MobilizationMap({
    * ranking e PDF continuam os mesmos, sobre esses numeros. Fechar volta ao
    * mapa da campanha.
    */
-  const [candidato, setCandidato] = useState<CandidatoDaVotacao | null>(null);
+  /**
+   * Ate quatro candidatos de uma vez (a dobradinha de federal e estadual, por
+   * exemplo): todos contra a mesma estimativa do time. O mapa desenha um de
+   * cada vez — o `ativo` —, e o placar acima troca qual.
+   */
+  const [candidatos, setCandidatos] = useState<CandidatoDaVotacao[]>([]);
+  /** A escola do raio-x (estimativa x apuracao), pela chave do confronto. */
+  const [raioX, setRaioX] = useState<string | null>(null);
+  const [ativoId, setAtivoId] = useState<string | null>(null);
+  const candidato = candidatos.find((c) => c.id === ativoId) ?? candidatos[0] ?? null;
   const loaderDaVotacao = useCallback(
     () =>
-      candidato
-        ? api<VotacaoNoMapa>(`/api/votacao/${encodeURIComponent(candidato.id)}`)
+      candidatos.length
+        ? Promise.all(candidatos.map((c) => api<VotacaoNoMapa>(`/api/votacao/${encodeURIComponent(c.id)}`)))
         : Promise.resolve(null),
-    [candidato],
+    [candidatos],
   );
-  const consultaDaVotacao = useRepositoryQuery<VotacaoNoMapa | null>(loaderDaVotacao);
-  // Trocando de candidato, a resposta do anterior ainda esta ali ate a nova
-  // chegar: so vale a que e do candidato escolhido.
-  const votacao =
-    candidato && consultaDaVotacao.data?.candidato.id === candidato.id ? consultaDaVotacao.data : null;
+  const consultaDaVotacao = useRepositoryQuery<VotacaoNoMapa[] | null>(loaderDaVotacao);
+  // Trocando a escolha, a resposta anterior ainda esta ali ate a nova chegar:
+  // so vale a que traz exatamente os candidatos escolhidos.
+  const votacoes = useMemo(() => {
+    const lista = consultaDaVotacao.data ?? [];
+    const ok = lista.length === candidatos.length && lista.every((v, i) => v.candidato.id === candidatos[i].id);
+    return ok ? lista : null;
+  }, [consultaDaVotacao.data, candidatos]);
+  const votacao = (candidato && votacoes?.find((v) => v.candidato.id === candidato.id)) || null;
   const erroVotacao = Boolean(candidato && !votacao && consultaDaVotacao.error);
   // Enquanto a votacao estiver na tela, a apuracao anda: boletim novo
   // redesenha os pinos sozinho.
@@ -215,7 +231,9 @@ export function MobilizationMap({
           .filter((c) => String(c.cargoCodigo) === cargo && c.numero === numero)
           .sort((a, b) => b.turno - a.turno)[0];
         if (!vivo || !achado) return;
-        escolherCandidato(achado);
+        // Chegada a pagina: nada a desfazer, so a escolha.
+        setCandidatos([achado]);
+        setAtivoId(achado.id);
         window.history.replaceState(null, '', window.location.pathname);
         secao.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
@@ -226,13 +244,17 @@ export function MobilizationMap({
     // So na chegada a pagina.
   }, []);
 
-  function escolherCandidato(escolhido: CandidatoDaVotacao | null) {
-    setCandidato(escolhido);
+  function escolherCandidatos(escolhidos: CandidatoDaVotacao[]) {
+    const entrando = candidatos.length === 0 && escolhidos.length > 0;
+    setCandidatos(escolhidos);
+    // O candidato do mapa continua o mesmo, se ainda estiver na escolha.
+    setAtivoId((atual) => (escolhidos.some((c) => c.id === atual) ? atual : (escolhidos[0]?.id ?? null)));
     setFocusPlace(null);
     setOpenPlace(null);
+    setRaioX(null);
     // Cidade, estado e busca da campanha nao valem para a votacao (os nomes
     // vem escritos de outro jeito na planilha do TSE): o recorte recomeca.
-    setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
+    if (entrando || escolhidos.length === 0) setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
   }
 
   /**
@@ -240,16 +262,19 @@ export function MobilizationMap({
    * casadas com as da votacao (o que o candidato teve). As escolas do time
    * ficam douradas no mapa; o raio-x abre a escola secao por secao.
    */
-  const confronto = useMemo(
-    () => (votacao ? confrontar(data?.pollingPlaces ?? [], [...votacao.noMapa, ...votacao.foraDoMapa]) : null),
-    [votacao, data],
+  const confrontos = useMemo(
+    () =>
+      votacoes
+        ? votacoes.map((v) => confrontar(data?.pollingPlaces ?? [], [...v.noMapa, ...v.foraDoMapa]))
+        : null,
+    [votacoes, data],
   );
+  const confronto = (candidato && confrontos?.[candidatos.findIndex((c) => c.id === candidato.id)]) || null;
   const pinosDaVotacao = useMemo(() => (confronto ? pinosDoConfronto(confronto) : null), [confronto]);
   const destaques = useMemo(
     () => new Map((confronto?.doTime ?? []).map((e) => [e.chave, { estimativa: e.estimativa, apurado: e.apurado }])),
     [confronto],
   );
-  const [raioX, setRaioX] = useState<string | null>(null);
   const escolaDoRaioX = raioX ? (confronto?.escolas.find((e) => e.chave === raioX) ?? null) : null;
   /** Quem cadastrou a estimativa da escola do raio-x, Lider a Lider (todos, sem o filtro). */
   const lideresDoRaioX = useMemo(
@@ -292,6 +317,29 @@ export function MobilizationMap({
       confronto ? recortar(confronto, new Set([...selection.places, ...foraDoMapa].map((p) => p.locationId))) : null,
     [confronto, selection.places, foraDoMapa],
   );
+  /**
+   * Varios candidatos: a mesma estimativa contra cada um, escola, zona e
+   * secao. `comparativoCompleto` alimenta o raio-x; o do recorte, o placar e o
+   * PDF — as escolas do time que estao no recorte da tela.
+   */
+  const comparativoCompleto = useMemo(
+    () => (confrontos && confrontos.length > 1 ? compararCandidatos(confrontos) : null),
+    [confrontos],
+  );
+  const comparativo = useMemo(() => {
+    if (!comparativoCompleto || !confrontoNoRecorte) return null;
+    const pinos = new Set(confrontoNoRecorte.doTime.flatMap((e) => e.pinosDaCampanha));
+    const escolas = comparativoCompleto.escolas.filter((e) => e.pinosDaCampanha.some((p) => pinos.has(p)));
+    return {
+      ...comparativoCompleto,
+      escolas,
+      estimativaTotal: escolas.reduce((t, e) => t + e.estimativa, 0),
+      apuradoNasEscolasDoTime: comparativoCompleto.apuradoTotal.map((_, i) => escolas.reduce((t, e) => t + (e.apurado[i] ?? 0), 0)),
+    };
+  }, [comparativoCompleto, confrontoNoRecorte]);
+  /** A cor de cada candidato: com um so, a apuracao segue em ouro. */
+  const corDo = (i: number) => (candidatos.length > 1 ? CORES_DOS_CANDIDATOS[i] : '#e0a426');
+
   /** O Lider escolhido no filtro, com o que ele cadastrou no mapa inteiro. */
   const liderEscolhido = recorte.leader ? (options.leaders.find((l) => l.id === recorte.leader) ?? null) : null;
   const votosForaDoMapa = foraDoMapa.reduce((soma, place) => soma + placeVotes(place, recorte.zone), 0);
@@ -573,22 +621,63 @@ export function MobilizationMap({
 
   /** Botao da votacao e, com um candidato escolhido, a faixa que diz o que o mapa mostra. */
   /** O relatorio do time: todas as escolas, estimativa x apuracao. */
-  const baixarRelatorio = async () => {
-    if (!candidato || !confrontoNoRecorte) return;
+  const time = clientName ?? 'Mapa da mobilização';
+  /** O PDF de um candidato so, com o recorte da tela (o confronto dele). */
+  const baixarRelatorioDe = async (c: CandidatoDaVotacao) => {
+    const i = candidatos.findIndex((x) => x.id === c.id);
+    const confrontoDele = confrontos?.[i];
+    if (!confrontoDele || !confrontoNoRecorte) return;
+    // O mesmo recorte da tela. Sem filtro, a votacao inteira dele; com
+    // filtro, as escolas do time que estao no recorte.
+    const pinos = new Set(confrontoNoRecorte.doTime.flatMap((e) => e.pinosDaCampanha));
+    const doRecorte =
+      c.id === candidato?.id
+        ? confrontoNoRecorte
+        : activeFilterCount(recorte) === 0
+          ? confrontoDele
+          : recortar(confrontoDele, new Set(confrontoDele.escolas.filter((e) => e.pinosDaCampanha.some((p) => pinos.has(p))).map((e) => e.chave)));
     await baixarPdfDoConfronto({
-      confronto: confrontoNoRecorte,
-      candidato: { rotulo: rotuloDoCandidato(candidato), nome: candidato.nome, numero: candidato.numero },
-      time: clientName ?? 'Mapa da mobilização',
+      confronto: doRecorte,
+      candidato: { rotulo: rotuloDoCandidato(c), nome: c.nome, numero: c.numero },
+      time,
       clientId,
+      fotoDe: c,
     });
   };
+  const baixarComparativo = async () => {
+    if (!comparativo) return;
+    await baixarPdfDoComparativo({
+      comparativo,
+      candidatos: candidatos.map((c, i) => ({ candidato: c, cor: corDo(i) })),
+      campanha: data?.pollingPlaces ?? [],
+      time,
+    });
+  };
+  /** Um candidato: um botao. Varios: cada um sozinho, ou todos juntos. */
+  const opcoesDoPdf: OpcaoDoPdf[] = [
+    ...(candidatos.length > 1
+      ? [
+          {
+            rotulo: `Todos juntos (${candidatos.length})`,
+            detalhe: 'Estimativa e votos de cada um por escola, zona e seção, com os líderes',
+            onClick: baixarComparativo,
+          },
+        ]
+      : []),
+    ...candidatos.map((c) => ({
+      rotulo: candidatos.length > 1 ? `Só ${c.nome}` : c.nome,
+      detalhe: `${c.numero} · ${c.cargo}`,
+      onClick: () => baixarRelatorioDe(c),
+    })),
+  ];
+  const menuDoPdf = <MenuDoPdf opcoes={opcoesDoPdf} rotulo="Estimativa × apuração (PDF)" titulo="Todas as escolas do time, escola, zona e seção" />;
 
   const barraDaVotacao = (
     <div className="flex flex-wrap items-center gap-2">
       <BotaoDaVotacao
-        selecionado={candidato}
-        onSelect={escolherCandidato}
-        onClear={() => escolherCandidato(null)}
+        selecionados={candidatos}
+        onChange={escolherCandidatos}
+        onClear={() => escolherCandidatos([])}
         podeEnviar={podeLocalizar}
       />
       <Link
@@ -605,7 +694,9 @@ export function MobilizationMap({
               ? 'Não foi possível carregar a votação deste candidato.'
               : votacao === null
                 ? 'Carregando a votação…'
-                : `${rotuloDoCandidato(candidato)} · ${textoDosTotais(votacao.candidato)}. O mapa mostra os votos dele por escola, zona e seção.`}
+                : candidatos.length > 1
+                  ? `${candidatos.length} candidatos contra a mesma estimativa do time. O mapa mostra os votos de ${candidato.nome} (${textoDosTotais(votacao.candidato)}); toque em outro candidato no placar para trocar.`
+                  : `${rotuloDoCandidato(candidato)} · ${textoDosTotais(votacao.candidato)}. O mapa mostra os votos dele por escola, zona e seção.`}
           </p>
           <AndamentoAoVivo
             className="mb-0"
@@ -617,9 +708,25 @@ export function MobilizationMap({
         </div>
       ) : null}
       {candidato && votacao && confrontoNoRecorte ? (
-        <PainelDoConfronto
-          confronto={confrontoNoRecorte}
-          onPdf={baixarRelatorio}
+        <PlacarDosCandidatos
+          escolasDoTime={confrontoNoRecorte.doTime.length}
+          estimativa={confrontoNoRecorte.estimativaTotal}
+          candidatos={candidatos.map((c, i) => ({
+            candidato: c,
+            cor: corDo(i),
+            apurado: comparativo
+              ? (comparativo.apuradoNasEscolasDoTime[i] ?? 0)
+              : candidatos.length === 1
+                ? confrontoNoRecorte.apuradoNasEscolasDoTime
+                : null,
+          }))}
+          ativoId={candidato.id}
+          onAtivo={(id) => {
+            setAtivoId(id);
+            setOpenPlace(null);
+          }}
+          onRemover={(id) => escolherCandidatos(candidatos.filter((c) => c.id !== id))}
+          pdf={menuDoPdf}
         />
       ) : null}
     </div>
@@ -916,8 +1023,20 @@ export function MobilizationMap({
 
       {escolaDoRaioX && candidato ? (
         <RaioXDaEscola
-          escola={escolaDoRaioX}
-          candidato={{ nome: candidato.nome, rotulo: rotuloDoCandidato(candidato) }}
+          escola={
+            (comparativoCompleto?.escolas.find((e) => e.pinosDaCampanha.some((p) => escolaDoRaioX.pinosDaCampanha.includes(p))) ??
+              null) ||
+            comoComparativo(escolaDoRaioX)
+          }
+          candidatos={(comparativoCompleto ? candidatos : [candidato]).map(
+            (c, i): CandidatoNoRaioX => ({
+              nome: c.nome,
+              rotulo: rotuloDoCandidato(c),
+              cor: corDo(i),
+              cargo: c.cargoCodigo,
+              foto: fotoDoCandidatoUrl(c),
+            }),
+          )}
           lideres={lideresDoRaioX?.lideres}
           diretos={lideresDoRaioX?.diretos}
           onClose={() => setRaioX(null)}
@@ -931,7 +1050,7 @@ export function MobilizationMap({
                 }
               : undefined
           }
-          onPdf={baixarRelatorio}
+          pdf={menuDoPdf}
         />
       ) : null}
 
@@ -945,71 +1064,5 @@ export function MobilizationMap({
         />
       ) : null}
     </section>
-  );
-}
-
-/**
- * A faixa do confronto, logo abaixo do candidato: quanto o time esperava nas
- * escolas dele, quanto virou voto, e o relatorio em PDF.
- */
-function PainelDoConfronto({
-  confronto,
-  onPdf,
-}: {
-  confronto: NonNullable<ReturnType<typeof recortar>>;
-  onPdf: () => Promise<void>;
-}) {
-  const { doTime, estimativaTotal, apuradoNasEscolasDoTime } = confronto;
-  const conversao = estimativaTotal > 0 ? Math.round((apuradoNasEscolasDoTime / estimativaTotal) * 100) : null;
-  const zeradas = doTime.filter((e) => e.apurado === 0).length;
-
-  if (doTime.length === 0) {
-    return (
-      <p className="basis-full rounded-control border border-line bg-ink-50 px-3 py-2 text-xs text-ink-700">
-        Este time não tinha estimativa de votos em nenhuma escola deste recorte. O mapa mostra só a apuração.
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex basis-full flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-gold-500/40 bg-gradient-to-r from-gold-50 to-surface px-3 py-2.5">
-      <p className="flex items-center gap-2 text-xs font-semibold text-gold-700">
-        <span className="flex size-6 items-center justify-center rounded-full bg-navy-900 text-[0.6875rem] text-gold-400">★</span>
-        {formatNumber(doTime.length)} {doTime.length === 1 ? 'escola do time' : 'escolas do time'} em destaque
-      </p>
-      <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-700">
-        <div className="flex gap-1">
-          <dt>Estimativa:</dt>
-          <dd className="font-bold text-navy-900 tabular-nums">{formatNumber(estimativaTotal)}</dd>
-        </div>
-        <div className="flex gap-1">
-          <dt>Apurado nelas:</dt>
-          <dd className="font-bold text-ink-900 tabular-nums">{formatNumber(apuradoNasEscolasDoTime)}</dd>
-        </div>
-        {conversao !== null ? (
-          <div className="flex gap-1">
-            <dt>Conversão:</dt>
-            <dd
-              className={cn(
-                'font-bold tabular-nums',
-                conversao >= 100 ? 'text-success-700' : conversao >= 80 ? 'text-gold-700' : 'text-danger-700',
-              )}
-            >
-              {conversao}%
-            </dd>
-          </div>
-        ) : null}
-        {zeradas > 0 ? (
-          <div className="flex gap-1">
-            <dt>Zeradas:</dt>
-            <dd className="font-bold text-danger-700 tabular-nums">{formatNumber(zeradas)}</dd>
-          </div>
-        ) : null}
-      </dl>
-      <span className="ml-auto flex items-center gap-2">
-        <span className="hidden text-[0.6875rem] text-ink-500 lg:inline">Clique numa escola dourada para o raio-x</span>
-        <BotaoDePdf onClick={onPdf} rotulo="Estimativa × apuração (PDF)" titulo="Todas as escolas do time, escola, zona e seção" variante="cheio" />
-      </span>
-    </div>
   );
 }
