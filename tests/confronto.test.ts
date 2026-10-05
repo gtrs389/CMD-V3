@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PollingPlacePin } from '@/lib/domain/map-pin';
-import { confrontar, conversao, leitura, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
+import { confrontar, conversao, fraseDoLider, leitura, lideresDaEscola, lideresDoTime, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
 
 const pino = (id: string, titulo: string, secoes: [string | null, string | null, number][], ponto: [number, number] = [-9.4, -36.6]): PollingPlacePin => ({
   locationId: id,
@@ -93,5 +93,47 @@ describe('o confronto no mapa e no recorte', () => {
     const so = recortar(r, new Set(['tse:h', 'tse:x']));
     expect(so).toMatchObject({ estimativaTotal: 23, apuradoNasEscolasDoTime: 39, apuradoTotal: 89 });
     expect(so.doTime.map((e) => e.chave)).toEqual(['tse:h']);
+  });
+});
+
+describe('os líderes em cada escola', () => {
+  const escola = {
+    secoes: [
+      { zona: '10', secao: '96', estimativa: 7, apurado: 3 },
+      { zona: '10', secao: '97', estimativa: 2, apurado: 9 },
+    ],
+  };
+  const p = (nome: string, lider: string | null, zona: string | null, secao: string | null, ehLider = false) => ({ nome, lider, zona, secao, ehLider });
+  const PESSOAS = [
+    ...Array.from({ length: 5 }, (_, i) => p(`A${i}`, 'JOSÉ', '010', '0096')),
+    p('B1', 'JOSÉ', null, null),
+    p('C1', 'MARIA', '10', '96'),
+    p('C2', 'MARIA', '10', '97'),
+    p('ANA', null, '10', '96', true),
+    p('X', null, '10', '97'),
+  ];
+
+  it('agrupa pelo líder, seção por seção, e calcula o teto de quem pode ter votado', () => {
+    const l = lideresDaEscola(escola, PESSOAS);
+    const jose = l.find((x) => x.lider === 'JOSÉ')!;
+    expect(jose).toMatchObject({ cadastrados: 6, semSecao: 1, noMaximo: 3, perda: 2 });
+    expect(jose.secoes).toEqual([{ zona: '10', secao: '96', cadastrados: 5, apurado: 3 }]);
+    expect(l.find((x) => x.lider === 'MARIA')).toMatchObject({ cadastrados: 2, noMaximo: 2, perda: 0 });
+    // Quem e Lider e vota aqui conta como dele mesmo; sem lider, fica separado.
+    expect(l.map((x) => x.lider)).toEqual(['JOSÉ', 'MARIA', 'ANA (Líder)', 'Sem líder informado']);
+  });
+
+  it('a frase só aparece quando os votos ficam abaixo do que o líder cadastrou', () => {
+    const [jose, maria] = lideresDaEscola(escola, PESSOAS);
+    expect(fraseDoLider(jose, 'PAULO')).toBe(
+      'JOSÉ cadastrou 6 pessoas nesta escola (5 na seção 96). Nessa seção PAULO teve 3 votos: no máximo 3 das 5 votaram nele.',
+    );
+    expect(fraseDoLider(maria, 'PAULO')).toBeNull();
+  });
+
+  it('no time inteiro, o líder com mais perda vem primeiro', () => {
+    const a = lideresDaEscola(escola, PESSOAS);
+    const time = lideresDoTime([a, a]);
+    expect(time[0]).toMatchObject({ lider: 'JOSÉ', escolas: 2, cadastrados: 12, noMaximo: 6, perda: 4 });
   });
 });

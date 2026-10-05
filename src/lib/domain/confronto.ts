@@ -223,3 +223,122 @@ export function recortar(c: Confronto, chaves: ReadonlySet<string>): Confronto {
     apuradoTotal: escolas.reduce((t, e) => t + e.apurado, 0),
   };
 }
+
+/* -------------------------------------------------------------------------
+   Os lideres em cada escola
+   ------------------------------------------------------------------------- */
+
+/** Uma pessoa da escola, como a lista "Ver pessoas" traz. */
+export interface PessoaDaEscola {
+  nome: string;
+  zona: string | null;
+  secao: string | null;
+  /** Lider de quem e da Equipe. */
+  lider: string | null;
+  ehLider: boolean;
+}
+
+export interface SecaoDoLider {
+  zona: string | null;
+  secao: string | null;
+  /** Pessoas que o lider cadastrou nesta secao. */
+  cadastrados: number;
+  /** Votos do candidato na secao inteira. */
+  apurado: number;
+}
+
+export interface LiderNaEscola {
+  /** "JOSÉ DA SILVA"; quem e Lider e vota aqui conta como dele mesmo. */
+  lider: string;
+  cadastrados: number;
+  secoes: SecaoDoLider[];
+  /** Pessoas dele sem zona/secao no cadastro: nao da para comparar. */
+  semSecao: number;
+  /**
+   * O maximo de pessoas dele que podem ter votado no candidato: em cada
+   * secao, o menor entre o que ele cadastrou e os votos da secao. O voto e
+   * secreto — o numero exato ninguem sabe; o teto e certo.
+   */
+  noMaximo: number;
+  /** Pessoas dele com secao que, pela conta, nao podem ter votado no candidato. */
+  perda: number;
+}
+
+const SEM_LIDER = 'Sem líder informado';
+
+/**
+ * Agrupa as pessoas da escola pelo Lider, secao por secao, e calcula o teto
+ * de quem pode ter votado no candidato. Do maior cadastro para o menor.
+ */
+export function lideresDaEscola(escola: Pick<EscolaNoConfronto, 'secoes'>, pessoas: readonly PessoaDaEscola[]): LiderNaEscola[] {
+  const apuradoDa = new Map(
+    escola.secoes.filter((s) => s.zona && s.secao).map((s) => [`${s.zona}/${s.secao}`, s.apurado]),
+  );
+  const porLider = new Map<string, { secoes: Map<string, SecaoDoLider>; semSecao: number; total: number }>();
+
+  for (const p of pessoas) {
+    const nome = p.lider?.trim() || (p.ehLider ? `${p.nome} (Líder)` : SEM_LIDER);
+    const atual = porLider.get(nome) ?? { secoes: new Map(), semSecao: 0, total: 0 };
+    atual.total += 1;
+    const zona = limpar(p.zona);
+    const secao = limpar(p.secao);
+    if (!zona || !secao) atual.semSecao += 1;
+    else {
+      const k = `${zona}/${secao}`;
+      const linha = atual.secoes.get(k) ?? { zona, secao, cadastrados: 0, apurado: apuradoDa.get(k) ?? 0 };
+      linha.cadastrados += 1;
+      atual.secoes.set(k, linha);
+    }
+    porLider.set(nome, atual);
+  }
+
+  return [...porLider.entries()]
+    .map(([lider, d]) => {
+      const secoes = [...d.secoes.values()].sort(
+        (a, b) =>
+          (a.zona ?? '').localeCompare(b.zona ?? '', 'pt-BR', { numeric: true }) ||
+          (a.secao ?? '').localeCompare(b.secao ?? '', 'pt-BR', { numeric: true }),
+      );
+      const comSecao = secoes.reduce((t, s) => t + s.cadastrados, 0);
+      const noMaximo = secoes.reduce((t, s) => t + Math.min(s.cadastrados, s.apurado), 0);
+      return { lider, cadastrados: d.total, secoes, semSecao: d.semSecao, noMaximo, perda: comSecao - noMaximo };
+    })
+    .sort((a, b) => b.cadastrados - a.cadastrados || a.lider.localeCompare(b.lider, 'pt-BR'));
+}
+
+/**
+ * A frase do lider na escola, quando os votos ficaram abaixo do que ele
+ * cadastrou: "JOSÉ cadastrou 5 pessoas nesta escola (5 na seção 96). Nessa
+ * seção o candidato teve 3 votos: no máximo 3 das 5 votaram nele."
+ */
+export function fraseDoLider(l: LiderNaEscola, candidato: string): string | null {
+  if (l.perda <= 0 || l.secoes.length === 0) return null;
+  const n = (v: number) => v.toLocaleString('pt-BR');
+  const pessoas = (v: number) => `${n(v)} ${v === 1 ? 'pessoa' : 'pessoas'}`;
+  const porSecao = l.secoes.map((s) => `${n(s.cadastrados)} na seção ${s.secao}`).join(', ');
+  const comSecao = l.cadastrados - l.semSecao;
+  const votos = l.secoes.reduce((t, s) => t + s.apurado, 0);
+  const onde = l.secoes.length === 1 ? 'Nessa seção' : 'Nessas seções';
+  return (
+    `${l.lider} cadastrou ${pessoas(l.cadastrados)} nesta escola (${porSecao}). ` +
+    `${onde} ${candidato} teve ${n(votos)} ${votos === 1 ? 'voto' : 'votos'}: ` +
+    `no máximo ${n(l.noMaximo)} das ${n(comSecao)} votaram nele.`
+  );
+}
+
+/** Os lideres do time inteiro: somados escola a escola, da maior perda para a menor. */
+export function lideresDoTime(porEscola: readonly LiderNaEscola[][]): (Omit<LiderNaEscola, 'secoes'> & { escolas: number })[] {
+  const soma = new Map<string, Omit<LiderNaEscola, 'secoes'> & { escolas: number }>();
+  for (const escola of porEscola) {
+    for (const l of escola) {
+      const atual = soma.get(l.lider) ?? { lider: l.lider, cadastrados: 0, semSecao: 0, noMaximo: 0, perda: 0, escolas: 0 };
+      atual.cadastrados += l.cadastrados;
+      atual.semSecao += l.semSecao;
+      atual.noMaximo += l.noMaximo;
+      atual.perda += l.perda;
+      atual.escolas += 1;
+      soma.set(l.lider, atual);
+    }
+  }
+  return [...soma.values()].sort((a, b) => b.perda - a.perda || b.cadastrados - a.cadastrados);
+}

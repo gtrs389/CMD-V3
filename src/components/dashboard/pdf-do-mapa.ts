@@ -2,7 +2,7 @@ import type { Member } from '@/lib/types';
 import type { MapOverviewPayload, PlaceMember, PlaceMembersPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import type { MapQuery } from '@/lib/domain/map-filters';
 import { pessoasPorEscola, rankingDeLideres, rankingDeVotos } from '@/lib/domain/votos-por-lideranca';
-import type { Confronto } from '@/lib/domain/confronto';
+import { lideresDaEscola, type Confronto, type LiderNaEscola } from '@/lib/domain/confronto';
 import { api } from '@/lib/repositories/http/api';
 import { baixarArquivo } from '@/lib/utils/download';
 
@@ -24,7 +24,7 @@ function slug(texto: string): string {
 }
 
 /** Todas as pessoas que votam no local, pagina por pagina (o servidor limita a 50). */
-async function todasAsPessoas(place: PollingPlacePin, clientId?: string): Promise<PlaceMember[]> {
+async function todasAsPessoas(place: Pick<PollingPlacePin, 'locationId'>, clientId?: string): Promise<PlaceMember[]> {
   const pessoas: PlaceMember[] = [];
   for (let pagina = 1; pagina <= 200; pagina += 1) {
     const params = new URLSearchParams({ pagina: String(pagina), tamanho: '50' });
@@ -123,7 +123,7 @@ export async function baixarPdfDasPessoasPorEscola(
 
 /** As pessoas de varios locais, com no maximo `simultaneos` pedidos no ar. */
 async function pessoasDosLocais(
-  places: readonly PollingPlacePin[],
+  places: readonly Pick<PollingPlacePin, 'locationId'>[],
   clientId?: string,
   simultaneos = 6,
 ): Promise<Map<string, PlaceMember[]>> {
@@ -172,16 +172,35 @@ export async function baixarPdfDoConfronto({
   confronto,
   candidato,
   time,
+  clientId,
 }: {
   confronto: Confronto;
   candidato: { rotulo: string; nome: string; numero: string };
   /** So no nome do arquivo. */
   time: string;
+  /** O time do mapa: a lista de pessoas de cada escola fica nele. */
+  clientId?: string;
 }): Promise<void> {
-  const { gerarPdfDoConfronto } = await import('@/components/neo/ConfrontoPdf');
+  // Quem cada Lider cadastrou em cada escola do time: a mesma lista do
+  // "Ver pessoas", lida escola por escola (poucas de cada vez).
+  const pinos = [...new Set(confronto.doTime.flatMap((e) => e.pinosDaCampanha))].map((locationId) => ({ locationId }));
+  const [porPino, { gerarPdfDoConfronto }] = await Promise.all([
+    pessoasDosLocais(pinos, clientId),
+    import('@/components/neo/ConfrontoPdf'),
+  ]);
+  const lideres: Record<string, LiderNaEscola[]> = {};
+  for (const escola of confronto.doTime) {
+    const pessoas = escola.pinosDaCampanha.flatMap((id) => porPino.get(id) ?? []);
+    lideres[escola.chave] = lideresDaEscola(
+      escola,
+      pessoas.map((p) => ({ nome: p.name, zona: p.zone, secao: p.section, lider: p.lider, ehLider: p.tier === 'LIDER' })),
+    );
+  }
   const blob = await gerarPdfDoConfronto({
     confronto,
     candidato: candidato.rotulo,
+    candidatoNome: candidato.nome,
+    lideres,
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`estimativa-x-apuracao_${slug(candidato.nome)}-${candidato.numero}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
