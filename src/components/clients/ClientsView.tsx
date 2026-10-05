@@ -18,7 +18,6 @@ import {
   List,
   Search,
   SearchX,
-  Sparkles,
   UserPlus,
   Users,
   UsersRound,
@@ -223,7 +222,7 @@ export function ClientsView() {
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 animate-fade-up">
             <p className="flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.16em] text-white/70 uppercase">
-              <Sparkles aria-hidden="true" className="size-3.5 text-gold-400" />
+              <span aria-hidden="true" className="h-3.5 w-1 rounded-full bg-gold-400" />
               Gestão de times
             </p>
             <h1 className="mt-1.5 text-3xl leading-tight font-extrabold tracking-tight sm:text-4xl">

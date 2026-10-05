@@ -860,10 +860,13 @@ export default function MapCanvas({
         fallbackCenter ? [fallbackCenter.latitude, fallbackCenter.longitude] : [-14.235, -51.9253]
       }
       zoom={fallbackCenter ? 8 : 4}
-      // A rodinha rola a PAGINA: o mapa e grande, e prender a rolagem nele
-      // deixava a pessoa presa. Zoom pela rodinha: Ctrl + rolagem, ou depois
-      // de clicar no mapa (ate o mouse sair dele). Ver `RodaDoMouse`.
-      scrollWheelZoom={false}
+      // A rodinha do mouse da zoom direto, sem Ctrl: em cima do mapa, rolar
+      // aproxima e afasta. Passos menores deixam o zoom suave, sem pulos.
+      scrollWheelZoom
+      wheelPxPerZoomLevel={90}
+      wheelDebounceTime={30}
+      zoomSnap={0.25}
+      zoomDelta={0.5}
       preferCanvas
       // Sem a faixa de credito no canto do mapa.
       attributionControl={false}
@@ -882,7 +885,6 @@ export default function MapCanvas({
       <ZoomWatcher onChange={setZoom} />
       <FlyToPlace focus={focusPlace} markers={markers} />
       <Resizer trigger={resizeKey} />
-      <RodaDoMouse />
 
       {clusters.map((cluster) => (
         <ClusterMarker
@@ -916,7 +918,8 @@ function ZoomWatcher({ onChange }: { onChange: (zoom: number) => void }) {
   const map = useMap();
 
   useEffect(() => {
-    const update = () => onChange(map.getZoom());
+    // Zoom suave anda de 0,25 em 0,25: os grupos so mudam no nivel inteiro.
+    const update = () => onChange(Math.round(map.getZoom()));
     update();
     map.on('zoomend', update);
     return () => {
@@ -974,51 +977,3 @@ function Resizer({ trigger }: { trigger?: string | number }) {
   return null;
 }
 
-/**
- * Rodinha do mouse como no Google Maps: em cima do mapa ela rola a pagina.
- * Ctrl + rodinha da zoom; clicar no mapa libera a rodinha ate o mouse sair.
- * Quem rola sem Ctrl ve, por um instante, como dar zoom.
- */
-function RodaDoMouse() {
-  const map = useMap();
-  const [aviso, setAviso] = useState(false);
-
-  useEffect(() => {
-    const container = map.getContainer();
-    let timer = 0;
-
-    const aoRolar = (event: WheelEvent) => {
-      if (map.scrollWheelZoom.enabled()) return;
-      if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        const ponto = map.mouseEventToContainerPoint(event);
-        map.setZoomAround(ponto, map.getZoom() + (event.deltaY < 0 ? 1 : -1));
-        return;
-      }
-      setAviso(true);
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => setAviso(false), 1300);
-    };
-    const liberar = () => map.scrollWheelZoom.enable();
-    const prender = () => map.scrollWheelZoom.disable();
-
-    container.addEventListener('wheel', aoRolar, { passive: false });
-    map.on('click', liberar);
-    map.on('mouseout', prender);
-    return () => {
-      window.clearTimeout(timer);
-      container.removeEventListener('wheel', aoRolar);
-      map.off('click', liberar);
-      map.off('mouseout', prender);
-    };
-  }, [map]);
-
-  if (!aviso) return null;
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[1000] flex items-center justify-center bg-navy-900/35 animate-fade-in">
-      <p className="rounded-pill bg-surface px-4 py-2 text-sm font-semibold text-ink-900 shadow-overlay">
-        Use Ctrl + rolagem para dar zoom no mapa
-      </p>
-    </div>
-  );
-}

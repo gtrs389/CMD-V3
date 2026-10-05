@@ -890,6 +890,72 @@ textarea {
 }
 
 /* ==========================================================================
+   BOTAO DA VOTACAO (cmd-cta)
+   ==========================================================================
+   A borda e um gradiente conico que gira por tras do cartao (o cartao cobre
+   tudo menos 2px): parece uma luz correndo em volta. O brilho atravessa o
+   cartao de tempos em tempos; no hover, na hora.
+   ========================================================================== */
+.cmd-cta {
+  isolation: isolate;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms ease;
+  box-shadow: 0 14px 32px -16px rgb(15 30 53 / 0.55);
+}
+.cmd-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 44px -16px rgb(37 99 235 / 0.55);
+}
+.cmd-cta:active { transform: translateY(0) scale(0.995); }
+.cmd-cta:focus-visible { outline: 3px solid var(--color-gold-400); outline-offset: 3px; }
+.cmd-cta__borda {
+  position: absolute;
+  /* Um QUADRADO bem maior que o botao, centrado: girando, a luz passa por
+     todas as bordas por igual (um retangulo achatado so riscaria o topo). */
+  top: 50%;
+  left: 50%;
+  width: max(250%, 900px);
+  aspect-ratio: 1;
+  z-index: -1;
+  background: conic-gradient(
+    from 0deg,
+    #1e3a8a 0deg,
+    #2563eb 50deg,
+    #4f9bff 80deg,
+    #f2c14e 100deg,
+    #ffe9a8 110deg,
+    #f2c14e 120deg,
+    #2563eb 160deg,
+    #1e3a8a 200deg,
+    #2563eb 250deg,
+    #4f9bff 280deg,
+    #f2c14e 300deg,
+    #2563eb 330deg,
+    #1e3a8a 360deg
+  );
+  animation: cmd-cta-gira 4.5s linear infinite;
+}
+.cmd-cta:hover .cmd-cta__borda { animation-duration: 1.6s; }
+@keyframes cmd-cta-gira {
+  from { transform: translate(-50%, -50%) rotate(0turn); }
+  to { transform: translate(-50%, -50%) rotate(1turn); }
+}
+.cmd-cta__brilho {
+  position: absolute;
+  inset-block: 0;
+  left: -40%;
+  width: 30%;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.16), transparent);
+  transform: skewX(-18deg);
+  animation: cmd-cta-brilho 5s ease-in-out 1s infinite;
+}
+.cmd-cta:hover .cmd-cta__brilho { animation: cmd-cta-brilho 1s ease-in-out both; }
+@keyframes cmd-cta-brilho {
+  0% { left: -40%; }
+  30%, 100% { left: 130%; }
+}
+
+/* ==========================================================================
    SALA DE APURACAO: passos e selecao para o mapa
    ========================================================================== */
 .cmd-passo-ativo {
