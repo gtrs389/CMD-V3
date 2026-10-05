@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { Maximize2, MapPin as MapPinIcon, RefreshCw, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import {
   DEFAULT_MAP_QUERY,
@@ -187,6 +188,33 @@ export function MobilizationMap({
   // Enquanto a votacao estiver na tela, a apuracao anda: boletim novo
   // redesenha os pinos sozinho.
   const aoVivo = useVotacaoAoVivo(candidato !== null, consultaDaVotacao.reload);
+
+  /**
+   * "Ver no mapa" da Sala de Apuracao chega com `?votacao=<cargo>:<numero>`:
+   * o mapa abre direto na votacao daquele candidato (o turno mais recente).
+   */
+  const secao = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const pedido = new URLSearchParams(window.location.search).get('votacao');
+    const [cargo, numero] = (pedido ?? '').split(':');
+    if (!cargo || !numero) return;
+    let vivo = true;
+    api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao')
+      .then(({ candidatos }) => {
+        const achado = candidatos
+          .filter((c) => String(c.cargoCodigo) === cargo && c.numero === numero)
+          .sort((a, b) => b.turno - a.turno)[0];
+        if (!vivo || !achado) return;
+        escolherCandidato(achado);
+        window.history.replaceState(null, '', window.location.pathname);
+        secao.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+    // So na chegada a pagina.
+  }, []);
 
   function escolherCandidato(escolhido: CandidatoDaVotacao | null) {
     setCandidato(escolhido);
@@ -446,6 +474,13 @@ export function MobilizationMap({
         onClear={() => escolherCandidato(null)}
         podeEnviar={podeLocalizar}
       />
+      <Link
+        href="/apuracao"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-xs font-semibold text-brand-800 hover:border-brand-400 hover:bg-brand-50"
+      >
+        <Trophy aria-hidden="true" className="size-3.5" />
+        Sala de Apuração
+      </Link>
       {candidato ? (
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs text-ink-700">
@@ -469,6 +504,7 @@ export function MobilizationMap({
 
   return (
     <section
+      ref={secao}
       aria-label="Mapa da mobilização"
       className={cn(
         'bg-surface',

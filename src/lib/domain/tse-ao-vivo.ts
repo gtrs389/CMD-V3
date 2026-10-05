@@ -205,3 +205,9 @@ export function nomesDoCargo(json: unknown, cargo: number): NomeNaApuracao[] {
   }
   return [...nomes.values()];
 }
+
+/** Foto oficial do candidato: `<eleicao>/fotos/<uf>/<sqcand>.jpeg`. */
+export function urlDaFoto(c: ConfiguracaoDaApuracao, uf: string, federal: boolean, sqcand: string): string {
+  const eleicao = federal ? c.eleicaoFederal : c.eleicaoEstadual;
+  return `${c.base}/${eleicao}/fotos/${uf.toLowerCase()}/${sqcand}.jpeg`;
+}

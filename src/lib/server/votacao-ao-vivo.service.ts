@@ -13,7 +13,8 @@ import {
   type ConfiguracaoDaApuracao,
   type SecaoDaApuracao,
 } from '@/lib/domain/tse-ao-vivo';
-import { callFunction, selectOne, selectRows, updateRows, upsertRows } from '@/lib/supabase/rest';
+import { callFunction, insertRows, selectOne, selectRows, updateRows, upsertRows } from '@/lib/supabase/rest';
+import { mudancasEntre, resultadoDoCargo, retratoDe, type ResultadoDoCargo } from '@/lib/domain/apuracao';
 
 /**
  * Votacao AO VIVO: os boletins de urna do TSE, buscados durante a apuracao
@@ -35,6 +36,57 @@ import { callFunction, selectOne, selectRows, updateRows, upsertRows } from '@/l
 const TABELA_SECOES = 'cmd_tse_live_sections';
 const TABELA_NOMES = 'cmd_tse_live_candidates';
 const TABELA_ESTADO = 'cmd_tse_live_state';
+const TABELA_RESULTADOS = 'cmd_tse_live_results';
+
+/**
+ * Guarda a leitura nova de um cargo: o resultado (o que a Sala mostra), um
+ * retrato para o grafico da noite e o que mudou desde a leitura anterior.
+ */
+async function guardarResultado(
+  chave: { pleito: number; uf: string },
+  resultado: ResultadoDoCargo,
+  anterior: ResultadoDoCargo | null,
+): Promise<void> {
+  const agora = new Date().toISOString();
+  const versao = (resultado.versao ?? agora).slice(0, 40);
+  const retrato = retratoDe(resultado, agora);
+  await upsertRows(
+    TABELA_RESULTADOS,
+    [{ ...chave, office_code: resultado.cargo, version: versao, payload: resultado, fetched_at: agora }],
+    'pleito,uf,office_code',
+  );
+  await upsertRows(
+    'cmd_tse_live_history',
+    [
+      {
+        ...chave,
+        office_code: resultado.cargo,
+        version: versao,
+        at: agora,
+        tse_time: retrato.horaTse,
+        pct_sections: retrato.pctSecoes,
+        leaders: retrato.lideres,
+      },
+    ],
+    'pleito,uf,office_code,version',
+  );
+  const mudancas = mudancasEntre(anterior, resultado);
+  if (mudancas.length > 0) {
+    await insertRows(
+      'cmd_tse_live_events',
+      mudancas.map((m) => ({
+        ...chave,
+        office_code: resultado.cargo,
+        at: agora,
+        tse_time: retrato.horaTse,
+        kind: m.tipo,
+        text: m.texto.slice(0, 300),
+        number: m.numero,
+      })),
+      'id',
+    );
+  }
+}
 
 /** Quanto tempo uma coleta pode durar (a rota tem 60 s). */
 const PRAZO_PADRAO_MS = 40_000;
@@ -53,8 +105,11 @@ const REVER_SEM_SINAL_MS = 4 * 60_000;
 const POR_COLETA = 1000;
 /** A lista de secoes (com o sinal de chegada) e relida a cada 2 minutos. */
 const LISTA_VALE_MS = 2 * 60_000;
-/** Nomes e totais oficiais do TSE, relidos a cada 3 minutos. */
-const NOMES_VALEM_MS = 3 * 60_000;
+/**
+ * O resultado de cada cargo (nomes, totais oficiais, porcentagens, situacao)
+ * e relido a cada 30 s. So o que mudou de versao no TSE e gravado.
+ */
+const RESULTADO_VALE_MS = 30_000;
 const PAUSA_DO_TSE_MS = 11 * 60_000;
 
 /** O turno e o estado apurados. Os codigos do 2o turno chegam por variavel de ambiente. */
@@ -236,12 +291,26 @@ export async function coletarAoVivo(prazoMs = PRAZO_PADRAO_MS): Promise<Situacao
       }
     }
 
-    // 2. Os nomes dos candidatos, renovados de tempos em tempos.
-    if (!atual?.names_at || Date.now() - new Date(atual.names_at).getTime() > NOMES_VALEM_MS) {
+    // 2. O resultado de cada cargo: nomes, totais oficiais, porcentagem,
+    //    situacao. E a Sala de Apuracao; e de onde saem os nomes do mapa.
+    if (!atual?.names_at || Date.now() - new Date(atual.names_at).getTime() > RESULTADO_VALE_MS) {
+      const anteriores = await selectRows<{ office_code: number; version: string | null; payload: ResultadoDoCargo }>(
+        TABELA_RESULTADOS,
+        { select: 'office_code,version,payload', filters: filtro },
+      ).catch(() => []);
       for (const cargo of CARGOS_DA_APURACAO) {
         const r = await baixar(urlDosCandidatos(c, c.uf, cargo.codigo, cargo.federal));
         if (r.status !== 200) continue;
-        const nomes = nomesDoCargo(json(r.corpo), cargo.codigo);
+        const bruto = json(r.corpo);
+        const resultado = resultadoDoCargo(bruto);
+        const anterior = anteriores.find((a) => a.office_code === cargo.codigo) ?? null;
+        // Mesma versao do TSE: nada mudou, nada a gravar.
+        if (resultado?.versao && anterior?.version === resultado.versao) continue;
+        if (resultado) {
+          // Sem a migration 058, a coleta segue; so a Sala fica sem dados.
+          await guardarResultado(chave, resultado, anterior?.payload ?? null).catch(() => undefined);
+        }
+        const nomes = nomesDoCargo(bruto, cargo.codigo);
         await upsertRows(
           TABELA_NOMES,
           nomes.map((n) => ({

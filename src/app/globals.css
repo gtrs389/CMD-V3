@@ -47,6 +47,17 @@
   --color-accent-600: #2563eb;
   --color-accent-700: #1d4ed8;
 
+  /* Ouro: o destaque de quem lidera, de quem foi eleito e dos favoritos
+     (Sala de Apuracao). E o mesmo dourado das medalhas dos PDFs. Texto
+     escuro (navy-900) sobre gold-400/500; gold-700 serve de texto sobre
+     fundo claro (6,6:1). */
+  --color-gold-50: #fdf6e3;
+  --color-gold-100: #f8e6b5;
+  --color-gold-400: #f2c14e;
+  --color-gold-500: #e0a426;
+  --color-gold-600: #b7801a;
+  --color-gold-700: #7a5410;
+
   /* Neutros */
   --color-ink-900: #17212b;
   --color-ink-700: #2e3d4b;
