@@ -485,8 +485,43 @@ function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: Modo
 
       <PlaceSections place={place} compact limite={4} />
 
+      {votacao ? null : <LideresNoBalao place={place} />}
+
       <p className="mt-1 text-[0.625rem] text-ink-500 italic">{votacao?.nota ?? ESTIMATED_VOTES_HINT}</p>
     </section>
+  );
+}
+
+/** Quem cadastrou a estimativa da escola: os maiores Lideres, com quantas pessoas cada um. */
+function LideresNoBalao({ place }: { place: PollingPlacePin }) {
+  const lideres = [...(place.leaders ?? [])].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'pt-BR'));
+  if (lideres.length === 0) return null;
+  const maior = lideres[0].total;
+  const mostrar = lideres.slice(0, 5);
+  return (
+    <div className="mt-2 border-t border-brand-100 pt-1.5">
+      <p className="mb-1 text-[0.625rem] font-semibold tracking-wide text-brand-800 uppercase">
+        Líderes que cadastraram aqui
+      </p>
+      <ul className="space-y-1">
+        {mostrar.map((l) => (
+          <li key={l.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-medium text-ink-900">{l.name}</span>
+              <span className="mt-0.5 block h-1 overflow-hidden rounded-pill bg-white">
+                <span className="block h-full rounded-pill bg-navy-800" style={{ width: `${Math.max(6, (l.total / maior) * 100)}%` }} />
+              </span>
+            </span>
+            <span className="text-xs font-bold text-navy-900 tabular-nums">{formatNumber(l.total)}</span>
+          </li>
+        ))}
+      </ul>
+      {lideres.length > mostrar.length ? (
+        <p className="mt-1 text-[0.625rem] text-ink-500">
+          e mais {formatNumber(lideres.length - mostrar.length)} {lideres.length - mostrar.length === 1 ? 'líder' : 'líderes'}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -532,6 +567,12 @@ function PlaceMarker({
 }) {
   const destaque = votacao?.destaques?.get(place.locationId) ?? null;
   const apagado = Boolean(votacao?.destaques?.size) && !destaque;
+  /**
+   * Escola do time na votacao: o clique abre direto o raio-x (estimativa,
+   * Lideres e apuracao), em vez de um balao pequeno com um botao para ele.
+   */
+  const raioX = destaque && votacao?.onRaioX ? votacao.onRaioX : null;
+  const eventos = useMemo(() => (raioX ? { click: () => raioX(place.locationId) } : undefined), [raioX, place.locationId]);
   // A fachada da escola no lugar do desenho; sem foto, fica o predio.
   const icon = useMemo(
     () =>
@@ -544,49 +585,42 @@ function PlaceMarker({
   );
 
   return (
-    <Marker ref={onReady} position={[place.latitude, place.longitude]} icon={icon}>
+    <Marker ref={onReady} position={[place.latitude, place.longitude]} icon={icon} eventHandlers={eventos}>
       {/* Balao com teto de altura: escola com muitas secoes rola por dentro,
           em vez de cobrir o mapa (principalmente em tela cheia). */}
-      <Popup maxHeight={420} minWidth={240}>
-        <div className="map-popup w-56 space-y-1.5">
-          <PlaceImage place={place} />
+      {raioX ? null : (
+        <Popup maxHeight={420} minWidth={240}>
+          <div className="map-popup w-56 space-y-1.5">
+            <PlaceImage place={place} />
 
-          <p className="text-sm font-semibold text-ink-900">
-            {place.title ?? 'Local de votação'}
-          </p>
-          {place.address ? <p className="text-xs text-ink-500">{place.address}</p> : null}
-          <p className="text-xs text-ink-500">
-            {[place.city, place.state].filter(Boolean).join('/') || '--'}
-          </p>
+            <p className="text-sm font-semibold text-ink-900">
+              {place.title ?? 'Local de votação'}
+            </p>
+            {place.address ? <p className="text-xs text-ink-500">{place.address}</p> : null}
+            <p className="text-xs text-ink-500">
+              {[place.city, place.state].filter(Boolean).join('/') || '--'}
+            </p>
 
-          {/* O confronto vem primeiro: e por ele que se clica na escola do time. */}
-          {destaque ? <ConfrontoNoBalao estimativa={destaque.estimativa} apurado={destaque.apurado} /> : null}
-          {votacao?.onRaioX ? (
-            <button
-              type="button"
-              onClick={() => votacao.onRaioX?.(place.locationId)}
-              className="inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-control bg-navy-900 px-3 text-xs font-semibold text-gold-400 transition-colors hover:bg-navy-800"
-            >
-              Raio-X: estimativa × apuração
-            </button>
-          ) : null}
+            {/* Escola do time sem raio-x (sem quem o abra): o confronto no balao. */}
+            {destaque ? <ConfrontoNoBalao estimativa={destaque.estimativa} apurado={destaque.apurado} /> : null}
 
-          <PlaceVotes place={place} votacao={votacao} />
+            <PlaceVotes place={place} votacao={votacao} />
 
-          {votacao ? null : (
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => onOpen(place)}
-                className="inline-flex min-h-9 flex-1 items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
-              >
-                Ver pessoas
-              </button>
-              {onDownload ? <BotaoDePdf onClick={() => onDownload(place)} rotulo="PDF" titulo="Baixar o PDF desta escola" /> : null}
-            </div>
-          )}
-        </div>
-      </Popup>
+            {votacao ? null : (
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpen(place)}
+                  className="inline-flex min-h-9 flex-1 items-center justify-center rounded-control bg-brand-700 px-3 text-xs font-semibold text-white transition-colors hover:bg-brand-800"
+                >
+                  Ver pessoas
+                </button>
+                {onDownload ? <BotaoDePdf onClick={() => onDownload(place)} rotulo="PDF" titulo="Baixar o PDF desta escola" /> : null}
+              </div>
+            )}
+          </div>
+        </Popup>
+      )}
     </Marker>
   );
 }

@@ -14,7 +14,7 @@ import {
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import { rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
-import { confrontar, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
+import { confrontar, lideresNoRaioX, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
 import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
@@ -251,6 +251,11 @@ export function MobilizationMap({
   );
   const [raioX, setRaioX] = useState<string | null>(null);
   const escolaDoRaioX = raioX ? (confronto?.escolas.find((e) => e.chave === raioX) ?? null) : null;
+  /** Quem cadastrou a estimativa da escola do raio-x, Lider a Lider (todos, sem o filtro). */
+  const lideresDoRaioX = useMemo(
+    () => (escolaDoRaioX ? lideresNoRaioX(escolaDoRaioX, data?.pollingPlaces ?? []) : null),
+    [escolaDoRaioX, data],
+  );
 
   const modoVotacao: ModoVotacao | undefined = candidato
     ? {
@@ -913,6 +918,8 @@ export function MobilizationMap({
         <RaioXDaEscola
           escola={escolaDoRaioX}
           candidato={{ nome: candidato.nome, rotulo: rotuloDoCandidato(candidato) }}
+          lideres={lideresDoRaioX?.lideres}
+          diretos={lideresDoRaioX?.diretos}
           onClose={() => setRaioX(null)}
           onVerPessoas={
             escolaDoRaioX.pinosDaCampanha.length

@@ -137,3 +137,33 @@ describe('os líderes em cada escola', () => {
     expect(time[0]).toMatchObject({ lider: 'JOSÉ', escolas: 2, cadastrados: 12, noMaximo: 6, perda: 4 });
   });
 });
+
+describe('lideresNoRaioX', () => {
+  it('soma os Lideres dos pinos da campanha na escola, secao por secao, e fecha com a estimativa', async () => {
+    const { lideresNoRaioX, chaveDaSecao } = await import('@/lib/domain/confronto');
+    const lider = (id: string, name: string, sections: { zone: string; section: string; total: number }[]) => ({
+      id,
+      name,
+      total: sections.reduce((t, s) => t + s.total, 0),
+      men: 0,
+      women: 0,
+      others: 0,
+      sections,
+    });
+    const pino = (locationId: string, leaders: ReturnType<typeof lider>[]) =>
+      ({ locationId, leaders }) as unknown as import('@/lib/domain/map-pin').PollingPlacePin;
+    const campanha = [
+      pino('p1', [lider('u1', 'José', [{ zone: '010', section: '0096', total: 4 }]), lider('u2', 'Maria', [{ zone: '10', section: '97', total: 2 }])]),
+      pino('p2', [lider('u1', 'José', [{ zone: '10', section: '97', total: 3 }])]),
+      pino('outra', [lider('u3', 'Ana', [{ zone: '10', section: '1', total: 9 }])]),
+    ];
+    const { lideres, diretos } = lideresNoRaioX({ pinosDaCampanha: ['p1', 'p2'], estimativa: 12 }, campanha);
+    expect(lideres.map((l) => [l.nome, l.cadastrados])).toEqual([
+      ['José', 7],
+      ['Maria', 2],
+    ]);
+    expect(lideres[0].porSecao[chaveDaSecao('10', '96')]).toBe(4);
+    expect(lideres[0].porSecao[chaveDaSecao('10', '97')]).toBe(3);
+    expect(diretos).toBe(3);
+  });
+});

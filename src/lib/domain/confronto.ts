@@ -342,3 +342,51 @@ export function lideresDoTime(porEscola: readonly LiderNaEscola[][]): (Omit<Lide
   }
   return [...soma.values()].sort((a, b) => b.perda - a.perda || b.cadastrados - a.cadastrados);
 }
+
+/* -------------------------------------------------------------------------
+   Lideres no raio-x da escola
+   ------------------------------------------------------------------------- */
+
+export interface LiderNoRaioX {
+  /** Chave do Lider (`leaderKey`). */
+  id: string;
+  nome: string;
+  /** Pessoas que ele cadastrou e que votam na escola. */
+  cadastrados: number;
+  /** Secao (`chaveDaSecao`) -> pessoas dele ali. */
+  porSecao: Record<string, number>;
+}
+
+/** A mesma chave de secao do confronto: zona e secao sem zero a esquerda. */
+export const chaveDaSecao = (zona: string | null, secao: string | null) => sectionKey({ zone: zona, section: secao });
+
+/**
+ * Quem cadastrou a estimativa da escola: os Lideres dos pinos da campanha
+ * que caem nela, somados (uma escola pode ter mais de um pino), do maior
+ * cadastro para o menor. `diretos` fecha a conta com a estimativa: quem e
+ * Lider (cadastrado pelo Administrador) ou nao tem Lider registrado.
+ */
+export function lideresNoRaioX(
+  escola: Pick<EscolaNoConfronto, 'pinosDaCampanha' | 'estimativa'>,
+  campanha: readonly PollingPlacePin[],
+): { lideres: LiderNoRaioX[]; diretos: number } {
+  const pinos = new Set(escola.pinosDaCampanha);
+  const porLider = new Map<string, LiderNoRaioX>();
+  for (const pin of campanha) {
+    if (!pinos.has(pin.locationId)) continue;
+    for (const l of pin.leaders ?? []) {
+      const atual = porLider.get(l.id) ?? { id: l.id, nome: l.name, cadastrados: 0, porSecao: {} };
+      atual.cadastrados += l.total;
+      for (const s of l.sections) {
+        const k = chaveDaSecao(s.zone, s.section);
+        atual.porSecao[k] = (atual.porSecao[k] ?? 0) + s.total;
+      }
+      porLider.set(l.id, atual);
+    }
+  }
+  const lideres = [...porLider.values()].sort(
+    (a, b) => b.cadastrados - a.cadastrados || a.nome.localeCompare(b.nome, 'pt-BR'),
+  );
+  const somados = lideres.reduce((t, l) => t + l.cadastrados, 0);
+  return { lideres, diretos: Math.max(0, escola.estimativa - somados) };
+}
