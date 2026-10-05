@@ -330,8 +330,18 @@ function SeletorDaVotacao({
                       disabled={!escolhido && cheio}
                       className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-3 text-left transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <span className="flex min-w-14 justify-center rounded-control bg-ink-100 px-1.5 py-1 text-xs font-bold text-ink-700 tabular-nums">
-                        {c.numero}
+                      {/* A foto oficial do TSE, com o numero de urna colado embaixo. */}
+                      <span className="relative shrink-0 pb-1.5">
+                        <FotoDoCandidato
+                          cargo={c.cargoCodigo}
+                          sqcand={c.sqcand ?? null}
+                          src={c.tipo === 'CANDIDATO' ? fotoDoCandidatoUrl(c) : undefined}
+                          nome={c.nome}
+                          tamanho="md"
+                        />
+                        <span className="absolute inset-x-0 -bottom-0.5 mx-auto w-fit rounded-pill bg-navy-900 px-1.5 text-[0.625rem] leading-4 font-bold text-white tabular-nums ring-2 ring-surface">
+                          {c.numero}
+                        </span>
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-ink-900">{c.nome}</span>
@@ -341,7 +351,7 @@ function SeletorDaVotacao({
                       </span>
                       <span className="shrink-0 text-right tabular-nums">
                         <span className="block text-sm font-bold text-brand-800">
-                          {formatNumber(c.total)} <span className="text-xs font-normal text-ink-500">votos</span>
+                          {formatNumber(c.total)} <span className="hidden text-xs font-normal text-ink-500 sm:inline">votos</span>
                         </span>
                         {/* O total oficial do TSE anda na frente durante a apuracao. */}
                         {c.totalOficial !== null && c.totalOficial > c.total ? (
