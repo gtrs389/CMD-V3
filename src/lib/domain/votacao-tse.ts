@@ -393,6 +393,11 @@ export interface CandidatoDaVotacao {
    * Nulo fora da apuracao ao vivo.
    */
   totalOficial: number | null;
+  /**
+   * Sequencial do TSE, quando a apuracao ao vivo ja o trouxe: a foto vai
+   * direto por ele. Sem ele, a foto e procurada pelo numero de urna.
+   */
+  sqcand?: string | null;
 }
 
 export interface VotacaoNoMapa {
@@ -479,6 +484,7 @@ export function textoDosTotais(c: Pick<CandidatoDaVotacao, 'total' | 'totalOfici
 }
 
 /** Foto oficial do candidato pelo numero de urna (o servidor busca no TSE). */
-export function fotoDoCandidatoUrl(c: Pick<CandidatoDaVotacao, 'cargoCodigo' | 'numero' | 'ano'>): string {
+export function fotoDoCandidatoUrl(c: Pick<CandidatoDaVotacao, 'cargoCodigo' | 'numero' | 'ano' | 'sqcand'>): string {
+  if (c.sqcand) return `/api/votacao/foto/${c.cargoCodigo}/${encodeURIComponent(c.sqcand)}`;
   return `/api/votacao/foto/${c.cargoCodigo}/numero/${encodeURIComponent(c.numero)}?ano=${c.ano}`;
 }

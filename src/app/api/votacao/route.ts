@@ -4,6 +4,7 @@ import { LOTE_DE_CANDIDATOS, LOTE_DE_SECOES } from '@/lib/domain/votacao-tse';
 import { requirePermission } from '@/lib/server/guard';
 import { jsonOk, readJson, toErrorResponse } from '@/lib/server/http';
 import { candidatosDaVotacao, favoritosDe, gravarCandidatos, gravarSecoes } from '@/lib/server/votacao.service';
+import { sequenciaisDaApuracao } from '@/lib/server/foto-do-candidato.service';
 
 /**
  * Votacao oficial do TSE (migration 054).
@@ -17,8 +18,20 @@ import { candidatosDaVotacao, favoritosDe, gravarCandidatos, gravarSecoes } from
 export async function GET() {
   try {
     const user = await requirePermission('map.view');
-    const [candidatos, favoritos] = await Promise.all([candidatosDaVotacao(), favoritosDe(user.id)]);
-    return jsonOk({ candidatos, favoritos });
+    const [candidatos, favoritos, sequenciais] = await Promise.all([
+      candidatosDaVotacao(),
+      favoritosDe(user.id),
+      sequenciaisDaApuracao(),
+    ]);
+    // A foto de cada candidato pelo sequencial do TSE (so do ano da apuracao:
+    // em outro ano, o mesmo numero e outra pessoa).
+    return jsonOk({
+      candidatos: candidatos.map((c) => ({
+        ...c,
+        sqcand: c.ano === sequenciais.ano ? (sequenciais.porNumero.get(`${c.cargoCodigo}:${c.numero}`) ?? null) : null,
+      })),
+      favoritos,
+    });
   } catch (error) {
     return toErrorResponse(error);
   }

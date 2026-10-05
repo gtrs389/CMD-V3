@@ -42,6 +42,24 @@ export async function sqcandPeloNumero(cargo: number, numero: string, ano?: numb
   return linha?.payload.candidatos.find((x) => x.numero === numero)?.sqcand ?? null;
 }
 
+/**
+ * O sequencial do TSE de todos os candidatos da apuracao gravada, numa
+ * leitura so: "cargo:numero" -> sqcand. A lista do seletor ja sai com ele, e
+ * a foto de cada linha vai direto ao TSE, sem uma consulta por foto.
+ */
+export async function sequenciaisDaApuracao(): Promise<{ ano: number; porNumero: Map<string, string> }> {
+  const c = configuracaoAoVivo();
+  const linhas = await selectRows<{ office_code: number; payload: ResultadoDoCargo }>('cmd_tse_live_results', {
+    select: 'office_code,payload',
+    filters: { pleito: `eq.${c.pleito}`, uf: `eq.${c.uf}` },
+  }).catch(() => []);
+  const porNumero = new Map<string, string>();
+  for (const l of linhas) {
+    for (const x of l.payload.candidatos ?? []) if (x.sqcand) porNumero.set(`${l.office_code}:${x.numero}`, x.sqcand);
+  }
+  return { ano: c.ano, porNumero };
+}
+
 /** A resposta HTTP da foto, com cache de um dia no navegador: a foto nao muda na eleicao. */
 export function respostaDaFoto(foto: { corpo: ArrayBuffer; tipo: string }): Response {
   return new Response(foto.corpo, {
