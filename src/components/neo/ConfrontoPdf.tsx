@@ -1,7 +1,16 @@
 import { Fragment } from 'react';
 import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
 import { appConfig } from '@/config/app.config';
-import { conversao, leitura, type Confronto, type EscolaNoConfronto, type LeituraDoConfronto } from '@/lib/domain/confronto';
+import {
+  conversao,
+  fraseDoLider,
+  leitura,
+  lideresDoTime,
+  type Confronto,
+  type EscolaNoConfronto,
+  type LeituraDoConfronto,
+  type LiderNaEscola,
+} from '@/lib/domain/confronto';
 import { C, Cabecalho, Kpi, LinhaDeKpis, Rodape, Tabela, num, s, st } from './pdf-base';
 
 /**
@@ -67,17 +76,75 @@ function Parte({ numero, titulo, texto, quebra = false }: { numero: number; titu
   );
 }
 
+/**
+ * Os lideres dentro de uma escola: quanto cada um cadastrou ali, em quais
+ * secoes, e o teto de quem pode ter votado. Embaixo, a frase de cada lider
+ * cujos votos ficaram abaixo do que ele cadastrou.
+ */
+function LideresNaEscola({ lideres, candidato }: { lideres: LiderNaEscola[]; candidato: string }) {
+  if (lideres.length === 0) return null;
+  const frases = lideres.map((l) => fraseDoLider(l, candidato)).filter((f): f is string => f !== null);
+  return (
+    <View style={{ marginTop: 5 }}>
+      <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 3 }}>{s('Líderes nesta escola')}</Text>
+      <Tabela
+        linhas={lideres}
+        chave={(l) => l.lider}
+        colunas={[
+          { titulo: 'Líder', largura: '30%', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(l.lider)}</Text> },
+          { titulo: 'Cadastrou', largura: '11%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text> },
+          {
+            titulo: 'Por seção',
+            largura: '33%',
+            celula: (l) => (
+              <Text style={{ fontSize: 7, color: C.muted, paddingLeft: 6 }}>
+                {s(
+                  [
+                    ...l.secoes.map((x) => `Seção ${x.secao}: ${num(x.cadastrados)} (${num(x.apurado)} ${x.apurado === 1 ? 'voto' : 'votos'})`),
+                    l.semSecao ? `sem seção: ${num(l.semSecao)}` : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
+                )}
+              </Text>
+            ),
+          },
+          { titulo: 'No máx. votaram', largura: '14%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(l.noMaximo)}</Text> },
+          {
+            titulo: 'Não votaram (mín.)',
+            largura: '12%',
+            alinhar: 'right',
+            celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: l.perda > 0 ? VERMELHO : C.muted }}>{num(l.perda)}</Text>,
+          },
+        ]}
+      />
+      {frases.map((f) => (
+        <View key={f} wrap={false} style={{ flexDirection: 'row', marginTop: 3, paddingLeft: 2 }}>
+          <Text style={{ fontSize: 7.2, color: VERMELHO, marginRight: 4 }}>•</Text>
+          <Text style={{ flex: 1, fontSize: 7.2, color: C.ink2, lineHeight: 1.35 }}>{s(f)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const zonasDe = (e: EscolaNoConfronto) => [...new Set(e.secoes.map((x) => x.zona).filter(Boolean))].join(', ') || '—';
 
 export interface PdfDoConfrontoProps {
   confronto: Confronto;
   /** "Fulano (15123) · Deputado Estadual · 1º turno". */
   candidato: string;
+  /** So o nome, para as frases: "PAULO teve 3 votos". */
+  candidatoNome?: string;
+  /** Escola (chave) -> quem cada Lider cadastrou ali, secao por secao. */
+  lideres?: Record<string, LiderNaEscola[]>;
   geradoEm: string;
 }
 
-export function PdfDoConfronto({ confronto, candidato, geradoEm }: PdfDoConfrontoProps) {
+export function PdfDoConfronto({ confronto, candidato, candidatoNome, lideres = {}, geradoEm }: PdfDoConfrontoProps) {
   const { doTime, estimativaTotal, apuradoNasEscolasDoTime, apuradoTotal } = confronto;
+  const nome = candidatoNome ?? candidato.split(' (')[0];
+  const doTimeTodo = lideresDoTime(doTime.map((e) => lideres[e.chave] ?? []));
   const conv = estimativaTotal > 0 ? (apuradoNasEscolasDoTime / estimativaTotal) * 100 : null;
   const zeradas = doTime.filter((e) => leitura(e) === 'ZERADA').length;
   const acima = doTime.filter((e) => leitura(e) === 'ACIMA').length;
@@ -151,11 +218,39 @@ export function PdfDoConfronto({ confronto, candidato, geradoEm }: PdfDoConfront
           ]}
         />
 
+        {doTimeTodo.length > 0 ? (
+          <>
+            <Parte
+              numero={2}
+              titulo="Os líderes do time"
+              texto="Quantas pessoas cada líder cadastrou nas escolas do time, e quantas, no máximo, podem ter votado no candidato: em cada seção, o menor entre o que o líder cadastrou e os votos da seção. O voto é secreto; o número exato ninguém sabe, mas o teto é certo. Da maior perda para a menor."
+            />
+            <Tabela
+              linhas={doTimeTodo}
+              chave={(l) => l.lider}
+              colunas={[
+                { titulo: '#', largura: '5%', celula: (_l, i) => String(i + 1) },
+                { titulo: 'Líder', largura: '35%', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s(l.lider)}</Text> },
+                { titulo: 'Escolas', largura: '10%', alinhar: 'right', celula: (l) => num(l.escolas) },
+                { titulo: 'Cadastrou', largura: '12%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text> },
+                { titulo: 'No máx. votaram', largura: '15%', alinhar: 'right', celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: OURO_TEXTO }}>{num(l.noMaximo)}</Text> },
+                {
+                  titulo: 'Não votaram (mín.)',
+                  largura: '15%',
+                  alinhar: 'right',
+                  celula: (l) => <Text style={{ fontFamily: 'Helvetica-Bold', color: l.perda > 0 ? VERMELHO : C.muted }}>{num(l.perda)}</Text>,
+                },
+                { titulo: 'Sem seção', largura: '8%', alinhar: 'right', celula: (l) => <Text style={{ color: C.faint }}>{num(l.semSecao)}</Text> },
+              ]}
+            />
+          </>
+        ) : null}
+
         {doTime.length > 0 ? (
           <Parte
-            numero={2}
+            numero={doTimeTodo.length > 0 ? 3 : 2}
             titulo="Escola por escola, seção por seção"
-            texto="Em cada escola do time: a estimativa e o apurado de cada seção. Diferença = apurado - estimativa."
+            texto="Em cada escola do time: a estimativa e o apurado de cada seção (diferença = apurado - estimativa), e quem cada líder cadastrou ali."
             quebra
           />
         ) : null}
@@ -223,6 +318,7 @@ export function PdfDoConfronto({ confronto, candidato, geradoEm }: PdfDoConfront
                   },
                 ]}
               />
+              <LideresNaEscola lideres={lideres[e.chave] ?? []} candidato={nome} />
             </Fragment>
           );
         })}
@@ -230,7 +326,7 @@ export function PdfDoConfronto({ confronto, candidato, geradoEm }: PdfDoConfront
         {fora.length > 0 ? (
           <>
             <Parte
-              numero={3}
+              numero={(doTimeTodo.length > 0 ? 3 : 2) + (doTime.length > 0 ? 1 : 0)}
               titulo="Votos fora da base do time"
               texto={`Escolas onde o candidato teve votos e o time não tinha estimativa — as ${num(fora.length)} com mais votos.`}
               quebra
