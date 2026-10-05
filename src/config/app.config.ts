@@ -8,6 +8,8 @@
  */
 
 export type LogoConfig =
+  /** A marca vetorial do CMD (`src/components/layout/BrandMark.tsx`). */
+  | { kind: 'mark'; src?: undefined; monogram?: undefined }
   | { kind: 'monogram'; monogram: string; src?: undefined }
   | { kind: 'image'; src: string; monogram?: undefined };
 
@@ -21,10 +23,13 @@ export const appConfig = {
     'Painel administrativo para cadastro de times, montagem de formulários e gestão de equipes.',
 
   /**
-   * Logotipo. Troque para `{ kind: 'image', src: '/logo.svg' }`
-   * quando existir um arquivo de marca em `public/`.
+   * Logotipo. `mark` e a marca vetorial do sistema (a rede em "M" com o
+   * ponto dourado do voto). Para usar um arquivo proprio, troque para
+   * `{ kind: 'image', src: '/logo.svg' }` com o arquivo em `public/`.
    */
-  logo: { kind: 'image', src: '/brand/logo-mark.svg' } as LogoConfig,
+  logo: { kind: 'mark' } as LogoConfig,
+  /** Linha abaixo da sigla, ao lado da marca na barra lateral. */
+  wordmarkTagline: 'Mobilização Digital',
 
   locale: 'pt-BR',
 

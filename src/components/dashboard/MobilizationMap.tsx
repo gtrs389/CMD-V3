@@ -80,6 +80,16 @@ interface MobilizationMapProps {
    * cabecalho em azul-marinho.
    */
   destaque?: boolean;
+  /**
+   * Candidatos pedidos DE FORA do mapa (a Sala de Apuracao escolhe e manda).
+   * Cada pedido novo traz um `vez` diferente: o mesmo grupo pedido duas
+   * vezes volta a aplicar (depois de a pessoa ter mexido no mapa).
+   */
+  pedidoDeVotacao?: { candidatos: CandidatoDaVotacao[]; vez: number } | null;
+  /** Avisa quem esta fora quando a escolha muda DENTRO do mapa. */
+  onCandidatosChange?: (candidatos: CandidatoDaVotacao[]) => void;
+  /** Dentro da propria Sala de Apuracao: sem o atalho para ela. */
+  naSala?: boolean;
 }
 
 /** "José Carlos da Silva" -> "José Silva": cabe no titulo do ranking. */
@@ -112,6 +122,9 @@ export function MobilizationMap({
   clientName,
   renderLiderActions,
   destaque = false,
+  pedidoDeVotacao = null,
+  onCandidatosChange,
+  naSala = false,
 }: MobilizationMapProps = {}) {
   const { can } = useSession();
   // Decide em qual dos dois lugares a ficha nasce: ao lado do mapa ou abaixo
@@ -244,7 +257,27 @@ export function MobilizationMap({
     // So na chegada a pagina.
   }, []);
 
+  /**
+   * Pedido vindo de fora (Sala de Apuracao). Cada pedido e um objeto novo:
+   * o mesmo grupo pedido de novo volta a aplicar. Quem pediu ja sabe a
+   * escolha, entao nao e avisado de volta.
+   */
+  useEffect(() => {
+    if (!pedidoDeVotacao) return;
+    const escolhidos = pedidoDeVotacao.candidatos;
+    const quadro = requestAnimationFrame(() => {
+      setCandidatos(escolhidos);
+      setAtivoId(escolhidos[0]?.id ?? null);
+      setFocusPlace(null);
+      setOpenPlace(null);
+      setRaioX(null);
+      setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
+    });
+    return () => cancelAnimationFrame(quadro);
+  }, [pedidoDeVotacao]);
+
   function escolherCandidatos(escolhidos: CandidatoDaVotacao[]) {
+    onCandidatosChange?.(escolhidos);
     const entrando = candidatos.length === 0 && escolhidos.length > 0;
     setCandidatos(escolhidos);
     // O candidato do mapa continua o mesmo, se ainda estiver na escolha.
@@ -682,13 +715,15 @@ export function MobilizationMap({
         onClear={() => escolherCandidatos([])}
         podeEnviar={podeLocalizar}
       />
-      <Link
-        href="/apuracao"
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-xs font-semibold text-brand-800 hover:border-brand-400 hover:bg-brand-50"
-      >
-        <Trophy aria-hidden="true" className="size-3.5" />
-        Sala de Apuração
-      </Link>
+      {naSala ? null : (
+        <Link
+          href="/apuracao"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-xs font-semibold text-brand-800 hover:border-brand-400 hover:bg-brand-50"
+        >
+          <Trophy aria-hidden="true" className="size-3.5" />
+          Sala de Apuração
+        </Link>
+      )}
       {candidato ? (
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs text-ink-700">
