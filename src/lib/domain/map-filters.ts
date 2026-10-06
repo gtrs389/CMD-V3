@@ -31,6 +31,11 @@ export interface MapQuery {
   /** UF. Nulo significa "todas". */
   state: string | null;
   city: string | null;
+  /**
+   * Varios municipios de uma vez (a votacao no mapa): vale o local que
+   * estiver em QUALQUER um deles. Vazio: todos.
+   */
+  cities: string[];
   /** Zona eleitoral. Recorta tambem a contagem de votos do local. */
   zone: string | null;
   /** Esconde local de votacao abaixo deste tamanho. */
@@ -48,6 +53,7 @@ export const DEFAULT_MAP_QUERY: MapQuery = {
   search: '',
   state: null,
   city: null,
+  cities: [],
   zone: null,
   minVotes: 0,
   leader: null,
@@ -113,10 +119,18 @@ export function placeOfLeader(place: PollingPlacePin, leader: string): PollingPl
   };
 }
 
+/** O local esta em algum dos municipios escolhidos (nenhum escolhido: todos). */
+function emAlgumMunicipio(city: string | null, cities: readonly string[] | undefined): boolean {
+  if (!cities?.length) return true;
+  const alvo = normalizeSearch(city);
+  return cities.some((c) => normalizeSearch(c) === alvo);
+}
+
 function matchesPin(pin: MapPin, query: MapQuery): boolean {
   if (query.leader && pin.leaderId !== query.leader) return false;
   if (query.state && normalizeSearch(pin.state) !== normalizeSearch(query.state)) return false;
   if (query.city && normalizeSearch(pin.city) !== normalizeSearch(query.city)) return false;
+  if (!emAlgumMunicipio(pin.city, query.cities)) return false;
   if (query.zone && normalizeZone(pin.zone) !== normalizeZone(query.zone)) return false;
 
   return matchesSearch(
@@ -133,6 +147,7 @@ function matchesPin(pin: MapPin, query: MapQuery): boolean {
 function matchesPlace(place: PollingPlacePin, query: MapQuery): boolean {
   if (query.state && normalizeSearch(place.state) !== normalizeSearch(query.state)) return false;
   if (query.city && normalizeSearch(place.city) !== normalizeSearch(query.city)) return false;
+  if (!emAlgumMunicipio(place.city, query.cities)) return false;
 
   if (query.zone) {
     const alvo = normalizeZone(query.zone);
@@ -323,6 +338,7 @@ export function activeFilterCount(query: MapQuery): number {
   if (query.search.trim()) total += 1;
   if (query.state) total += 1;
   if (query.city) total += 1;
+  if (query.cities?.length) total += 1;
   if (query.zone) total += 1;
   if (query.minVotes > 0) total += 1;
   if (query.leader) total += 1;

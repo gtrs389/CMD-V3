@@ -55,6 +55,7 @@ import {
 } from './user.service';
 import { ensureTeamAccessLink } from './team-access.service';
 import { badRequest, notFound } from './http';
+import { apagarArquivosDoTime } from './arquivos.service';
 
 /**
  * Regras de cliente no servidor.
@@ -777,6 +778,10 @@ export async function deleteClient(id: string): Promise<void> {
 
   await deleteImage(current.photo_path);
   await deleteImage(current.banner_path);
+
+  // Repositorio de Arquivos (migration 059): os arquivos saem do bucket; as
+  // linhas caem pela cascata. Falha aqui nunca trava a exclusao do time.
+  await apagarArquivosDoTime(id).catch(() => undefined);
 
   await deleteRows(TABLES.clients, { id: `eq.${id}` });
 }

@@ -13,7 +13,8 @@
  * com a troca entre um e outro la dentro.
  */
 
-export const TAB_IDS = ['visao-geral', 'equipe', 'inconsistencias', 'formulario'] as const;
+/** `arquivos`: o Repositorio de Arquivos do time (migration 059). */
+export const TAB_IDS = ['visao-geral', 'equipe', 'inconsistencias', 'arquivos', 'formulario'] as const;
 
 export type TabId = (typeof TAB_IDS)[number];
 

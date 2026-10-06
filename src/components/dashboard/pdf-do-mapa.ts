@@ -7,7 +7,9 @@ import {
   lideresNoRaioX,
   type Comparativo,
   type Confronto,
+  type EscolaNoComparativo,
   type LiderNaEscola,
+  type LiderNoRaioX,
 } from '@/lib/domain/confronto';
 import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import { api } from '@/lib/repositories/http/api';
@@ -68,6 +70,7 @@ function recorteEmPalavras(query: MapQuery | null, places: readonly PollingPlace
     lider ? `Líder ${lider}` : null,
     query.zone ? `Zona ${query.zone}` : null,
     query.city,
+    query.cities?.length ? (query.cities.length === 1 ? query.cities[0] : `Municípios: ${query.cities.join(', ')}`) : null,
     query.state,
     query.minVotes > 0 ? `a partir de ${query.minVotes} votos` : null,
     query.search.trim() ? `busca "${query.search.trim()}"` : null,
@@ -233,8 +236,14 @@ export async function baixarPdfDoConfronto({
  * nao ha foto (outro ano, cargo sem foto, TSE fora): o PDF usa as iniciais.
  */
 async function fotoComoDataUrl(c: Pick<CandidatoDaVotacao, 'cargoCodigo' | 'numero' | 'ano'>): Promise<string | null> {
+  return urlComoDataUrl(fotoDoCandidatoUrl(c));
+}
+
+/** Qualquer foto do proprio sistema (pelo endereco) como data URL para o PDF. */
+async function urlComoDataUrl(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
   try {
-    const resposta = await fetch(fotoDoCandidatoUrl(c), { credentials: 'same-origin' });
+    const resposta = await fetch(url, { credentials: 'same-origin' });
     const tipo = resposta.headers.get('content-type') ?? '';
     // O gerador do PDF so le JPEG e PNG.
     if (!resposta.ok || !/image\/(jpe?g|png)/.test(tipo)) return null;
@@ -282,4 +291,36 @@ export async function baixarPdfDoComparativo({
   });
   const nomes = candidatos.map(({ candidato: c }) => `${slug(c.nome)}-${c.numero}`).join('_x_');
   baixarArquivo(`estimativa-x-apuracao_${nomes}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
+}
+
+/**
+ * O Raio-X da escola em PDF: o mesmo quadro que esta aberto na tela —
+ * estimativa contra cada candidato, a frase, os Lideres e as secoes.
+ */
+export async function baixarPdfDoRaioX({
+  escola,
+  candidatos,
+  lideres,
+  diretos,
+  time,
+}: {
+  escola: EscolaNoComparativo;
+  candidatos: { nome: string; rotulo: string; cor: string; foto?: string }[];
+  lideres: LiderNoRaioX[];
+  diretos: number;
+  time?: string;
+}): Promise<void> {
+  const [{ gerarPdfDoRaioX }, fotos] = await Promise.all([
+    import('@/components/neo/RaioXPdf'),
+    Promise.all(candidatos.map((c) => urlComoDataUrl(c.foto))),
+  ]);
+  const blob = await gerarPdfDoRaioX({
+    escola,
+    candidatos: candidatos.map((c, i) => ({ nome: c.nome, rotulo: c.rotulo, cor: c.cor, foto: fotos[i] })),
+    lideres,
+    diretos,
+    time,
+    geradoEm: new Date().toISOString(),
+  });
+  baixarArquivo(`raio-x_${slug(escola.titulo)}_${dataDoArquivo()}.pdf`, blob);
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Minus, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, FileDown, Minus, ScanSearch, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -16,6 +16,8 @@ import { formatNumber, initials } from '@/lib/utils/text';
 import { Modal } from '@/components/ui/Modal';
 import { Contador } from '@/components/ui/Contador';
 import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
+import { Spinner } from '@/components/ui/Spinner';
+import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -527,6 +529,7 @@ export function RaioXDaEscola({
   onClose,
   onVerPessoas,
   pdf,
+  time,
 }: {
   /** A escola com o apurado de cada candidato (um so: `comoComparativo`). */
   escola: EscolaNoComparativo;
@@ -541,12 +544,15 @@ export function RaioXDaEscola({
   onVerPessoas?: () => void;
   /** O botao do relatorio do time (um candidato ou todos juntos). */
   pdf?: React.ReactNode;
+  /** Nome do time, no cabecalho do PDF da escola. */
+  time?: string;
 }) {
   const [foco, setFoco] = useState<string | null>(null);
   const escolhido = lideres.find((l) => l.id === foco) ?? null;
   const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
   const varios = candidatos.length > 1;
   const um = candidatos[0];
+  const baixar = () => baixarPdfDoRaioX({ escola, candidatos, lideres, diretos, time });
 
   return (
     <Modal
@@ -557,11 +563,14 @@ export function RaioXDaEscola({
       header={
         <div className="min-w-0">
           <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-navy-900 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400">
-            <span aria-hidden="true">★</span>
+            <ScanSearch aria-hidden="true" className="size-3.5 shrink-0" />
             <span className="wrap-break-word">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
           </p>
           <h2 className="mt-2 text-lg leading-tight font-bold text-ink-900 sm:text-xl">{escola.titulo}</h2>
           {onde ? <p className="mt-0.5 text-sm text-ink-500">{onde}</p> : null}
+          <div className="mt-3">
+            <BotaoPdfDaEscola onBaixar={baixar} />
+          </div>
         </div>
       }
     >
@@ -603,8 +612,61 @@ export function RaioXDaEscola({
             </button>
           ) : null}
           {pdf}
+          <BotaoPdfDaEscola onBaixar={baixar} compacto />
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * "Baixar PDF desta escola": o mesmo Raio-X que esta aberto, em PDF. Mostra
+ * que esta gerando (fotos e paginas levam um instante) e confirma ao fim.
+ */
+function BotaoPdfDaEscola({ onBaixar, compacto = false }: { onBaixar: () => Promise<void>; compacto?: boolean }) {
+  const [estado, setEstado] = useState<'parado' | 'gerando' | 'pronto' | 'erro'>('parado');
+  async function clicar() {
+    if (estado === 'gerando') return;
+    setEstado('gerando');
+    try {
+      await onBaixar();
+      setEstado('pronto');
+      window.setTimeout(() => setEstado('parado'), 2500);
+    } catch {
+      setEstado('erro');
+      window.setTimeout(() => setEstado('parado'), 3500);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={clicar}
+      disabled={estado === 'gerando'}
+      aria-live="polite"
+      className={cn(
+        'group inline-flex items-center gap-2 rounded-pill font-semibold transition-all duration-200 disabled:cursor-wait',
+        compacto ? 'min-h-9 px-3 text-xs' : 'min-h-10 px-4 text-sm shadow-[0_10px_22px_-12px_rgba(15,30,53,0.8)] hover:-translate-y-0.5',
+        estado === 'pronto'
+          ? 'bg-success-600 text-white'
+          : estado === 'erro'
+            ? 'bg-danger-600 text-white'
+            : 'bg-navy-900 text-gold-400 hover:bg-navy-800',
+      )}
+    >
+      {estado === 'gerando' ? (
+        <Spinner className="size-4" />
+      ) : estado === 'pronto' ? (
+        <Check aria-hidden="true" className="cmd-chip-entra size-4" strokeWidth={3} />
+      ) : (
+        <FileDown aria-hidden="true" className="size-4 transition-transform group-hover:translate-y-0.5" />
+      )}
+      {estado === 'gerando'
+        ? 'Gerando o PDF…'
+        : estado === 'pronto'
+          ? 'PDF baixado'
+          : estado === 'erro'
+            ? 'Não deu: tente de novo'
+            : 'Baixar PDF desta escola'}
+    </button>
   );
 }

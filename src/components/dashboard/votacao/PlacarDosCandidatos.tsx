@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { MapPin, X } from 'lucide-react';
+import { MapPin, School, X } from 'lucide-react';
 import { conversao } from '@/lib/domain/confronto';
 import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import { cn } from '@/lib/utils/cn';
@@ -54,7 +54,9 @@ export function PlacarDosCandidatos({
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gold-500/20 px-3 py-2">
         <p className="flex items-center gap-2 text-xs font-semibold text-gold-700">
-          <span className="flex size-6 items-center justify-center rounded-full bg-navy-900 text-[0.6875rem] text-gold-400">★</span>
+          <span className="flex size-6 items-center justify-center rounded-full bg-navy-900 text-gold-400">
+            <School aria-hidden="true" className="size-3.5" />
+          </span>
           {formatNumber(escolasDoTime)} {escolasDoTime === 1 ? 'escola do time' : 'escolas do time'} em destaque
         </p>
         <p className="text-xs text-ink-700">

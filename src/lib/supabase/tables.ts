@@ -45,7 +45,23 @@ export const TABLES = {
   demoSeeds: 'cmd_demo_seeds',
   /** Visitas do ADMIN geral ao painel de uma pessoa do time (migration 045). */
   impersonations: 'cmd_impersonations',
+  /** Repositorio de Arquivos do time (migration 059). */
+  teamFiles: 'cmd_team_files',
 } as const;
+
+/** Um arquivo do Repositorio de Arquivos (migration 059). */
+export interface TeamFileRow {
+  id: string;
+  client_id: string;
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+  kind: 'IMAGEM' | 'VIDEO' | 'DOCUMENTO' | 'AUDIO' | 'OUTRO';
+  uploaded_by_user_id: string | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+}
 
 export interface UserRow {
   id: string;
