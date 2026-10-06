@@ -20,7 +20,7 @@ export interface OpcaoDeFiltro {
 }
 
 /** "Roberval", "ROBERVAL " e "roberval" sao a mesma referencia. */
-function chaveDaReferencia(member: Pick<Member, 'reference'>): string {
+export function chaveDaReferencia(member: Pick<Member, 'reference'>): string {
   return normalizeSearch(member.reference ?? '');
 }
 
