@@ -139,7 +139,7 @@ export function MapRanking({
                       <span className="wrap-break-word">{[item.place.city, item.place.state].filter(Boolean).join('/') || '--'}</span>
                       {destaques?.get(item.place.locationId) ? (
                         <span className="shrink-0 rounded-pill bg-navy-900 px-1.5 py-px text-[0.625rem] font-bold text-gold-400">
-                          ★ est. {formatNumber(destaques.get(item.place.locationId)!.estimativa)}
+                          est. {formatNumber(destaques.get(item.place.locationId)!.estimativa)}
                         </span>
                       ) : null}
                     </span>

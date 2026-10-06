@@ -78,6 +78,18 @@ export const PERMISSIONS = [
   'survey.view',
   'survey.manage',
   'survey.send',
+  /**
+   * Repositorio de Arquivos do time (migration 059): imagens, documentos e
+   * videos guardados no armazenamento privado.
+   *
+   * `files.view`   ve a lista e baixa;
+   * `files.manage` envia, renomeia e exclui.
+   *
+   * ADMIN alcanca qualquer time; o Administrador do time, so o proprio
+   * (`requireClientAccess`). A EQUIPE fica de fora: o repositorio e do time.
+   */
+  'files.view',
+  'files.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -145,6 +157,8 @@ const CANDIDATE_PERMISSIONS: readonly Permission[] = [
   'map.view',
   'survey.view',
   'survey.send',
+  'files.view',
+  'files.manage',
 ];
 
 /**

@@ -45,6 +45,7 @@ variáveis na Vercel.
 | `cmd_api_key_events` | O que cada chave fez: operação, em nome de quem, resultado e motivo da recusa |
 | `cmd_demo_seeds` | Chaves de idempotência da criação de Time DEMO |
 | `cmd_impersonations` | Cada vez que o ADMIN entrou no painel de alguém: quem, em nome de quem, quando começou e quando terminou |
+| `cmd_team_files` | Repositório de Arquivos de cada time (migration 059): caminho no bucket privado `cmd-arquivos`, nome, tipo, tamanho e quem enviou |
 
 Todas ficam com RLS habilitado e **sem nenhuma policy**. O acesso de `PUBLIC`,
 `anon` e `authenticated` é revogado, e o `service_role` recebe explicitamente só
@@ -55,6 +56,15 @@ servidor.
 O bucket não é criado por SQL. Depois da migration, rode
 `npm run configurar-storage` (ou crie o bucket pelo painel, conforme o
 `SETUP.md`).
+
+O Repositório de Arquivos usa um bucket próprio, também privado:
+`cmd-arquivos` (imagens, vídeos, áudios e documentos, até 500 MB por arquivo).
+A migration 059 cria esse bucket, e o servidor o cria sozinho no primeiro
+envio se ele ainda não existir. O arquivo vai do navegador direto para o
+bucket por uma URL de envio assinada, de uso único, emitida pelo servidor
+depois de conferir tipo, tamanho e permissão; o servidor confere no bucket
+que o arquivo chegou antes de registrá-lo. O plano do Supabase pode impor um
+teto por arquivo menor que 500 MB (no plano gratuito, 50 MB).
 
 Junto de cada integrante que consentiu fica a evidência do aceite: data do
 servidor, texto do aviso exatamente como estava valendo, hash SHA-256 desse

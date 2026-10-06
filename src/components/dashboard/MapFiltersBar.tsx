@@ -1,6 +1,6 @@
 'use client';
 
-import { FilterX } from 'lucide-react';
+import { FilterX, MapPin, X } from 'lucide-react';
 import {
   MIN_VOTES_STEPS,
   activeFilterCount,
@@ -40,10 +40,22 @@ interface MapFiltersBarProps {
   options: MapOptions;
   /** Compacto no cabecalho do cartao, espacado na tela cheia. */
   dense?: boolean;
+  /**
+   * Varios municipios de uma vez (a votacao no mapa): a cidade vira uma
+   * escolha multipla, e os escolhidos aparecem em etiquetas para tirar.
+   */
+  municipiosMultiplos?: boolean;
 }
 
-export function MapFiltersBar({ query, onChange, options, dense = false }: MapFiltersBarProps) {
+export function MapFiltersBar({ query, onChange, options, dense = false, municipiosMultiplos = false }: MapFiltersBarProps) {
   const ativos = activeFilterCount(query);
+  const municipios = query.cities ?? [];
+  const alternarMunicipio = (cidade: string) =>
+    onChange({
+      ...query,
+      city: null,
+      cities: municipios.includes(cidade) ? municipios.filter((c) => c !== cidade) : [...municipios, cidade],
+    });
 
   return (
     <div className={cn('space-y-2', dense ? 'space-y-2' : 'space-y-3')}>
@@ -117,7 +129,7 @@ export function MapFiltersBar({ query, onChange, options, dense = false }: MapFi
           // na lista nova, e um filtro invisivel esvaziaria o mapa sem
           // explicacao.
           onChange={(event) =>
-            onChange({ ...query, state: event.target.value || null, city: null })
+            onChange({ ...query, state: event.target.value || null, city: null, cities: [] })
           }
         >
           <option value="">Todos os estados</option>
@@ -128,18 +140,38 @@ export function MapFiltersBar({ query, onChange, options, dense = false }: MapFi
           ))}
         </Select>
 
-        <Select
-          aria-label="Cidade"
-          value={query.city ?? ''}
-          onChange={(event) => onChange({ ...query, city: event.target.value || null })}
-        >
-          <option value="">Todas as cidades</option>
-          {options.cities.map((city) => (
-            <option key={city} value={city}>
-              {city}
-            </option>
-          ))}
-        </Select>
+        {municipiosMultiplos ? (
+          <Dropdown
+            aria-label="Municípios"
+            options={options.cities.map((cidade) => ({ value: cidade, label: cidade }))}
+            highlighted={municipios.length > 0}
+            searchPlaceholder="Buscar município"
+            searchThreshold={6}
+            multiple={{
+              selected: municipios,
+              onToggle: alternarMunicipio,
+              resumo:
+                municipios.length === 0
+                  ? 'Todos os municípios'
+                  : municipios.length === 1
+                    ? municipios[0]
+                    : `${municipios.length} municípios`,
+            }}
+          />
+        ) : (
+          <Select
+            aria-label="Cidade"
+            value={query.city ?? ''}
+            onChange={(event) => onChange({ ...query, city: event.target.value || null })}
+          >
+            <option value="">Todas as cidades</option>
+            {options.cities.map((city) => (
+              <option key={city} value={city}>
+                {city}
+              </option>
+            ))}
+          </Select>
+        )}
 
         <Select
           aria-label="Zona eleitoral"
@@ -166,6 +198,35 @@ export function MapFiltersBar({ query, onChange, options, dense = false }: MapFi
           ))}
         </Select>
       </div>
+
+      {/* Os municipios escolhidos, inteiros, cada um com o X para tirar. */}
+      {municipiosMultiplos && municipios.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5" aria-label="Municípios escolhidos">
+          <span className="flex items-center gap-1 text-xs font-semibold text-ink-700">
+            <MapPin aria-hidden="true" className="size-3.5 text-accent-600" />
+            {municipios.length === 1 ? 'Município:' : `${municipios.length} municípios:`}
+          </span>
+          {municipios.map((cidade) => (
+            <button
+              key={cidade}
+              type="button"
+              onClick={() => alternarMunicipio(cidade)}
+              title={`Tirar ${cidade}`}
+              className="cmd-chip-entra inline-flex min-h-8 items-center gap-1.5 rounded-pill border border-accent-100 bg-accent-50 px-2.5 text-left text-xs font-semibold text-accent-700 transition-colors hover:border-accent-600"
+            >
+              {cidade}
+              <X aria-hidden="true" className="size-3 shrink-0" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange({ ...query, cities: [] })}
+            className="inline-flex min-h-8 items-center rounded-pill px-2 text-xs font-medium text-ink-500 hover:text-ink-900"
+          >
+            Todos os municípios
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

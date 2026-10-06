@@ -658,7 +658,9 @@ function ConfrontoNoBalao({ estimativa, apurado }: { estimativa: number; apurado
   const conversao = estimativa > 0 ? Math.round((apurado / estimativa) * 100) : null;
   return (
     <section className="rounded-control border border-gold-500/40 bg-gold-50 px-2.5 py-2">
-      <p className="text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">★ Escola do time</p>
+      <p className="flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">
+        <span aria-hidden="true" className="size-2 rounded-full bg-gold-500" /> Escola do time
+      </p>
       <p className="mt-0.5 text-xs text-ink-700">
         Estimativa: <b className="text-ink-900">{formatNumber(estimativa)}</b> · Apurado: <b className="text-ink-900">{formatNumber(apurado)}</b>
       </p>

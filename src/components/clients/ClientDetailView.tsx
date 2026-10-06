@@ -21,6 +21,7 @@ import {
   Settings,
   Trash2,
   Users,
+  FolderOpen,
 } from 'lucide-react';
 import { useClient } from '@/hooks/use-clients';
 import { useSession } from '@/components/layout/SessionProvider';
@@ -43,6 +44,7 @@ import { trocarParametros } from '@/lib/utils/historico';
 import { diagnosticar, municipioDaOperacao } from '@/lib/domain/inconsistencias';
 import { formatNumber, pluralize } from '@/lib/utils/text';
 import { InconsistenciasPanel } from './InconsistenciasPanel';
+import { RepositorioPanel } from './RepositorioPanel';
 import { NeoRelatorioModal } from '@/components/neo/NeoRelatorioModal';
 import { BannerTagModal } from './BannerTagModal';
 import { DemoBadge } from './DemoBadge';
@@ -180,7 +182,8 @@ export function ClientDetailView({
 
   // Perfil sem acesso ao formulario nunca fica preso na aba: qualquer
   // tentativa cai na visao geral.
-  const abaAtiva: TabId = tab === 'formulario' && !mostrarFormulario ? 'visao-geral' : tab;
+  const abaAtiva: TabId =
+    (tab === 'formulario' && !mostrarFormulario) || (tab === 'arquivos' && !can('files.view')) ? 'visao-geral' : tab;
 
   // A aba fica no endereco (`?aba=`): recarregar ou mandar o link abre na
   // mesma aba. Troca a entrada atual do historico, sem criar um "voltar"
@@ -259,6 +262,9 @@ export function ClientDetailView({
           </span>
         ) : undefined,
     },
+    ...(can('files.view')
+      ? [{ id: 'arquivos', label: 'Repositório de Arquivos', icon: <FolderOpen className="size-4" /> }]
+      : []),
     ...(mostrarFormulario
       ? [{ id: 'formulario', label: 'Formulários', icon: <FileText className="size-4" /> }]
       : []),
@@ -644,6 +650,14 @@ export function ClientDetailView({
             )}
           </ComNavegador>
         </TabPanel>
+
+        {/* Montado depois da primeira visita: trocar de aba nao derruba um
+            envio que ainda esta correndo. */}
+        {can('files.view') ? (
+          <TabPanel id="arquivos" active={abaAtiva} keepMounted>
+            <RepositorioPanel clientId={client.id} clientName={client.name} podeGerenciar={can('files.manage')} />
+          </TabPanel>
+        ) : null}
 
         {mostrarFormulario ? (
           <TabPanel id="formulario" active={abaAtiva}>

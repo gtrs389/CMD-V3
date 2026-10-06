@@ -272,7 +272,7 @@ export function MobilizationMap({
       setFocusPlace(null);
       setOpenPlace(null);
       setRaioX(null);
-      setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
+      setQuery((atual) => ({ ...atual, state: null, city: null, cities: [], search: '' }));
     });
     return () => cancelAnimationFrame(quadro);
   }, [pedidoDeVotacao]);
@@ -288,7 +288,7 @@ export function MobilizationMap({
     setRaioX(null);
     // Cidade, estado e busca da campanha nao valem para a votacao (os nomes
     // vem escritos de outro jeito na planilha do TSE): o recorte recomeca.
-    if (entrando || escolhidos.length === 0) setQuery((atual) => ({ ...atual, state: null, city: null, search: '' }));
+    if (entrando || escolhidos.length === 0) setQuery((atual) => ({ ...atual, state: null, city: null, cities: [], search: '' }));
   }
 
   /**
@@ -338,7 +338,18 @@ export function MobilizationMap({
     () => (candidato ? { ...query, kind: 'POLLING_PLACE', leader: null } : query),
     [candidato, query],
   );
-  const options = useMemo(() => mapOptions(fonte, query.state), [fonte, query.state]);
+  /**
+   * Na votacao, os municipios saem de TODAS as escolas do candidato — as com
+   * ponto no mapa e as sem —, para nenhum municipio com voto ficar de fora.
+   */
+  const options = useMemo(
+    () =>
+      mapOptions(
+        candidato ? { pins: [], pollingPlaces: [...(pinosDaVotacao?.noMapa ?? []), ...(pinosDaVotacao?.foraDoMapa ?? [])] } : fonte,
+        query.state,
+      ),
+    [candidato, pinosDaVotacao, fonte, query.state],
+  );
   /** O numero de cada escola no pino: com zona escolhida, so as secoes dela. */
   const valorDoLocal = useCallback((place: PollingPlacePin) => placeVotes(place, recorte.zone), [recorte.zone]);
   const selection = useMemo(() => applyMapQuery(fonte, recorte), [fonte, recorte]);
@@ -880,7 +891,7 @@ export function MobilizationMap({
 
           {barraDaVotacao}
 
-          <MapFiltersBar query={query} onChange={setQuery} options={options} dense />
+          <MapFiltersBar query={query} onChange={setQuery} options={options} dense municipiosMultiplos={candidato !== null} />
 
           {faixaDoLider}
 
@@ -1001,7 +1012,7 @@ export function MobilizationMap({
 
               <div className="min-h-0 space-y-3 overflow-y-auto p-3">
                 {barraDaVotacao}
-                <MapFiltersBar query={query} onChange={setQuery} options={options} />
+                <MapFiltersBar query={query} onChange={setQuery} options={options} municipiosMultiplos={candidato !== null} />
                 {faixaDoLider}
 
                 {podeLocalizar && pendentes > 0 ? (
@@ -1084,6 +1095,7 @@ export function MobilizationMap({
           )}
           lideres={lideresDoRaioX?.lideres}
           diretos={lideresDoRaioX?.diretos}
+          time={clientName}
           onClose={() => setRaioX(null)}
           onVerPessoas={
             escolaDoRaioX.pinosDaCampanha.length
