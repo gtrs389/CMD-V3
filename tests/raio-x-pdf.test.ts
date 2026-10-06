@@ -38,7 +38,7 @@ const lideres: LiderNoRaioX[] = [
 describe('PDF do Raio-X da escola', () => {
   it('gera o PDF com varios candidatos', async () => {
     const buffer = await renderToBuffer(
-      documento({ escola, candidatos, lideres, diretos: 3, time: 'Time Bezerra', geradoEm: '2026-10-05T12:00:00Z' }),
+      documento({ escola, candidatos, lideres, geradoEm: '2026-10-05T12:00:00Z' }),
     );
     expect(buffer.subarray(0, 4).toString()).toBe('%PDF');
     expect(buffer.length).toBeGreaterThan(2000);
@@ -50,7 +50,6 @@ describe('PDF do Raio-X da escola', () => {
         escola: { ...escola, apurado: [83], secoes: escola.secoes.map((x) => ({ ...x, apurado: [x.apurado[0]] })) },
         candidatos: [candidatos[0]],
         lideres: [],
-        diretos: 0,
         geradoEm: '2026-10-05T12:00:00Z',
       }),
     );

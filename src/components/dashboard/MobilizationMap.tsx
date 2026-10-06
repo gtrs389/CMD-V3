@@ -1095,7 +1095,6 @@ export function MobilizationMap({
           )}
           lideres={lideresDoRaioX?.lideres}
           diretos={lideresDoRaioX?.diretos}
-          time={clientName}
           onClose={() => setRaioX(null)}
           onVerPessoas={
             escolaDoRaioX.pinosDaCampanha.length
