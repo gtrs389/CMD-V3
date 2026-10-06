@@ -529,7 +529,6 @@ export function RaioXDaEscola({
   onClose,
   onVerPessoas,
   pdf,
-  time,
 }: {
   /** A escola com o apurado de cada candidato (um so: `comoComparativo`). */
   escola: EscolaNoComparativo;
@@ -544,15 +543,13 @@ export function RaioXDaEscola({
   onVerPessoas?: () => void;
   /** O botao do relatorio do time (um candidato ou todos juntos). */
   pdf?: React.ReactNode;
-  /** Nome do time, no cabecalho do PDF da escola. */
-  time?: string;
 }) {
   const [foco, setFoco] = useState<string | null>(null);
   const escolhido = lideres.find((l) => l.id === foco) ?? null;
   const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
   const varios = candidatos.length > 1;
   const um = candidatos[0];
-  const baixar = () => baixarPdfDoRaioX({ escola, candidatos, lideres, diretos, time });
+  const baixar = () => baixarPdfDoRaioX({ escola, candidatos, lideres });
 
   return (
     <Modal

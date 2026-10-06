@@ -301,14 +301,10 @@ export async function baixarPdfDoRaioX({
   escola,
   candidatos,
   lideres,
-  diretos,
-  time,
 }: {
   escola: EscolaNoComparativo;
   candidatos: { nome: string; rotulo: string; cor: string; foto?: string }[];
   lideres: LiderNoRaioX[];
-  diretos: number;
-  time?: string;
 }): Promise<void> {
   const [{ gerarPdfDoRaioX }, fotos] = await Promise.all([
     import('@/components/neo/RaioXPdf'),
@@ -318,8 +314,6 @@ export async function baixarPdfDoRaioX({
     escola,
     candidatos: candidatos.map((c, i) => ({ nome: c.nome, rotulo: c.rotulo, cor: c.cor, foto: fotos[i] })),
     lideres,
-    diretos,
-    time,
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`raio-x_${slug(escola.titulo)}_${dataDoArquivo()}.pdf`, blob);

@@ -34,9 +34,6 @@ export interface PdfDoRaioXProps {
   escola: EscolaNoComparativo;
   candidatos: CandidatoNoRaioXPdf[];
   lideres: LiderNoRaioX[];
-  diretos: number;
-  /** Nome do time, no cabecalho. */
-  time?: string;
   geradoEm: string;
 }
 
@@ -180,7 +177,12 @@ function Quadro({ escola, candidatos }: { escola: EscolaNoComparativo; candidato
   );
 }
 
-function Lideres({ escola, lideres, diretos }: { escola: EscolaNoComparativo; lideres: LiderNoRaioX[]; diretos: number }) {
+/**
+ * Os Lideres da escola, cada um com quantas PESSOAS cadastrou que votam ali.
+ * No PDF nao entra a linha "sem lider registrado": ela fecha a conta na
+ * tela, mas no papel so confunde quem le a lista de Lideres.
+ */
+function Lideres({ escola, lideres }: { escola: EscolaNoComparativo; lideres: LiderNoRaioX[] }) {
   const maior = Math.max(1, ...lideres.map((l) => l.cadastrados));
   return (
     <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 7, marginTop: 12 }}>
@@ -197,7 +199,7 @@ function Lideres({ escola, lideres, diretos }: { escola: EscolaNoComparativo; li
           <View
             key={l.id}
             wrap={false}
-            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5.5, borderBottomWidth: i === lideres.length - 1 && diretos <= 0 ? 0 : 0.5, borderBottomColor: C.line }}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5.5, borderBottomWidth: i === lideres.length - 1 ? 0 : 0.5, borderBottomColor: C.line }}
           >
             <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.navy, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
               <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: '#f2c14e' }}>{s(initials(l.nome))}</Text>
@@ -208,20 +210,16 @@ function Lideres({ escola, lideres, diretos }: { escola: EscolaNoComparativo; li
                 <Barra valor={l.cadastrados} maior={maior} cor={NAVY_BARRA} altura={4} />
               </View>
             </View>
-            <View style={{ width: 62, alignItems: 'flex-end' }}>
+            <View style={{ width: 150, alignItems: 'flex-end' }}>
               <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.cadastrados)}</Text>
-              <Text style={{ fontSize: 6.8, color: C.muted }}>{s(`${parte}% da escola`)}</Text>
+              <Text style={{ fontSize: 7.2, color: C.ink2, marginTop: 1 }}>
+                {s(l.cadastrados === 1 ? 'pessoa cadastrada nesta escola' : 'pessoas cadastradas nesta escola')}
+              </Text>
+              <Text style={{ fontSize: 6.6, color: C.faint, marginTop: 1 }}>{s(`${parte}% da escola`)}</Text>
             </View>
           </View>
         );
       })}
-      {diretos > 0 ? (
-        <View wrap={false} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5.5 }}>
-          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 0.8, borderColor: C.faint, borderStyle: 'dashed', marginRight: 8 }} />
-          <Text style={{ flex: 1, fontSize: 8, color: C.muted }}>{s('Líderes e cadastros sem líder registrado')}</Text>
-          <Text style={{ width: 62, textAlign: 'right', fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.muted }}>{num(diretos)}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -294,7 +292,7 @@ function Secoes({ escola, candidatos }: { escola: EscolaNoComparativo; candidato
   );
 }
 
-export function PdfDoRaioX({ escola, candidatos, lideres, diretos, time, geradoEm }: PdfDoRaioXProps) {
+export function PdfDoRaioX({ escola, candidatos, lideres, geradoEm }: PdfDoRaioXProps) {
   const quando = new Date(geradoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const varios = candidatos.length > 1;
   const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
@@ -303,7 +301,7 @@ export function PdfDoRaioX({ escola, candidatos, lideres, diretos, time, geradoE
   return (
     <Document title={s(`Raio-X · ${escola.titulo}`)} author={s(appConfig.name)} language="pt-BR">
       <Page size="A4" style={st.page}>
-        <Cabecalho esquerda={`Raio-X da escola${time ? ` · ${time}` : ''}`} direita={appConfig.shortName} />
+        <Cabecalho esquerda="Raio-X da escola" direita={appConfig.shortName} />
         <Rodape texto={`Estimativa: cadastros do time. Apurado: TSE, seção por seção. Gerado em ${quando}.`} />
 
         <View style={{ alignSelf: 'flex-start', backgroundColor: C.navy, borderRadius: 9, paddingVertical: 3.5, paddingHorizontal: 9 }}>
@@ -318,7 +316,7 @@ export function PdfDoRaioX({ escola, candidatos, lideres, diretos, time, geradoE
           <Text hyphenationCallback={semHifen} style={{ fontSize: 8.8, color: C.ink, lineHeight: 1.45 }}>{s(frase(escola, candidatos))}</Text>
         </View>
 
-        <Lideres escola={escola} lideres={lideres} diretos={diretos} />
+        <Lideres escola={escola} lideres={lideres} />
         <Secoes escola={escola} candidatos={candidatos} />
       </Page>
     </Document>
