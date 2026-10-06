@@ -1,6 +1,7 @@
 import { matchesSearch, normalizeSearch } from '@/lib/utils/text';
 import {
   filterPins,
+  sectionKey,
   sectionLabel,
   type MapFilter,
   type MapOverviewPayload,
@@ -38,6 +39,12 @@ export interface MapQuery {
   cities: string[];
   /** Zona eleitoral. Recorta tambem a contagem de votos do local. */
   zone: string | null;
+  /**
+   * Uma secao eleitoral, pela chave `zona/secao` (`sectionKey`): a mesma
+   * secao existe em varias zonas, entao a zona vai junto. O local passa a
+   * contar so essa secao, e some do mapa onde ela nao existe.
+   */
+  section: string | null;
   /** Esconde local de votacao abaixo deste tamanho. */
   minVotes: number;
   /**
@@ -55,6 +62,7 @@ export const DEFAULT_MAP_QUERY: MapQuery = {
   city: null,
   cities: [],
   zone: null,
+  section: null,
   minVotes: 0,
   leader: null,
 };
@@ -126,8 +134,48 @@ function emAlgumMunicipio(city: string | null, cities: readonly string[] | undef
   return cities.some((c) => normalizeSearch(c) === alvo);
 }
 
+/**
+ * A escola vista por UMA secao: total, genero (na mesma proporcao) e
+ * Lideres so com quem vota nela. Nulo quando a secao nao e desta escola.
+ *
+ * Como o recorte do Lider, troca o pino em vez de cada tela saber do filtro.
+ */
+export function placeOfSection(place: PollingPlacePin, chave: string): PollingPlacePin | null {
+  const secoes = place.sections.filter((row) => sectionKey(row) === chave);
+  const total = secoes.reduce((soma, row) => soma + row.total, 0);
+  if (secoes.length === 0 || total <= 0) return null;
+  const proporcao = place.total > 0 ? total / place.total : 0;
+  const leaders = place.leaders
+    ?.map((l) => {
+      const dele = l.sections.filter((row) => sectionKey(row) === chave);
+      const deleTotal = dele.reduce((soma, row) => soma + row.total, 0);
+      const parte = l.total > 0 ? deleTotal / l.total : 0;
+      return {
+        ...l,
+        total: deleTotal,
+        men: Math.round(l.men * parte),
+        women: Math.round(l.women * parte),
+        others: Math.max(0, deleTotal - Math.round(l.men * parte) - Math.round(l.women * parte)),
+        sections: dele,
+      };
+    })
+    .filter((l) => l.total > 0);
+  const men = Math.round(place.men * proporcao);
+  const women = Math.round(place.women * proporcao);
+  return {
+    ...place,
+    total,
+    men,
+    women,
+    others: Math.max(0, total - men - women),
+    sections: secoes,
+    ...(leaders ? { leaders } : {}),
+  };
+}
+
 function matchesPin(pin: MapPin, query: MapQuery): boolean {
   if (query.leader && pin.leaderId !== query.leader) return false;
+  if (query.section && sectionKey({ zone: pin.zone, section: pin.section }) !== query.section) return false;
   if (query.state && normalizeSearch(pin.state) !== normalizeSearch(query.state)) return false;
   if (query.city && normalizeSearch(pin.city) !== normalizeSearch(query.city)) return false;
   if (!emAlgumMunicipio(pin.city, query.cities)) return false;
@@ -190,6 +238,7 @@ export function applyMapQuery(
       ? []
       : (payload?.pollingPlaces ?? [])
           .map((place) => (query.leader ? placeOfLeader(place, query.leader) : place))
+          .map((place) => (place && query.section ? placeOfSection(place, query.section) : place))
           .filter((place): place is PollingPlacePin => place !== null && matchesPlace(place, query));
 
   return {
@@ -209,6 +258,11 @@ export interface MapOptions {
   /** Somente as cidades do estado escolhido: opcao morta confunde. */
   cities: string[];
   zones: string[];
+  /**
+   * As secoes (chave `zona/secao`) com gente ou voto. Com zona escolhida, so
+   * as dela; sem zona, todas, com a zona no rotulo.
+   */
+  sections: { value: string; label: string; zone: string | null }[];
   /** Os Lideres com gente cadastrada que vota em alguma escola do mapa. */
   leaders: LeaderOption[];
 }
@@ -235,6 +289,7 @@ function sortText(values: Iterable<string>): string[] {
 export function mapOptions(
   payload: Pick<MapOverviewPayload, 'pins' | 'pollingPlaces'> | null | undefined,
   state: string | null,
+  zone: string | null = null,
 ): MapOptions {
   const pins = payload?.pins ?? [];
   const places = payload?.pollingPlaces ?? [];
@@ -245,11 +300,27 @@ export function mapOptions(
   const states: string[] = [];
   const cities: string[] = [];
   const zones: string[] = [];
+  const secoes = new Map<string, { value: string; label: string; zone: string | null; ordem: [number, number] }>();
+  const naZona = (z: string | null) => !zone || normalizeZone(z) === normalizeZone(zone);
+  const anotarSecao = (row: { zone: string | null; section: string | null }) => {
+    if (!row.section || !naZona(row.zone)) return;
+    const value = sectionKey(row);
+    if (secoes.has(value)) return;
+    const z = row.zone ? normalizeZone(row.zone) : null;
+    const sec = row.section.trim().replace(/^0+(?=\d)/, '');
+    secoes.set(value, {
+      value,
+      label: zone || !z ? `Seção ${sec}` : `Zona ${z} · Seção ${sec}`,
+      zone: z,
+      ordem: [Number(z) || 0, Number(sec) || 0],
+    });
+  };
 
   for (const pin of pins) {
     if (pin.state) states.push(pin.state);
     if (pin.city && noEstado(pin.state)) cities.push(pin.city);
     if (pin.zone && noEstado(pin.state)) zones.push(normalizeZone(pin.zone));
+    if (noEstado(pin.state)) anotarSecao({ zone: pin.zone, section: pin.section });
   }
 
   for (const place of places) {
@@ -258,6 +329,7 @@ export function mapOptions(
     if (noEstado(place.state)) {
       for (const row of place.sections) {
         if (row.zone) zones.push(normalizeZone(row.zone));
+        anotarSecao(row);
       }
     }
   }
@@ -276,7 +348,11 @@ export function mapOptions(
   }
   const leaders = [...lideres.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
-  return { states: sortText(states), cities: sortText(cities), zones: sortText(zones), leaders };
+  const sections = [...secoes.values()]
+    .sort((a, b) => a.ordem[0] - b.ordem[0] || a.ordem[1] - b.ordem[1])
+    .map(({ value, label, zone: z }) => ({ value, label, zone: z }));
+
+  return { states: sortText(states), cities: sortText(cities), zones: sortText(zones), sections, leaders };
 }
 
 /* -------------------------------------------------------------------------
@@ -340,6 +416,7 @@ export function activeFilterCount(query: MapQuery): number {
   if (query.city) total += 1;
   if (query.cities?.length) total += 1;
   if (query.zone) total += 1;
+  if (query.section) total += 1;
   if (query.minVotes > 0) total += 1;
   if (query.leader) total += 1;
   return total;

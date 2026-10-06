@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   FileSpreadsheet,
+  FileText,
   Pencil,
   SearchX,
   Trash2,
@@ -40,6 +41,7 @@ import { useSession } from '@/components/layout/SessionProvider';
 import { MemberFormModal } from './MemberFormModal';
 import { SurveyAnswerModal } from '@/components/survey/SurveyAnswerModal';
 import { SpreadsheetImportModal } from './SpreadsheetImportModal';
+import { PdfDeLideresModal } from './PdfDeLideresModal';
 import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
@@ -194,6 +196,8 @@ function ListaDoTime({
   const [formOpen, setFormOpen] = useState(false);
   /** Cadastro de muita gente de uma vez, por planilha. */
   const [planilhaAberta, setPlanilhaAberta] = useState(false);
+  /** PDF "Líderes por referência": escolhe as referências e baixa. */
+  const [pdfDeLideres, setPdfDeLideres] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
 
   const ordered = useMemo(() => [...members].sort(byNewest), [members]);
@@ -450,6 +454,24 @@ function ListaDoTime({
     </Button>
   ) : null;
 
+  /**
+   * PDF dos Lideres por referencia: o time inteiro (nao o recorte da busca),
+   * com as referencias escolhidas na janela. Mesma regra da planilha: so
+   * quem pode exportar.
+   */
+  const botaoPdfDeLideres =
+    podeExportar && contagens.lideres > 0 ? (
+      <Button
+        variant="secondary"
+        onClick={() => setPdfDeLideres(true)}
+        title="Baixar o PDF dos líderes por referência"
+        aria-label="Baixar o PDF dos líderes por referência"
+      >
+        <FileText aria-hidden="true" className="size-4" />
+        PDF dos líderes
+      </Button>
+    ) : null;
+
   const importar = podeCriar ? (
     <SpreadsheetImportModal
       open={planilhaAberta}
@@ -524,6 +546,7 @@ function ListaDoTime({
             className="lg:flex-1"
           />
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            {botaoPdfDeLideres}
             {botaoExportar}
             {podeCriar ? (
               // O rotulo curto cabe na barra; o completo fica no titulo e na
@@ -936,6 +959,7 @@ function ListaDoTime({
       )}
 
       {importar}
+      {botaoPdfDeLideres ? <PdfDeLideresModal open={pdfDeLideres} onClose={() => setPdfDeLideres(false)} members={ordered} /> : null}
 
       {/* Adicionar abre o formulario que a pagina escolheu. EDITAR abre
           pelo navegador, e e sempre a ficha do integrante, porque e uma

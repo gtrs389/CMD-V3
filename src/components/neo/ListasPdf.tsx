@@ -387,7 +387,7 @@ export interface SecaoParaPdf {
   titulo: string;
   explicacao: string;
   gravidade: 'alta' | 'media' | 'baixa';
-  pessoas: { nome: string; telefone: string; detalhe: string; cadastradoPor: string }[];
+  pessoas: { nome: string; telefone: string; detalhe: string; cadastradoPor: string; cadastradoEm?: string }[];
 }
 
 export interface RelatorioDeInconsistenciasProps {
@@ -516,9 +516,10 @@ export function RelatorioDeInconsistencias(props: RelatorioDeInconsistenciasProp
                     chave={(p, i) => `${sec.titulo}-${grupo.responsavel}-${i}`}
                     colunas={[
                       { titulo: '#', largura: '6%', celula: (_, i) => String(i + 1) },
-                      { titulo: 'Pessoa', largura: '38%', celula: (p) => p.nome },
-                      { titulo: 'Telefone', largura: '22%', celula: (p) => telefone(p.telefone) },
-                      { titulo: 'Problema', largura: '34%', celula: (p) => <Text style={{ color: tom.cor }}>{s(p.detalhe)}</Text> },
+                      { titulo: 'Pessoa', largura: '32%', celula: (p) => p.nome },
+                      { titulo: 'Telefone', largura: '18%', celula: (p) => telefone(p.telefone) },
+                      { titulo: 'Problema', largura: '30%', celula: (p) => <Text style={{ color: tom.cor }}>{s(p.detalhe)}</Text> },
+                      { titulo: 'Cadastro', largura: '14%', alinhar: 'right', celula: (p) => data(p.cadastradoEm) },
                     ]}
                   />
                 </BlocoDoGrupo>
