@@ -81,7 +81,8 @@ export function createLocalMemberRepository(
         access: normalizePhone(input.phone).length >= 10 ? 'PENDING' : 'NO_PHONE',
         // A referencia local nao cria acesso: o usuario vive so no servidor.
         userId: null,
-        createdAt: timestamp,
+        // "DATA DE CADASTRO" da planilha, quando veio.
+        createdAt: input.registeredAt || timestamp,
         updatedAt: timestamp,
       };
 

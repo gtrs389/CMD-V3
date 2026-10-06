@@ -308,6 +308,8 @@ export const memberCreateSchema = z.object({
   photoVerified: z.boolean().nullable().default(null),
   /** "REFERÊNCIA" da planilha (migration 051). Vazio: a pessoa nao tem. */
   reference: z.string().trim().max(200).nullable().default(null),
+  /** "DATA DE CADASTRO" da planilha: a data que a ficha ganha. Nulo: agora. */
+  registeredAt: z.iso.datetime({ offset: true }).nullable().default(null),
 });
 
 export const memberUpdateSchema = z
@@ -536,6 +538,8 @@ export const surveyMemberSchema = z.object({
   photoVerified: z.boolean().nullable().default(null),
   /** "REFERÊNCIA" da planilha (migration 051). Vazio: a pessoa nao tem. */
   reference: z.string().trim().max(200).nullable().default(null),
+  /** "DATA DE CADASTRO" da planilha: a data que a ficha ganha. Nulo: agora. */
+  registeredAt: z.iso.datetime({ offset: true }).nullable().default(null),
   photo: photoValue.default(null),
   consentAt: z.iso.datetime().nullable().default(null),
   answers: z

@@ -839,7 +839,11 @@ function CartaoRepetido({
                   cadastrou, o telefone e onde vota. */}
               <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-ink-500 sm:grid-cols-2 xl:grid-cols-4">
                 <Dado rotulo="Cadastrado em">
-                  <span className="font-semibold text-ink-900 tabular-nums">{formatDateTime(member.createdAt)}</span>
+                  {member.semDataDeCadastro ? (
+                    <span className="text-ink-400 italic">sem data na planilha</span>
+                  ) : (
+                    <span className="font-semibold text-ink-900 tabular-nums">{formatDateTime(member.createdAt)}</span>
+                  )}
                 </Dado>
                 <Dado rotulo="Por">{recruiterText(member.recruitedBy)}</Dado>
                 <Dado rotulo="Telefone">{member.phone ? formatPhone(member.phone) : '—'}</Dado>
@@ -998,7 +1002,7 @@ function LinhaDaPessoa({
           {children}
           <span className="text-ink-400"> · {recruiterText(member.recruitedBy)}</span>
         </span>
-        <DataDoCadastro iso={member.createdAt} className="mt-0.5" />
+        <DataDoCadastro member={member} className="mt-0.5" />
       </span>
       <ArrowRight
         aria-hidden="true"
@@ -1017,20 +1021,32 @@ function PessoaChip({ member, onOpenMember }: { member: Member; onOpenMember: (i
     >
       {member.name}
       <span className="text-ink-400">· {recruiterText(member.recruitedBy).split(' · ')[0]}</span>
-      <span className="inline-flex items-center gap-1 text-ink-400 tabular-nums" title={`Cadastrado em ${formatDateTime(member.createdAt)}`}>
-        · <CalendarDays aria-hidden="true" className="size-3" />
-        {formatDate(member.createdAt)}
-      </span>
+      {member.semDataDeCadastro ? null : (
+        <span className="inline-flex items-center gap-1 text-ink-400 tabular-nums" title={`Cadastrado em ${formatDateTime(member.createdAt)}`}>
+          · <CalendarDays aria-hidden="true" className="size-3" />
+          {formatDate(member.createdAt)}
+        </span>
+      )}
     </button>
   );
 }
 
-/** "Cadastrado em 05/10/2026, 14:32": a data de entrada da pessoa no time. */
-function DataDoCadastro({ iso, className }: { iso: string | null | undefined; className?: string }) {
+/**
+ * "Cadastrado em 05/10/2026, 14:32": a data de entrada da pessoa no time.
+ * Da planilha sem "DATA DE CADASTRO" nao ha data — e diz isso, em vez de
+ * mostrar a hora em que a planilha foi lida.
+ */
+function DataDoCadastro({ member, className }: { member: Member; className?: string }) {
   return (
     <span className={cn('flex items-center gap-1 text-[0.6875rem] text-ink-400', className)}>
       <CalendarDays aria-hidden="true" className="size-3 shrink-0" />
-      Cadastrado em <span className="font-medium text-ink-500 tabular-nums">{formatDateTime(iso)}</span>
+      {member.semDataDeCadastro ? (
+        <span className="italic">Sem data de cadastro na planilha</span>
+      ) : (
+        <>
+          Cadastrado em <span className="font-medium text-ink-500 tabular-nums">{formatDateTime(member.createdAt)}</span>
+        </>
+      )}
     </span>
   );
 }

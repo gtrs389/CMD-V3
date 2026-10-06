@@ -370,6 +370,7 @@ function ListaDoTime({
     street: string;
     photoVerified: string;
     reference: string;
+    registeredAt?: string;
   }) => {
     const ficha = {
       name: pessoa.name.trim(),
@@ -386,6 +387,8 @@ function ListaDoTime({
       photoVerified: verificadoPorFotoParaGravar(pessoa.photoVerified),
       // "REFERÊNCIA": vai como veio; em branco, a pessoa simplesmente nao tem.
       reference: pessoa.reference.trim() || null,
+      // "DATA DE CADASTRO": a ficha nasce com a data da planilha.
+      registeredAt: pessoa.registeredAt || null,
     };
 
     if (addForm === 'formulario-2') {

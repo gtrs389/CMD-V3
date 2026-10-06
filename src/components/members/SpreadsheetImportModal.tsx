@@ -40,6 +40,15 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
+import { dataDeCadastroDaPlanilha } from '@/lib/domain/data-da-planilha';
+
+/** ISO -> "2026-10-01" (dia de Brasilia), para o campo de data. */
+function diaDoCampo(iso: string): string {
+  if (!iso) return '';
+  const quando = new Date(iso);
+  if (Number.isNaN(quando.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Maceio', year: 'numeric', month: '2-digit', day: '2-digit' }).format(quando);
+}
 
 /** Uma pessoa conferida: o que veio da planilha mais o endereco escolhido. */
 export type PessoaDaPlanilha = LinhaImportada & EnderecoDaLinha;
@@ -628,6 +637,31 @@ export function SpreadsheetImportModal({
                           disabled={bloqueado}
                           placeholder="Sem referência"
                           onChange={(event) => editar(linha.id, 'reference', event.target.value)}
+                        />
+                      </Field>
+
+                      {/* Coluna "DATA DE CADASTRO": a ficha nasce com ela, e
+                          nao com a data de hoje. Da para corrigir aqui; o
+                          que nao for data avisa, em vez de sumir calado. */}
+                      <Field
+                        id={campo('data')}
+                        label="Data de cadastro"
+                        help={!linha.registeredAt && !linha.registeredAtTexto ? 'Não veio na planilha: entra com a data de hoje.' : undefined}
+                        warning={
+                          !linha.registeredAt && linha.registeredAtTexto
+                            ? `"${linha.registeredAtTexto}" não é uma data: entra com a data de hoje.`
+                            : null
+                        }
+                      >
+                        <Input
+                          id={campo('data')}
+                          type="date"
+                          value={diaDoCampo(linha.registeredAt ?? '')}
+                          max={diaDoCampo(new Date().toISOString())}
+                          disabled={bloqueado}
+                          onChange={(event) =>
+                            editar(linha.id, 'registeredAt', dataDeCadastroDaPlanilha(event.target.value))
+                          }
                         />
                       </Field>
 

@@ -75,7 +75,8 @@ export async function montarPdfDeInconsistencias({
     telefone: member.phone ?? '',
     detalhe,
     cadastradoPor: recruiterText(member.recruitedBy),
-    cadastradoEm: member.createdAt,
+    // Da planilha sem "DATA DE CADASTRO": sem data (sai "—").
+    cadastradoEm: member.semDataDeCadastro ? undefined : member.createdAt,
   });
   const secoes: SecaoParaPdf[] = [
     ...(recorte.incompletos.length

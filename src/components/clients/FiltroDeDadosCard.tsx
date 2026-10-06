@@ -91,7 +91,8 @@ export function FiltroDeDadosCard({
           telefone: member.phone ?? '',
           bairro: member.district ?? '',
           cadastradoPor: recruiterText(member.recruitedBy),
-          cadastradoEm: member.createdAt,
+          // Da planilha sem "DATA DE CADASTRO": sem data (sai "—").
+          cadastradoEm: member.semDataDeCadastro ? '' : member.createdAt,
           problema: nomeDoProblema(filtro.id, motivos[0] ?? ''),
         }));
         return {
@@ -219,7 +220,8 @@ export function FiltroDeDadosCard({
                       </span>
                       <span className="text-xs text-danger-600">{motivos.join(', ')}</span>
                       <span className="wrap-break-word text-xs text-ink-500">
-                        por {recruiterText(member.recruitedBy)} · {formatDate(member.createdAt)}
+                        por {recruiterText(member.recruitedBy)}
+                        {member.semDataDeCadastro ? ' · sem data na planilha' : ` · ${formatDate(member.createdAt)}`}
                       </span>
                       <ArrowRight
                         aria-hidden="true"

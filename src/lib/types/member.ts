@@ -145,4 +145,9 @@ export interface MemberInput {
   photoVerified?: boolean | null;
   /** "REFERÊNCIA" da planilha (migration 051). Vazio ou nulo: nao tem. */
   reference?: string | null;
+  /**
+   * "DATA DE CADASTRO" da planilha (ISO): a ficha nasce com essa data, e nao
+   * com a do dia da importacao. Nulo ou ausente: agora.
+   */
+  registeredAt?: string | null;
 }

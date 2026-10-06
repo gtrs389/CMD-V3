@@ -689,6 +689,19 @@ export async function transferMember(
   return atualizado;
 }
 
+/**
+ * A "DATA DE CADASTRO" que pode valer: uma data de verdade, de 2000 para
+ * ca, e nunca no futuro (uma data adiantada poria a pessoa em "hoje" por
+ * dias). Fora disso, vale o agora — como sempre foi.
+ */
+export function dataDeCadastroValida(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const quando = new Date(iso);
+  const tempo = quando.getTime();
+  if (Number.isNaN(tempo) || quando.getUTCFullYear() < 2000 || tempo > Date.now() + 5 * 60_000) return null;
+  return quando.toISOString();
+}
+
 export async function createMember(
   input: MemberInput,
   recruitedBy?: RecruitedBy | null,
@@ -721,6 +734,8 @@ export async function createMember(
     ...(referencia ? { reference: referencia } : {}),
   };
 
+  const dataDaPlanilha = dataDeCadastroValida(input.registeredAt);
+
   let row: MemberRow;
   try {
     row = await insertOne<MemberRow>(TABLES.members, {
@@ -735,6 +750,9 @@ export async function createMember(
       ...consent,
       ...recruiterColumns(recruitedBy),
       ...verificadoPorFoto,
+      // "DATA DE CADASTRO" da planilha: a ficha nasce com a data de quando a
+      // pessoa foi cadastrada de verdade, e nao com a do dia da importacao.
+      ...(dataDaPlanilha ? { created_at: dataDaPlanilha } : {}),
       source: input.source,
     });
   } catch (error) {

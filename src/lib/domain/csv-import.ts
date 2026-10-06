@@ -1,6 +1,7 @@
 import { normalizeSection, normalizeVoterId, normalizeZone } from '@/lib/utils/documents';
 import { normalizePhone } from '@/lib/utils/phone';
 import { dadosParaConferir } from './conferencia';
+import { CABECALHOS_DA_DATA, dataDeCadastroDaPlanilha } from './data-da-planilha';
 
 /**
  * Cadastro de muita gente de uma vez, por planilha.
@@ -56,6 +57,13 @@ export interface LinhaImportada {
    * nao e falta: nenhuma etiqueta de incompleto nasce por causa dela.
    */
   reference: string;
+  /**
+   * Coluna "DATA DE CADASTRO", em ISO: e a data que a ficha ganha. Vazio
+   * quando a planilha nao trouxe (a ficha fica com a data do cadastro aqui).
+   */
+  registeredAt?: string;
+  /** O que estava escrito na coluna, para avisar quando nao e uma data. */
+  registeredAtTexto?: string;
 }
 
 /** Tamanho maximo da REFERÊNCIA, igual ao `check` da migration 051. */
@@ -116,7 +124,8 @@ const COLUNAS: Record<
   | 'street'
   | 'address'
   | 'photoVerified'
-  | 'reference',
+  | 'reference'
+  | 'registeredAt',
   string[]
 > = {
   name: ['nome completo', 'nome', 'nome do integrante', 'integrante'],
@@ -129,6 +138,7 @@ const COLUNAS: Record<
   address: ['endereco', 'endereco completo'],
   photoVerified: ['verificado por foto', 'verificado foto', 'verificacao por foto'],
   reference: ['referencia', 'ponto de referencia', 'ref'],
+  registeredAt: [...CABECALHOS_DA_DATA],
 };
 
 /**
@@ -384,6 +394,8 @@ export function lerPlanilha(conteudo: string): LeituraDaPlanilha {
           }),
       photoVerified: lerVerificadoPorFoto(valor(bruta, 'photoVerified')),
       reference: limpo(valor(bruta, 'reference'), REFERENCIA_MAX),
+      registeredAt: dataDeCadastroDaPlanilha(valor(bruta, 'registeredAt')),
+      registeredAtTexto: limpo(valor(bruta, 'registeredAt'), 60),
     });
   }
 
