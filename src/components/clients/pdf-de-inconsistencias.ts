@@ -75,6 +75,7 @@ export async function montarPdfDeInconsistencias({
     telefone: member.phone ?? '',
     detalhe,
     cadastradoPor: recruiterText(member.recruitedBy),
+    cadastradoEm: member.createdAt,
   });
   const secoes: SecaoParaPdf[] = [
     ...(recorte.incompletos.length
