@@ -176,7 +176,12 @@ export function MapFiltersBar({ query, onChange, options, dense = false, municip
         <Select
           aria-label="Zona eleitoral"
           value={query.zone ?? ''}
-          onChange={(event) => onChange({ ...query, zone: event.target.value || null })}
+          // Trocar a zona invalida a secao: ela e de uma zona so.
+          onChange={(event) => {
+            const zone = event.target.value || null;
+            const secaoNaZona = !zone || !query.section || query.section.startsWith(`${zone.replace(/^0+(?=\d)/, '')}/`);
+            onChange({ ...query, zone, section: secaoNaZona ? query.section : null });
+          }}
         >
           <option value="">Todas as zonas</option>
           {options.zones.map((zone) => (
@@ -185,6 +190,19 @@ export function MapFiltersBar({ query, onChange, options, dense = false, municip
             </option>
           ))}
         </Select>
+
+        <Dropdown
+          aria-label="Seção eleitoral"
+          value={query.section ?? ''}
+          highlighted={Boolean(query.section)}
+          searchPlaceholder="Buscar seção"
+          searchThreshold={10}
+          options={[
+            { value: '', label: query.zone ? `Todas as seções da zona ${query.zone}` : 'Todas as seções' },
+            ...options.sections.map((secao) => ({ value: secao.value, label: secao.label })),
+          ]}
+          onChange={(section) => onChange({ ...query, section: section || null })}
+        />
 
         <Select
           aria-label="Tamanho mínimo do local de votação"

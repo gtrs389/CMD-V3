@@ -9,12 +9,23 @@ import {
   activeFilterCount,
   applyMapQuery,
   mapOptions,
+  placeOfLeader,
+  placeOfSection,
   placeVotes,
   type MapQuery,
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
 import { fotoDoCandidatoUrl, rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
-import { compararCandidatos, comoComparativo, confrontar, lideresNoRaioX, pinosDoConfronto, recortar } from '@/lib/domain/confronto';
+import {
+  compararCandidatos,
+  comoComparativo,
+  confrontar,
+  conversao,
+  lideresNoRaioX,
+  pinosDoConfronto,
+  recortar,
+  type EscolaNoComparativo,
+} from '@/lib/domain/confronto';
 import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
 import { MapFiltersBar } from './MapFiltersBar';
@@ -34,6 +45,7 @@ import { AndamentoAoVivo, BotaoDaVotacao } from './votacao/VotacaoTse';
 import { RaioXDaEscola, type CandidatoNoRaioX } from './votacao/RaioXDaEscola';
 import { PlacarDosCandidatos } from './votacao/PlacarDosCandidatos';
 import { CarregandoVotacao } from './votacao/CarregandoVotacao';
+import { EscolaPorEscola } from './votacao/EscolaPorEscola';
 import { MenuDoPdf, type OpcaoDoPdf } from './votacao/MenuDoPdf';
 import { CORES_DOS_CANDIDATOS } from './votacao/cores';
 import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
@@ -296,24 +308,54 @@ export function MobilizationMap({
    * casadas com as da votacao (o que o candidato teve). As escolas do time
    * ficam douradas no mapa; o raio-x abre a escola secao por secao.
    */
+  /**
+   * A estimativa que entra no confronto: a do time inteiro ou, com Lider ou
+   * secao no filtro, so as pessoas DELE (ou so as daquela secao). E assim que
+   * "o que a Jailma prometeu e o que o candidato teve" vira uma conta so.
+   */
+  const lider = query.leader;
+  const secaoEscolhida = query.section;
+  const campanhaDoRecorte = useMemo(
+    () =>
+      (data?.pollingPlaces ?? [])
+        .map((p) => (lider ? placeOfLeader(p, lider) : p))
+        .map((p) => (p && secaoEscolhida ? placeOfSection(p, secaoEscolhida) : p))
+        .filter((p): p is PollingPlacePin => p !== null),
+    [data, lider, secaoEscolhida],
+  );
   const confrontos = useMemo(
     () =>
       votacoes
-        ? votacoes.map((v) => confrontar(data?.pollingPlaces ?? [], [...v.noMapa, ...v.foraDoMapa]))
+        ? votacoes.map((v) => {
+            const tse = [...v.noMapa, ...v.foraDoMapa];
+            return confrontar(
+              campanhaDoRecorte,
+              secaoEscolhida
+                ? tse.map((p) => placeOfSection(p, secaoEscolhida)).filter((p): p is PollingPlacePin => p !== null)
+                : tse,
+            );
+          })
         : null,
-    [votacoes, data],
+    [votacoes, campanhaDoRecorte, secaoEscolhida],
   );
   const confronto = (candidato && confrontos?.[candidatos.findIndex((c) => c.id === candidato.id)]) || null;
-  const pinosDaVotacao = useMemo(() => (confronto ? pinosDoConfronto(confronto) : null), [confronto]);
+  /** Com Lider no filtro, o mapa da votacao mostra so as escolas dele. */
+  const pinosDaVotacao = useMemo(
+    () =>
+      confronto
+        ? pinosDoConfronto(lider ? recortar(confronto, new Set(confronto.doTime.map((e) => e.chave))) : confronto)
+        : null,
+    [confronto, lider],
+  );
   const destaques = useMemo(
     () => new Map((confronto?.doTime ?? []).map((e) => [e.chave, { estimativa: e.estimativa, apurado: e.apurado }])),
     [confronto],
   );
   const escolaDoRaioX = raioX ? (confronto?.escolas.find((e) => e.chave === raioX) ?? null) : null;
-  /** Quem cadastrou a estimativa da escola do raio-x, Lider a Lider (todos, sem o filtro). */
+  /** Quem cadastrou a estimativa da escola do raio-x, Lider a Lider (no recorte de Lider e secao). */
   const lideresDoRaioX = useMemo(
-    () => (escolaDoRaioX ? lideresNoRaioX(escolaDoRaioX, data?.pollingPlaces ?? []) : null),
-    [escolaDoRaioX, data],
+    () => (escolaDoRaioX ? lideresNoRaioX(escolaDoRaioX, campanhaDoRecorte) : null),
+    [escolaDoRaioX, campanhaDoRecorte],
   );
 
   const modoVotacao: ModoVotacao | undefined = candidato
@@ -331,25 +373,30 @@ export function MobilizationMap({
     [candidato, pinosDaVotacao, data],
   );
   /**
-   * Na votacao nao ha pessoa no mapa: so escolas. E nao ha Lider: o voto do
-   * TSE nao tem cadastro por tras.
+   * Na votacao nao ha pessoa no mapa: so escolas. Lider e secao ja entraram
+   * no confronto (a estimativa dele, os votos daquela secao), entao nao se
+   * aplicam de novo sobre os pinos do TSE.
    */
   const recorte = useMemo<MapQuery>(
-    () => (candidato ? { ...query, kind: 'POLLING_PLACE', leader: null } : query),
+    () => (candidato ? { ...query, kind: 'POLLING_PLACE', leader: null, section: null } : query),
     [candidato, query],
   );
   /**
    * Na votacao, os municipios saem de TODAS as escolas do candidato — as com
    * ponto no mapa e as sem —, para nenhum municipio com voto ficar de fora.
    */
-  const options = useMemo(
-    () =>
-      mapOptions(
-        candidato ? { pins: [], pollingPlaces: [...(pinosDaVotacao?.noMapa ?? []), ...(pinosDaVotacao?.foraDoMapa ?? [])] } : fonte,
-        query.state,
-      ),
-    [candidato, pinosDaVotacao, fonte, query.state],
-  );
+  const options = useMemo(() => {
+    if (!candidato) return mapOptions(fonte, query.state, query.zone);
+    // Os pinos do TSE nao tem Lider: a lista de Lideres sai da campanha. E as
+    // secoes saem da votacao inteira, para trocar de secao sem limpar antes.
+    const pollingPlaces = [
+      ...(votacoes ?? []).flatMap((v) => [...v.noMapa, ...v.foraDoMapa]),
+      ...(pinosDaVotacao?.noMapa ?? []),
+      ...(pinosDaVotacao?.foraDoMapa ?? []),
+    ];
+    const daVotacao = mapOptions({ pins: [], pollingPlaces }, query.state, query.zone);
+    return { ...daVotacao, leaders: mapOptions(data, null).leaders };
+  }, [candidato, votacoes, pinosDaVotacao, fonte, data, query.state, query.zone]);
   /** O numero de cada escola no pino: com zona escolhida, so as secoes dela. */
   const valorDoLocal = useCallback((place: PollingPlacePin) => placeVotes(place, recorte.zone), [recorte.zone]);
   const selection = useMemo(() => applyMapQuery(fonte, recorte), [fonte, recorte]);
@@ -388,7 +435,7 @@ export function MobilizationMap({
   const corDo = (i: number) => (candidatos.length > 1 ? CORES_DOS_CANDIDATOS[i] : '#e0a426');
 
   /** O Lider escolhido no filtro, com o que ele cadastrou no mapa inteiro. */
-  const liderEscolhido = recorte.leader ? (options.leaders.find((l) => l.id === recorte.leader) ?? null) : null;
+  const liderEscolhido = query.leader ? (options.leaders.find((l) => l.id === query.leader) ?? null) : null;
   const votosForaDoMapa = foraDoMapa.reduce((soma, place) => soma + placeVotes(place, recorte.zone), 0);
 
   const totals = data?.totals;
@@ -468,6 +515,49 @@ export function MobilizationMap({
     setShowRankingFull(false);
     setFullscreen((atual) => !atual);
   }
+
+  /** A escola do quadro no confronto do candidato do mapa (a chave muda de um candidato para outro). */
+  function escolaNoMapa(e: EscolaNoComparativo) {
+    if (!confronto) return null;
+    return (
+      confronto.escolas.find((x) => x.chave === e.chave) ??
+      confronto.escolas.find((x) => x.pinosDaCampanha.some((p) => e.pinosDaCampanha.includes(p))) ??
+      null
+    );
+  }
+  const lideresDaEscola = useCallback(
+    (e: EscolaNoComparativo) => lideresNoRaioX(e, campanhaDoRecorte).lideres,
+    [campanhaDoRecorte],
+  );
+  const recorteEmTexto =
+    [
+      query.cities.length ? query.cities.join(', ') : query.city,
+      query.zone ? `Zona ${query.zone}` : null,
+      query.section ? (options.sections.find((x) => x.value === query.section)?.label ?? `Seção ${query.section.split('/')[1]}`) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || null;
+
+  const quadroEscolaPorEscola =
+    candidato && votacao && confrontoNoRecorte && !fullscreen ? (
+      <EscolaPorEscola
+        escolas={comparativo ? comparativo.escolas : confrontoNoRecorte.doTime.map(comoComparativo)}
+        candidatos={(comparativo ? candidatos : [candidato]).map((c, i) => ({ nome: c.nome, cor: corDo(i) }))}
+        lideresDe={lideresDaEscola}
+        liderEmFoco={liderEscolhido?.name ?? null}
+        recorte={recorteEmTexto}
+        onAbrir={(e) => {
+          const alvo = escolaNoMapa(e);
+          if (alvo) setRaioX(alvo.chave);
+        }}
+        onFocar={(e) => {
+          const alvo = escolaNoMapa(e);
+          if (!alvo || !alvo.noMapa) return;
+          setFocusPlace({ locationId: alvo.chave, latitude: alvo.latitude, longitude: alvo.longitude, nonce: Date.now() });
+          secao.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+      />
+    ) : null;
 
   const painelRanking = candidato ? (
     <MapRanking
@@ -579,8 +669,11 @@ export function MobilizationMap({
    * so aparece quando outro recorte (cidade, zona...) corta parte da gente
    * dele — senao seria o mesmo numero duas vezes.
    */
-  const maisForte = liderEscolhido
+  const maisForte = liderEscolhido && !candidato
     ? selection.places.reduce<PollingPlacePin | null>((m, p) => (!m || p.total > m.total ? p : m), null)
+    : null;
+  const conversaoDoLider = confrontoNoRecorte
+    ? conversao({ estimativa: confrontoNoRecorte.estimativaTotal, apurado: confrontoNoRecorte.apuradoNasEscolasDoTime })
     : null;
   const faixaDoLider = liderEscolhido ? (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-gold-500/40 bg-gradient-to-r from-gold-50 to-surface px-3 py-2.5">
@@ -605,7 +698,20 @@ export function MobilizationMap({
           <dd className="text-lg leading-none font-bold text-navy-900 tabular-nums">{formatNumber(liderEscolhido.places)}</dd>
           <dt>{liderEscolhido.places === 1 ? 'escola' : 'escolas'}</dt>
         </div>
-        {selection.votes !== liderEscolhido.people ? (
+        {candidato && confrontoNoRecorte ? (
+          <div className="flex items-baseline gap-1">
+            <dd className="text-lg leading-none font-bold tabular-nums" style={{ color: '#b7801a' }}>
+              {formatNumber(confrontoNoRecorte.apuradoNasEscolasDoTime)}
+            </dd>
+            <dt>
+              {confrontoNoRecorte.apuradoNasEscolasDoTime === 1 ? 'voto real' : 'votos reais'} de {candidato.nome} nas escolas
+              {liderEscolhido.people !== confrontoNoRecorte.estimativaTotal
+                ? ` (${formatNumber(confrontoNoRecorte.estimativaTotal)} cadastradas no filtro)`
+                : ''}
+              {conversaoDoLider !== null ? ` · ${Math.round(conversaoDoLider).toLocaleString('pt-BR')}% da expectativa` : ''}
+            </dt>
+          </div>
+        ) : selection.votes !== liderEscolhido.people ? (
           <div className="flex items-baseline gap-1">
             <dd className="text-lg leading-none font-bold text-brand-800 tabular-nums">{formatNumber(selection.votes)}</dd>
             <dt>no filtro</dt>
@@ -680,7 +786,7 @@ export function MobilizationMap({
     const doRecorte =
       c.id === candidato?.id
         ? confrontoNoRecorte
-        : activeFilterCount(recorte) === 0
+        : activeFilterCount(recorte) === 0 && !query.leader
           ? confrontoDele
           : recortar(confrontoDele, new Set(confrontoDele.escolas.filter((e) => e.pinosDaCampanha.some((p) => pinos.has(p))).map((e) => e.chave)));
     await baixarPdfDoConfronto({
@@ -696,7 +802,7 @@ export function MobilizationMap({
     await baixarPdfDoComparativo({
       comparativo,
       candidatos: candidatos.map((c, i) => ({ candidato: c, cor: corDo(i) })),
-      campanha: data?.pollingPlaces ?? [],
+      campanha: campanhaDoRecorte,
       time,
     });
   };
@@ -1077,6 +1183,8 @@ export function MobilizationMap({
         </div>
       ) : null}
 
+      {quadroEscolaPorEscola}
+
       {escolaDoRaioX && candidato ? (
         <RaioXDaEscola
           escola={
@@ -1114,7 +1222,7 @@ export function MobilizationMap({
         <PlaceMembersPanel
           place={openPlace}
           clientId={clientId}
-          leaderId={recorte.leader}
+          leaderId={query.leader}
           onOpenMember={abrirFicha}
           onClose={() => setOpenPlace(null)}
         />

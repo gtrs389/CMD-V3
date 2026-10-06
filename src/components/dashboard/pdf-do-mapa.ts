@@ -69,6 +69,7 @@ function recorteEmPalavras(query: MapQuery | null, places: readonly PollingPlace
   const partes = [
     lider ? `Líder ${lider}` : null,
     query.zone ? `Zona ${query.zone}` : null,
+    query.section ? `Seção ${query.section.split('/')[1]}${query.zone ? '' : ` (zona ${query.section.split('/')[0]})`}` : null,
     query.city,
     query.cities?.length ? (query.cities.length === 1 ? query.cities[0] : `Municípios: ${query.cities.join(', ')}`) : null,
     query.state,
