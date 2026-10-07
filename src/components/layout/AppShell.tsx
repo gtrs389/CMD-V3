@@ -53,9 +53,9 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
       <Sidebar />
       <MobileNav />
 
-      {/* A barra flutuante ocupa 13rem a partir de 1rem da borda. */}
-      <div className="lg:pl-[15rem]">
-        <div className="safe-x mx-auto w-full max-w-[76rem] px-4 py-5 sm:px-6 lg:pr-4 lg:pl-0">
+      {/* A barra flutuante ocupa 13rem a partir de 1rem da borda (4,5rem recolhida). */}
+      <div className="transition-[padding] duration-300 ease-out lg:pl-[15rem] lg:menu-recolhido:pl-[6.5rem]">
+        <div className="safe-x mx-auto w-full max-w-[76rem] px-4 py-5 sm:px-6 lg:pr-4 lg:pl-0 lg:menu-recolhido:max-w-[84rem]">
           {/* No celular o botao de usuario vive no cabecalho fixo. */}
           <div className="mb-3 hidden justify-end lg:flex">
             <UserMenu />

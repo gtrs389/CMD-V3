@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { Contador } from '@/components/ui/Contador';
 import { LideresDaEscola } from './LideresDaEscola';
+import { MarcaDaBarra } from './MarcaDaBarra';
 import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 
 /**
@@ -26,6 +27,9 @@ import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 export interface CandidatoNoQuadro {
   nome: string;
   cor: string;
+  /** A foto oficial (pelo numero de urna), no comeco da barra dele. */
+  foto?: string;
+  cargo?: number;
 }
 
 type Ordem = 'expectativa' | 'votos' | 'pior' | 'melhor' | 'nome';
@@ -385,7 +389,7 @@ export function EscolaPorEscola({
 
                 {/* Expectativa x votos reais */}
                 <div className="min-w-0 space-y-1.5">
-                  <Barra rotulo="Expectativa" valor={e.estimativa} maior={maior} cor="#16263f" nota="pessoas cadastradas" />
+                  <Barra rotulo="Expectativa" valor={e.estimativa} maior={maior} cor="#16263f" nota="pessoas cadastradas" marca={<MarcaDaBarra />} />
                   {candidatos.map((c, k) => {
                     const votos = e.apurado[k] ?? 0;
                     const conv = conversao({ estimativa: e.estimativa, apurado: votos });
@@ -397,6 +401,7 @@ export function EscolaPorEscola({
                         valor={votos}
                         maior={maior}
                         cor={c.cor}
+                        marca={<MarcaDaBarra candidato={c} />}
                         extra={
                           <span className="flex items-center gap-1.5">
                             <span className="text-[0.6875rem] font-bold tabular-nums" style={{ color: corDaConversao(conv) }}>
@@ -474,6 +479,7 @@ function Barra({
   cor,
   nota,
   extra,
+  marca,
 }: {
   rotulo: string;
   valor: number;
@@ -481,15 +487,20 @@ function Barra({
   cor: string;
   nota?: string;
   extra?: React.ReactNode;
+  /** O rosto da barra: a foto do candidato, ou o icone do time na estimativa. */
+  marca?: React.ReactNode;
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,5.5rem)_minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)_auto] items-center gap-2">
       <span className="text-[0.6875rem] font-medium wrap-break-word text-ink-500">{rotulo}</span>
-      <span className="h-2.5 overflow-hidden rounded-pill bg-ink-100" title={`${rotulo}: ${formatNumber(valor)}${nota ? ` ${nota}` : ''}`}>
-        <span
-          className="cmd-barra-viva block h-full rounded-pill"
-          style={{ width: `${valor > 0 ? Math.max(3, (valor / maior) * 100) : 0}%`, background: cor }}
-        />
+      <span className="flex min-w-0 items-center gap-2">
+        {marca}
+        <span className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100" title={`${rotulo}: ${formatNumber(valor)}${nota ? ` ${nota}` : ''}`}>
+          <span
+            className="cmd-barra-viva block h-full rounded-pill"
+            style={{ width: `${valor > 0 ? Math.max(3, (valor / maior) * 100) : 0}%`, background: cor }}
+          />
+        </span>
       </span>
       <span className="flex items-center gap-1.5">
         <span className="min-w-8 text-right text-sm font-bold text-ink-900 tabular-nums">{formatNumber(valor)}</span>

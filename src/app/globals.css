@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/*
+ * Menu lateral recolhido (preferencia deste navegador, `cmd:menu`). O
+ * atributo `data-menu` mora no <html> e e posto antes de desenhar (script no
+ * layout): a pagina abre ja no tamanho certo, sem piscar.
+ *   `recolhido:`      so dentro da barra lateral do computador
+ *                     (`data-lateral`); o menu deslizante do celular nao muda.
+ *   `menu-recolhido:` qualquer lugar (o recuo do conteudo, a bandeja).
+ */
+@custom-variant recolhido (&:where([data-menu="recolhido"] [data-lateral], [data-menu="recolhido"] [data-lateral] *));
+@custom-variant menu-recolhido (&:where([data-menu="recolhido"] *));
+
 /* ==========================================================================
    TOKENS DE IDENTIDADE VISUAL
    Ponto unico de edicao para cores, raios, sombras e tipografia.

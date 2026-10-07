@@ -644,7 +644,7 @@ export function MobilizationMap({
     candidato && votacao && confrontoNoRecorte && !fullscreen ? (
       <EscolaPorEscola
         escolas={escolasDosAtivosNoRecorte ?? confrontoNoRecorte.doTime.map(comoComparativo)}
-        candidatos={candidatosDaEscola.map((c) => ({ nome: c.nome, cor: corDoEscolhido(c) }))}
+        candidatos={candidatosDaEscola.map((c) => ({ nome: c.nome, cor: corDoEscolhido(c), foto: fotoDoCandidatoUrl(c), cargo: c.cargoCodigo }))}
         lideresDe={lideresDaEscola}
         liderEmFoco={liderEscolhido?.name ?? null}
         recorte={recorteEmTexto}
