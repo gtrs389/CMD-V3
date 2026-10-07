@@ -1,7 +1,19 @@
 'use client';
 
 import { useMemo, useState, type CSSProperties } from 'react';
-import { BarChart3, BookmarkCheck, BookmarkX, ChevronDown, ChevronsDownUp, ChevronsUpDown, UserRound, Users } from 'lucide-react';
+import {
+  BarChart3,
+  BookmarkCheck,
+  BookmarkX,
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  ShieldCheck,
+  UserRound,
+  Users,
+} from 'lucide-react';
 import type { Member } from '@/lib/types';
 import { equipePorReferencia, type GrupoDaReferencia } from '@/lib/domain/equipe-por-referencia';
 import { SEM_REFERENCIA } from '@/lib/domain/filtros-da-equipe';
@@ -10,6 +22,9 @@ import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
 import { TagDoLider } from './TagDoLider';
+import { TierBadge } from './TierBadge';
+import { dadosParaConferir } from '@/lib/domain/conferencia';
+import { camposFaltantes } from '@/lib/domain/member-completeness';
 
 /** Vermelho de "Sem referência": o mesmo da tag. */
 const VERMELHO = '#b42318';
@@ -190,8 +205,19 @@ function LinhaDoLider({
   onAbrirLider: (m: Member) => void;
 }) {
   const [toda, setToda] = useState(false);
+  // "Agora" fixado ao abrir: a conta dos dias nao muda a cada pintura.
+  const [agora] = useState(() => Date.now());
   const { lider, equipe } = linha;
   const visiveis = toda ? equipe : equipe.slice(0, EQUIPE_DE_CARA);
+  // Previa das metricas do Lider: quanto da Equipe esta em ordem e ha quanto
+  // tempo ele nao cadastra. O painel completo abre no botao.
+  const emOrdem = equipe.filter((m) => dadosParaConferir(m).length === 0 && camposFaltantes(m).length === 0).length;
+  const saude = equipe.length ? Math.round((emOrdem / equipe.length) * 100) : null;
+  const ultimo = equipe.filter((m) => !m.semDataDeCadastro).reduce<number | null>((maisNovo, m) => {
+    const t = new Date(m.createdAt).getTime();
+    return Number.isNaN(t) ? maisNovo : maisNovo === null || t > maisNovo ? t : maisNovo;
+  }, null);
+  const dias = ultimo === null ? null : Math.max(0, Math.floor((agora - ultimo) / 86_400_000));
   return (
     <li className="px-4 py-3 sm:px-5">
       <div className="flex flex-wrap items-center gap-3">
@@ -201,6 +227,7 @@ function LinhaDoLider({
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-1.5">
                 <span className="text-sm font-semibold wrap-break-word text-ink-900 group-hover:text-brand-700 group-hover:underline">{lider.name}</span>
+                <TierBadge tier="LIDER" />
                 <TagDoLider member={lider} />
                 {!linha.liderNoRecorte ? <span className="rounded-pill bg-ink-100 px-1.5 py-0.5 text-[0.625rem] font-semibold text-ink-500">fora do filtro</span> : null}
               </span>
@@ -208,6 +235,26 @@ function LinhaDoLider({
                 <span className="h-1.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
                   <span className="block h-full rounded-pill" style={{ width: `${equipe.length ? Math.max(4, (equipe.length / maior) * 100) : 0}%`, background: cor }} />
                 </span>
+              </span>
+              {/* A previa das metricas: saude da Equipe e ritmo. */}
+              <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.6875rem] text-ink-500">
+                {saude !== null ? (
+                  <span className="inline-flex items-center gap-1" title="Pessoas da Equipe sem nada para conferir nem faltando">
+                    <ShieldCheck aria-hidden="true" className={cn('size-3.5', saude >= 90 ? 'text-success-600' : saude >= 70 ? 'text-warning-600' : 'text-danger-600')} />
+                    <b className={cn('tabular-nums', saude >= 90 ? 'text-success-700' : saude >= 70 ? 'text-warning-600' : 'text-danger-700')}>{saude}%</b> em ordem
+                  </span>
+                ) : null}
+                {dias !== null ? (
+                  <span className="inline-flex items-center gap-1" title="Desde o último cadastro da Equipe">
+                    <CalendarClock aria-hidden="true" className={cn('size-3.5', dias <= 7 ? 'text-success-600' : dias <= 30 ? 'text-warning-600' : 'text-danger-600')} />
+                    {dias === 0 ? 'cadastrou hoje' : `último cadastro há ${formatNumber(dias)} ${dias === 1 ? 'dia' : 'dias'}`}
+                  </span>
+                ) : equipe.length === 0 ? (
+                  <span className="inline-flex items-center gap-1 text-danger-700">
+                    <CalendarClock aria-hidden="true" className="size-3.5" />
+                    ainda sem Equipe
+                  </span>
+                ) : null}
               </span>
             </span>
           </button>
@@ -228,11 +275,15 @@ function LinhaDoLider({
             <button
               type="button"
               onClick={() => onAbrirLider(lider)}
-              aria-label={`Painel do Líder ${lider.name}`}
-              title="Painel do Líder"
-              className="flex size-9 items-center justify-center rounded-full border border-line text-ink-500 transition-colors hover:border-brand-700 hover:text-brand-700"
+              aria-label={`Ver as métricas do Líder ${lider.name}`}
+              title="Abrir o painel do Líder: ritmo, Equipe, escolas, zonas e seções"
+              className="group inline-flex min-h-10 items-center gap-2 rounded-pill bg-navy-900 py-1 pr-3.5 pl-1 text-xs font-bold text-white shadow-[0_10px_22px_-12px_rgba(15,30,53,0.9)] transition-all hover:-translate-y-0.5 hover:bg-navy-800"
             >
-              <BarChart3 aria-hidden="true" className="size-4" />
+              <span className="flex size-8 items-center justify-center rounded-full bg-gold-400 text-navy-900 transition-transform group-hover:scale-110">
+                <BarChart3 aria-hidden="true" className="size-4" />
+              </span>
+              Ver métricas
+              <ChevronRight aria-hidden="true" className="size-3.5 text-gold-400 transition-transform group-hover:translate-x-0.5" />
             </button>
           ) : null}
         </span>
