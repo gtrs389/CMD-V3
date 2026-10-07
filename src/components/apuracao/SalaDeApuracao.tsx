@@ -38,6 +38,9 @@ import { AndamentoAoVivo } from '@/components/dashboard/votacao/VotacaoTse';
 import { textoDoAndamento, useVotacaoAoVivo, type SituacaoAoVivo } from '@/components/dashboard/votacao/use-votacao-ao-vivo';
 import { useSession } from '@/components/layout/SessionProvider';
 import { corDoCandidato } from '@/components/dashboard/votacao/cores';
+import { EscolhaDoMunicipio } from '@/components/dashboard/votacao/EscolhaDoMunicipio';
+import type { PedidoDeVotacao } from '@/components/dashboard/MobilizationMap';
+import { createPortal } from 'react-dom';
 import { FotoDoCandidato } from './FotoDoCandidato';
 import { GraficoDaNoite } from './GraficoDaNoite';
 import {
@@ -187,11 +190,12 @@ export function SalaDeApuracao() {
 
   const mapaRef = useRef<HTMLDivElement>(null);
   const [paraOMapa, setParaOMapa] = useState<CandidatoMarcado[]>([]);
-  const [pedido, setPedido] = useState<{ candidatos: CandidatoDaVotacao[]; vez: number } | null>(null);
+  const [pedido, setPedido] = useState<PedidoDeVotacao | null>(null);
+  /** Os marcados ja achados na votacao, esperando a escolha do municipio. */
+  const [escolhendoMunicipio, setEscolhendoMunicipio] = useState<{ prontos: CandidatoDaVotacao[]; faltam: string[] } | null>(null);
   /** As chaves que estao no mapa agora: a bandeja diz se ha algo novo para mandar. */
   const [noMapa, setNoMapa] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const [preparando, setPreparando] = useState<CandidatoDaVotacao[] | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   useEffect(() => {
     if (!aviso) return;
@@ -228,7 +232,10 @@ export function SalaDeApuracao() {
     alvo?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  /** Manda os marcados para o mapa: cada um vira a votacao dele, secao por secao. */
+  /**
+   * Manda os marcados para o mapa: cada um vira a votacao dele, secao por
+   * secao. Antes, a pergunta: qual municipio? (passo 2, como na central).
+   */
   async function verNoMapa() {
     if (!time) {
       setAviso('Escolha um time primeiro: é o mapa dele que mostra os votos.');
@@ -237,25 +244,6 @@ export function SalaDeApuracao() {
     }
     if (enviando) return;
     setEnviando(true);
-    // A espera aparece ja no clique: a pagina desce ate o mapa e os
-    // escolhidos entram em orbita enquanto a votacao e buscada.
-    setPreparando(
-      paraOMapa.map((m) => ({
-        id: m.chave,
-        ano: sala?.ano ?? new Date().getFullYear(),
-        turno: sala?.turno ?? 1,
-        uf: sala?.uf ?? '',
-        cargoCodigo: m.cargo,
-        cargo: m.nomeDoCargo,
-        numero: m.numero,
-        nome: m.nome,
-        tipo: 'CANDIDATO' as const,
-        total: 0,
-        totalOficial: null,
-        sqcand: m.sqcand,
-      })),
-    );
-    requestAnimationFrame(irParaOMapa);
     try {
       const { candidatos } = await api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao');
       const turno = sala?.turno ?? 0;
@@ -272,17 +260,27 @@ export function SalaDeApuracao() {
         setAviso('Ainda não chegaram os votos por seção desses candidatos. O mapa se atualiza sozinho conforme o TSE publica.');
         return;
       }
-      setPedido({ candidatos: prontos, vez: Date.now() });
-      setNoMapa(prontos.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
-      if (faltam.length) setAviso(`Ainda sem votos por seção: ${faltam.join(', ')}. Os outros já estão no mapa.`);
-      requestAnimationFrame(irParaOMapa);
+      setEscolhendoMunicipio({ prontos, faltam });
     } catch {
       setAviso('Não foi possível carregar a votação por seção. Tente de novo em instantes.');
     } finally {
       setEnviando(false);
-      setPreparando(null);
     }
   }
+
+  /** Municipio escolhido: a pagina desce ate o mapa, que abre ja no recorte. */
+  function abrirNoMapa(municipios: string[]) {
+    if (!escolhendoMunicipio) return;
+    const { prontos, faltam } = escolhendoMunicipio;
+    setEscolhendoMunicipio(null);
+    // A espera aparece no proprio mapa enquanto a votacao de cada um chega.
+    setPedido({ candidatos: prontos, vez: Date.now(), municipios });
+    setNoMapa(prontos.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
+    if (faltam.length) setAviso(`Ainda sem votos por seção: ${faltam.join(', ')}. Os outros já estão no mapa.`);
+    requestAnimationFrame(irParaOMapa);
+  }
+
+  const fecharEscolhaDoMunicipio = useCallback(() => setEscolhendoMunicipio(null), []);
 
   /** O mapa mudou a escolha por dentro (o placar, o seletor dele): a bandeja acompanha. */
   const candidatosDoMapa = useCallback((lista: CandidatoDaVotacao[]) => {
@@ -322,7 +320,6 @@ export function SalaDeApuracao() {
         marcados={jaNoMapa ? [] : paraOMapa}
         fallbackCenter={sala?.uf === 'AL' || !sala ? ALAGOAS_CENTER : undefined}
         mapaRef={mapaRef}
-        preparando={preparando}
       />
 
       {error ? (
@@ -393,6 +390,21 @@ export function SalaDeApuracao() {
         onTirar={(k) => setParaOMapa((atual) => atual.filter((m) => m.chave !== k))}
         onVerNoMapa={() => (jaNoMapa ? irParaOMapa() : void verNoMapa())}
       />
+
+      {escolhendoMunicipio
+        ? createPortal(
+            <div className="fixed inset-0 z-50">
+              <EscolhaDoMunicipio
+                candidatos={escolhendoMunicipio.prontos}
+                rotuloDoVoltar="Sala de Apuração"
+                passo={null}
+                onVoltar={fecharEscolhaDoMunicipio}
+                onConfirmar={abrirNoMapa}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

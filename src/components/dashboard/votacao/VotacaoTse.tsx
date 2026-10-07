@@ -5,6 +5,7 @@ import { ArrowRight, Vote, X } from 'lucide-react';
 import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
 import { corDoCandidato } from './cores';
+import type { PollingPlacePin } from '@/lib/domain/map-pin';
 import { cn } from '@/lib/utils/cn';
 import { CentralDeCandidatos } from './CentralDeCandidatos';
 
@@ -24,11 +25,18 @@ export function BotaoDaVotacao({
   onChange,
   onClear,
   podeEnviar,
+  campanha,
+  municipios,
   className,
 }: {
-  /** Ate quatro candidatos de uma vez (a dobradinha, por exemplo). */
+  /** Quantos candidatos quiser (a dobradinha, a chapa...). */
   selecionados: CandidatoDaVotacao[];
-  onChange: (candidatos: CandidatoDaVotacao[]) => void;
+  /** `municipios`: o recorte escolhido no passo 2 (vazio: o estado); nulo sem passo 2. */
+  onChange: (candidatos: CandidatoDaVotacao[], municipios: string[] | null) => void;
+  /** As escolas do time: quantas pessoas em cada municipio. */
+  campanha?: readonly Pick<PollingPlacePin, 'city' | 'total'>[];
+  /** Os municipios que o mapa ja mostra. */
+  municipios?: string[];
   onClear: () => void;
   podeEnviar: boolean;
   className?: string;
@@ -155,9 +163,11 @@ export function BotaoDaVotacao({
         <CentralDeCandidatos
           podeEnviar={podeEnviar}
           selecionados={selecionados}
+          campanha={campanha}
+          municipiosIniciais={municipios}
           onClose={() => setAberto(false)}
-          onConfirm={(lista) => {
-            onChange(lista);
+          onConfirm={(lista, escolhidos) => {
+            onChange(lista, escolhidos);
             setAberto(false);
           }}
         />

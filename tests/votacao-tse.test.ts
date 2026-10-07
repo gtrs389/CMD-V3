@@ -10,6 +10,7 @@ import {
   escolasDoCandidato,
   filtrarCandidatos,
   indiceDeColunas,
+  municipiosDaVotacao,
   rotuloDoCandidato,
   textoDosTotais,
   separadorDe,
@@ -285,5 +286,51 @@ describe('varios candidatos somados no mapa', () => {
     expect(soma.noMapa.map((p) => p.total)).toEqual([5]);
     expect(soma.foraDoMapa.map((p) => p.total)).toEqual([1]);
     expect(soma.candidato.id).toBe(`${PREFIXO_DA_SOMA}a+b`);
+  });
+});
+
+describe('municipios dos escolhidos', () => {
+  const pino = (id: string, city: string | null, total: number) => ({
+    locationId: id,
+    latitude: -9.4,
+    longitude: -36.6,
+    title: id,
+    address: null,
+    city,
+    state: 'AL',
+    imageUrl: null,
+    total,
+    men: 0,
+    women: 0,
+    others: total,
+    sections: [],
+  });
+  const votacao = (noMapa: ReturnType<typeof pino>[], foraDoMapa: ReturnType<typeof pino>[] = []) => ({
+    candidato: {} as never,
+    noMapa,
+    foraDoMapa,
+  });
+
+  it('soma os votos de cada candidato por municipio, sem acento nem caixa, do maior para o menor', () => {
+    const lista = municipiosDaVotacao(
+      [
+        votacao([pino('tse:1', 'PALMEIRA DOS ÍNDIOS', 30), pino('tse:2', 'MACEIÓ', 10)], [pino('tse:9', 'PALMEIRA DOS ÍNDIOS', 5)]),
+        votacao([pino('tse:1', 'PALMEIRA DOS ÍNDIOS', 4), pino('tse:3', 'MACEIÓ', 60)]),
+      ],
+      [
+        { city: 'Palmeira dos Indios', total: 120 },
+        { city: 'Arapiraca', total: 8 },
+      ],
+    );
+    expect(lista.map((m) => [m.nome, m.votos, m.total, m.locais, m.pessoasDoTime])).toEqual([
+      ['MACEIÓ', [10, 60], 70, 2, 0],
+      ['PALMEIRA DOS ÍNDIOS', [35, 4], 39, 2, 120],
+      // So o time tem gente: entra, com zero voto.
+      ['Arapiraca', [0, 0], 0, 0, 8],
+    ]);
+  });
+
+  it('ignora local sem municipio ou sem voto', () => {
+    expect(municipiosDaVotacao([votacao([pino('a', null, 3), pino('b', 'X', 0)])])).toEqual([]);
   });
 });

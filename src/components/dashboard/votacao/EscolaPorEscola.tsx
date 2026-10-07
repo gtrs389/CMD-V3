@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState, type CSSProperties } from 'react';
-import { ArrowDownRight, ArrowUpRight, MapPin, Minus, ScanSearch, Search, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, MapPin, Minus, ScanSearch, Search, Users, X } from 'lucide-react';
 import { conversao, leitura, type EscolaNoComparativo, type LeituraDoConfronto, type LiderNoRaioX } from '@/lib/domain/confronto';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { Contador } from '@/components/ui/Contador';
+import { LideresDaEscola } from './LideresDaEscola';
 
 /**
  * Expectativa x votos reais, ESCOLA POR ESCOLA.
@@ -86,6 +87,8 @@ export function EscolaPorEscola({
   const [busca, setBusca] = useState('');
   const [ordem, setOrdem] = useState<Ordem>('expectativa');
   const [filtro, setFiltro] = useState<FiltroDeLeitura>('TODAS');
+  /** A escola com a lista inteira de Lideres aberta (o "+32" virou botao). */
+  const [lideresAbertos, setLideresAbertos] = useState<{ escola: EscolaNoComparativo; lideres: LiderNoRaioX[] } | null>(null);
   const varios = candidatos.length > 1;
 
   // Os Lideres de cada escola, calculados uma vez.
@@ -328,10 +331,22 @@ export function EscolaPorEscola({
 
                 {/* Lideres */}
                 <div className="min-w-0">
-                  <p className="mb-1 flex items-center gap-1 text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
-                    <Users aria-hidden="true" className="size-3" />
-                    {lideres.length === 1 ? 'Líder' : `${lideres.length} líderes`}
-                  </p>
+                  {lideres.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setLideresAbertos({ escola: e, lideres })}
+                      className="mb-1 inline-flex items-center gap-1 rounded-pill text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase transition-colors hover:text-accent-700"
+                      title="Ver todos os líderes desta escola"
+                    >
+                      <Users aria-hidden="true" className="size-3" />
+                      {`${lideres.length} líderes`}
+                    </button>
+                  ) : (
+                    <p className="mb-1 flex items-center gap-1 text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+                      <Users aria-hidden="true" className="size-3" />
+                      Líder
+                    </p>
+                  )}
                   {lideres.length === 0 ? (
                     <p className="text-xs text-ink-400">Sem líder registrado</p>
                   ) : (
@@ -350,7 +365,17 @@ export function EscolaPorEscola({
                         </li>
                       ))}
                       {outros > 0 ? (
-                        <li className="inline-flex items-center rounded-pill bg-ink-100 px-2 text-xs font-semibold text-ink-700">+{outros}</li>
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => setLideresAbertos({ escola: e, lideres })}
+                            title={`Ver os ${lideres.length} líderes desta escola`}
+                            className="group inline-flex min-h-7 items-center gap-1 rounded-pill border border-accent-600/30 bg-accent-50 py-0.5 pr-1.5 pl-2.5 text-xs font-semibold text-accent-700 transition-all hover:-translate-y-0.5 hover:border-accent-600 hover:bg-accent-600 hover:text-white hover:shadow-card"
+                          >
+                            Ver mais {outros} {outros === 1 ? 'líder' : 'líderes'}
+                            <ChevronRight aria-hidden="true" className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                          </button>
+                        </li>
                       ) : null}
                     </ul>
                   )}
@@ -427,6 +452,14 @@ export function EscolaPorEscola({
             Mostrar mais {formatNumber(Math.min(POR_VEZ, visiveis.length - mostrar))} de {formatNumber(visiveis.length - mostrar)} escolas
           </button>
         </div>
+      ) : null}
+      {lideresAbertos ? (
+        <LideresDaEscola
+          escola={lideresAbertos.escola}
+          lideres={lideresAbertos.lideres}
+          liderEmFoco={liderEmFoco}
+          onClose={() => setLideresAbertos(null)}
+        />
       ) : null}
     </section>
   );
