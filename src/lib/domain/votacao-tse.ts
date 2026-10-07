@@ -488,3 +488,71 @@ export function fotoDoCandidatoUrl(c: Pick<CandidatoDaVotacao, 'cargoCodigo' | '
   if (c.sqcand) return `/api/votacao/foto/${c.cargoCodigo}/${encodeURIComponent(c.sqcand)}`;
   return `/api/votacao/foto/${c.cargoCodigo}/numero/${encodeURIComponent(c.numero)}?ano=${c.ano}`;
 }
+
+/* -------------------------------------------------------------------------
+   Varios candidatos no mapa de uma vez
+   ------------------------------------------------------------------------- */
+
+/** Prefixo do candidato "somado": nunca colide com um id de verdade. */
+export const PREFIXO_DA_SOMA = 'soma:';
+
+/**
+ * Varios candidatos desenhados juntos no mapa (a dobradinha, a chapa): um
+ * candidato so, com os votos de todos somados. O nome diz quem entrou na
+ * conta; com mais de tres, so quantos.
+ */
+export function candidatoSomado(candidatos: readonly CandidatoDaVotacao[]): CandidatoDaVotacao {
+  if (candidatos.length === 0) throw new Error('Nenhum candidato para somar.');
+  if (candidatos.length === 1) return candidatos[0];
+  const base = candidatos[0];
+  const cargos = [...new Set(candidatos.map((c) => c.cargo))];
+  return {
+    ...base,
+    id: `${PREFIXO_DA_SOMA}${candidatos.map((c) => c.id).join('+')}`,
+    nome: candidatos.length <= 3 ? candidatos.map((c) => c.nome).join(' + ') : `${candidatos.length} candidatos somados`,
+    numero: candidatos.map((c) => c.numero).join(' + '),
+    cargo: cargos.join(' + '),
+    total: candidatos.reduce((t, c) => t + c.total, 0),
+    // Os totais oficiais andam em ritmos diferentes: somados, nao diriam nada.
+    totalOficial: null,
+    sqcand: null,
+  };
+}
+
+/**
+ * As escolas de varios candidatos numa lista so: o mesmo local (a mesma
+ * chave `tse:`) vira um pino, com os votos de todos e as secoes somadas
+ * secao a secao. Do maior para o menor, como `escolasDoCandidato`.
+ */
+export function somarEscolas(listas: readonly (readonly PollingPlacePin[])[]): PollingPlacePin[] {
+  const porLocal = new Map<string, PollingPlacePin>();
+  for (const lista of listas) {
+    for (const pin of lista) {
+      const atual = porLocal.get(pin.locationId);
+      if (!atual) {
+        porLocal.set(pin.locationId, { ...pin, sections: pin.sections.map((s) => ({ ...s })) });
+        continue;
+      }
+      atual.total += pin.total;
+      atual.men += pin.men;
+      atual.women += pin.women;
+      atual.others += pin.others;
+      for (const s of pin.sections) {
+        const mesma = atual.sections.find((x) => x.zone === s.zone && x.section === s.section);
+        if (mesma) mesma.total += s.total;
+        else atual.sections.push({ ...s });
+      }
+    }
+  }
+  return [...porLocal.values()].sort((a, b) => b.total - a.total);
+}
+
+/** A votacao de varios candidatos como se fosse de um so (`candidatoSomado`). */
+export function somarVotacoes(votacoes: readonly VotacaoNoMapa[]): VotacaoNoMapa {
+  if (votacoes.length === 1) return votacoes[0];
+  return {
+    candidato: candidatoSomado(votacoes.map((v) => v.candidato)),
+    noMapa: somarEscolas(votacoes.map((v) => v.noMapa)),
+    foraDoMapa: somarEscolas(votacoes.map((v) => v.foraDoMapa)),
+  };
+}

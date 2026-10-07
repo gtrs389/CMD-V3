@@ -595,6 +595,23 @@ textarea {
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
+/* Varios candidatos somados: a parte de cada um, na cor dele, sob a etiqueta. */
+.cmd-escola-partes {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -6px;
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border: 1.5px solid #fff;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgb(15 30 53 / 0.3);
+}
+.cmd-escola-partes > span + span {
+  border-left: 1px solid rgb(255 255 255 / 0.85);
+}
 /* O nome se abre ao lado do numero quando o mouse passa. */
 .cmd-escola-nome {
   max-width: 0;

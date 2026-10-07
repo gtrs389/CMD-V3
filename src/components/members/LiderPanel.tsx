@@ -34,6 +34,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useSession } from '@/components/layout/SessionProvider';
 import { EditarTagModal, NomeComTag, TagDoLider } from './TagDoLider';
+import { TagDaReferencia } from './TagDaReferencia';
 
 const TOM_DO_SELO: Record<Selo, string> = {
   Motor: 'bg-success-50 text-success-700',
@@ -120,6 +121,7 @@ export function LiderPanel({
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-xl font-bold text-ink-900">{lider.name}</h3>
               <TagDoLider member={lider} className="px-2.5 py-1 text-xs" />
+              <TagDaReferencia member={lider} className="px-2.5 py-1 text-xs" />
               <span className={cn('rounded-pill px-2.5 py-1 text-xs font-semibold', TOM_DO_SELO[p.selo])} title={SELO_EXPLICACAO[p.selo]}>
                 {p.selo}
               </span>

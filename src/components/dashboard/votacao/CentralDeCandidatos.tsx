@@ -30,7 +30,7 @@ import { api } from '@/lib/repositories/http/api';
 import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber } from '@/lib/utils/text';
-import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from './cores';
+import { corDoCandidato } from './cores';
 import { importarVotacao, type Andamento, type ResumoDoEnvio } from './importar-votacao';
 import { textoDoAndamento, useVotacaoAoVivo } from './use-votacao-ao-vivo';
 
@@ -40,8 +40,9 @@ import { textoDoAndamento, useVotacaoAoVivo } from './use-votacao-ao-vivo';
  * Em vez de uma lista seca, a votacao inteira de relance: o anel das secoes
  * apuradas, os cargos em botoes com a contagem, o podio do cargo escolhido e,
  * em cada candidato, a barra dos votos (contra o lider do cargo), a parte dos
- * votos validos e a posicao. Do lado, "Sua selecao": quatro vagas, cada uma
- * na cor que o candidato tera no mapa, e um grafico comparando os escolhidos.
+ * votos validos e a posicao. Do lado, "Sua selecao": quantos candidatos
+ * quiser, cada um na cor que tera no mapa, e um grafico comparando todos.
+ * Abre na tela inteira: a lista e a selecao pedem espaco.
  *
  * A lista chega inteira de uma vez (alguns milhares de nomes, sem as secoes)
  * e e filtrada aqui: digitar nao espera o servidor. O ADMIN geral envia a
@@ -76,19 +77,11 @@ export function CentralDeCandidatos({
 }) {
   /** A escolha em andamento: so vai para o mapa no "Ver no mapa". */
   const [escolhidos, setEscolhidos] = useState<CandidatoDaVotacao[]>(selecionados);
-  const cheio = escolhidos.length >= MAXIMO_DE_CANDIDATOS;
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Sem limite: cada toque poe ou tira, e cada um ganha a proxima cor. */
   function alternar(c: CandidatoDaVotacao) {
-    if (escolhidos.some((x) => x.id === c.id)) {
-      setEscolhidos((atual) => atual.filter((x) => x.id !== c.id));
-      return;
-    }
-    if (cheio) {
-      setAviso(`Já são ${MAXIMO_DE_CANDIDATOS} candidatos: tire um para escolher outro.`);
-      return;
-    }
     setAviso(null);
-    setEscolhidos((atual) => [...atual, c].slice(0, MAXIMO_DE_CANDIDATOS));
+    setEscolhidos((atual) => (atual.some((x) => x.id === c.id) ? atual.filter((x) => x.id !== c.id) : [...atual, c]));
   }
 
   const loader = useCallback(() => api<{ candidatos: CandidatoDaVotacao[]; favoritos?: string[] }>('/api/votacao'), []);
@@ -205,14 +198,15 @@ export function CentralDeCandidatos({
   const secoesPct = situacao?.totalDeSecoes ? Math.min(100, (situacao.secoesApuradas / situacao.totalDeSecoes) * 100) : 0;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-      <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-navy-900/60 backdrop-blur-sm" onClick={() => !busy && onClose()} />
+    <div className="fixed inset-0 z-50 flex">
+      <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-navy-900/60 backdrop-blur-sm" />
 
+      {/* Tela inteira, de borda a borda: a lista e a selecao pedem espaco. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Votação 2026: escolher candidatos para o mapa"
-        className="relative flex h-[94dvh] w-full max-w-6xl animate-slide-up flex-col overflow-hidden rounded-t-2xl bg-canvas shadow-overlay sm:h-[90dvh] sm:animate-scale-in sm:rounded-card"
+        className="relative flex h-dvh w-full animate-scale-in flex-col overflow-hidden bg-canvas"
       >
         {/* CABECALHO: o que e, ao vivo, e o anel das secoes. */}
         <header className="relative shrink-0 overflow-hidden bg-gradient-to-br from-navy-900 via-navy-800 to-[#1e3a8a] px-4 pt-4 pb-4 text-white sm:px-6 sm:pt-5">
@@ -237,7 +231,7 @@ export function CentralDeCandidatos({
               </p>
               <h2 className="mt-1 text-xl leading-tight font-bold sm:text-2xl">Escolha quem vai para o mapa</h2>
               <p className="mt-1 max-w-2xl text-xs text-white/70 sm:text-sm">
-                Até {MAXIMO_DE_CANDIDATOS} candidatos, cada um com a sua cor. O mapa mostra onde cada um teve voto contra a
+                Quantos candidatos quiser, cada um com a sua cor. O mapa mostra onde cada um teve voto contra a
                 estimativa do time — escola, zona e seção.
               </p>
               <p className="mt-2 text-[0.6875rem] text-white/60" role="status">
@@ -264,7 +258,7 @@ export function CentralDeCandidatos({
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
           {/* COLUNA DA ESCOLHA */}
           <div className="scrollbar-slim min-h-0 overflow-y-auto">
             <div className="sticky top-0 z-10 space-y-2.5 border-b border-line bg-canvas/95 px-4 py-3 backdrop-blur sm:px-6">
@@ -399,7 +393,7 @@ export function CentralDeCandidatos({
                         : 'Ninguém encontrado com essa busca.'}
                     </div>
                   ) : (
-                    <ul className="space-y-2">
+                    <ul className="grid gap-2 2xl:grid-cols-2">
                       {achados.slice(0, quantos).map((c, i) => (
                         <LinhaDoCandidato
                           key={c.id}
@@ -407,7 +401,6 @@ export function CentralDeCandidatos({
                           indice={i}
                           estatistica={estatisticas.get(chaveDoCargo(c))}
                           posicaoNaEscolha={escolhidos.findIndex((x) => x.id === c.id)}
-                          bloqueado={cheio}
                           favorito={favoritos.has(chaveDoFavorito(c))}
                           onAlternar={() => alternar(c)}
                           onFavorito={() => alternarFavorito(c)}
@@ -438,6 +431,7 @@ export function CentralDeCandidatos({
               escolhidos={escolhidos}
               estatisticas={estatisticas}
               onTirar={(id) => setEscolhidos((atual) => atual.filter((x) => x.id !== id))}
+              onLimpar={() => setEscolhidos([])}
               onConfirmar={confirmar}
               podeConfirmar={podeConfirmar}
             />
@@ -447,7 +441,7 @@ export function CentralDeCandidatos({
         {/* SUA SELECAO (celular): a barra de baixo. */}
         <div className="safe-bottom flex shrink-0 flex-col gap-2 border-t border-line bg-surface px-4 py-3 lg:hidden">
           {escolhidos.length > 0 ? (
-            <ul className="flex flex-wrap gap-1.5" aria-label="Candidatos escolhidos">
+            <ul className="scrollbar-slim flex max-h-28 flex-wrap gap-1.5 overflow-y-auto" aria-label="Candidatos escolhidos">
               {escolhidos.map((c, i) => (
                 <li key={c.id} className="cmd-chip-entra">
                   <button
@@ -457,7 +451,7 @@ export function CentralDeCandidatos({
                     className="inline-flex min-h-8 items-center gap-1.5 rounded-pill border border-line bg-surface py-0.5 pr-2 pl-0.5 text-left text-xs font-semibold text-ink-900"
                   >
                     <FotoDoCandidato cargo={c.cargoCodigo} sqcand={c.sqcand ?? null} src={fotoDoCandidatoUrl(c)} nome={c.nome} tamanho="xs" />
-                    <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ background: CORES_DOS_CANDIDATOS[i] }} />
+                    <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ background: corDoCandidato(i) }} />
                     <span className="wrap-break-word">{c.nome}</span>
                     <X aria-hidden="true" className="size-3 shrink-0 text-ink-400" />
                   </button>
@@ -465,7 +459,7 @@ export function CentralDeCandidatos({
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-ink-500">Toque nos candidatos para escolher até {MAXIMO_DE_CANDIDATOS}.</p>
+            <p className="text-xs text-ink-500">Toque nos candidatos para escolher — quantos quiser.</p>
           )}
           <BotaoVerNoMapa quantos={escolhidos.length} podeConfirmar={podeConfirmar} onClick={confirmar} />
         </div>
@@ -563,7 +557,7 @@ function Podio({
                 {posicao >= 0 ? (
                   <span
                     className="cmd-chip-entra absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full text-white ring-2 ring-surface"
-                    style={{ background: CORES_DOS_CANDIDATOS[posicao] }}
+                    style={{ background: corDoCandidato(posicao) }}
                   >
                     <Check aria-hidden="true" className="size-3.5" strokeWidth={3} />
                   </span>
@@ -593,7 +587,6 @@ function LinhaDoCandidato({
   indice,
   estatistica,
   posicaoNaEscolha,
-  bloqueado,
   favorito,
   onAlternar,
   onFavorito,
@@ -602,13 +595,12 @@ function LinhaDoCandidato({
   indice: number;
   estatistica: Estatistica | undefined;
   posicaoNaEscolha: number;
-  bloqueado: boolean;
   favorito: boolean;
   onAlternar: () => void;
   onFavorito: () => void;
 }) {
   const escolhido = posicaoNaEscolha >= 0;
-  const cor = escolhido ? CORES_DOS_CANDIDATOS[posicaoNaEscolha] : null;
+  const cor = escolhido ? corDoCandidato(posicaoNaEscolha) : null;
   const parte = estatistica?.validos ? (c.total / estatistica.validos) * 100 : null;
   const barra = estatistica?.maior ? Math.max(2, (c.total / estatistica.maior) * 100) : 0;
   const posicao = estatistica?.posicao.get(c.id) ?? null;
@@ -641,8 +633,7 @@ function LinhaDoCandidato({
           type="button"
           onClick={onAlternar}
           aria-pressed={escolhido}
-          disabled={!escolhido && bloqueado}
-          className="flex min-w-0 flex-1 items-center gap-2.5 py-3 pr-2.5 text-left disabled:cursor-not-allowed disabled:opacity-50 sm:gap-3 sm:pr-3"
+          className="flex min-w-0 flex-1 items-center gap-2.5 py-3 pr-2.5 text-left sm:gap-3 sm:pr-3"
         >
           {/* A foto oficial do TSE, com o numero de urna colado embaixo. */}
           <span className="relative shrink-0 pb-1.5">
@@ -724,12 +715,14 @@ function SuaSelecao({
   escolhidos,
   estatisticas,
   onTirar,
+  onLimpar,
   onConfirmar,
   podeConfirmar,
 }: {
   escolhidos: CandidatoDaVotacao[];
   estatisticas: Map<string, Estatistica>;
   onTirar: (id: string) => void;
+  onLimpar: () => void;
   onConfirmar: () => void;
   podeConfirmar: boolean;
 }) {
@@ -739,30 +732,28 @@ function SuaSelecao({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="scrollbar-slim min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-ink-900">Sua seleção</h3>
-          <span className="rounded-pill bg-ink-100 px-2 py-0.5 text-xs font-semibold text-ink-700 tabular-nums">
-            {escolhidos.length}/{MAXIMO_DE_CANDIDATOS}
-          </span>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            Sua seleção
+            <span className="rounded-pill bg-navy-900 px-2 py-0.5 text-xs font-bold text-gold-400 tabular-nums">
+              {escolhidos.length}
+            </span>
+          </h3>
+          {escolhidos.length > 1 ? (
+            <button
+              type="button"
+              onClick={onLimpar}
+              className="inline-flex min-h-8 items-center gap-1 rounded-pill px-2.5 text-xs font-semibold text-ink-500 transition-colors hover:bg-danger-50 hover:text-danger-600"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+              Tirar todos
+            </button>
+          ) : null}
         </div>
 
-        {/* As quatro vagas, cada uma na cor do mapa. */}
+        {/* Sem limite: cada escolhido na cor do mapa, e sempre uma vaga a mais. */}
         <ol className="space-y-2">
-          {Array.from({ length: MAXIMO_DE_CANDIDATOS }, (_, i) => {
-            const c = escolhidos[i];
-            const cor = CORES_DOS_CANDIDATOS[i];
-            if (!c) {
-              return (
-                <li
-                  key={`vaga-${i}`}
-                  className="flex items-center gap-3 rounded-card border-2 border-dashed border-line px-3 py-2.5 text-xs text-ink-400"
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-dashed" style={{ borderColor: cor, color: cor }}>
-                    {i + 1}
-                  </span>
-                  Vaga livre · toque num candidato
-                </li>
-              );
-            }
+          {escolhidos.map((c, i) => {
+            const cor = corDoCandidato(i);
             const est = estatisticas.get(chaveDoCargo(c));
             return (
               <li
@@ -792,6 +783,15 @@ function SuaSelecao({
               </li>
             );
           })}
+          <li className="flex items-center gap-3 rounded-card border-2 border-dashed border-line px-3 py-2.5 text-xs text-ink-400">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-dashed"
+              style={{ borderColor: corDoCandidato(escolhidos.length), color: corDoCandidato(escolhidos.length) }}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+            </span>
+            {escolhidos.length === 0 ? 'Toque num candidato para escolher' : 'Quer mais? Toque em outro candidato'}
+          </li>
         </ol>
 
         {/* O grafico: os escolhidos lado a lado. */}
@@ -813,7 +813,7 @@ function SuaSelecao({
                   <div className="mt-1 h-2.5 overflow-hidden rounded-pill bg-ink-100">
                     <div
                       className="h-full rounded-pill transition-[width] duration-700 ease-out"
-                      style={{ width: `${Math.max(3, (c.total / maior) * 100)}%`, background: CORES_DOS_CANDIDATOS[i] }}
+                      style={{ width: `${Math.max(3, (c.total / maior) * 100)}%`, background: corDoCandidato(i) }}
                     />
                   </div>
                 </li>
@@ -830,7 +830,7 @@ function SuaSelecao({
             <MapPinned aria-hidden="true" className="mx-auto size-8 text-accent-600" />
             <p className="mt-2 text-sm font-semibold text-ink-900">Monte a sua seleção</p>
             <p className="mt-1 text-xs text-ink-500">
-              Escolha a dobradinha, os adversários ou quem quiser comparar. Cada um ganha uma cor no mapa.
+              Escolha a dobradinha, os adversários, a chapa inteira — quantos quiser. Cada um ganha uma cor no mapa.
             </p>
           </div>
         )}

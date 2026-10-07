@@ -37,7 +37,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { AndamentoAoVivo } from '@/components/dashboard/votacao/VotacaoTse';
 import { textoDoAndamento, useVotacaoAoVivo, type SituacaoAoVivo } from '@/components/dashboard/votacao/use-votacao-ao-vivo';
 import { useSession } from '@/components/layout/SessionProvider';
-import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from '@/components/dashboard/votacao/cores';
+import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import { FotoDoCandidato } from './FotoDoCandidato';
 import { GraficoDaNoite } from './GraficoDaNoite';
 import {
@@ -88,7 +88,6 @@ type Variacao = Map<string, { votos: number; posicoes: number }>;
 interface Marcacao {
   indice: (cargo: number, numero: string) => number;
   alternar: (r: ResultadoDoCargo, c: CandidatoNaApuracao) => void;
-  cheio: boolean;
 }
 
 /** O ultimo time aberto na Sala: conveniencia deste navegador. */
@@ -202,21 +201,24 @@ export function SalaDeApuracao() {
 
   const marcacao: Marcacao = {
     indice: (cargo, numero) => paraOMapa.findIndex((m) => m.chave === chaveDoMarcado(cargo, numero)),
-    cheio: paraOMapa.length >= MAXIMO_DE_CANDIDATOS,
     alternar: (r, c) => {
       const chaveNova = chaveDoMarcado(r.cargo, c.numero);
-      const ja = paraOMapa.some((m) => m.chave === chaveNova);
-      if (!ja && paraOMapa.length >= MAXIMO_DE_CANDIDATOS) {
-        setAviso(`Até ${MAXIMO_DE_CANDIDATOS} candidatos de uma vez: tire um para marcar outro.`);
-        return;
-      }
+      // Sem limite: quantos candidatos quiser, cada um na sua cor.
       setParaOMapa((atual) =>
         atual.some((m) => m.chave === chaveNova)
           ? atual.filter((m) => m.chave !== chaveNova)
           : [
               ...atual,
-              { chave: chaveNova, cargo: r.cargo, numero: c.numero, nome: c.nome, nomeDoCargo: r.nomeDoCargo, sqcand: c.sqcand },
-            ].slice(0, MAXIMO_DE_CANDIDATOS),
+              {
+                chave: chaveNova,
+                cargo: r.cargo,
+                numero: c.numero,
+                nome: c.nome,
+                nomeDoCargo: r.nomeDoCargo,
+                sqcand: c.sqcand,
+                ano: sala?.ano ?? new Date().getFullYear(),
+              },
+            ],
       );
     },
   };
@@ -292,6 +294,7 @@ export function SalaDeApuracao() {
         nome: c.nome,
         nomeDoCargo: c.cargo,
         sqcand: c.sqcand ?? null,
+        ano: c.ano,
       })),
     );
     setNoMapa(lista.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
@@ -388,7 +391,6 @@ export function SalaDeApuracao() {
         aviso={aviso}
         jaNoMapa={jaNoMapa}
         onTirar={(k) => setParaOMapa((atual) => atual.filter((m) => m.chave !== k))}
-        onLimpar={() => setParaOMapa([])}
         onVerNoMapa={() => (jaNoMapa ? irParaOMapa() : void verNoMapa())}
       />
     </div>
@@ -619,29 +621,20 @@ function MarcarParaMapa({
 }) {
   const indice = marcacao.indice(r.cargo, c.numero);
   const marcado = indice >= 0;
-  const bloqueado = !marcado && marcacao.cheio;
   return (
     <button
       type="button"
       onClick={() => marcacao.alternar(r, c)}
       aria-pressed={marcado}
-      disabled={bloqueado}
-      title={
-        marcado
-          ? `Tirar ${c.nome} do mapa`
-          : bloqueado
-            ? `Até ${MAXIMO_DE_CANDIDATOS} candidatos de uma vez`
-            : `Marcar ${c.nome} para ver no mapa`
-      }
+      title={marcado ? `Tirar ${c.nome} do mapa` : `Marcar ${c.nome} para ver no mapa`}
       className={cn(
         'inline-flex shrink-0 items-center gap-1.5 rounded-pill border text-[0.6875rem] font-semibold transition-all duration-200',
         compacto ? 'min-h-8 px-2' : 'min-h-8 px-2.5',
         marcado
           ? 'border-transparent text-white shadow-[0_6px_14px_-6px_rgba(15,30,53,0.6)]'
           : 'border-line bg-surface text-brand-800 hover:-translate-y-0.5 hover:border-accent-600 hover:bg-accent-50',
-        bloqueado && 'cursor-not-allowed opacity-50 hover:translate-y-0',
       )}
-      style={marcado ? { background: CORES_DOS_CANDIDATOS[indice] } : undefined}
+      style={marcado ? { background: corDoCandidato(indice) } : undefined}
     >
       {marcado ? (
         <Check aria-hidden="true" className="cmd-chip-entra size-3.5" strokeWidth={3} />

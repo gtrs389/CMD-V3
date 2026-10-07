@@ -41,18 +41,17 @@ function sameDay(a: Date, b: Date): boolean {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
 
-/** Data e hora curtas usadas na coluna "Cadastrado em". */
-function shortDateTime(iso: string, today: Date): string {
+/** O dia do cadastro, sem a hora: "Hoje", "Ontem" ou "29/09/2026". */
+function diaDoCadastro(iso: string, today: Date): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '--';
 
-  const hora = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const ontem = new Date(today);
   ontem.setDate(ontem.getDate() - 1);
 
-  if (sameDay(date, today)) return `Hoje, ${hora}`;
-  if (sameDay(date, ontem)) return `Ontem, ${hora}`;
-  return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}, ${hora}`;
+  if (sameDay(date, today)) return 'Hoje';
+  if (sameDay(date, ontem)) return 'Ontem';
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 /** Cidade e UF do integrante, como aparecem na tabela. */
@@ -347,7 +346,7 @@ export function DashboardView() {
                         </p>
                         <p className="wrap-break-word text-xs text-ink-700">{cliente?.name ?? '--'}</p>
                         <p className="mt-0.5 wrap-break-word text-xs text-ink-500">
-                          {location(member)} · {shortDateTime(member.createdAt, now)}
+                          {location(member)} · {diaDoCadastro(member.createdAt, now)}
                         </p>
                       </div>
                     </li>
@@ -389,7 +388,7 @@ export function DashboardView() {
                           {location(member)}
                         </td>
                         <td className="py-2.5 text-[0.8125rem] text-ink-500">
-                          {shortDateTime(member.createdAt, now)}
+                          {diaDoCadastro(member.createdAt, now)}
                         </td>
                       </tr>
                     );

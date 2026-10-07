@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState, type CSSProperties, type RefObject } from 'react';
-import { Check, ChevronRight, MapPinned, Search, Trophy, Users, Vote, X } from 'lucide-react';
-import type { CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
+import { Check, ChevronDown, ChevronRight, ChevronUp, MapPinned, Search, Trophy, Users, Vote, X } from 'lucide-react';
+import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import type { ClientSummary } from '@/lib/types';
 import { useClient, useClientSummaries } from '@/hooks/use-clients';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials, matchesSearch } from '@/lib/utils/text';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
-import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from '@/components/dashboard/votacao/cores';
+import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import { Spinner } from '@/components/ui/Spinner';
 import { CarregandoVotacao } from '@/components/dashboard/votacao/CarregandoVotacao';
 import { FotoDoCandidato } from './FotoDoCandidato';
@@ -41,6 +41,8 @@ export interface CandidatoMarcado {
   nome: string;
   nomeDoCargo: string;
   sqcand: string | null;
+  /** Ano da eleicao: sem o sequencial, a foto e achada pelo numero de urna e o ano. */
+  ano: number;
 }
 
 export function chaveDoMarcado(cargo: number, numero: string): string {
@@ -172,7 +174,7 @@ export function CentralDoTime({
                 <div className="absolute inset-0 z-[46] overflow-hidden rounded-card">
                   <CarregandoVotacao
                     candidatos={preparando}
-                    cores={preparando.map((_, i) => (preparando.length > 1 ? CORES_DOS_CANDIDATOS[i] : '#e0a426'))}
+                    cores={preparando.map((_, i) => (preparando.length > 1 ? corDoCandidato(i) : '#e0a426'))}
                   />
                 </div>
               ) : null}
@@ -372,7 +374,6 @@ export function BandejaDoMapa({
   aviso,
   jaNoMapa,
   onTirar,
-  onLimpar,
   onVerNoMapa,
 }: {
   marcados: CandidatoMarcado[];
@@ -382,10 +383,71 @@ export function BandejaDoMapa({
   /** Os marcados ja sao exatamente os do mapa: o botao so leva ate ele. */
   jaNoMapa: boolean;
   onTirar: (chave: string) => void;
-  onLimpar: () => void;
   onVerNoMapa: () => void;
 }) {
+  /**
+   * "Ocultar" recolhe a bandeja numa pilula com os rostos: a escolha continua
+   * de pe (e no mapa), so sai da frente da apuracao. Tocar a pilula a abre.
+   */
+  const [oculta, setOculta] = useState(false);
   if (marcados.length === 0) return null;
+
+  const foto = (c: CandidatoMarcado) =>
+    fotoDoCandidatoUrl({ cargoCodigo: c.cargo, numero: c.numero, ano: c.ano, sqcand: c.sqcand });
+  const verNoMapa = (
+    <button
+      type="button"
+      onClick={onVerNoMapa}
+      disabled={enviando}
+      className="group inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-pill bg-gradient-to-r from-gold-400 to-gold-500 px-4 text-sm font-bold text-navy-900 shadow-[0_8px_20px_-8px_rgba(242,193,78,0.8)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-8px_rgba(242,193,78,0.9)] disabled:opacity-60 sm:flex-none"
+    >
+      {enviando ? (
+        <Spinner className="size-4" />
+      ) : jaNoMapa ? (
+        <Check aria-hidden="true" className="size-4" strokeWidth={3} />
+      ) : (
+        <MapPinned aria-hidden="true" className="size-4" />
+      )}
+      {!time ? 'Escolha um time' : jaNoMapa ? 'No mapa · ir até ele' : `Ver no mapa (${marcados.length})`}
+      <ChevronRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-0.5" />
+    </button>
+  );
+
+  if (oculta) {
+    return (
+      <div className="pointer-events-none fixed right-3 bottom-3 z-40 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setOculta(false)}
+          aria-label={`Mostrar os ${marcados.length} candidatos marcados`}
+          title="Mostrar os candidatos marcados"
+          className="cmd-bandeja group pointer-events-auto flex items-center gap-2.5 rounded-pill border border-white/10 bg-navy-900/95 py-1.5 pr-3 pl-1.5 text-white shadow-[0_18px_40px_-12px_rgba(15,30,53,0.7)] backdrop-blur-md transition-transform hover:-translate-y-0.5"
+        >
+          <span className="flex -space-x-2">
+            {marcados.slice(0, 5).map((c, i) => (
+              <span
+                key={c.chave}
+                className="rounded-full ring-2 ring-offset-2 ring-offset-navy-900"
+                style={{ '--tw-ring-color': corDoCandidato(i) } as CSSProperties}
+              >
+                <FotoDoCandidato cargo={c.cargo} sqcand={c.sqcand} src={foto(c)} nome={c.nome} tamanho="xs" />
+              </span>
+            ))}
+            {marcados.length > 5 ? (
+              <span className="flex size-7 items-center justify-center rounded-full bg-gold-400 text-[0.625rem] font-bold text-navy-900 ring-2 ring-navy-900">
+                +{marcados.length - 5}
+              </span>
+            ) : null}
+          </span>
+          <span className="text-xs font-semibold tabular-nums">
+            {marcados.length} {marcados.length === 1 ? 'candidato' : 'candidatos'}
+          </span>
+          <ChevronUp aria-hidden="true" className="size-4 text-gold-400 transition-transform group-hover:-translate-y-0.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:pl-[15rem]">
       <div
@@ -395,7 +457,8 @@ export function BandejaDoMapa({
         // na de baixo: nome comprido nunca empurra nem esconde o botao.
         className="cmd-bandeja pointer-events-auto flex w-full max-w-3xl flex-col gap-2 rounded-card border border-white/10 bg-navy-900/95 p-2.5 text-white shadow-[0_24px_50px_-12px_rgba(15,30,53,0.7)] backdrop-blur-md"
       >
-        <div className="flex min-w-0 items-center gap-2">
+        {/* Muitos marcados: a fileira rola por dentro, o botao fica sempre a vista. */}
+        <div className="scrollbar-slim flex max-h-32 min-w-0 items-center gap-2 overflow-y-auto">
           <ul className="flex min-w-0 flex-1 flex-wrap gap-1.5" aria-label="Marcados">
             {marcados.map((c, i) => (
               <li key={c.chave} className="cmd-chip-entra max-w-full">
@@ -403,15 +466,21 @@ export function BandejaDoMapa({
                   type="button"
                   onClick={() => onTirar(c.chave)}
                   title={`Tirar ${c.nome}`}
-                  className="inline-flex min-h-9 items-center text-left gap-1.5 rounded-pill border border-white/15 bg-white/10 py-0.5 pr-2 pl-0.5 text-xs font-semibold transition-colors hover:bg-white/20"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-pill border border-white/15 bg-white/10 py-0.5 pr-2.5 pl-0.5 text-left text-xs font-semibold transition-colors hover:bg-white/20"
                 >
-                  <FotoDoCandidato cargo={c.cargo} sqcand={c.sqcand} nome={c.nome} tamanho="xs" />
+                  {/* A foto oficial, com o anel na cor que o candidato tem no mapa. */}
                   <span
-                    aria-hidden="true"
-                    className="size-2 shrink-0 rounded-full ring-2 ring-white/20"
-                    style={{ background: CORES_DOS_CANDIDATOS[i] }}
-                  />
-                  <span className="wrap-break-word">{c.nome}</span>
+                    className="rounded-full ring-2 ring-offset-1 ring-offset-navy-900"
+                    style={{ '--tw-ring-color': corDoCandidato(i) } as CSSProperties}
+                  >
+                    <FotoDoCandidato cargo={c.cargo} sqcand={c.sqcand} src={foto(c)} nome={c.nome} tamanho="xs" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block wrap-break-word leading-tight">{c.nome}</span>
+                    <span className="block text-[0.625rem] leading-tight font-medium text-white/55">
+                      {c.numero} · {c.nomeDoCargo}
+                    </span>
+                  </span>
                   <X aria-hidden="true" className="size-3 shrink-0 text-white/60" />
                 </button>
               </li>
@@ -421,32 +490,18 @@ export function BandejaDoMapa({
 
         <div className="flex items-center gap-2 border-t border-white/10 pt-2">
           <span className="pl-1 text-[0.6875rem] font-semibold tracking-wide text-navy-300 uppercase tabular-nums">
-            {marcados.length}/{MAXIMO_DE_CANDIDATOS} no mapa
+            {marcados.length} {marcados.length === 1 ? 'marcado' : 'marcados'}
           </span>
           <span className="flex-1" />
           <button
             type="button"
-            onClick={onLimpar}
-            className="inline-flex min-h-10 items-center rounded-pill px-3 text-xs font-semibold text-navy-200 hover:bg-white/10 hover:text-white"
+            onClick={() => setOculta(true)}
+            className="inline-flex min-h-10 items-center gap-1 rounded-pill px-3 text-xs font-semibold text-navy-200 hover:bg-white/10 hover:text-white"
           >
-            Limpar
+            <ChevronDown aria-hidden="true" className="size-4" />
+            Ocultar
           </button>
-          <button
-            type="button"
-            onClick={onVerNoMapa}
-            disabled={enviando}
-            className="group inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-pill bg-gradient-to-r from-gold-400 to-gold-500 px-4 text-sm font-bold text-navy-900 shadow-[0_8px_20px_-8px_rgba(242,193,78,0.8)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-8px_rgba(242,193,78,0.9)] disabled:opacity-60 sm:flex-none"
-          >
-            {enviando ? (
-              <Spinner className="size-4" />
-            ) : jaNoMapa ? (
-              <Check aria-hidden="true" className="size-4" strokeWidth={3} />
-            ) : (
-              <MapPinned aria-hidden="true" className="size-4" />
-            )}
-            {!time ? 'Escolha um time' : jaNoMapa ? 'No mapa · ir até ele' : `Ver no mapa (${marcados.length})`}
-            <ChevronRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </button>
+          {verNoMapa}
         </div>
         {aviso ? <p className="text-xs text-gold-400 sm:hidden">{aviso}</p> : null}
       </div>
