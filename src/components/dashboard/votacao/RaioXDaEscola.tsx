@@ -20,6 +20,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 import { BotaoVoltar } from './EscolhaDoMunicipio';
+import { MarcaDaBarra } from './MarcaDaBarra';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -268,10 +269,16 @@ function PlacarComparado({ escola, candidatos }: { escola: EscolaNoComparativo; 
       </div>
 
       <div className="mt-4 space-y-1.5">
-        {[{ rotulo: 'Estimativa', valor: escola.estimativa, cor: 'rgb(255 255 255 / 0.85)' }, ...candidatos.map((c, i) => ({ rotulo: c.nome, valor: escola.apurado[i] ?? 0, cor: c.cor }))].map(
+        {[
+          { rotulo: 'Estimativa', valor: escola.estimativa, cor: 'rgb(255 255 255 / 0.85)', candidato: undefined as CandidatoNoRaioX | undefined },
+          ...candidatos.map((c, i) => ({ rotulo: c.nome, valor: escola.apurado[i] ?? 0, cor: c.cor, candidato: c })),
+        ].map(
           (b) => (
-            <div key={b.rotulo} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_3rem] items-center gap-2">
-              <span className="wrap-break-word text-[0.6875rem] text-white/70">{b.rotulo}</span>
+            <div key={b.rotulo} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_3rem] items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
+                <MarcaDaBarra candidato={b.candidato} className="ring-offset-navy-800" />
+                <span className="wrap-break-word text-[0.6875rem] text-white/70">{b.rotulo}</span>
+              </span>
               <span className="h-2.5 overflow-hidden rounded-pill bg-white/10">
                 <span
                   className="block h-full rounded-pill transition-[width] duration-1000 ease-out"
@@ -496,6 +503,7 @@ function Secoes({
               <div className="space-y-1">
                 {/* Estimativa: com um Lider em foco, a parte dele em ouro escuro. */}
                 <div className="flex items-center gap-2" title={`estimativa: ${formatNumber(s.estimativa)}`}>
+                  <MarcaDaBarra />
                   <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
                     <div className="flex h-full overflow-hidden rounded-pill transition-[width] duration-700 ease-out" style={{ width: largura(s.estimativa) }}>
                       {escolhido && dele > 0 ? (
@@ -517,6 +525,7 @@ function Secoes({
                 </div>
                 {candidatos.map((c, k) => (
                   <div key={c.rotulo} className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(s.apurado[k] ?? 0)}`}>
+                    <MarcaDaBarra candidato={{ ...c, cor: varios ? c.cor : '#e0a426' }} />
                     <div className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
                       <div
                         className={cn('h-full rounded-pill transition-[width] duration-700 ease-out', !varios && 'bg-gold-400')}

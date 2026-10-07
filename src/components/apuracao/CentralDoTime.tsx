@@ -449,7 +449,7 @@ export function BandejaDoMapa({
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:pl-[15rem]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 lg:pl-[15rem] lg:menu-recolhido:pl-[6.5rem]">
       <div
         role="region"
         aria-label="Candidatos marcados para o mapa"
