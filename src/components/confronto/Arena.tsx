@@ -51,7 +51,10 @@ export function Lado({
   onRemover,
   onAdicionar,
   vazio,
+  rotuloDeAdicionar = 'Adicionar adversário',
 }: {
+  /** O texto do botao de adicionar. */
+  rotuloDeAdicionar?: string;
   titulo: string;
   subtitulo: string;
   cor: string;
@@ -148,7 +151,7 @@ export function Lado({
                 onClick={onAdicionar}
                 className="flex min-h-11 w-full items-center justify-center gap-2 rounded-control border-2 border-dashed border-white/20 text-sm font-semibold text-white/80 transition-colors hover:border-[#e5484d] hover:bg-[#e5484d]/10 hover:text-white"
               >
-                <Plus aria-hidden="true" className="size-4" /> Adicionar adversário
+                <Plus aria-hidden="true" className="size-4" /> {rotuloDeAdicionar}
               </button>
             </li>
           ) : null}
@@ -875,7 +878,8 @@ export function Seletor({
   const [turno, setTurno] = useState<number | null>(base?.turno ?? null);
   const turnoAtivo = turno ?? turnos[turnos.length - 1] ?? null;
   const cargos = useMemo(() => cargosDaVotacao(lista.filter((c) => turnoAtivo === null || c.turno === turnoAtivo)), [lista, turnoAtivo]);
-  const [cargo, setCargo] = useState<number | null>(base?.cargoCodigo ?? null);
+  // Abre com TODOS os cargos: o candidato que quiser, de qualquer cargo.
+  const [cargo, setCargo] = useState<number | null>(null);
   const [busca, setBusca] = useState('');
   const [quantos, setQuantos] = useState(LEVA);
   const achados = useMemo(

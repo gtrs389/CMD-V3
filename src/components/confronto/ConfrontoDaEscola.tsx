@@ -79,7 +79,10 @@ export function ConfrontoDaEscola({
   const [adversarios, setAdversarios] = useState<CandidatoDaVotacao[]>(registro.direita);
   const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(() => new Set(registro.lideres.map((l) => l.id)));
   const [votacoes, setVotacoes] = useState<Record<string, VotacaoNoMapa | 'erro'>>({});
-  const [escolhendo, setEscolhendo] = useState(false);
+  /** A gaveta de candidatos aberta: para o seu lado ou para o lado dos adversarios. */
+  const [escolhendo, setEscolhendo] = useState<'esquerda' | 'direita' | null>(null);
+  /** O seu lado tambem e editavel aqui: entra e sai quem voce quiser. */
+  const [ladoEsquerdo, setLadoEsquerdo] = useState<CandidatoDaVotacao[]>(registro.esquerda);
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [zona, setZona] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -97,12 +100,12 @@ export function ConfrontoDaEscola({
       });
   }, []);
   useEffect(() => {
-    for (const c of [...registro.esquerda, ...adversarios]) buscar(c.id);
-  }, [registro.esquerda, adversarios, buscar]);
+    for (const c of [...ladoEsquerdo, ...adversarios]) buscar(c.id);
+  }, [ladoEsquerdo, adversarios, buscar]);
 
   /** Grava na sala e avisa a lista; se nao der, volta atras e diz por que. */
   const gravar = useCallback(
-    (mudanca: { direita?: CandidatoDaVotacao[]; lideres?: { id: string; nome: string }[] }, desfazer: () => void) => {
+    (mudanca: { esquerda?: CandidatoDaVotacao[]; direita?: CandidatoDaVotacao[]; lideres?: { id: string; nome: string }[] }, desfazer: () => void) => {
       api<{ escola: EscolaNaSala }>(`/api/confrontos/${registro.id}`, { method: 'PATCH', body: mudanca })
         .then(({ escola }) => onMudou(escola))
         .catch((e) => {
@@ -113,7 +116,7 @@ export function ConfrontoDaEscola({
     [registro.id, onMudou],
   );
 
-  const idsDaEsquerda = useMemo(() => new Set<string | undefined>(registro.esquerda.map((c) => c.id)), [registro.esquerda]);
+  const idsDaEsquerda = useMemo(() => new Set<string | undefined>(ladoEsquerdo.map((c) => c.id)), [ladoEsquerdo]);
   function adicionar(c: CandidatoDaVotacao) {
     if (idsDaEsquerda.has(c.id) || adversarios.some((a) => a.id === c.id)) return;
     const antes = adversarios;
@@ -128,6 +131,29 @@ export function ConfrontoDaEscola({
     }
     buscar(c.id);
     gravar({ direita: depois }, () => setAdversarios(antes));
+  }
+  function adicionarNoSeuLado(c: CandidatoDaVotacao) {
+    if (ladoEsquerdo.some((a) => a.id === c.id)) return;
+    if (adversarios.some((a) => a.id === c.id)) remover(c.id);
+    const antes = ladoEsquerdo;
+    const depois = [...antes, c];
+    setLadoEsquerdo(depois);
+    if (votacoes[c.id] === 'erro') {
+      setVotacoes((atual) => {
+        const novo = { ...atual };
+        delete novo[c.id];
+        return novo;
+      });
+    }
+    buscar(c.id);
+    gravar({ esquerda: depois }, () => setLadoEsquerdo(antes));
+  }
+  function tirarDoSeuLado(id: string) {
+    if (ladoEsquerdo.length <= 1) return;
+    const antes = ladoEsquerdo;
+    const depois = antes.filter((a) => a.id !== id);
+    setLadoEsquerdo(depois);
+    gravar({ esquerda: depois }, () => setLadoEsquerdo(antes));
   }
   function remover(id: string) {
     const antes = adversarios;
@@ -160,12 +186,12 @@ export function ConfrontoDaEscola({
     },
     [votacoes, recorte],
   );
-  const esquerdaPronta = registro.esquerda.every((c) => votacoes[c.id] !== undefined);
+  const esquerdaPronta = ladoEsquerdo.every((c) => votacoes[c.id] !== undefined);
   const escola = useMemo(() => {
     if (!mapa.data || !esquerdaPronta) return null;
-    const tse = registro.esquerda.map((c) => pinsDe(c.id)).filter((p): p is NonNullable<typeof p> => p !== null);
+    const tse = ladoEsquerdo.map((c) => pinsDe(c.id)).filter((p): p is NonNullable<typeof p> => p !== null);
     return escolaDaSala(campanha, tse, { chave: registro.chave, pinos: registro.pinos });
-  }, [mapa.data, esquerdaPronta, registro.esquerda, registro.chave, registro.pinos, campanha, pinsDe]);
+  }, [mapa.data, esquerdaPronta, ladoEsquerdo, registro.chave, registro.pinos, campanha, pinsDe]);
   /** Sem a escola no recorte de hoje, o duelo ainda acontece pelo local do TSE. */
   const base = useMemo(
     () => escola ?? { chave: registro.chave, secoes: [], estimativa: 0, pinosDaCampanha: registro.pinos },
@@ -178,16 +204,16 @@ export function ConfrontoDaEscola({
   /** As referencias dos Lideres desta escola (no recorte do envio): as opcoes do filtro. */
   const opcoesDeReferencia = useMemo(() => {
     if (!mapa.data || !esquerdaPronta) return [];
-    const tse = registro.esquerda.map((c) => pinsDe(c.id)).filter((p): p is NonNullable<typeof p> => p !== null);
+    const tse = ladoEsquerdo.map((c) => pinsDe(c.id)).filter((p): p is NonNullable<typeof p> => p !== null);
     const daEscola = escolaDaSala(campanhaDoEnvio, tse, { chave: registro.chave, pinos: registro.pinos });
     return daEscola ? referenciasDosLideres(lideresNoRaioX(daEscola, campanhaDoEnvio, mapa.data.referencias).lideres) : [];
-  }, [mapa.data, esquerdaPronta, registro.esquerda, registro.chave, registro.pinos, campanhaDoEnvio, pinsDe]);
+  }, [mapa.data, esquerdaPronta, ladoEsquerdo, registro.chave, registro.pinos, campanhaDoEnvio, pinsDe]);
   const lideresMarcados = useMemo(() => lideres.filter((l) => selecionados.has(l.id)), [lideres, selecionados]);
 
   const esquerda = useMemo(
     (): CandidatoNoRaioX[] =>
-      registro.esquerda.map((c, i) => ({ id: c.id, nome: c.nome, rotulo: rotuloDoCandidato(c), cor: corDoCandidato(i), cargo: c.cargoCodigo, foto: fotoDoCandidatoUrl(c) })),
-    [registro.esquerda],
+      ladoEsquerdo.map((c, i) => ({ id: c.id, nome: c.nome, rotulo: rotuloDoCandidato(c), cor: corDoCandidato(i), cargo: c.cargoCodigo, foto: fotoDoCandidatoUrl(c) })),
+    [ladoEsquerdo],
   );
   const direita = useMemo(
     (): Lutador[] =>
@@ -195,13 +221,13 @@ export function ConfrontoDaEscola({
         id: c.id,
         nome: c.nome,
         rotulo: rotuloDoCandidato(c),
-        cor: corDoCandidato(registro.esquerda.length + i),
+        cor: corDoCandidato(ladoEsquerdo.length + i),
         cargo: c.cargoCodigo,
         foto: fotoDoCandidatoUrl(c),
         carregando: votacoes[c.id] === undefined,
         erro: votacoes[c.id] === 'erro',
       })),
-    [adversarios, votacoes, registro.esquerda.length],
+    [adversarios, votacoes, ladoEsquerdo.length],
   );
   const prontos = direita.filter((c) => !c.carregando && !c.erro);
 
@@ -211,10 +237,10 @@ export function ConfrontoDaEscola({
       return pins ? votosNaEscola(base, pins) : new Map();
     };
     const dir = adversarios.filter((a) => pinsDe(a.id) !== null).map((a) => votosDe(a.id));
-    return montarDuelo(base, registro.esquerda.map((c) => votosDe(c.id)), dir, lideresMarcados);
-  }, [base, registro.esquerda, adversarios, pinsDe, lideresMarcados]);
+    return montarDuelo(base, ladoEsquerdo.map((c) => votosDe(c.id)), dir, lideresMarcados);
+  }, [base, ladoEsquerdo, adversarios, pinsDe, lideresMarcados]);
   const zonas = useMemo(() => porZona(duelo.secoes), [duelo.secoes]);
-  const placares = useMemo(() => placarDosLideres(duelo.secoes, lideres, registro.esquerda.length), [duelo.secoes, lideres, registro.esquerda.length]);
+  const placares = useMemo(() => placarDosLideres(duelo.secoes, lideres, ladoEsquerdo.length), [duelo.secoes, lideres, ladoEsquerdo.length]);
   const temAdversario = prontos.length > 0;
   const pronto = Boolean(mapa.data) && esquerdaPronta;
 
@@ -258,12 +284,12 @@ export function ConfrontoDaEscola({
   // Esc fecha a gaveta dos adversarios; sem ela, volta para a lista.
   const gaveta = useRef(false);
   useEffect(() => {
-    gaveta.current = escolhendo;
+    gaveta.current = escolhendo !== null;
   }, [escolhendo]);
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (gaveta.current) setEscolhendo(false);
+      if (gaveta.current) setEscolhendo(null);
       else onVoltar();
     };
     document.addEventListener('keydown', aoTeclar);
@@ -271,7 +297,7 @@ export function ConfrontoDaEscola({
   }, [onVoltar]);
 
   const todosDaLista = useMemo(() => lista.data?.candidatos ?? [], [lista.data]);
-  const baseDaEleicao = useMemo(() => todosDaLista.find((c) => idsDaEsquerda.has(c.id)) ?? registro.esquerda[0] ?? null, [todosDaLista, idsDaEsquerda, registro.esquerda]);
+  const baseDaEleicao = useMemo(() => todosDaLista.find((c) => idsDaEsquerda.has(c.id)) ?? ladoEsquerdo[0] ?? null, [todosDaLista, idsDaEsquerda, ladoEsquerdo]);
   const daEleicao = useMemo(
     () => (baseDaEleicao ? todosDaLista.filter((c) => c.ano === baseDaEleicao.ano && c.uf === baseDaEleicao.uf) : todosDaLista),
     [todosDaLista, baseDaEleicao],
@@ -369,12 +395,15 @@ export function ConfrontoDaEscola({
             <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
               <Lado
                 titulo="Seu lado"
-                subtitulo="Os candidatos que você escolheu no mapa"
+                subtitulo="Os seus candidatos: adicione ou tire quem quiser"
                 cor={AZUL}
                 lutadores={esquerda}
                 votos={duelo.esquerda}
                 total={duelo.totalEsquerda}
                 totalDaEscola={duelo.totalEsquerda + duelo.totalDireita}
+                onRemover={ladoEsquerdo.length > 1 ? tirarDoSeuLado : undefined}
+                onAdicionar={() => setEscolhendo('esquerda')}
+                rotuloDeAdicionar="Adicionar candidato ao seu lado"
               />
               <Centro esquerda={duelo.totalEsquerda} direita={duelo.totalDireita} vitorias={duelo.vitorias} temAdversario={temAdversario} />
               <Lado
@@ -390,13 +419,13 @@ export function ConfrontoDaEscola({
                 totalDaEscola={duelo.totalEsquerda + duelo.totalDireita}
                 direita
                 onRemover={remover}
-                onAdicionar={() => setEscolhendo(true)}
+                onAdicionar={() => setEscolhendo('direita')}
                 vazio={
                   <ChamadaDoAdversario
                     sugestoes={sugestoes}
                     carregando={!lista.data && !lista.error}
                     onEscolher={adicionar}
-                    onAbrir={() => setEscolhendo(true)}
+                    onAbrir={() => setEscolhendo('direita')}
                   />
                 }
               />
@@ -441,11 +470,11 @@ export function ConfrontoDaEscola({
           base={baseDaEleicao}
           carregando={!lista.data && !lista.error}
           erro={Boolean(lista.error)}
-          naEsquerda={idsDaEsquerda}
-          naDireita={new Set(adversarios.map((a) => a.id))}
-          onAdicionar={adicionar}
-          onRemover={remover}
-          onClose={() => setEscolhendo(false)}
+          naEsquerda={escolhendo === 'esquerda' ? new Set(adversarios.map((a) => a.id)) : idsDaEsquerda}
+          naDireita={escolhendo === 'esquerda' ? new Set(ladoEsquerdo.map((a) => a.id)) : new Set(adversarios.map((a) => a.id))}
+          onAdicionar={escolhendo === 'esquerda' ? adicionarNoSeuLado : adicionar}
+          onRemover={escolhendo === 'esquerda' ? tirarDoSeuLado : remover}
+          onClose={() => setEscolhendo(null)}
         />
       ) : null}
     </div>

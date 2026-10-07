@@ -6,6 +6,7 @@ import { atualizarNaSala, tirarDaSala } from '@/lib/server/confronto.service';
 import { candidatoSchema, lideresSchema, resumoSchema } from '../schema';
 
 const mudancaSchema = z.object({
+  esquerda: z.array(candidatoSchema).min(1).max(30).optional(),
   direita: z.array(candidatoSchema).max(30).optional(),
   lideres: lideresSchema.optional(),
   resumo: resumoSchema.optional(),

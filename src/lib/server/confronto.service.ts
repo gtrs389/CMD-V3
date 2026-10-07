@@ -139,14 +139,15 @@ function filtroDaLinha(user: SessionUser, id: string): Record<string, string> {
 export async function atualizarNaSala(
   user: SessionUser,
   id: string,
-  mudanca: { direita?: CandidatoDaVotacao[]; lideres?: { id: string; nome: string }[]; resumo?: Partial<ResumoDaEscolaNaSala> },
+  mudanca: { esquerda?: CandidatoDaVotacao[]; direita?: CandidatoDaVotacao[]; lideres?: { id: string; nome: string }[]; resumo?: Partial<ResumoDaEscolaNaSala> },
 ): Promise<EscolaNaSala> {
   const valores: Record<string, object | string> = {};
+  if (mudanca.esquerda) valores.left_candidates = mudanca.esquerda;
   if (mudanca.direita) valores.right_candidates = mudanca.direita;
   if (mudanca.lideres) valores.leaders = mudanca.lideres;
   if (mudanca.resumo) valores.snapshot = { ...mudanca.resumo, em: new Date().toISOString() };
   // O placar recalculado nao conta como mexida na sala: so o resto sobe a escola na lista.
-  if (mudanca.direita || mudanca.lideres) valores.updated_at = new Date().toISOString();
+  if (mudanca.esquerda || mudanca.direita || mudanca.lideres) valores.updated_at = new Date().toISOString();
   const [linha] = await updateRows<LinhaDaSala>(TABELA, filtroDaLinha(user, id), valores, COLUNAS);
   if (!linha) throw notFound('Esta escola não está mais na sala.');
   return montar(linha);
