@@ -83,6 +83,16 @@ const MapCanvas = dynamic(() => import('./MapCanvas'), {
   loading: () => <MapaCarregando texto="Carregando o mapa" />,
 });
 
+/**
+ * Candidatos pedidos DE FORA do mapa (a Sala de Apuracao). `municipios`: o
+ * recorte escolhido antes (vazio ou ausente: o estado inteiro).
+ */
+export interface PedidoDeVotacao {
+  candidatos: CandidatoDaVotacao[];
+  vez: number;
+  municipios?: string[];
+}
+
 interface MobilizationMapProps {
   /** Restringe o mapa a equipe de um unico time. */
   clientId?: string;
@@ -108,7 +118,7 @@ interface MobilizationMapProps {
    * Cada pedido novo traz um `vez` diferente: o mesmo grupo pedido duas
    * vezes volta a aplicar (depois de a pessoa ter mexido no mapa).
    */
-  pedidoDeVotacao?: { candidatos: CandidatoDaVotacao[]; vez: number } | null;
+  pedidoDeVotacao?: PedidoDeVotacao | null;
   /** Avisa quem esta fora quando a escolha muda DENTRO do mapa. */
   onCandidatosChange?: (candidatos: CandidatoDaVotacao[]) => void;
   /** Dentro da propria Sala de Apuracao: sem o atalho para ela. */
@@ -307,12 +317,16 @@ export function MobilizationMap({
       setFocusPlace(null);
       setOpenPlace(null);
       setRaioX(null);
-      setQuery((atual) => ({ ...atual, state: null, city: null, cities: [], search: '' }));
+      setQuery((atual) => ({ ...atual, state: null, city: null, cities: pedidoDeVotacao.municipios ?? [], search: '' }));
     });
     return () => cancelAnimationFrame(quadro);
   }, [pedidoDeVotacao]);
 
-  function escolherCandidatos(escolhidos: CandidatoDaVotacao[]) {
+  /**
+   * `municipios`: o recorte escolhido no passo 2 da central (vazio: o estado
+   * inteiro). Ausente quando a escolha vem do placar, que mantem o recorte.
+   */
+  function escolherCandidatos(escolhidos: CandidatoDaVotacao[], municipios?: string[] | null) {
     onCandidatosChange?.(escolhidos);
     const entrando = candidatos.length === 0 && escolhidos.length > 0;
     setCandidatos(escolhidos);
@@ -326,7 +340,11 @@ export function MobilizationMap({
     setRaioX(null);
     // Cidade, estado e busca da campanha nao valem para a votacao (os nomes
     // vem escritos de outro jeito na planilha do TSE): o recorte recomeca.
-    if (entrando || escolhidos.length === 0) setQuery((atual) => ({ ...atual, state: null, city: null, cities: [], search: '' }));
+    if (escolhidos.length > 0 && municipios) {
+      setQuery((atual) => ({ ...atual, state: null, city: null, cities: municipios, search: '' }));
+    } else if (entrando || escolhidos.length === 0) {
+      setQuery((atual) => ({ ...atual, state: null, city: null, cities: [], search: '' }));
+    }
   }
 
   /**
@@ -477,7 +495,7 @@ export function MobilizationMap({
   );
   /**
    * Varios candidatos: a mesma estimativa contra cada um, escola, zona e
-   * secao. `comparativoCompleto` alimenta o raio-x; o do recorte, o placar e o
+   * secao. `comparativoCompleto` com todos; o do recorte alimenta o placar e o
    * PDF — as escolas do time que estao no recorte da tela.
    */
   const comparativoCompleto = useMemo(
@@ -495,8 +513,27 @@ export function MobilizationMap({
       apuradoNasEscolasDoTime: comparativoCompleto.apuradoTotal.map((_, i) => escolas.reduce((t, e) => t + (e.apurado[i] ?? 0), 0)),
     };
   }, [comparativoCompleto, confrontoNoRecorte]);
+  /**
+   * So os LIGADOS no mapa: a escola (raio-x) e o quadro "Escola por escola"
+   * mostram os candidatos que estao no mapa, e nao todos os escolhidos. Um
+   * ligado so: o confronto dele, sem comparativo.
+   */
+  const comparativoDosAtivos = useMemo(() => {
+    if (!confrontos || ativos.length < 2) return null;
+    const deles = ativos.map((c) => confrontos[candidatos.findIndex((x) => x.id === c.id)]);
+    return deles.every(Boolean) ? compararCandidatos(deles) : null;
+  }, [confrontos, ativos, candidatos]);
+  const escolasDosAtivosNoRecorte = useMemo(() => {
+    if (!comparativoDosAtivos || !confrontoNoRecorte) return null;
+    const pinos = new Set(confrontoNoRecorte.doTime.flatMap((e) => e.pinosDaCampanha));
+    return comparativoDosAtivos.escolas.filter((e) => e.pinosDaCampanha.some((p) => pinos.has(p)));
+  }, [comparativoDosAtivos, confrontoNoRecorte]);
   /** A cor de cada candidato: com um so, a apuracao segue em ouro. */
   const corDo = (i: number) => (candidatos.length > 1 ? corDoCandidato(i) : '#e0a426');
+  /** A cor de um escolhido, a mesma do placar (pela posicao dele na escolha). */
+  const corDoEscolhido = (c: CandidatoDaVotacao) => corDo(Math.max(0, candidatos.findIndex((x) => x.id === c.id)));
+  /** Quem a escola mostra: os ligados no mapa (um so, quando so um esta ligado). */
+  const candidatosDaEscola = comparativoDosAtivos ? ativos : ativos.slice(0, 1);
 
   /** O Lider escolhido no filtro, com o que ele cadastrou no mapa inteiro. */
   const liderEscolhido = query.leader ? (options.leaders.find((l) => l.id === query.leader) ?? null) : null;
@@ -605,8 +642,8 @@ export function MobilizationMap({
   const quadroEscolaPorEscola =
     candidato && votacao && confrontoNoRecorte && !fullscreen ? (
       <EscolaPorEscola
-        escolas={comparativo ? comparativo.escolas : confrontoNoRecorte.doTime.map(comoComparativo)}
-        candidatos={(comparativo ? candidatos : [candidato]).map((c, i) => ({ nome: c.nome, cor: corDo(i) }))}
+        escolas={escolasDosAtivosNoRecorte ?? confrontoNoRecorte.doTime.map(comoComparativo)}
+        candidatos={candidatosDaEscola.map((c) => ({ nome: c.nome, cor: corDoEscolhido(c) }))}
         lideresDe={lideresDaEscola}
         liderEmFoco={liderEscolhido?.name ?? null}
         recorte={recorteEmTexto}
@@ -953,6 +990,8 @@ export function MobilizationMap({
       <BotaoDaVotacao
         selecionados={candidatos}
         onChange={escolherCandidatos}
+        campanha={data?.pollingPlaces}
+        municipios={query.cities}
         onClear={() => escolherCandidatos([])}
         podeEnviar={podeLocalizar}
       />
@@ -1331,15 +1370,15 @@ export function MobilizationMap({
       {escolaDoRaioX && candidato ? (
         <RaioXDaEscola
           escola={
-            (comparativoCompleto?.escolas.find((e) => e.pinosDaCampanha.some((p) => escolaDoRaioX.pinosDaCampanha.includes(p))) ??
+            (comparativoDosAtivos?.escolas.find((e) => e.pinosDaCampanha.some((p) => escolaDoRaioX.pinosDaCampanha.includes(p))) ??
               null) ||
             comoComparativo(escolaDoRaioX)
           }
-          candidatos={(comparativoCompleto ? candidatos : [candidato]).map(
-            (c, i): CandidatoNoRaioX => ({
+          candidatos={candidatosDaEscola.map(
+            (c): CandidatoNoRaioX => ({
               nome: c.nome,
               rotulo: rotuloDoCandidato(c),
-              cor: corDo(i),
+              cor: corDoEscolhido(c),
               cargo: c.cargoCodigo,
               foto: fotoDoCandidatoUrl(c),
             }),

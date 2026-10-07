@@ -15,12 +15,20 @@ export async function fotoDoCandidato(cargo: number, sqcand: string): Promise<{ 
   const info = CARGOS_DA_APURACAO.find((x) => x.codigo === cargo);
   if (!info || !/^[0-9]{1,20}$/.test(sqcand)) return null;
   const c = configuracaoAoVivo();
-  const resposta = await fetch(urlDaFoto(c, c.uf, info.federal, sqcand), {
-    signal: AbortSignal.timeout(10_000),
-    cache: 'force-cache',
-  }).catch(() => null);
-  if (!resposta?.ok) return null;
-  return { corpo: await resposta.arrayBuffer(), tipo: resposta.headers.get('content-type') ?? 'image/jpeg' };
+  // Presidente e da eleicao FEDERAL: a foto mora na pasta nacional do TSE
+  // ("br"), e nao na do estado — era por isso que o presidente saia sem
+  // foto. A pasta do estado fica de reserva, caso o TSE a publique ali.
+  const pastas = info.federal ? ['br', c.uf] : [c.uf];
+  for (const pasta of pastas) {
+    const resposta = await fetch(urlDaFoto(c, pasta, info.federal, sqcand), {
+      signal: AbortSignal.timeout(10_000),
+      cache: 'force-cache',
+    }).catch(() => null);
+    const tipo = resposta?.headers.get('content-type') ?? 'image/jpeg';
+    // Foto que falta pode voltar como pagina de erro (HTML): essa nao conta.
+    if (resposta?.ok && !tipo.startsWith('text/')) return { corpo: await resposta.arrayBuffer(), tipo };
+  }
+  return null;
 }
 
 /**

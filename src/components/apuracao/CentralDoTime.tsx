@@ -7,7 +7,7 @@ import type { ClientSummary } from '@/lib/types';
 import { useClient, useClientSummaries } from '@/hooks/use-clients';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials, matchesSearch } from '@/lib/utils/text';
-import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
+import { MobilizationMap, type PedidoDeVotacao } from '@/components/dashboard/MobilizationMap';
 import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import { Spinner } from '@/components/ui/Spinner';
 import { CarregandoVotacao } from '@/components/dashboard/votacao/CarregandoVotacao';
@@ -56,7 +56,7 @@ interface CentralDoTimeProps {
   timeDaSessao: string | null;
   time: TimeDaSala | null;
   onTime: (time: TimeDaSala | null) => void;
-  pedido: { candidatos: CandidatoDaVotacao[]; vez: number } | null;
+  pedido: PedidoDeVotacao | null;
   onCandidatosDoMapa: (candidatos: CandidatoDaVotacao[]) => void;
   marcados: CandidatoMarcado[];
   fallbackCenter?: { latitude: number; longitude: number };

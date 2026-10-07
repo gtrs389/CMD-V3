@@ -556,3 +556,78 @@ export function somarVotacoes(votacoes: readonly VotacaoNoMapa[]): VotacaoNoMapa
     foraDoMapa: somarEscolas(votacoes.map((v) => v.foraDoMapa)),
   };
 }
+
+/* -------------------------------------------------------------------------
+   Municipio: o recorte escolhido antes de abrir o mapa
+   ------------------------------------------------------------------------- */
+
+export interface MunicipioNaVotacao {
+  /** Sem acento nem caixa: "Palmeira dos Índios" e "PALMEIRA DOS INDIOS" sao um so. */
+  chave: string;
+  /** Como o TSE escreve (e o que o filtro do mapa compara). */
+  nome: string;
+  /** Votos de cada candidato no municipio, na ordem da escolha. */
+  votos: number[];
+  /** A soma dos votos dos escolhidos. */
+  total: number;
+  /** Locais de votacao com voto de algum dos escolhidos. */
+  locais: number;
+  /** Pessoas que o time cadastrou ali (a estimativa). */
+  pessoasDoTime: number;
+}
+
+/**
+ * Os municipios dos candidatos escolhidos, do mais votado para o menos: os
+ * votos de cada um, quantos locais e quantas pessoas o time tem ali.
+ * Municipio onde so o time tem gente (e nenhum dos escolhidos teve voto)
+ * tambem entra: e justamente o que a campanha quer ver.
+ */
+export function municipiosDaVotacao(
+  votacoes: readonly VotacaoNoMapa[],
+  campanha: readonly Pick<PollingPlacePin, 'city' | 'total'>[] = [],
+): MunicipioNaVotacao[] {
+  const porChave = new Map<string, MunicipioNaVotacao>();
+  const formas = new Map<string, Map<string, number>>();
+  // O mesmo local com voto de dois candidatos conta uma vez so.
+  const locais = new Map<string, Set<string>>();
+  const linha = (cidade: string) => {
+    const chave = paraBusca(cidade);
+    let m = porChave.get(chave);
+    if (!m) {
+      m = { chave, nome: cidade, votos: votacoes.map(() => 0), total: 0, locais: 0, pessoasDoTime: 0 };
+      porChave.set(chave, m);
+    }
+    return m;
+  };
+
+  votacoes.forEach((v, i) => {
+    for (const pin of [...v.noMapa, ...v.foraDoMapa]) {
+      const cidade = pin.city?.trim();
+      if (!cidade || pin.total <= 0) continue;
+      const m = linha(cidade);
+      m.votos[i] += pin.total;
+      m.total += pin.total;
+      const escritas = formas.get(m.chave) ?? new Map<string, number>();
+      escritas.set(cidade, (escritas.get(cidade) ?? 0) + 1);
+      formas.set(m.chave, escritas);
+      const doMunicipio = locais.get(m.chave) ?? new Set<string>();
+      doMunicipio.add(pin.locationId);
+      locais.set(m.chave, doMunicipio);
+    }
+  });
+
+  for (const p of campanha) {
+    const cidade = p.city?.trim();
+    if (!cidade || p.total <= 0) continue;
+    linha(cidade).pessoasDoTime += p.total;
+  }
+
+  return [...porChave.values()]
+    .map((m) => ({
+      ...m,
+      // O nome como o TSE mais escreve; sem voto, como o time escreveu.
+      nome: [...(formas.get(m.chave) ?? new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? m.nome,
+      locais: locais.get(m.chave)?.size ?? 0,
+    }))
+    .sort((a, b) => b.total - a.total || b.pessoasDoTime - a.pessoasDoTime || a.nome.localeCompare(b.nome, 'pt-BR'));
+}

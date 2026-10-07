@@ -33,6 +33,8 @@ import { formatNumber } from '@/lib/utils/text';
 import { corDoCandidato } from './cores';
 import { importarVotacao, type Andamento, type ResumoDoEnvio } from './importar-votacao';
 import { textoDoAndamento, useVotacaoAoVivo } from './use-votacao-ao-vivo';
+import { BotaoVoltar, EscolhaDoMunicipio } from './EscolhaDoMunicipio';
+import type { PollingPlacePin } from '@/lib/domain/map-pin';
 
 /**
  * Central de candidatos: a escolha de quem vai para o mapa.
@@ -67,14 +69,26 @@ const pct = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDigits:
 export function CentralDeCandidatos({
   podeEnviar,
   selecionados,
+  campanha,
+  municipiosIniciais,
   onClose,
   onConfirm,
 }: {
   podeEnviar: boolean;
   selecionados: CandidatoDaVotacao[];
+  /** As escolas do time: quantas pessoas em cada municipio, no passo do municipio. */
+  campanha?: readonly Pick<PollingPlacePin, 'city' | 'total'>[];
+  /** Os municipios que o mapa ja mostra. */
+  municipiosIniciais?: string[];
   onClose: () => void;
-  onConfirm: (candidatos: CandidatoDaVotacao[]) => void;
+  /**
+   * `municipios`: os escolhidos no passo 2 (vazio: o estado inteiro). Nulo
+   * quando nao houve passo 2 (voltar ao mapa da campanha).
+   */
+  onConfirm: (candidatos: CandidatoDaVotacao[], municipios: string[] | null) => void;
 }) {
+  /** Passo 1: os candidatos. Passo 2: o municipio, antes de abrir o mapa. */
+  const [passo, setPasso] = useState<'candidatos' | 'municipio'>('candidatos');
   /** A escolha em andamento: so vai para o mapa no "Ver no mapa". */
   const [escolhidos, setEscolhidos] = useState<CandidatoDaVotacao[]>(selecionados);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -175,7 +189,8 @@ export function CentralDeCandidatos({
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) {
+      // No passo do municipio, o Esc e dele: volta para os candidatos.
+      if (e.key === 'Escape' && !busy && passo === 'candidatos') {
         e.stopPropagation();
         onClose();
       }
@@ -185,15 +200,19 @@ export function CentralDeCandidatos({
       document.body.style.overflow = overflow;
       document.removeEventListener('keydown', aoTeclar, true);
     };
-  }, [busy, onClose]);
+  }, [busy, onClose, passo]);
   useEffect(() => {
     if (window.matchMedia('(pointer: fine)').matches) campoDeBusca.current?.focus({ preventScroll: true });
   }, []);
 
   const podeConfirmar = escolhidos.length > 0 || selecionados.length > 0;
+  /** "Ver no mapa": com candidatos, antes pergunta o municipio. */
   const confirmar = () => {
-    if (podeConfirmar) onConfirm(escolhidos);
+    if (!podeConfirmar) return;
+    if (escolhidos.length === 0) onConfirm([], null);
+    else setPasso('municipio');
   };
+  const voltarDoMunicipio = useCallback(() => setPasso('candidatos'), []);
 
   const secoesPct = situacao?.totalDeSecoes ? Math.min(100, (situacao.secoesApuradas / situacao.totalDeSecoes) * 100) : 0;
 
@@ -215,7 +234,8 @@ export function CentralDeCandidatos({
           <span aria-hidden="true" className="cmd-orbe cmd-orbe--b pointer-events-none absolute -bottom-24 left-1/3 size-64 rounded-full bg-gold-500/20 blur-3xl" />
 
           <div className="relative flex items-start gap-4">
-            <span className="hidden size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-500 text-navy-900 shadow-[0_10px_24px_-8px_rgba(242,193,78,0.8)] sm:flex">
+            <BotaoVoltar onClick={onClose} rotulo="Mapa" disabled={busy} />
+            <span className="hidden size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-500 text-navy-900 shadow-[0_10px_24px_-8px_rgba(242,193,78,0.8)] xl:flex">
               <Vote aria-hidden="true" className="size-6" />
             </span>
             <div className="min-w-0 flex-1">
@@ -245,16 +265,6 @@ export function CentralDeCandidatos({
             </div>
 
             {situacao?.totalDeSecoes ? <AnelDasSecoes pct={secoesPct} /> : null}
-
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={busy}
-              aria-label="Fechar"
-              className="-mt-1 -mr-1 flex size-10 shrink-0 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
-            >
-              <X aria-hidden="true" className="size-5" />
-            </button>
           </div>
         </header>
 
@@ -437,6 +447,17 @@ export function CentralDeCandidatos({
             />
           </aside>
         </div>
+
+        {/* PASSO 2: o municipio, por cima da escolha (que continua ali para voltar). */}
+        {passo === 'municipio' ? (
+          <EscolhaDoMunicipio
+            candidatos={escolhidos}
+            campanha={campanha}
+            iniciais={municipiosIniciais}
+            onVoltar={voltarDoMunicipio}
+            onConfirmar={(municipios) => onConfirm(escolhidos, municipios)}
+          />
+        ) : null}
 
         {/* SUA SELECAO (celular): a barra de baixo. */}
         <div className="safe-bottom flex shrink-0 flex-col gap-2 border-t border-line bg-surface px-4 py-3 lg:hidden">
