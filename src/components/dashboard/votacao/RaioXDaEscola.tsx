@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, CheckCheck, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -21,6 +21,7 @@ import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 import { BotaoVoltar } from './EscolhaDoMunicipio';
 import { MarcaDaBarra } from './MarcaDaBarra';
+import { SalaDeConfronto } from './SalaDeConfronto';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -35,7 +36,9 @@ import { MarcaDaBarra } from './MarcaDaBarra';
  * Abre na TELA INTEIRA, com o voltar vermelho. Quantas pessoas cada Lider
  * cadastrou em cada secao aparece sozinho, sem clique: na grade "Lider x
  * Secao" e em cada secao da lista. Todo Lider leva a tag da referencia.
- * Tocar um Lider ainda acende a parte dele, na grade e nas barras.
+ * Da para selecionar UM OU MAIS Lideres: a gente deles acende junta, na
+ * grade e nas barras. "Enviar para sala de confronto" leva a escola, os
+ * candidatos e os Lideres selecionados para o duelo contra outros candidatos.
  */
 
 const LEITURA: Record<LeituraDoConfronto, { texto: string; classe: string; icone: React.ReactNode } | null> = {
@@ -100,6 +103,8 @@ function Medidor({ valor }: { valor: number | null }) {
 
 /** Um candidato no raio-x: nome, rotulo, cor e foto (pelo numero de urna). */
 export interface CandidatoNoRaioX {
+  /** O id da votacao (`CandidatoDaVotacao.id`): a Sala de Confronto acha o cargo e o turno por ele. */
+  id?: string;
   nome: string;
   /** "Fulano (15123) · Deputado Estadual". */
   rotulo: string;
@@ -306,38 +311,91 @@ function fraseComparada(e: EscolaNoComparativo, candidatos: CandidatoNoRaioX[]):
     : `${lista}. O time não tinha estimativa aqui.`;
 }
 
-/** Os Lideres que cadastraram a estimativa da escola. Tocar um acende a parte dele nas secoes. */
+/** Quantas pessoas dos Lideres selecionados votam na secao (a chave de `chaveDaSecao`). */
+const dosSelecionados = (selecionados: readonly LiderNoRaioX[], chave: string) =>
+  selecionados.reduce((t, l) => t + (l.porSecao[chave] ?? 0), 0);
+
+/** "Félix", "Félix e Ana", "Félix, Ana e mais 2". */
+function nomesDosLideres(selecionados: readonly LiderNoRaioX[]): string {
+  const primeiros = selecionados.map((l) => l.nome.split(' ')[0]);
+  if (primeiros.length <= 2) return primeiros.join(' e ');
+  return `${primeiros.slice(0, 2).join(', ')} e mais ${primeiros.length - 2}`;
+}
+
+/**
+ * Os Lideres que cadastraram a estimativa da escola. Toque para selecionar
+ * UM OU MAIS: a gente de todos os selecionados acende junta nas secoes, na
+ * grade e vai para a Sala de Confronto.
+ */
 function Lideres({
   escola,
   lideres,
   diretos,
   foco,
-  onFoco,
+  onAlternar,
+  onTodos,
+  onLimpar,
   candidatos,
 }: {
   escola: EscolaNoComparativo;
   lideres: LiderNoRaioX[];
   diretos: number;
-  foco: string | null;
-  onFoco: (id: string | null) => void;
+  foco: ReadonlySet<string>;
+  onAlternar: (id: string) => void;
+  onTodos: () => void;
+  onLimpar: () => void;
   candidatos: CandidatoNoRaioX[];
 }) {
   const maior = Math.max(1, ...lideres.map((l) => l.cadastrados));
-  const escolhido = lideres.find((l) => l.id === foco) ?? null;
-  // Votos de cada candidato nas secoes onde a gente do Lider escolhido vota.
-  const secoesDoEscolhido = escolhido
-    ? escola.secoes.filter((s) => (s.zona || s.secao) && (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) > 0)
+  const selecionados = lideres.filter((l) => foco.has(l.id));
+  const algum = selecionados.length > 0;
+  // Votos de cada candidato nas secoes onde a gente dos Lideres selecionados vota.
+  const secoesDosSelecionados = algum
+    ? escola.secoes.filter((s) => (s.zona || s.secao) && dosSelecionados(selecionados, chaveDaSecao(s.zona, s.secao)) > 0)
     : [];
-  const votosNasSecoesDele = candidatos.map((_, i) => secoesDoEscolhido.reduce((t, s) => t + (s.apurado[i] ?? 0), 0));
-  const secoesDele = escolhido ? Object.keys(escolhido.porSecao).filter((k) => k !== chaveDaSecao(null, null)).length : 0;
+  const votosNasSecoesDeles = candidatos.map((_, i) => secoesDosSelecionados.reduce((t, s) => t + (s.apurado[i] ?? 0), 0));
+  const pessoasDeles = selecionados.reduce((t, l) => t + l.cadastrados, 0);
+  const secoesDeles = secoesDosSelecionados.length;
 
   return (
     <section aria-label="Líderes nesta escola" className="flex min-w-0 flex-col rounded-card border border-line bg-surface">
-      <header className="flex items-baseline justify-between gap-2 border-b border-line px-4 py-3">
-        <h3 className="text-sm font-semibold text-ink-900">Líderes nesta escola</h3>
-        <p className="text-xs text-ink-500 tabular-nums">
-          {formatNumber(lideres.length)} {lideres.length === 1 ? 'líder' : 'líderes'}
-        </p>
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-ink-900">Líderes nesta escola</h3>
+          <p className="text-xs text-ink-500 tabular-nums">
+            {formatNumber(lideres.length)} {lideres.length === 1 ? 'líder' : 'líderes'}
+            {algum ? (
+              <>
+                {' · '}
+                <b className="text-gold-700">
+                  {formatNumber(selecionados.length)} {selecionados.length === 1 ? 'selecionado' : 'selecionados'}
+                </b>
+              </>
+            ) : ' · selecione um ou mais'}
+          </p>
+        </div>
+        {lideres.length > 1 ? (
+          <div className="flex items-center gap-1.5">
+            {selecionados.length < lideres.length ? (
+              <button
+                type="button"
+                onClick={onTodos}
+                className="inline-flex min-h-8 items-center gap-1 rounded-pill border border-line px-2.5 text-[0.6875rem] font-semibold text-ink-700 transition-colors hover:border-gold-500 hover:bg-gold-50"
+              >
+                <CheckCheck aria-hidden="true" className="size-3.5" /> Todos
+              </button>
+            ) : null}
+            {algum ? (
+              <button
+                type="button"
+                onClick={onLimpar}
+                className="inline-flex min-h-8 items-center gap-1 rounded-pill border border-line px-2.5 text-[0.6875rem] font-semibold text-ink-700 transition-colors hover:bg-ink-50"
+              >
+                <X aria-hidden="true" className="size-3.5" /> Limpar
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {lideres.length === 0 ? (
@@ -345,27 +403,37 @@ function Lideres({
       ) : (
         <ol className="max-h-[32rem] divide-y divide-line overflow-y-auto">
           {lideres.map((l, i) => {
-            const ativo = l.id === foco;
+            const ativo = foco.has(l.id);
             const parte = escola.estimativa > 0 ? Math.round((l.cadastrados / escola.estimativa) * 100) : 0;
             return (
               <li key={l.id} className="animate-fade-up" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
                 <button
                   type="button"
                   aria-pressed={ativo}
-                  onClick={() => onFoco(ativo ? null : l.id)}
+                  onClick={() => onAlternar(l.id)}
                   className={cn(
                     'grid w-full grid-cols-[2.25rem_minmax(0,1fr)_5.75rem] items-center gap-x-3 px-4 py-2.5 text-left transition-colors',
-                    ativo ? 'bg-gold-50' : 'hover:bg-ink-50',
+                    ativo ? 'bg-gold-50 shadow-[inset_3px_0_0_var(--color-gold-500)]' : 'hover:bg-ink-50',
                   )}
                 >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'flex size-9 items-center justify-center rounded-full text-xs font-bold transition-colors',
-                      ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400',
-                    )}
-                  >
-                    {initials(l.nome)}
+                  <span aria-hidden="true" className="relative">
+                    <span
+                      className={cn(
+                        'flex size-9 items-center justify-center rounded-full text-xs font-bold transition-colors',
+                        ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400',
+                      )}
+                    >
+                      {initials(l.nome)}
+                    </span>
+                    {/* A caixinha: varios podem estar marcados ao mesmo tempo. */}
+                    <span
+                      className={cn(
+                        'absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-[5px] border-2 border-surface transition-all',
+                        ativo ? 'scale-100 bg-success-600 text-white' : 'scale-90 bg-ink-200 text-transparent',
+                      )}
+                    >
+                      <Check className="size-2.5" strokeWidth={4} />
+                    </span>
                   </span>
                   <span className="min-w-0">
                     <span className="block wrap-break-word text-sm font-semibold text-ink-900">{l.nome}</span>
@@ -402,39 +470,42 @@ function Lideres({
       )}
 
       <footer className="mt-auto border-t border-line px-4 py-2.5 text-xs text-ink-500">
-        {escolhido ? (
+        {algum ? (
           <p>
-            <b className="text-ink-900">{escolhido.nome}</b> cadastrou {formatNumber(escolhido.cadastrados)}{' '}
-            {escolhido.cadastrados === 1 ? 'pessoa' : 'pessoas'}
-            {secoesDele ? ` em ${formatNumber(secoesDele)} ${secoesDele === 1 ? 'seção' : 'seções'}` : ''}. Nessas seções,{' '}
+            <b className="text-ink-900">{selecionados.length === 1 ? selecionados[0].nome : nomesDosLideres(selecionados)}</b>{' '}
+            {selecionados.length === 1 ? 'cadastrou' : 'cadastraram juntos'} {formatNumber(pessoasDeles)}{' '}
+            {pessoasDeles === 1 ? 'pessoa' : 'pessoas'}
+            {secoesDeles ? ` em ${formatNumber(secoesDeles)} ${secoesDeles === 1 ? 'seção' : 'seções'}` : ''}
+            {escola.estimativa > 0 ? ` (${Math.round((pessoasDeles / escola.estimativa) * 100)}% da escola)` : ''}. Nessas seções,{' '}
             {candidatos.map((c, i) => (
               <span key={c.rotulo}>
                 {i > 0 ? (i === candidatos.length - 1 ? ' e ' : ', ') : ''}
                 {c.nome} teve <b style={{ color: candidatos.length > 1 ? c.cor : undefined }} className={candidatos.length > 1 ? undefined : 'text-gold-700'}>
-                  {formatNumber(votosNasSecoesDele[i])}
+                  {formatNumber(votosNasSecoesDeles[i])}
                 </b>
               </span>
             ))}{' '}
-            {candidatos.length === 1 && votosNasSecoesDele[0] === 1 ? 'voto' : 'votos'}.
+            {candidatos.length === 1 && votosNasSecoesDeles[0] === 1 ? 'voto' : 'votos'}.
           </p>
         ) : lideres.length > 0 ? (
-          <p>Toque em um líder para acender a gente dele na grade e nas seções.</p>
+          <p>Toque nos líderes para selecionar um ou mais: a gente deles acende junta na grade e nas seções.</p>
         ) : null}
       </footer>
     </section>
   );
 }
 
-/** Secao por secao: a estimativa (com a parte do Lider em foco) e o apurado de cada candidato. */
+/** Secao por secao: a estimativa (com a parte dos Lideres selecionados) e o apurado de cada candidato. */
 function Secoes({
   escola,
   candidatos,
-  escolhido,
+  selecionados,
   lideres,
 }: {
   escola: EscolaNoComparativo;
   candidatos: CandidatoNoRaioX[];
-  escolhido: LiderNoRaioX | null;
+  /** Os Lideres selecionados (nenhum, um ou varios): a gente deles acende junta. */
+  selecionados: LiderNoRaioX[];
   /** Os Lideres da escola: cada secao mostra, sozinha, quantos cada um cadastrou ali. */
   lideres: LiderNoRaioX[];
 }) {
@@ -443,6 +514,8 @@ function Secoes({
   const comNumero = escola.secoes.filter((s) => s.zona || s.secao);
   const zonas = [...new Set(comNumero.map((s) => s.zona).filter(Boolean))];
   const largura = (v: number) => `${v > 0 ? Math.max(2, (v / maior) * 100) : 0}%`;
+  const escolhido = selecionados.length > 0;
+  const foco = new Set(selecionados.map((l) => l.id));
 
   return (
     <section aria-label="Seções desta escola" className="flex min-w-0 flex-col rounded-card border border-line bg-surface">
@@ -457,7 +530,7 @@ function Secoes({
           </span>
           {escolhido ? (
             <span className="flex items-center gap-1">
-              <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-gold-600" /> de {escolhido.nome.split(' ')[0]}
+              <span aria-hidden="true" className="h-2 w-3 rounded-sm bg-gold-600" /> de {nomesDosLideres(selecionados)}
             </span>
           ) : null}
           {varios ? (
@@ -477,8 +550,8 @@ function Secoes({
       <ol className="max-h-[32rem] divide-y divide-line overflow-y-auto">
         {escola.secoes.map((s, i) => {
           const comSecao = Boolean(s.zona || s.secao);
-          const dele = escolhido ? (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) : 0;
-          const apagada = escolhido !== null && dele === 0;
+          const dele = escolhido ? dosSelecionados(selecionados, chaveDaSecao(s.zona, s.secao)) : 0;
+          const apagada = escolhido && dele === 0;
           // Ninguem do recorte (do time, do Lider, da referencia) vota aqui: a
           // secao fica cinza — so os votos dela, sem a gente da campanha.
           const semGente = comSecao && s.estimativa <= 0;
@@ -511,7 +584,7 @@ function Secoes({
               </div>
 
               <div className="space-y-1">
-                {/* Estimativa: com um Lider em foco, a parte dele em ouro escuro. */}
+                {/* Estimativa: com Lideres selecionados, a parte deles em ouro escuro. */}
                 <div className="flex items-center gap-2" title={`estimativa: ${formatNumber(s.estimativa)}`}>
                   <MarcaDaBarra />
                   <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
@@ -548,7 +621,7 @@ function Secoes({
                   </div>
                 ))}
                 {/* Quem cadastrou a gente desta secao, sem precisar tocar em nada. */}
-                <LideresDaSecao lideres={lideres} chave={chaveDaSecao(s.zona, s.secao)} estimativa={s.estimativa} foco={escolhido?.id ?? null} />
+                <LideresDaSecao lideres={lideres} chave={chaveDaSecao(s.zona, s.secao)} estimativa={s.estimativa} foco={foco} />
               </div>
 
               {varios ? null : (
@@ -591,7 +664,7 @@ function LideresDaSecao({
   lideres: LiderNoRaioX[];
   chave: string;
   estimativa: number;
-  foco: string | null;
+  foco: ReadonlySet<string>;
 }) {
   const daSecao = lideres
     .map((l) => ({ l, n: l.porSecao[chave] ?? 0 }))
@@ -606,7 +679,7 @@ function LideresDaSecao({
           key={l.id}
           className={cn(
             'inline-flex max-w-full items-center gap-1 rounded-pill border py-0.5 pr-1 pl-0.5 text-[0.6875rem] transition-colors',
-            foco === l.id ? 'border-gold-500 bg-gold-50' : 'border-line bg-surface',
+            foco.has(l.id) ? 'border-gold-500 bg-gold-50' : 'border-line bg-surface',
           )}
           title={`${l.nome}: ${n} ${n === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} nesta seção`}
         >
@@ -640,14 +713,14 @@ function GradeLiderPorSecao({
   diretos,
   candidatos,
   foco,
-  onFoco,
+  onAlternar,
 }: {
   escola: EscolaNoComparativo;
   lideres: LiderNoRaioX[];
   diretos: number;
   candidatos: CandidatoNoRaioX[];
-  foco: string | null;
-  onFoco: (id: string | null) => void;
+  foco: ReadonlySet<string>;
+  onAlternar: (id: string) => void;
 }) {
   const [aberta, setAberta] = useState(false);
   const secoes = escola.secoes.filter((s) => s.zona || s.secao);
@@ -733,11 +806,11 @@ function GradeLiderPorSecao({
               </thead>
               <tbody>
                 {lideres.map((l) => {
-                  const ativo = foco === l.id;
+                  const ativo = foco.has(l.id);
                   return (
-                    <tr key={l.id} className={cn('group', foco && !ativo && 'opacity-45')}>
+                    <tr key={l.id} className={cn('group', foco.size > 0 && !ativo && 'opacity-45')}>
                       <th scope="row" className={cn('sticky left-0 z-10 border-b border-line px-4 py-2 text-left font-normal', ativo ? 'bg-gold-50' : 'bg-surface group-hover:bg-ink-50')}>
-                        <button type="button" onClick={() => onFoco(ativo ? null : l.id)} aria-pressed={ativo} className="flex w-full min-w-0 items-center gap-2 text-left">
+                        <button type="button" onClick={() => onAlternar(l.id)} aria-pressed={ativo} className="flex w-full min-w-0 items-center gap-2 text-left">
                           <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-bold', ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400')}>
                             {initials(l.nome)}
                           </span>
@@ -824,7 +897,7 @@ function GradeLiderPorSecao({
             </table>
           </div>
           <p className="border-t border-line px-4 py-2 text-[0.6875rem] text-ink-500">
-            Em vermelho, a seção onde o candidato teve menos votos do que o time estimava. Toque num líder para acender a gente dele.
+            Em vermelho, a seção onde o candidato teve menos votos do que o time estimava. Toque nos líderes para selecionar um ou mais.
           </p>
         </div>
       ) : null}
@@ -840,6 +913,7 @@ export function RaioXDaEscola({
   onClose,
   onVerPessoas,
   pdf,
+  secaoNoFiltro = false,
 }: {
   /** A escola com o apurado de cada candidato (um so: `comoComparativo`). */
   escola: EscolaNoComparativo;
@@ -854,9 +928,25 @@ export function RaioXDaEscola({
   onVerPessoas?: () => void;
   /** O botao do relatorio do time (um candidato ou todos juntos). */
   pdf?: React.ReactNode;
+  /** O mapa esta filtrado por uma secao: a Sala de Confronto fica so nela. */
+  secaoNoFiltro?: boolean;
 }) {
-  const [foco, setFoco] = useState<string | null>(null);
-  const escolhido = lideres.find((l) => l.id === foco) ?? null;
+  /** Os Lideres selecionados: nenhum, um ou varios. */
+  const [foco, setFoco] = useState<ReadonlySet<string>>(() => new Set());
+  const selecionados = lideres.filter((l) => foco.has(l.id));
+  const alternar = (id: string) =>
+    setFoco((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  const [sala, setSala] = useState(false);
+  // Com a Sala aberta, o Esc e dela (volta para o raio-x), nao do raio-x.
+  const salaAberta = useRef(false);
+  useEffect(() => {
+    salaAberta.current = sala;
+  }, [sala]);
   const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
   const varios = candidatos.length > 1;
   const um = candidatos[0];
@@ -867,7 +957,7 @@ export function RaioXDaEscola({
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !salaAberta.current) {
         e.stopPropagation();
         onClose();
       }
@@ -927,6 +1017,7 @@ export function RaioXDaEscola({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-center">
+            <BotaoDaSala onClick={() => setSala(true)} lideres={selecionados.length} />
             <BotaoPdfDaEscola onBaixar={baixar} claro />
           </div>
         </div>
@@ -947,21 +1038,30 @@ export function RaioXDaEscola({
           </p>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-            <Lideres escola={escola} lideres={lideres} diretos={diretos} foco={foco} onFoco={setFoco} candidatos={candidatos} />
-            <Secoes escola={escola} candidatos={candidatos} escolhido={escolhido} lideres={lideres} />
+            <Lideres
+              escola={escola}
+              lideres={lideres}
+              diretos={diretos}
+              foco={foco}
+              onAlternar={alternar}
+              onTodos={() => setFoco(new Set(lideres.map((l) => l.id)))}
+              onLimpar={() => setFoco(new Set())}
+              candidatos={candidatos}
+            />
+            <Secoes escola={escola} candidatos={candidatos} selecionados={selecionados} lideres={lideres} />
           </div>
 
           {/* Por ultimo, e fechada: abre no clique. */}
-          <GradeLiderPorSecao escola={escola} lideres={lideres} diretos={diretos} candidatos={candidatos} foco={foco} onFoco={setFoco} />
+          <GradeLiderPorSecao escola={escola} lideres={lideres} diretos={diretos} candidatos={candidatos} foco={foco} onAlternar={alternar} />
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
-            {escolhido ? (
+            {selecionados.length ? (
               <button
                 type="button"
-                onClick={() => setFoco(null)}
+                onClick={() => setFoco(new Set())}
                 className="mr-auto inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line px-3 text-xs font-medium text-ink-700 hover:bg-ink-50"
               >
-                <X aria-hidden="true" className="size-3.5" /> Ver todos os líderes
+                <X aria-hidden="true" className="size-3.5" /> Limpar seleção ({selecionados.length})
               </button>
             ) : null}
             {onVerPessoas ? (
@@ -975,11 +1075,49 @@ export function RaioXDaEscola({
             ) : null}
             {pdf}
             <BotaoPdfDaEscola onBaixar={baixar} compacto />
+            <BotaoDaSala onClick={() => setSala(true)} lideres={selecionados.length} compacto />
           </div>
         </div>
       </div>
+
+      {sala ? (
+        <SalaDeConfronto
+          escola={escola}
+          candidatos={candidatos}
+          lideres={selecionados}
+          secaoNoFiltro={secaoNoFiltro}
+          onClose={() => setSala(false)}
+        />
+      ) : null}
     </div>,
     document.body,
+  );
+}
+
+/**
+ * "Enviar para sala de confronto": a escola, os candidatos e os Lideres
+ * selecionados vao para o duelo. Vermelho de arena, com as espadas.
+ */
+function BotaoDaSala({ onClick, lideres, compacto = false }: { onClick: () => void; lideres: number; compacto?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group relative inline-flex items-center gap-2 overflow-hidden rounded-pill bg-gradient-to-r from-danger-600 via-[#e0457b] to-danger-600 bg-[length:200%_100%] font-bold text-white transition-all duration-500 hover:bg-right',
+        compacto
+          ? 'min-h-9 px-3 text-xs'
+          : 'min-h-10 px-4 text-sm shadow-[0_10px_24px_-10px_rgba(220,38,38,0.85)] hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(220,38,38,0.95)]',
+      )}
+    >
+      <Swords aria-hidden="true" className="size-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+      Enviar para sala de confronto
+      {lideres > 0 ? (
+        <span className="rounded-pill bg-white/20 px-1.5 py-px text-[0.625rem] font-bold tabular-nums" title="Líderes selecionados que vão junto">
+          +{lideres} {lideres === 1 ? 'líder' : 'líderes'}
+        </span>
+      ) : null}
+    </button>
   );
 }
 
