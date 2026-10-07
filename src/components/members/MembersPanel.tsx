@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   FileText,
   Filter,
+  Grid3x3,
   MapPin,
   Pencil,
   Search,
@@ -66,9 +67,11 @@ import {
   chaveDaReferencia,
   contarFotos,
   opcoesDeReferencia,
+  opcoesDeSecao,
   opcoesDeZona,
   passaNaFoto,
   passaNaReferencia,
+  passaNaSecao,
   passaNaZona,
   situacaoDaFoto,
   tituloLegivel,
@@ -189,6 +192,8 @@ function ListaDoTime({
   const [referencia, setReferencia] = useState('todas');
   const [foto, setFoto] = useState<FiltroDeFoto>('todos');
   const [zona, setZona] = useState('todas');
+  /** Uma secao eleitoral (`zona/secao`); com zona no filtro, so as dela. */
+  const [secaoEleitoral, setSecaoEleitoral] = useState('todas');
   // "Ver a Equipe na lista" pedido depois da lista montada: aplicado na
   // renderizacao, comparando com o ultimo pedido visto — o filtro certo ja
   // sai na primeira pintura.
@@ -226,10 +231,12 @@ function ListaDoTime({
 
   const referencias = useMemo(() => opcoesDeReferencia(ordered), [ordered]);
   const zonas = useMemo(() => opcoesDeZona(ordered), [ordered]);
+  const secoesEleitorais = useMemo(() => opcoesDeSecao(ordered, zona), [ordered, zona]);
   const fotos = useMemo(() => contarFotos(ordered), [ordered]);
   // A opcao escolhida sumiu da lista (a planilha mudou): volta a "todas".
   if (referencia !== 'todas' && !referencias.some((o) => o.valor === referencia)) setReferencia('todas');
   if (zona !== 'todas' && !zonas.some((o) => o.valor === zona)) setZona('todas');
+  if (secaoEleitoral !== 'todas' && !secoesEleitorais.some((o) => o.valor === secaoEleitoral)) setSecaoEleitoral('todas');
 
   /**
    * A lista filtrada, e ONDE a busca achou cada pessoa.
@@ -253,6 +260,7 @@ function ListaDoTime({
       if (!passaNaReferencia(member, referencia)) return false;
       if (!passaNaFoto(member, foto)) return false;
       if (!passaNaZona(member, zona)) return false;
+      if (!passaNaSecao(member, secaoEleitoral)) return false;
 
       const resultado = buscarPessoa(member, term);
       if (!resultado.achou) return false;
@@ -263,7 +271,7 @@ function ListaDoTime({
       return true;
     });
     return { filtered, achadoEm };
-  }, [ordered, term, recruiter, nivel, tag, situacao, referencia, foto, zona]);
+  }, [ordered, term, recruiter, nivel, tag, situacao, referencia, foto, zona, secaoEleitoral]);
 
   /** Contagens de cada botao de filtro, sobre o time inteiro. */
   const contagens = useMemo(
@@ -322,6 +330,13 @@ function ListaDoTime({
           limpar: () => setZona('todas'),
         }
       : null,
+    secaoEleitoral !== 'todas'
+      ? {
+          id: 'secao',
+          rotulo: `Seção ${secaoEleitoral.split('/')[1]} (zona ${secaoEleitoral.split('/')[0]})`,
+          limpar: () => setSecaoEleitoral('todas'),
+        }
+      : null,
     recruiter !== 'todos'
       ? {
           id: 'responsavel',
@@ -340,6 +355,7 @@ function ListaDoTime({
     setReferencia('todas');
     setFoto('todos');
     setZona('todas');
+    setSecaoEleitoral('todas');
   }
 
   /** Clicar na tag de uma linha filtra a lista por ela. */
@@ -653,10 +669,10 @@ function ListaDoTime({
             {/* O resto dos recortes em grade, cada um com o seu icone, o nome
                 em cima e a contagem em cada opcao. So aparece o filtro que
                 tem o que filtrar. */}
-            {responsaveis.length > 1 || referencias.length > 0 || fotos.sim + fotos.nao > 0 || zonas.length > 1 || tags.length > 0 ? (
+            {responsaveis.length > 1 || referencias.length > 0 || fotos.sim + fotos.nao > 0 || zonas.length > 1 || secoesEleitorais.length > 1 || tags.length > 0 ? (
               <div className="rounded-xl border border-dashed border-line bg-ink-50/50 p-3">
                 <RotuloDoAndar icone={<SlidersHorizontal className="size-3.5" />}>Filtrar por</RotuloDoAndar>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
                   {responsaveis.length > 1 ? (
                     <FiltroEmCaixa
                       id="filtro-responsavel"
@@ -718,6 +734,23 @@ function ListaDoTime({
                       opcoes={[
                         { valor: 'todas', rotulo: 'Todas' },
                         ...zonas.map((opcao) => ({
+                          valor: opcao.valor,
+                          rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                        })),
+                      ]}
+                    />
+                  ) : null}
+                  {secoesEleitorais.length > 1 ? (
+                    <FiltroEmCaixa
+                      id="filtro-secao"
+                      icone={<Grid3x3 className="size-3.5" />}
+                      rotulo="Seção eleitoral"
+                      valor={secaoEleitoral}
+                      padrao="todas"
+                      onChange={setSecaoEleitoral}
+                      opcoes={[
+                        { valor: 'todas', rotulo: 'Todas' },
+                        ...secoesEleitorais.map((opcao) => ({
                           valor: opcao.valor,
                           rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
                         })),

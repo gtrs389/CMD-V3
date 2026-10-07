@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Bookmark, BookmarkCheck, BookmarkX, Check, CheckCheck, ChevronDown, Filter, Grid3x3, MapPin, Search, Swords, Users, X } from 'lucide-react';
+import { Bookmark, BookmarkCheck, BookmarkX, Check, CheckCheck, ChevronDown, FileDown, Filter, Grid3x3, MapPin, Search, Swords, Users, X } from 'lucide-react';
 import type { MapOverviewPayload } from '@/lib/domain/map-pin';
-import { lideresNoRaioX } from '@/lib/domain/confronto';
 import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
 import {
   campanhaDoRecorte,
@@ -27,6 +26,7 @@ import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { BotaoVoltar } from '@/components/ui/BotaoVoltar';
+import { Spinner } from '@/components/ui/Spinner';
 import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import type { CandidatoNoRaioX } from '@/components/dashboard/votacao/RaioXDaEscola';
@@ -45,6 +45,8 @@ import {
   type Lutador,
 } from './Arena';
 import { NeoDoConfronto } from './NeoDoConfronto';
+import { FiltroDeSecoes } from '@/components/dashboard/votacao/FiltroDeSecoes';
+import { chaveDaSecao, lideresNoRaioX } from '@/lib/domain/confronto';
 
 /**
  * O confronto de UMA escola da sala, ao vivo.
@@ -87,6 +89,8 @@ export function ConfrontoDaEscola({
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [zona, setZona] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** A tela do confronto inteira: e ela que vira o PDF. */
+  const tela = useRef<HTMLDivElement>(null);
 
   // Os votos de cada candidato (dos dois lados), buscados uma vez cada.
   const pedidos = useRef(new Set<string>());
@@ -232,14 +236,34 @@ export function ConfrontoDaEscola({
   );
   const prontos = direita.filter((c) => !c.carregando && !c.erro);
 
-  const duelo = useMemo(() => {
+  /** Filtro de secao: so as secoes escolhidas entram na conta (nenhuma escolhida = todas). */
+  const [secoesEscolhidas, setSecoesEscolhidas] = useState<string[]>([]);
+  const { dueloCompleto, duelo } = useMemo(() => {
     const votosDe = (id: string) => {
       const pins = pinsDe(id);
       return pins ? votosNaEscola(base, pins) : new Map();
     };
+    const esq = ladoEsquerdo.map((c) => votosDe(c.id));
     const dir = adversarios.filter((a) => pinsDe(a.id) !== null).map((a) => votosDe(a.id));
-    return montarDuelo(base, ladoEsquerdo.map((c) => votosDe(c.id)), dir, lideresMarcados);
-  }, [base, ladoEsquerdo, adversarios, pinsDe, lideresMarcados]);
+    const completo = montarDuelo(base, esq, dir, lideresMarcados);
+    if (secoesEscolhidas.length === 0) return { dueloCompleto: completo, duelo: completo };
+    const so = new Set(secoesEscolhidas);
+    const recortar = (m: Map<string, { zona: string | null; secao: string | null; votos: number }>) => new Map([...m].filter(([k]) => so.has(k)));
+    const baseRecortada = { secoes: base.secoes.filter((s) => so.has(chaveDaSecao(s.zona, s.secao))) };
+    return { dueloCompleto: completo, duelo: montarDuelo(baseRecortada, esq.map(recortar), dir.map(recortar), lideresMarcados) };
+  }, [base, ladoEsquerdo, adversarios, pinsDe, lideresMarcados, secoesEscolhidas]);
+  const opcoesDeSecao = useMemo(
+    () =>
+      dueloCompleto.secoes.map((s) => ({
+        chave: s.chave,
+        zona: s.zona,
+        secao: s.secao,
+        gente: s.estimativa,
+        cor: s.vencedor === 'ESQUERDA' ? AZUL : s.vencedor === 'DIREITA' ? VERMELHO : undefined,
+      })),
+    [dueloCompleto.secoes],
+  );
+  const estimativaVista = secoesEscolhidas.length ? duelo.secoes.reduce((t, s) => t + s.estimativa, 0) : base.estimativa;
   const zonas = useMemo(() => porZona(duelo.secoes), [duelo.secoes]);
   const placares = useMemo(() => placarDosLideres(duelo.secoes, lideres, ladoEsquerdo.length), [duelo.secoes, lideres, ladoEsquerdo.length]);
   const temAdversario = prontos.length > 0;
@@ -249,7 +273,7 @@ export function ConfrontoDaEscola({
   const ultimo = useRef('');
   useEffect(() => {
     // Com o filtro de referencia ligado, o placar e de um recorte so: nao vai para a lista.
-    if (!pronto || referencias.length || direita.some((c) => c.carregando)) return;
+    if (!pronto || referencias.length || secoesEscolhidas.length || direita.some((c) => c.carregando)) return;
     const resumo = resumoDoDuelo(duelo, base, lideres.length);
     const chave = JSON.stringify(resumo);
     const antes = registro.resumo;
@@ -265,7 +289,7 @@ export function ConfrontoDaEscola({
     api<{ escola: EscolaNaSala }>(`/api/confrontos/${registro.id}`, { method: 'PATCH', body: { resumo } })
       .then(({ escola: salva }) => onMudou(salva))
       .catch(() => undefined);
-  }, [pronto, referencias.length, direita, duelo, base, lideres.length, registro.id, registro.resumo, onMudou]);
+  }, [pronto, referencias.length, secoesEscolhidas.length, direita, duelo, base, lideres.length, registro.id, registro.resumo, onMudou]);
 
   function alternarLider(id: string) {
     const antes = selecionados;
@@ -314,7 +338,7 @@ export function ConfrontoDaEscola({
   const zonasDoCabecalho = zonas.map((z) => z.zona).filter(Boolean);
 
   return (
-    <div className="space-y-4">
+    <div ref={tela} className="space-y-4">
       {/* CABECALHO: a escola, o time, o recorte e os tres numeros (zonas, secoes, Lideres). */}
       <header className="relative animate-fade-up overflow-hidden rounded-card bg-gradient-to-r from-[#0d1f4d] via-navy-900 to-[#4a0d16] px-4 py-4 text-white shadow-overlay sm:px-6 sm:py-5">
         <span aria-hidden="true" className="cmd-grade-pontos pointer-events-none absolute inset-0" />
@@ -322,6 +346,22 @@ export function ConfrontoDaEscola({
         <span aria-hidden="true" className="cmd-orbe pointer-events-none absolute -right-16 -bottom-28 size-80 rounded-full bg-[#e5484d]/30 blur-3xl" />
         <div className="relative flex flex-wrap items-start gap-4">
           <BotaoVoltar onClick={onVoltar} rotulo="Escolas da sala" />
+          {pronto ? (
+            <div data-pdf-ocultar className="order-last w-full sm:order-none sm:ml-auto sm:w-auto lg:order-last">
+              <BotaoPdfDaTela
+                gerar={() =>
+                  tela.current
+                    ? import('./pdf-da-tela').then(({ baixarPdfDaTela }) =>
+                        baixarPdfDaTela(tela.current!, {
+                          titulo: `Confronto · ${registro.titulo}`,
+                          nomeDoArquivo: `confronto_${registro.titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()}.pdf`,
+                        }),
+                      )
+                    : Promise.resolve()
+                }
+              />
+            </div>
+          ) : null}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="inline-flex items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-[0.6875rem] font-bold tracking-[0.16em] uppercase ring-1 ring-white/15">
@@ -349,7 +389,7 @@ export function ConfrontoDaEscola({
               { rotulo: zonasDoCabecalho.length === 1 ? 'Zona' : 'Zonas', valor: zonasDoCabecalho.length ? zonasDoCabecalho.join(', ') : '—' },
               { rotulo: 'Seções', valor: formatNumber(duelo.secoes.length) },
               { rotulo: 'Líderes', valor: lideresMarcados.length ? `${lideresMarcados.length}/${lideres.length}` : formatNumber(lideres.length) },
-              { rotulo: 'Estimativa', valor: formatNumber(base.estimativa) },
+              { rotulo: 'Estimativa', valor: formatNumber(estimativaVista) },
             ].map((x) => (
               <div key={x.rotulo} className="rounded-control bg-white/[0.07] px-3 py-2 ring-1 ring-white/10 lg:min-w-[6.5rem]">
                 <dt className="text-[0.625rem] font-semibold tracking-wider text-white/55 uppercase">{x.rotulo}</dt>
@@ -387,6 +427,19 @@ export function ConfrontoDaEscola({
             }
             onLimpar={() => setReferencias([])}
           />
+
+          <section aria-label="Filtrar por seção" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-line bg-surface px-4 py-3">
+            <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-navy-900 text-gold-400">
+                <Grid3x3 aria-hidden="true" className="size-4" />
+              </span>
+              Filtrar por seção
+              <span className="text-xs font-normal text-ink-500">
+                {secoesEscolhidas.length ? '· a sala inteira conta só estas seções' : '· escolha uma ou mais'}
+              </span>
+            </p>
+            <FiltroDeSecoes opcoes={opcoesDeSecao} escolhidas={secoesEscolhidas} onChange={setSecoesEscolhidas} />
+          </section>
 
           {/* A ARENA */}
           <section
@@ -454,8 +507,10 @@ export function ConfrontoDaEscola({
 
           {temAdversario ? <Ranking esquerda={esquerda} votosEsquerda={duelo.esquerda} direita={prontos} votosDireita={duelo.direita} /> : null}
 
-          {/* O NEO: o chat flutuante, que ja chega lendo a escola. */}
-          <NeoDoConfronto titulo={registro.titulo} duelo={duelo} esquerda={esquerda} direita={prontos} lideres={lideres} />
+          {/* O NEO: o chat flutuante, que ja chega lendo a escola (fora do PDF). */}
+          <div data-pdf-ocultar>
+            <NeoDoConfronto titulo={registro.titulo} duelo={duelo} esquerda={esquerda} direita={prontos} lideres={lideres} />
+          </div>
 
           {/* Por ultimo, e fechado: abre no botao. */}
           <PlacarDosLideres
@@ -957,5 +1012,50 @@ function FiltroDeReferencia({
         })}
       </div>
     </section>
+  );
+}
+
+/**
+ * "Baixar PDF": a tela do confronto, igual, em paginas A4. Mostra que esta
+ * gerando (a foto da tela leva alguns segundos) e confirma ao fim.
+ */
+function BotaoPdfDaTela({ gerar }: { gerar: () => Promise<void> }) {
+  const [estado, setEstado] = useState<'parado' | 'gerando' | 'pronto' | 'erro'>('parado');
+  async function clicar() {
+    if (estado === 'gerando') return;
+    setEstado('gerando');
+    try {
+      await gerar();
+      setEstado('pronto');
+      window.setTimeout(() => setEstado('parado'), 2500);
+    } catch {
+      setEstado('erro');
+      window.setTimeout(() => setEstado('parado'), 3500);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={clicar}
+      disabled={estado === 'gerando'}
+      aria-live="polite"
+      className={cn(
+        'group inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-pill px-4 text-sm font-bold shadow-[0_10px_22px_-12px_rgba(0,0,0,0.8)] transition-all hover:-translate-y-0.5 disabled:cursor-wait sm:w-auto',
+        estado === 'pronto'
+          ? 'bg-success-600 text-white'
+          : estado === 'erro'
+            ? 'bg-danger-600 text-white'
+            : 'bg-gradient-to-r from-gold-400 to-gold-500 text-navy-900',
+      )}
+    >
+      {estado === 'gerando' ? (
+        <Spinner className="size-4" />
+      ) : estado === 'pronto' ? (
+        <Check aria-hidden="true" className="size-4" strokeWidth={3} />
+      ) : (
+        <FileDown aria-hidden="true" className="size-4 transition-transform group-hover:translate-y-0.5" />
+      )}
+      {estado === 'gerando' ? 'Fotografando a tela…' : estado === 'pronto' ? 'PDF baixado' : estado === 'erro' ? 'Não deu: tente de novo' : 'Baixar PDF do confronto'}
+    </button>
   );
 }

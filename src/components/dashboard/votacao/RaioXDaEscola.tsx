@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Trophy, Vote, BookmarkCheck, BookmarkX, Check, CheckCheck, Filter, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
+  escolaNasSecoes,
+  lideresNasSecoes,
   leitura,
   type EscolaNoComparativo,
   type EscolaNoConfronto,
@@ -23,6 +25,7 @@ import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 import { BotaoVoltar } from './EscolhaDoMunicipio';
 import { chaveDaReferenciaDoLider, referenciasDosLideres } from '@/lib/domain/sala-de-confronto';
 import { MarcaDaBarra, RotuloDaBarra, RotuloDaEstimativa } from './MarcaDaBarra';
+import { FiltroDeSecoes } from './FiltroDeSecoes';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -1140,10 +1143,10 @@ function GradeLiderPorSecao({
 }
 
 export function RaioXDaEscola({
-  escola,
+  escola: escolaCompleta,
   candidatos,
-  lideres = [],
-  diretos = 0,
+  lideres: lideresCompletos = [],
+  diretos: diretosCompletos = 0,
   onClose,
   onVerPessoas,
   pdf,
@@ -1165,6 +1168,23 @@ export function RaioXDaEscola({
   /** Guarda a escola na Sala de Confronto, com os Lideres selecionados; devolve o id dela na sala. */
   onEnviarParaSala?: (lideres: LiderNoRaioX[]) => Promise<{ id: string }>;
 }) {
+  /**
+   * Filtro de secao: escolhidas uma ou mais, o raio-x inteiro (placar,
+   * destaques, Lideres, secoes, grade e o PDF) conta so elas.
+   */
+  const [secoesEscolhidas, setSecoesEscolhidas] = useState<string[]>([]);
+  const escola = useMemo(() => escolaNasSecoes(escolaCompleta, secoesEscolhidas), [escolaCompleta, secoesEscolhidas]);
+  const lideres = useMemo(() => lideresNasSecoes(lideresCompletos, secoesEscolhidas), [lideresCompletos, secoesEscolhidas]);
+  const diretos = secoesEscolhidas.length
+    ? Math.max(0, escola.estimativa - lideres.reduce((t, l) => t + l.cadastrados, 0))
+    : diretosCompletos;
+  const opcoesDeSecao = useMemo(
+    () =>
+      escolaCompleta.secoes
+        .filter((s) => s.zona || s.secao)
+        .map((s) => ({ chave: chaveDaSecao(s.zona, s.secao), zona: s.zona, secao: s.secao, gente: s.estimativa })),
+    [escolaCompleta.secoes],
+  );
   /** Os Lideres selecionados: nenhum, um ou varios. */
   const [foco, setFoco] = useState<ReadonlySet<string>>(() => new Set());
   const selecionados = lideres.filter((l) => foco.has(l.id));
@@ -1262,12 +1282,15 @@ export function RaioXDaEscola({
                 <b className="text-white tabular-nums">{formatNumber(lideres.length)}</b> {lideres.length === 1 ? 'líder' : 'líderes'}
               </span>
               <span>
-                <b className="text-white tabular-nums">{formatNumber(escola.secoes.filter((x) => x.zona || x.secao).length)}</b> seções
+                <b className="text-white tabular-nums">{formatNumber(escola.secoes.filter((x) => x.zona || x.secao).length)}</b>{' '}
+                {escola.secoes.filter((x) => x.zona || x.secao).length === 1 ? 'seção' : 'seções'}
               </span>
               <span>
                 estimativa de <b className="text-white tabular-nums">{formatNumber(escola.estimativa)}</b>
               </span>
             </p>
+            {/* Filtrar por secao: o raio-x inteiro passa a contar so as escolhidas. */}
+            <FiltroDeSecoes opcoes={opcoesDeSecao} escolhidas={secoesEscolhidas} onChange={setSecoesEscolhidas} escuro className="mt-3" />
           </div>
           <div className="flex flex-wrap items-center gap-2 self-center">
             {onEnviarParaSala ? <BotaoDaSala onEnviar={() => onEnviarParaSala(selecionados)} lideres={selecionados.length} /> : null}

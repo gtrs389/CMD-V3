@@ -506,3 +506,34 @@ export function compararCandidatos(confrontos: readonly Confronto[]): Comparativ
 export function comoComparativo(e: EscolaNoConfronto): EscolaNoComparativo {
   return { ...e, apurado: [e.apurado], secoes: e.secoes.map((s) => ({ ...s, apurado: [s.apurado] })) };
 }
+
+/**
+ * A escola so com as secoes escolhidas (o filtro de secao do Raio-X): a
+ * estimativa e o apurado de cada candidato passam a ser a soma delas.
+ * Nenhuma escolhida: a escola inteira.
+ */
+export function escolaNasSecoes(e: EscolaNoComparativo, chaves: readonly string[]): EscolaNoComparativo {
+  if (chaves.length === 0) return e;
+  const so = new Set(chaves);
+  const secoes = e.secoes.filter((s) => so.has(chaveDaSecao(s.zona, s.secao)));
+  const n = e.apurado.length;
+  return {
+    ...e,
+    secoes,
+    estimativa: secoes.reduce((t, s) => t + s.estimativa, 0),
+    apurado: Array.from({ length: n }, (_, i) => secoes.reduce((t, s) => t + (s.apurado[i] ?? 0), 0)),
+  };
+}
+
+/** Os Lideres so com a gente das secoes escolhidas; quem nao tem ninguem nelas sai. */
+export function lideresNasSecoes(lideres: readonly LiderNoRaioX[], chaves: readonly string[]): LiderNoRaioX[] {
+  if (chaves.length === 0) return [...lideres];
+  const so = new Set(chaves);
+  return lideres
+    .map((l) => {
+      const porSecao = Object.fromEntries(Object.entries(l.porSecao).filter(([k]) => so.has(k)));
+      return { ...l, porSecao, cadastrados: Object.values(porSecao).reduce((t, n) => t + n, 0) };
+    })
+    .filter((l) => l.cadastrados > 0)
+    .sort((a, b) => b.cadastrados - a.cadastrados || a.nome.localeCompare(b.nome, 'pt-BR'));
+}

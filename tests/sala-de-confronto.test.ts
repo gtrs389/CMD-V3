@@ -141,3 +141,31 @@ describe('sala de confronto', () => {
     ]);
   });
 });
+
+describe('filtro de seção na escola', () => {
+  it('a escola e os líderes passam a contar só as seções escolhidas', async () => {
+    const { escolaNasSecoes, lideresNasSecoes } = await import('@/lib/domain/confronto');
+    const escola = {
+      chave: 'h', titulo: 'X', endereco: null, cidade: null, uf: null, latitude: 0, longitude: 0, noMapa: true, pinosDaCampanha: [],
+      estimativa: 26, apurado: [41, 12],
+      secoes: [
+        { zona: '10', secao: '96', estimativa: 12, apurado: [30, 5] },
+        { zona: '10', secao: '97', estimativa: 8, apurado: [2, 1] },
+        { zona: '10', secao: '98', estimativa: 6, apurado: [9, 6] },
+      ],
+    };
+    const so = escolaNasSecoes(escola, ['10/96', '10/98']);
+    expect(so.secoes.map((s) => s.secao)).toEqual(['96', '98']);
+    expect(so.estimativa).toBe(18);
+    expect(so.apurado).toEqual([39, 11]);
+    expect(escolaNasSecoes(escola, [])).toBe(escola);
+    const lideres = lideresNasSecoes(
+      [
+        { id: 'a', nome: 'Ana', cadastrados: 8, porSecao: { '10/97': 8 } },
+        { id: 'f', nome: 'Félix', cadastrados: 10, porSecao: { '10/96': 6, '10/97': 4 } },
+      ],
+      ['10/96'],
+    );
+    expect(lideres).toEqual([{ id: 'f', nome: 'Félix', cadastrados: 6, porSecao: { '10/96': 6 } }]);
+  });
+});

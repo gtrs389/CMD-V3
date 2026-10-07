@@ -111,6 +111,37 @@ export function passaNaZona(member: Member, valor: string): boolean {
   return valor === SEM_ZONA ? !zona : zona === valor;
 }
 
+/** "0096" e "96" sao a mesma secao. */
+function chaveDaSecaoDaPessoa(member: Pick<Member, 'zone' | 'section'>): string | null {
+  const zona = chaveDaZona(member);
+  const secao = (member.section ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  return zona && secao ? `${zona}/${secao}` : null;
+}
+
+/**
+ * As secoes da lista (`zona/secao`), em ordem numerica. Com uma zona no
+ * filtro, so as dela (e o rotulo nem repete a zona).
+ */
+export function opcoesDeSecao(members: readonly Member[], zona: string): OpcaoDeFiltro[] {
+  const contagem = new Map<string, number>();
+  for (const member of members) {
+    if (!passaNaZona(member, zona)) continue;
+    const chave = chaveDaSecaoDaPessoa(member);
+    if (chave) contagem.set(chave, (contagem.get(chave) ?? 0) + 1);
+  }
+  return [...contagem.entries()]
+    .map(([valor, quantidade]) => {
+      const [z, s] = valor.split('/');
+      return { valor, rotulo: zona !== 'todas' ? `Seção ${s}` : `Zona ${z} · Seção ${s}`, quantidade, ordem: [Number(z), Number(s)] };
+    })
+    .sort((a, b) => a.ordem[0] - b.ordem[0] || a.ordem[1] - b.ordem[1])
+    .map(({ valor, rotulo, quantidade }) => ({ valor, rotulo, quantidade }));
+}
+
+export function passaNaSecao(member: Member, valor: string): boolean {
+  return valor === 'todas' || chaveDaSecaoDaPessoa(member) === valor;
+}
+
 export type FiltroDeOrigem = 'todas' | 'planilha' | 'sistema';
 
 export function passaNaOrigem(member: Member, valor: FiltroDeOrigem): boolean {

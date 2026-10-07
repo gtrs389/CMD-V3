@@ -78,3 +78,20 @@ describe('título legível', () => {
     expect(tituloLegivel(null)).toBeNull();
   });
 });
+
+describe('filtro de seção eleitoral da equipe', () => {
+  it('"0096" e "96" são a mesma seção; com zona escolhida, só as dela', async () => {
+    const { opcoesDeSecao, passaNaSecao } = await import('@/lib/domain/filtros-da-equipe');
+    const p = (zone: string | null, section: string | null) => ({ zone, section }) as unknown as import('@/lib/types').Member;
+    const lista = [p('10', '96'), p('0010', '0096'), p('10', '97'), p('11', '5'), p(null, '3')];
+    expect(opcoesDeSecao(lista, 'todas')).toEqual([
+      { valor: '10/96', rotulo: 'Zona 10 · Seção 96', quantidade: 2 },
+      { valor: '10/97', rotulo: 'Zona 10 · Seção 97', quantidade: 1 },
+      { valor: '11/5', rotulo: 'Zona 11 · Seção 5', quantidade: 1 },
+    ]);
+    expect(opcoesDeSecao(lista, '11').map((o) => o.rotulo)).toEqual(['Seção 5']);
+    expect(passaNaSecao(lista[1], '10/96')).toBe(true);
+    expect(passaNaSecao(lista[2], '10/96')).toBe(false);
+    expect(passaNaSecao(lista[4], 'todas')).toBe(true);
+  });
+});
