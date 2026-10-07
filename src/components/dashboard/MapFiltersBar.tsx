@@ -1,9 +1,11 @@
 'use client';
 
-import { FilterX, MapPin, X } from 'lucide-react';
+import { BookmarkCheck, FilterX, MapPin, X } from 'lucide-react';
 import {
   MIN_VOTES_STEPS,
+  SEM_REFERENCIA_NO_MAPA,
   activeFilterCount,
+  chaveDaReferenciaNoMapa,
   clearFilters,
   type MapOptions,
   type MapQuery,
@@ -20,9 +22,10 @@ import { Select } from '@/components/ui/Select';
  *
  * Duas linhas, e a ordem e a da pergunta que a campanha faz: primeiro O QUE
  * aparece (pessoas, locais de votacao ou os dois), depois ONDE (estado,
- * cidade, zona) e por fim QUANTO (tamanho minimo do local). O Lider fica ao
- * lado da busca: escolhido, o mapa inteiro passa a contar so quem ele
- * cadastrou, escola por escola.
+ * cidade, zona) e por fim QUANTO (tamanho minimo do local). O Lider e a
+ * Referencia ficam ao lado da busca: escolhidos, o mapa inteiro passa a
+ * contar so quem eles cadastraram, escola por escola. Referencia aceita
+ * varias de uma vez, e a lista de Lideres passa a ser so a delas.
  *
  * As opcoes de estado, cidade e zona nao sao listas fixas: vem dos proprios
  * dados, entao nenhum filtro daqui pode devolver mapa vazio por escolha
@@ -50,6 +53,21 @@ interface MapFiltersBarProps {
 export function MapFiltersBar({ query, onChange, options, dense = false, municipiosMultiplos = false }: MapFiltersBarProps) {
   const ativos = activeFilterCount(query);
   const municipios = query.cities ?? [];
+  const referencias = query.references ?? [];
+  const rotuloDaReferencia = (valor: string) => options.references.find((r) => r.value === valor)?.label ?? valor;
+  const alternarReferencia = (valor: string) => {
+    const proximas = referencias.includes(valor) ? referencias.filter((r) => r !== valor) : [...referencias, valor];
+    // O Lider escolhido que nao e de nenhuma das referencias sai do filtro:
+    // senao o mapa ficaria vazio sem explicacao.
+    const lider = options.leaders.find((l) => l.id === query.leader);
+    const liderFica =
+      !lider || proximas.length === 0 || proximas.includes(chaveDaReferenciaNoMapa(lider.reference) || SEM_REFERENCIA_NO_MAPA);
+    onChange({ ...query, references: proximas, leader: liderFica ? query.leader : null });
+  };
+  /** A lista de Lideres segue a referencia: so os Lideres das escolhidas. */
+  const lideresVisiveis = referencias.length
+    ? options.leaders.filter((l) => referencias.includes(chaveDaReferenciaNoMapa(l.reference) || SEM_REFERENCIA_NO_MAPA))
+    : options.leaders;
   const alternarMunicipio = (cidade: string) =>
     onChange({
       ...query,
@@ -101,7 +119,7 @@ export function MapFiltersBar({ query, onChange, options, dense = false, municip
           placeholder="Buscar no mapa"
           value={query.search}
           onChange={(search) => onChange({ ...query, search })}
-          className="col-span-2 sm:col-span-4 lg:col-span-2"
+          className={cn('col-span-2 sm:col-span-4', options.references.length > 0 ? 'lg:col-span-4 xl:col-span-2' : 'lg:col-span-2')}
         />
 
         {options.leaders.length > 0 ? (
@@ -111,14 +129,39 @@ export function MapFiltersBar({ query, onChange, options, dense = false, municip
             highlighted={Boolean(query.leader)}
             searchPlaceholder="Buscar líder"
             options={[
-              { value: '', label: 'Todos os líderes' },
-              ...options.leaders.map((l) => ({
+              { value: '', label: referencias.length ? 'Todos os líderes da referência' : 'Todos os líderes' },
+              ...lideresVisiveis.map((l) => ({
                 value: l.id,
-                label: `${l.name} · ${formatNumber(l.people)} ${l.people === 1 ? 'pessoa' : 'pessoas'} em ${formatNumber(l.places)} ${l.places === 1 ? 'escola' : 'escolas'}`,
+                label: `${l.name}${options.references.length ? ` · ${l.reference ?? 'sem referência'}` : ''} · ${formatNumber(l.people)} ${l.people === 1 ? 'pessoa' : 'pessoas'} em ${formatNumber(l.places)} ${l.places === 1 ? 'escola' : 'escolas'}`,
               })),
             ]}
             onChange={(leader) => onChange({ ...query, leader: leader || null })}
-            className="col-span-2 sm:col-span-4 lg:col-span-2"
+            className={cn('col-span-2', options.references.length > 0 ? 'sm:col-span-2 xl:col-span-1' : 'sm:col-span-4 lg:col-span-2')}
+          />
+        ) : null}
+
+        {/* Referencia: varias de uma vez; vale a Equipe dos Lideres de qualquer uma. */}
+        {options.references.length > 0 ? (
+          <Dropdown
+            aria-label="Referência"
+            options={options.references.map((r) => ({
+              value: r.value,
+              label: `${r.label} · ${formatNumber(r.leaders)} ${r.leaders === 1 ? 'líder' : 'líderes'} · ${formatNumber(r.people)} ${r.people === 1 ? 'pessoa' : 'pessoas'}`,
+            }))}
+            highlighted={referencias.length > 0}
+            searchPlaceholder="Buscar referência"
+            searchThreshold={6}
+            multiple={{
+              selected: referencias,
+              onToggle: alternarReferencia,
+              resumo:
+                referencias.length === 0
+                  ? 'Todas as referências'
+                  : referencias.length === 1
+                    ? `Ref. ${rotuloDaReferencia(referencias[0])}`
+                    : `${referencias.length} referências`,
+            }}
+            className="col-span-2 sm:col-span-2 xl:col-span-1"
           />
         ) : null}
 
@@ -216,6 +259,40 @@ export function MapFiltersBar({ query, onChange, options, dense = false, municip
           ))}
         </Select>
       </div>
+
+      {/* As referencias escolhidas, cada uma com o X para tirar. */}
+      {referencias.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5" aria-label="Referências escolhidas">
+          <span className="flex items-center gap-1 text-xs font-semibold text-ink-700">
+            <BookmarkCheck aria-hidden="true" className="size-3.5 text-gold-600" />
+            {referencias.length === 1 ? 'Referência:' : `${referencias.length} referências:`}
+          </span>
+          {referencias.map((valor) => (
+            <button
+              key={valor}
+              type="button"
+              onClick={() => alternarReferencia(valor)}
+              title={`Tirar ${rotuloDaReferencia(valor)}`}
+              className={cn(
+                'cmd-chip-entra inline-flex min-h-8 items-center gap-1.5 rounded-pill px-2.5 text-left text-xs font-semibold transition-colors',
+                valor === SEM_REFERENCIA_NO_MAPA
+                  ? 'border border-dashed border-ink-300 bg-surface text-ink-700 hover:border-ink-500'
+                  : 'border border-gold-500/40 bg-gold-50 text-gold-700 hover:border-gold-600',
+              )}
+            >
+              {rotuloDaReferencia(valor)}
+              <X aria-hidden="true" className="size-3 shrink-0" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange({ ...query, references: [] })}
+            className="inline-flex min-h-8 items-center rounded-pill px-2 text-xs font-medium text-ink-500 hover:text-ink-900"
+          >
+            Todas as referências
+          </button>
+        </div>
+      ) : null}
 
       {/* Os municipios escolhidos, inteiros, cada um com o X para tirar. */}
       {municipiosMultiplos && municipios.length > 0 ? (

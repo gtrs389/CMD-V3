@@ -247,6 +247,13 @@ export interface MapOverviewPayload {
   pins: MapPin[];
   pollingPlaces: PollingPlacePin[];
   totals: MapTotals;
+  /**
+   * A referencia de cada Lider do time, como foi escrita (a coluna
+   * "Referência" da planilha), pela chave do Lider (`leaderKey`) — e tambem
+   * pela chave do nome, para o Lider da planilha sem usuario. Lider sem
+   * referencia nao entra. Ausente no mapa geral: o filtro nao aparece.
+   */
+  referencias?: Record<string, string>;
 }
 
 /** Pessoa listada apenas depois do clique em "Ver pessoas". */
