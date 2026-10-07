@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { PollingPlacePin } from '@/lib/domain/map-pin';
 import type { EscolaNoComparativo } from '@/lib/domain/confronto';
-import { montarDuelo, parteDaEsquerda, votosDoComparativo, votosNaEscola } from '@/lib/domain/sala-de-confronto';
+import {
+  campanhaDoRecorte,
+  escolaDaSala,
+  montarDuelo,
+  parteDaEsquerda,
+  placarDosLideres,
+  porZona,
+  resumoDoDuelo,
+  votosDoComparativo,
+  votosNaEscola,
+} from '@/lib/domain/sala-de-confronto';
 
 const pino = (id: string, secoes: [string | null, string | null, number][]): PollingPlacePin => ({
   locationId: id,
@@ -70,9 +80,49 @@ describe('sala de confronto', () => {
   });
 
   it('sem adversário e sem votos, a seção fica sem vencedor e a barra no meio', () => {
-    const d = montarDuelo({ secoes: [{ zona: '1', secao: '2', estimativa: 5, apurado: [0] }] }, [votosDoComparativo({ secoes: [{ zona: '1', secao: '2', estimativa: 5, apurado: [0] }] }, 0)], []);
+    const escola = { secoes: [{ zona: '1', secao: '2', estimativa: 5, apurado: [0] }] };
+    const d = montarDuelo(escola, [votosDoComparativo(escola, 0)], []);
     expect(d.secoes[0].vencedor).toBe('SEM_VOTOS');
     expect(d.dosLideres).toBeNull();
     expect(parteDaEsquerda(d)).toBe(50);
+  });
+
+  it('zona a zona e líder a líder: o duelo só nas seções de cada um', () => {
+    const direita = votosNaEscola(ESCOLA, [pino('tse:h', [['10', '96', 10], ['10', '97', 20], ['11', '5', 4]])]);
+    const d = montarDuelo(ESCOLA, [votosDoComparativo(ESCOLA, 0)], [direita]);
+    const zonas = porZona(d.secoes);
+    expect(zonas.map((z) => [z.zona, z.totalEsquerda, z.totalDireita, z.vitorias.esquerda, z.vitorias.direita])).toEqual([
+      ['10', 32, 30, 1, 1],
+      ['11', 0, 4, 0, 1],
+    ]);
+    const lideres = placarDosLideres(d.secoes, [
+      { id: 'a', nome: 'Ana', cadastrados: 3, porSecao: { '10/97': 3 } },
+      { id: 'f', nome: 'Félix', cadastrados: 10, porSecao: { '10/96': 6, '10/97': 2, '-/-': 2 } },
+    ]);
+    expect(lideres.map((l) => l.lider.nome)).toEqual(['Félix', 'Ana']);
+    expect(lideres[0]).toMatchObject({ pessoas: 8, esquerda: 32, direita: 30, vitorias: 1, derrotas: 1, conversao: 400 });
+    expect(placarDosLideres(d.secoes, [{ id: 'f', nome: 'Félix', cadastrados: 8, porSecao: { '10/96': 6, '10/97': 2 } }], 2)[0].conversao).toBe(200);
+    expect(lideres[0].secoes.map((x) => x.secao.chave)).toEqual(['10/96', '10/97']);
+    expect(lideres[1]).toMatchObject({ pessoas: 3, esquerda: 2, direita: 20, vitorias: 0, derrotas: 1 });
+    expect(resumoDoDuelo(d, { estimativa: 23 }, 2)).toMatchObject({ estimativa: 23, secoes: 3, zonas: ['10', '11'], esquerda: 32, direita: 34 });
+  });
+
+  it('a escola enviada é achada de novo, com o recorte do envio (só a gente do Líder)', () => {
+    const campanha: PollingPlacePin = {
+      ...pino('c-humberto', [['10', '96', 5], ['10', '97', 3]]),
+      leaders: [
+        { id: 'f', name: 'Félix', total: 5, men: 0, women: 0, others: 0, sections: [{ zone: '10', section: '96', total: 5 }] },
+        { id: 'a', name: 'Ana', total: 3, men: 0, women: 0, others: 0, sections: [{ zone: '10', section: '97', total: 3 }] },
+      ],
+    };
+    const payload = { pins: [], pollingPlaces: [campanha] };
+    const doFelix = campanhaDoRecorte(payload, { leader: 'f' });
+    expect(doFelix[0].total).toBe(5);
+    // O primeiro candidato não tem voto ali; o segundo tem: a escola sai casada com o TSE.
+    const escola = escolaDaSala(doFelix, [[], [pino('tse:h', [['10', '96', 9]])]], { chave: 'tse:h', pinos: ['c-humberto'] });
+    expect(escola?.chave).toBe('tse:h');
+    expect(escola?.estimativa).toBe(5);
+    expect(escolaDaSala(doFelix, [[]], { chave: 'tse:h', pinos: ['c-humberto'] })?.chave).toBe('campanha:c-humberto');
+    expect(escolaDaSala(doFelix, [[]], { chave: 'x', pinos: ['outro'] })).toBeNull();
   });
 });
