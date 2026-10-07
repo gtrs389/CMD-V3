@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDownRight, ArrowUpRight, Check, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -111,7 +111,20 @@ export interface CandidatoNoRaioX {
 const pct = (estimativa: number, apurado: number) => conversao({ estimativa, apurado });
 
 /** O placar de um candidato: estimativa contra apurado, em numeros grandes e em duas barras. */
-function Placar({ estimativa, apurado, candidato }: { estimativa: number; apurado: number; candidato: string }) {
+function Placar({
+  estimativa,
+  apurado,
+  candidato,
+  foto,
+  cargo,
+}: {
+  estimativa: number;
+  apurado: number;
+  candidato: string;
+  /** A foto oficial do candidato (pelo numero de urna), ao lado dos votos dele. */
+  foto?: string;
+  cargo?: number;
+}) {
   const c = pct(estimativa, apurado);
   const maior = Math.max(1, estimativa, apurado);
   const diferenca = apurado - estimativa;
@@ -130,14 +143,26 @@ function Placar({ estimativa, apurado, candidato }: { estimativa: number; apurad
           </p>
           <p className="mt-1 text-xs text-white/60">pessoas cadastradas que votam aqui</p>
         </div>
-        <div>
-          <p className="flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-white/60 uppercase">
-            <span aria-hidden="true" className="size-2 rounded-sm bg-gold-400" /> Apurado (TSE)
-          </p>
-          <p className="mt-1 text-4xl leading-none font-bold text-gold-400 tabular-nums">
-            <Contador valor={apurado} />
-          </p>
-          <p className="mt-1 wrap-break-word text-xs text-white/60">votos de {candidato}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          {cargo !== undefined ? (
+            <FotoDoCandidato
+              cargo={cargo}
+              sqcand={null}
+              src={foto}
+              nome={candidato}
+              tamanho="lg"
+              className="shrink-0 ring-[3px] ring-gold-400 ring-offset-2 ring-offset-navy-800"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-white/60 uppercase">
+              <span aria-hidden="true" className="size-2 rounded-sm bg-gold-400" /> Apurado (TSE)
+            </p>
+            <p className="mt-1 text-4xl leading-none font-bold text-gold-400 tabular-nums">
+              <Contador valor={apurado} />
+            </p>
+            <p className="mt-1 wrap-break-word text-xs text-white/60">votos de {candidato}</p>
+          </div>
         </div>
         <div className="col-span-2 flex flex-col items-center sm:col-span-1">
           <Medidor valor={c} />
@@ -605,6 +630,7 @@ function GradeLiderPorSecao({
   foco: string | null;
   onFoco: (id: string | null) => void;
 }) {
+  const [aberta, setAberta] = useState(false);
   const secoes = escola.secoes.filter((s) => s.zona || s.secao);
   const semSecao = escola.secoes.find((s) => !s.zona && !s.secao) ?? null;
   const colunas = [...secoes, ...(semSecao ? [semSecao] : [])];
@@ -626,133 +652,155 @@ function GradeLiderPorSecao({
 
   return (
     <section aria-label="Pessoas de cada líder em cada seção" className="overflow-hidden rounded-card border border-line bg-surface">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
-          <Grid3x3 aria-hidden="true" className="size-4 text-accent-600" />
-          Quem cadastrou em cada seção
-        </h3>
-        <p className="text-xs text-ink-500">
-          {formatNumber(lideres.length)} {lideres.length === 1 ? 'líder' : 'líderes'} × {formatNumber(secoes.length)}{' '}
-          {secoes.length === 1 ? 'seção' : 'seções'}
-          {zonas.length ? ` · Zona ${zonas.join(', ')}` : ''} · quanto mais escuro, mais gente
-        </p>
-      </header>
-      <div className="scrollbar-slim overflow-x-auto">
-        <table className="w-full border-separate border-spacing-0 text-sm">
-          <thead>
-            <tr>
-              <th scope="col" className="sticky left-0 z-10 min-w-[15rem] border-b border-line bg-ink-50 px-4 py-2 text-left text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
-                Líder
-              </th>
-              {colunas.map((s) => (
-                <th key={chaveDaSecao(s.zona, s.secao)} scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-2 py-2 text-center">
-                  {s.zona || s.secao ? (
-                    <>
-                      <span className="block text-xs font-bold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</span>
-                      <span className="block text-[0.625rem] text-ink-500">Zona {s.zona ?? '?'}</span>
-                    </>
-                  ) : (
-                    <span className="block text-[0.625rem] leading-tight text-ink-500">sem seção</span>
-                  )}
-                </th>
-              ))}
-              <th scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-3 py-2 text-right text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {lideres.map((l) => {
-              const ativo = foco === l.id;
-              return (
-                <tr key={l.id} className={cn('group', foco && !ativo && 'opacity-45')}>
-                  <th scope="row" className={cn('sticky left-0 z-10 border-b border-line px-4 py-2 text-left font-normal', ativo ? 'bg-gold-50' : 'bg-surface group-hover:bg-ink-50')}>
-                    <button type="button" onClick={() => onFoco(ativo ? null : l.id)} aria-pressed={ativo} className="flex w-full min-w-0 items-center gap-2 text-left">
-                      <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-bold', ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400')}>
-                        {initials(l.nome)}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-xs font-semibold wrap-break-word text-ink-900">{l.nome}</span>
-                        <SeloDaReferencia referencia={l.referencia} compacto />
-                      </span>
-                    </button>
+      {/* Fechada por padrao: a barra inteira abre e fecha. */}
+      <button
+        type="button"
+        onClick={() => setAberta((atual) => !atual)}
+        aria-expanded={aberta}
+        className={cn(
+          'group flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3.5 text-left transition-colors hover:bg-accent-50/50',
+          aberta && 'border-b border-line',
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-navy-900 text-gold-400">
+            <Grid3x3 aria-hidden="true" className="size-4.5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink-900">Quem cadastrou em cada seção</span>
+            <span className="block text-xs text-ink-500">
+              {formatNumber(lideres.length)} {lideres.length === 1 ? 'líder' : 'líderes'} × {formatNumber(secoes.length)}{' '}
+              {secoes.length === 1 ? 'seção' : 'seções'}
+              {zonas.length ? ` · Zona ${zonas.join(', ')}` : ''}
+              {aberta ? ' · quanto mais escuro, mais gente' : ''}
+            </span>
+          </span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-accent-700 transition-colors group-hover:border-accent-600">
+          {aberta ? 'Fechar' : 'Abrir a grade'}
+          <ChevronDown aria-hidden="true" className={cn('size-4 transition-transform duration-300', aberta && 'rotate-180')} />
+        </span>
+      </button>
+      {aberta ? (
+        <div className="animate-fade-in">
+          <div className="scrollbar-slim overflow-x-auto">
+            <table className="w-full border-separate border-spacing-0 text-sm">
+              <thead>
+                <tr>
+                  <th scope="col" className="sticky left-0 z-10 min-w-[15rem] border-b border-line bg-ink-50 px-4 py-2 text-left text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+                    Líder
                   </th>
-                  {colunas.map((s) => {
-                    const n = valor(l, s);
-                    return (
-                      <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line p-1 text-center">
-                        <span
-                          className={cn(
-                            'flex h-8 items-center justify-center rounded-md text-xs font-bold tabular-nums transition-colors',
-                            n <= 0 && 'text-ink-200',
-                          )}
-                          style={celula(n, ativo)}
-                          title={`${l.nome} · Seção ${s.secao ?? '?'}: ${n} ${n === 1 ? 'pessoa' : 'pessoas'}`}
-                        >
-                          {n > 0 ? formatNumber(n) : '·'}
-                        </span>
-                      </td>
-                    );
-                  })}
-                  <td className="border-b border-line px-3 py-2 text-right text-sm font-bold text-navy-900 tabular-nums">{formatNumber(l.cadastrados)}</td>
+                  {colunas.map((s) => (
+                    <th key={chaveDaSecao(s.zona, s.secao)} scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-2 py-2 text-center">
+                      {s.zona || s.secao ? (
+                        <>
+                          <span className="block text-xs font-bold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</span>
+                          <span className="block text-[0.625rem] text-ink-500">Zona {s.zona ?? '?'}</span>
+                        </>
+                      ) : (
+                        <span className="block text-[0.625rem] leading-tight text-ink-500">sem seção</span>
+                      )}
+                    </th>
+                  ))}
+                  <th scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-3 py-2 text-right text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+                    Total
+                  </th>
                 </tr>
-              );
-            })}
-            {diretos > 0 ? (
-              <tr>
-                <th scope="row" className="sticky left-0 z-10 border-b border-line bg-surface px-4 py-2 text-left text-xs font-normal text-ink-500">
-                  Sem líder registrado
-                </th>
-                {colunas.map((s) => (
-                  <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line p-1 text-center text-xs text-ink-500 tabular-nums">
-                    {semLiderNa(s) || '·'}
-                  </td>
-                ))}
-                <td className="border-b border-line px-3 py-2 text-right text-sm font-semibold text-ink-500 tabular-nums">{formatNumber(diretos)}</td>
-              </tr>
-            ) : null}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th scope="row" className="sticky left-0 z-10 border-b border-line bg-ink-50 px-4 py-2 text-left text-xs font-semibold text-navy-900">
-                Estimativa do time
-              </th>
-              {colunas.map((s) => (
-                <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line bg-ink-50 px-1 py-2 text-center text-sm font-bold text-navy-900 tabular-nums">
-                  {formatNumber(s.estimativa)}
-                </td>
-              ))}
-              <td className="border-b border-line bg-ink-50 px-3 py-2 text-right text-sm font-bold text-navy-900 tabular-nums">{formatNumber(escola.estimativa)}</td>
-            </tr>
-            {candidatos.map((c, k) => (
-              <tr key={c.rotulo}>
-                <th scope="row" className="sticky left-0 z-10 border-b border-line bg-surface px-4 py-2 text-left text-xs font-semibold text-ink-900">
-                  <span className="flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: candidatos.length > 1 ? c.cor : '#e0a426' }} />
-                    <span className="wrap-break-word">Votos de {c.nome}</span>
-                  </span>
-                </th>
-                {colunas.map((s) => {
-                  const votos = s.apurado[k] ?? 0;
-                  const abaixo = (s.zona || s.secao) && s.estimativa > 0 && votos < s.estimativa;
+              </thead>
+              <tbody>
+                {lideres.map((l) => {
+                  const ativo = foco === l.id;
                   return (
-                    <td
-                      key={chaveDaSecao(s.zona, s.secao)}
-                      className={cn('border-b border-line px-1 py-2 text-center text-sm font-bold tabular-nums', abaixo ? 'text-danger-700' : 'text-ink-900')}
-                    >
-                      {s.zona || s.secao ? formatNumber(votos) : '—'}
-                    </td>
+                    <tr key={l.id} className={cn('group', foco && !ativo && 'opacity-45')}>
+                      <th scope="row" className={cn('sticky left-0 z-10 border-b border-line px-4 py-2 text-left font-normal', ativo ? 'bg-gold-50' : 'bg-surface group-hover:bg-ink-50')}>
+                        <button type="button" onClick={() => onFoco(ativo ? null : l.id)} aria-pressed={ativo} className="flex w-full min-w-0 items-center gap-2 text-left">
+                          <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-bold', ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400')}>
+                            {initials(l.nome)}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-xs font-semibold wrap-break-word text-ink-900">{l.nome}</span>
+                            <SeloDaReferencia referencia={l.referencia} compacto />
+                          </span>
+                        </button>
+                      </th>
+                      {colunas.map((s) => {
+                        const n = valor(l, s);
+                        return (
+                          <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line p-1 text-center">
+                            <span
+                              className={cn(
+                                'flex h-8 items-center justify-center rounded-md text-xs font-bold tabular-nums transition-colors',
+                                n <= 0 && 'text-ink-200',
+                              )}
+                              style={celula(n, ativo)}
+                              title={`${l.nome} · Seção ${s.secao ?? '?'}: ${n} ${n === 1 ? 'pessoa' : 'pessoas'}`}
+                            >
+                              {n > 0 ? formatNumber(n) : '·'}
+                            </span>
+                          </td>
+                        );
+                      })}
+                      <td className="border-b border-line px-3 py-2 text-right text-sm font-bold text-navy-900 tabular-nums">{formatNumber(l.cadastrados)}</td>
+                    </tr>
                   );
                 })}
-                <td className="border-b border-line px-3 py-2 text-right text-sm font-bold text-ink-900 tabular-nums">{formatNumber(escola.apurado[k] ?? 0)}</td>
-              </tr>
-            ))}
-          </tfoot>
-        </table>
-      </div>
-      <p className="border-t border-line px-4 py-2 text-[0.6875rem] text-ink-500">
-        Em vermelho, a seção onde o candidato teve menos votos do que o time estimava. Toque num líder para acender a gente dele.
-      </p>
+                {diretos > 0 ? (
+                  <tr>
+                    <th scope="row" className="sticky left-0 z-10 border-b border-line bg-surface px-4 py-2 text-left text-xs font-normal text-ink-500">
+                      Sem líder registrado
+                    </th>
+                    {colunas.map((s) => (
+                      <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line p-1 text-center text-xs text-ink-500 tabular-nums">
+                        {semLiderNa(s) || '·'}
+                      </td>
+                    ))}
+                    <td className="border-b border-line px-3 py-2 text-right text-sm font-semibold text-ink-500 tabular-nums">{formatNumber(diretos)}</td>
+                  </tr>
+                ) : null}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th scope="row" className="sticky left-0 z-10 border-b border-line bg-ink-50 px-4 py-2 text-left text-xs font-semibold text-navy-900">
+                    Estimativa do time
+                  </th>
+                  {colunas.map((s) => (
+                    <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line bg-ink-50 px-1 py-2 text-center text-sm font-bold text-navy-900 tabular-nums">
+                      {formatNumber(s.estimativa)}
+                    </td>
+                  ))}
+                  <td className="border-b border-line bg-ink-50 px-3 py-2 text-right text-sm font-bold text-navy-900 tabular-nums">{formatNumber(escola.estimativa)}</td>
+                </tr>
+                {candidatos.map((c, k) => (
+                  <tr key={c.rotulo}>
+                    <th scope="row" className="sticky left-0 z-10 border-b border-line bg-surface px-4 py-2 text-left text-xs font-semibold text-ink-900">
+                      <span className="flex items-center gap-1.5">
+                        <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: candidatos.length > 1 ? c.cor : '#e0a426' }} />
+                        <span className="wrap-break-word">Votos de {c.nome}</span>
+                      </span>
+                    </th>
+                    {colunas.map((s) => {
+                      const votos = s.apurado[k] ?? 0;
+                      const abaixo = (s.zona || s.secao) && s.estimativa > 0 && votos < s.estimativa;
+                      return (
+                        <td
+                          key={chaveDaSecao(s.zona, s.secao)}
+                          className={cn('border-b border-line px-1 py-2 text-center text-sm font-bold tabular-nums', abaixo ? 'text-danger-700' : 'text-ink-900')}
+                        >
+                          {s.zona || s.secao ? formatNumber(votos) : '—'}
+                        </td>
+                      );
+                    })}
+                    <td className="border-b border-line px-3 py-2 text-right text-sm font-bold text-ink-900 tabular-nums">{formatNumber(escola.apurado[k] ?? 0)}</td>
+                  </tr>
+                ))}
+              </tfoot>
+            </table>
+          </div>
+          <p className="border-t border-line px-4 py-2 text-[0.6875rem] text-ink-500">
+            Em vermelho, a seção onde o candidato teve menos votos do que o time estimava. Toque num líder para acender a gente dele.
+          </p>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -813,10 +861,25 @@ export function RaioXDaEscola({
         <div className="relative mx-auto flex max-w-[1600px] flex-wrap items-start gap-4">
           <BotaoVoltar onClick={onClose} rotulo="Mapa" />
           <div className="min-w-0 flex-1">
-            <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400 ring-1 ring-white/15">
-              <ScanSearch aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="wrap-break-word">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Os candidatos da escola, com a foto oficial, cada um na cor dele. */}
+              <span className="flex -space-x-2">
+                {candidatos.map((c) => (
+                  <span
+                    key={c.rotulo}
+                    title={c.nome}
+                    className="rounded-full ring-2 ring-offset-2 ring-offset-navy-900"
+                    style={{ '--tw-ring-color': varios ? c.cor : '#f2c14e' } as CSSProperties}
+                  >
+                    <FotoDoCandidato cargo={c.cargo} sqcand={null} src={c.foto} nome={c.nome} tamanho="sm" />
+                  </span>
+                ))}
+              </span>
+              <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400 ring-1 ring-white/15">
+                <ScanSearch aria-hidden="true" className="size-3.5 shrink-0" />
+                <span className="wrap-break-word">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
+              </p>
+            </div>
             <h2 className="mt-2 text-xl leading-tight font-bold wrap-break-word sm:text-2xl">{escola.titulo}</h2>
             {onde ? (
               <p className="mt-0.5 flex items-start gap-1.5 text-sm text-white/70">
@@ -847,7 +910,7 @@ export function RaioXDaEscola({
           {varios ? (
             <PlacarComparado escola={escola} candidatos={candidatos} />
           ) : (
-            <Placar estimativa={escola.estimativa} apurado={escola.apurado[0] ?? 0} candidato={um?.nome ?? ''} />
+            <Placar estimativa={escola.estimativa} apurado={escola.apurado[0] ?? 0} candidato={um?.nome ?? ''} foto={um?.foto} cargo={um?.cargo} />
           )}
 
           <p className="rounded-control border-l-4 border-gold-500 bg-gold-50 px-3 py-2 text-sm text-ink-900">
@@ -856,12 +919,13 @@ export function RaioXDaEscola({
               : fraseDaEscola({ estimativa: escola.estimativa, apurado: escola.apurado[0] ?? 0 }, um?.nome ?? '')}
           </p>
 
-          <GradeLiderPorSecao escola={escola} lideres={lideres} diretos={diretos} candidatos={candidatos} foco={foco} onFoco={setFoco} />
-
           <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <Lideres escola={escola} lideres={lideres} diretos={diretos} foco={foco} onFoco={setFoco} candidatos={candidatos} />
             <Secoes escola={escola} candidatos={candidatos} escolhido={escolhido} lideres={lideres} />
           </div>
+
+          {/* Por ultimo, e fechada: abre no clique. */}
+          <GradeLiderPorSecao escola={escola} lideres={lideres} diretos={diretos} candidatos={candidatos} foco={foco} onFoco={setFoco} />
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
             {escolhido ? (
