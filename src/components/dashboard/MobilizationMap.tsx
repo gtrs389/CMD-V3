@@ -1381,6 +1381,7 @@ export function MobilizationMap({
           }
           candidatos={candidatosDaEscola.map(
             (c): CandidatoNoRaioX => ({
+              id: c.id,
               nome: c.nome,
               rotulo: rotuloDoCandidato(c),
               cor: corDoEscolhido(c),
@@ -1402,6 +1403,7 @@ export function MobilizationMap({
               : undefined
           }
           pdf={menuDoPdf}
+          secaoNoFiltro={Boolean(secaoEscolhida)}
         />
       ) : null}
 
