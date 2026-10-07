@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { ArrowDownRight, ArrowRight, ArrowUpRight, BookmarkCheck, BookmarkX, Check, CheckCheck, Filter, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Trophy, Vote, BookmarkCheck, BookmarkX, Check, CheckCheck, Filter, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -313,6 +313,183 @@ function fraseComparada(e: EscolaNoComparativo, candidatos: CandidatoNoRaioX[]):
     : `${lista}. O time não tinha estimativa aqui.`;
 }
 
+/** O id da secao na lista (os destaques rolam ate ela). */
+const idDaSecao = (zona: string | null, secao: string | null) => `raiox-secao-${zona ?? 'x'}-${secao ?? 'x'}`;
+
+/** Rola a lista ate a secao e a faz piscar em ouro, para o olho achar. */
+function irParaSecao(zona: string | null, secao: string | null) {
+  const alvo = document.getElementById(idDaSecao(zona, secao));
+  if (!alvo) return;
+  alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  alvo.animate(
+    [{ backgroundColor: 'rgba(242, 193, 78, 0.45)' }, { backgroundColor: 'rgba(242, 193, 78, 0)' }],
+    { duration: 1800, easing: 'ease-out' },
+  );
+}
+
+/** Um destaque das secoes: o titulo na cor, a secao, o numero grande e uma linha de contexto. */
+function CartaoDeDestaque({
+  s,
+  titulo,
+  icone,
+  cor,
+  numero,
+  rodape,
+  foto,
+}: {
+  s: { zona: string | null; secao: string | null };
+  titulo: string;
+  icone: React.ReactNode;
+  cor: string;
+  numero: React.ReactNode;
+  rodape: React.ReactNode;
+  foto?: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => irParaSecao(s.zona, s.secao)}
+      title="Ver esta seção na lista"
+      className="group relative flex min-w-0 flex-col overflow-hidden rounded-card border border-line bg-surface p-3.5 text-left shadow-card transition-all hover:-translate-y-0.5 hover:shadow-overlay"
+      style={{ boxShadow: `inset 0 3px 0 ${cor}` }}
+    >
+      <span className="flex items-center gap-1.5 text-[0.625rem] font-bold tracking-[0.12em] uppercase" style={{ color: cor }}>
+        {icone}
+        {titulo}
+      </span>
+      <span className="mt-2 flex items-center gap-2.5">
+        {foto}
+        <span className="min-w-0">
+          <span className="block text-base leading-tight text-ink-900">
+            Seção <b className="tabular-nums">{s.secao ?? '?'}</b>
+            <span className="text-ink-500"> · Zona {s.zona ?? '?'}</span>
+          </span>
+          <span className="mt-0.5 block text-2xl leading-none font-black tabular-nums" style={{ color: cor }}>
+            {numero}
+          </span>
+        </span>
+      </span>
+      <span className="mt-2 block text-xs text-ink-500">{rodape}</span>
+      <span className="mt-2 inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-accent-700 opacity-0 transition-opacity group-hover:opacity-100">
+        Ver na lista <ArrowRight aria-hidden="true" className="size-3" />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Os destaques da escola, de relance: a secao com MAIS GENTE do time, a
+ * secao com MAIS VOTOS (de cada candidato, com a foto), a de MELHOR
+ * conversao e a que MAIS FICOU DEVENDO (gente cadastrada que nao virou
+ * voto). Tocar num destaque leva a secao, na lista.
+ */
+function DestaquesDasSecoes({
+  escola,
+  candidatos,
+  lideres,
+}: {
+  escola: EscolaNoComparativo;
+  candidatos: CandidatoNoRaioX[];
+  lideres: LiderNoRaioX[];
+}) {
+  const secoes = escola.secoes.filter((s) => s.zona || s.secao);
+  if (secoes.length === 0) return null;
+  const varios = candidatos.length > 1;
+  const votos = (s: (typeof secoes)[number]) => s.apurado.reduce((t, n) => t + n, 0);
+  const maisGente = [...secoes].sort((a, b) => b.estimativa - a.estimativa)[0];
+  const quemCadastrou = lideres
+    .map((l) => ({ l, n: l.porSecao[chaveDaSecao(maisGente.zona, maisGente.secao)] ?? 0 }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 2);
+  const maisVotos = candidatos.map((c, k) => ({ c, s: [...secoes].sort((a, b) => (b.apurado[k] ?? 0) - (a.apurado[k] ?? 0))[0], k }));
+  const comGente = secoes.filter((s) => s.estimativa > 0);
+  const conv = (s: (typeof secoes)[number]) => votos(s) / candidatos.length / Math.max(1, s.estimativa);
+  const melhor = comGente.length ? [...comGente].sort((a, b) => conv(b) - conv(a))[0] : null;
+  const devendo = comGente
+    .map((s) => ({ s, falta: s.estimativa - Math.max(...s.apurado, 0) }))
+    .filter((x) => x.falta > 0)
+    .sort((a, b) => b.falta - a.falta)[0];
+  return (
+    <section aria-label="Destaques das seções">
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-900">
+        <span className="flex size-7 items-center justify-center rounded-lg bg-navy-900 text-gold-400">
+          <Trophy aria-hidden="true" className="size-4" />
+        </span>
+        Destaques das seções
+        <span className="text-xs font-normal text-ink-500">· toque para ver a seção na lista</span>
+      </h3>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-3">
+        <CartaoDeDestaque
+          s={maisGente}
+          titulo="Mais gente cadastrada"
+          icone={<Users aria-hidden="true" className="size-3.5" />}
+          cor="#0f1e35"
+          numero={
+            <>
+              {formatNumber(maisGente.estimativa)} <span className="text-sm font-semibold text-ink-500">{maisGente.estimativa === 1 ? 'pessoa' : 'pessoas'}</span>
+            </>
+          }
+          rodape={
+            <>
+              {escola.estimativa > 0 ? `${Math.round((maisGente.estimativa / escola.estimativa) * 100)}% da escola` : ''}
+              {quemCadastrou.length ? ` · mais de ${quemCadastrou.map((x) => `${x.l.nome.split(' ')[0]} (${x.n})`).join(' e ')}` : ''}
+            </>
+          }
+        />
+        {maisVotos.map(({ c, s, k }) => (
+          <CartaoDeDestaque
+            key={c.rotulo}
+            s={s}
+            titulo={varios ? `Mais votos de ${c.nome.split(' ')[0]}` : 'Mais votos'}
+            icone={<Vote aria-hidden="true" className="size-3.5" />}
+            cor={varios ? c.cor : '#b7791f'}
+            foto={<FotoDoCandidato cargo={c.cargo} sqcand={null} src={c.foto} nome={c.nome} tamanho="md" className="shrink-0 ring-2 ring-offset-1" />}
+            numero={
+              <>
+                {formatNumber(s.apurado[k] ?? 0)} <span className="text-sm font-semibold text-ink-500">{(s.apurado[k] ?? 0) === 1 ? 'voto' : 'votos'}</span>
+              </>
+            }
+            rodape={
+              s.estimativa > 0
+                ? `o time tinha ${formatNumber(s.estimativa)} ${s.estimativa === 1 ? 'pessoa' : 'pessoas'} ali`
+                : 'nenhuma pessoa do time vota ali'
+            }
+          />
+        ))}
+        {melhor ? (
+          <CartaoDeDestaque
+            s={melhor}
+            titulo="Melhor conversão"
+            icone={<ArrowUpRight aria-hidden="true" className="size-3.5" />}
+            cor="#15803d"
+            numero={`${Math.round(conv(melhor) * 100)}%`}
+            rodape={
+              varios
+                ? `em média ${formatNumber(Math.round(votos(melhor) / candidatos.length))} votos por candidato para ${formatNumber(melhor.estimativa)} ${melhor.estimativa === 1 ? 'pessoa' : 'pessoas'} do time`
+                : `${formatNumber(votos(melhor))} votos para ${formatNumber(melhor.estimativa)} ${melhor.estimativa === 1 ? 'pessoa' : 'pessoas'} do time`
+            }
+          />
+        ) : null}
+        {devendo ? (
+          <CartaoDeDestaque
+            s={devendo.s}
+            titulo="Mais ficou devendo"
+            icone={<ArrowDownRight aria-hidden="true" className="size-3.5" />}
+            cor="#b42318"
+            numero={
+              <>
+                −{formatNumber(devendo.falta)} <span className="text-sm font-semibold text-ink-500">votos</span>
+              </>
+            }
+            rodape={`${formatNumber(devendo.s.estimativa)} cadastrados, e o mais votado ali teve ${formatNumber(Math.max(...devendo.s.apurado, 0))}`}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 /** Quantas pessoas dos Lideres selecionados votam na secao (a chave de `chaveDaSecao`). */
 const dosSelecionados = (selecionados: readonly LiderNoRaioX[], chave: string) =>
   selecionados.reduce((t, l) => t + (l.porSecao[chave] ?? 0), 0);
@@ -605,6 +782,7 @@ function Secoes({
           return (
             <li
               key={`${s.zona}/${s.secao}/${i}`}
+              id={comSecao ? idDaSecao(s.zona, s.secao) : undefined}
               className={cn(
                 'grid items-center gap-3 px-4 py-2.5 transition-[opacity,filter] duration-300',
                 varios ? 'grid-cols-[5.5rem_minmax(0,1fr)]' : 'grid-cols-[5.5rem_minmax(0,1fr)_auto]',
@@ -1101,6 +1279,8 @@ export function RaioXDaEscola({
               ? fraseComparada(escola, candidatos)
               : fraseDaEscola({ estimativa: escola.estimativa, apurado: escola.apurado[0] ?? 0 }, um?.nome ?? '')}
           </p>
+
+          <DestaquesDasSecoes escola={escola} candidatos={candidatos} lideres={lideres} />
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
             <Lideres

@@ -95,6 +95,11 @@ export interface PedidoDeVotacao {
   candidatos: CandidatoDaVotacao[];
   vez: number;
   municipios?: string[];
+  /**
+   * O mapa como estava (a Sala de Apuracao guarda e devolve): os filtros,
+   * os candidatos ligados no placar e a escola aberta no raio-x.
+   */
+  estado?: EstadoDoMapa;
 }
 
 interface MobilizationMapProps {
@@ -127,6 +132,15 @@ interface MobilizationMapProps {
   onCandidatosChange?: (candidatos: CandidatoDaVotacao[]) => void;
   /** Dentro da propria Sala de Apuracao: sem o atalho para ela. */
   naSala?: boolean;
+  /** Avisa quem esta fora a cada mudanca de filtro, placar ou escola (a Sala guarda). */
+  onEstadoDoMapa?: (estado: EstadoDoMapa) => void;
+}
+
+/** O que a Sala de Apuracao lembra do mapa: os filtros, quem esta ligado no placar e a escola aberta. */
+export interface EstadoDoMapa {
+  filtros: MapQuery;
+  ativos: string[];
+  escola: string | null;
 }
 
 /** "José Carlos da Silva" -> "José Silva": cabe no titulo do ranking. */
@@ -162,6 +176,7 @@ export function MobilizationMap({
   pedidoDeVotacao = null,
   onCandidatosChange,
   naSala = false,
+  onEstadoDoMapa,
 }: MobilizationMapProps = {}) {
   const { can } = useSession();
   // Decide em qual dos dois lugares a ficha nasce: ao lado do mapa ou abaixo
@@ -315,16 +330,30 @@ export function MobilizationMap({
   useEffect(() => {
     if (!pedidoDeVotacao) return;
     const escolhidos = pedidoDeVotacao.candidatos;
+    const estado = pedidoDeVotacao.estado;
+    const ligados = (estado?.ativos ?? []).filter((id) => escolhidos.some((c) => c.id === id));
     const quadro = requestAnimationFrame(() => {
       setCandidatos(escolhidos);
-      setAtivosIds(escolhidos[0] ? [escolhidos[0].id] : []);
+      setAtivosIds(ligados.length ? ligados : escolhidos[0] ? [escolhidos[0].id] : []);
       setFocusPlace(null);
       setOpenPlace(null);
-      setRaioX(null);
-      setQuery((atual) => ({ ...atual, state: null, city: null, cities: pedidoDeVotacao.municipios ?? [], search: '' }));
+      // Voltando a Sala, o mapa volta como estava: filtros e escola aberta.
+      setRaioX(estado?.escola ?? null);
+      setQuery((atual) =>
+        estado?.filtros
+          ? { ...DEFAULT_MAP_QUERY, ...estado.filtros }
+          : { ...atual, state: null, city: null, cities: pedidoDeVotacao.municipios ?? [], search: '' },
+      );
     });
     return () => cancelAnimationFrame(quadro);
   }, [pedidoDeVotacao]);
+
+  // Quem esta fora (a Sala de Apuracao) fica sabendo de cada mudanca: so com
+  // candidato no mapa, que e o que se volta a ver.
+  useEffect(() => {
+    if (!onEstadoDoMapa || candidatos.length === 0) return;
+    onEstadoDoMapa({ filtros: query, ativos: ativosIds, escola: raioX });
+  }, [onEstadoDoMapa, candidatos.length, query, ativosIds, raioX]);
 
   /**
    * `municipios`: o recorte escolhido no passo 2 da central (vazio: o estado
@@ -751,10 +780,14 @@ export function MobilizationMap({
           })),
     [candidato, confronto, selection.places, valorDoLocal],
   );
-  /** A escola escolhida na busca: o mapa voa ate ela e abre o balao; na votacao sem ponto, abre o raio-x. */
+  /**
+   * A escola escolhida na busca ABRE: na votacao, o raio-x dela; na
+   * campanha, a escola com a gente que vota ali. Por tras, o mapa ja fica
+   * nela — fechar a escola devolve o mapa no lugar certo.
+   */
   function escolherNaBusca(e: (typeof escolasDaBusca)[number]) {
-    if (e.pino) return focar(e.pino);
     if (e.noMapa) setFocusPlace({ locationId: e.chave, latitude: e.latitude, longitude: e.longitude, nonce: Date.now() });
+    if (e.pino) setOpenPlace(e.pino);
     else setRaioX(e.chave);
   }
 

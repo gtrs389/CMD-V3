@@ -39,7 +39,7 @@ import { textoDoAndamento, useVotacaoAoVivo, type SituacaoAoVivo } from '@/compo
 import { useSession } from '@/components/layout/SessionProvider';
 import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import { EscolhaDoMunicipio } from '@/components/dashboard/votacao/EscolhaDoMunicipio';
-import type { PedidoDeVotacao } from '@/components/dashboard/MobilizationMap';
+import type { EstadoDoMapa, PedidoDeVotacao } from '@/components/dashboard/MobilizationMap';
 import { createPortal } from 'react-dom';
 import { FotoDoCandidato } from './FotoDoCandidato';
 import { GraficoDaNoite } from './GraficoDaNoite';
@@ -106,7 +106,7 @@ const CHAVE_DA_ESCOLHA = 'cmd:sala:escolha';
 
 interface EscolhaGuardada {
   marcados: CandidatoMarcado[];
-  mapa: { candidatos: CandidatoDaVotacao[]; municipios: string[] } | null;
+  mapa: { candidatos: CandidatoDaVotacao[]; municipios: string[]; estado?: EstadoDoMapa } | null;
 }
 
 function lerEscolhas(): Record<string, EscolhaGuardada> {
@@ -244,7 +244,7 @@ export function SalaDeApuracao() {
       setParaOMapa(escolha?.marcados ?? []);
       setUltimoNoMapa(escolha?.mapa ?? null);
       if (escolha?.mapa?.candidatos.length) {
-        setPedido({ candidatos: escolha.mapa.candidatos, vez: Date.now(), municipios: escolha.mapa.municipios });
+        setPedido({ candidatos: escolha.mapa.candidatos, vez: Date.now(), municipios: escolha.mapa.municipios, estado: escolha.mapa.estado });
         setNoMapa(escolha.mapa.candidatos.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
       } else {
         setNoMapa('');
@@ -342,6 +342,12 @@ export function SalaDeApuracao() {
 
   const fecharEscolhaDoMunicipio = useCallback(() => setEscolhendoMunicipio(null), []);
 
+  /** Os filtros, o placar e a escola aberta no mapa: guardados com os candidatos. */
+  const estadoDoMapa = useCallback(
+    (estado: EstadoDoMapa) => setUltimoNoMapa((atual) => (atual ? { ...atual, municipios: estado.filtros.cities, estado } : atual)),
+    [],
+  );
+
   /** O mapa mudou a escolha por dentro (o placar, o seletor dele): a bandeja acompanha. */
   const candidatosDoMapa = useCallback((lista: CandidatoDaVotacao[]) => {
     setParaOMapa(
@@ -378,6 +384,7 @@ export function SalaDeApuracao() {
         onTime={escolherTime}
         pedido={pedido}
         onCandidatosDoMapa={candidatosDoMapa}
+        onEstadoDoMapa={estadoDoMapa}
         marcados={jaNoMapa ? [] : paraOMapa}
         fallbackCenter={sala?.uf === 'AL' || !sala ? ALAGOAS_CENTER : undefined}
         mapaRef={mapaRef}

@@ -1,20 +1,30 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   BookmarkCheck,
+  Camera,
   Check,
+  ClipboardCheck,
+  Crown,
   Download,
   Eye,
   FileSpreadsheet,
   FileText,
+  Filter,
+  MapPin,
   Pencil,
+  Search,
   SearchX,
+  SlidersHorizontal,
+  Tag,
   Trash2,
   UserPlus,
+  UserRound,
   Users,
   X,
+  Zap,
 } from 'lucide-react';
 import type { Client, Member, TeamTier } from '@/lib/types';
 import { memberRepository } from '@/lib/repositories';
@@ -36,7 +46,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
-import { SearchInput } from '@/components/ui/SearchInput';
 import { useToast } from '@/components/ui/Toast';
 import { useSession } from '@/components/layout/SessionProvider';
 import { MemberFormModal } from './MemberFormModal';
@@ -546,34 +555,63 @@ function ListaDoTime({
 
   return (
     <div className="space-y-4">
-      {/* A busca: uma caixa so, que acha por qualquer dado da pessoa. */}
-      <div className="space-y-3 rounded-card border border-line bg-surface p-3 shadow-card sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <SearchInput
-            id="busca-integrantes"
-            value={term}
-            onChange={setTerm}
-            label="Buscar pessoas por nome, telefone, CPF, título, bairro, rua, zona e seção ou responsável"
-            placeholder={
-              somenteBasico
-                ? 'Buscar por nome ou telefone'
-                : 'Buscar por nome, telefone, CPF, título, bairro, rua ou responsável'
-            }
-            className="lg:flex-1"
-          />
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            {botaoPdfDeLideres}
-            {botaoExportar}
-            {podeCriar ? (
-              // O rotulo curto cabe na barra; o completo fica no titulo e na
-              // leitura por tecnologia assistiva, dizendo QUAL formulario abre.
-              <>
-                {botaoPlanilha}
-                <Button onClick={openCreate} title={rotuloAdicionar} aria-label={rotuloAdicionar}>
-                  <UserPlus aria-hidden="true" className="size-4" />
-                  Adicionar
-                </Button>
-              </>
+      {/*
+        A CENTRAL DA EQUIPE, em tres andares que nao se confundem:
+        em cima (azul-marinho) a BUSCA e as ACOES (botoes de verdade, o
+        dourado e o principal); no meio, o que MOSTRAR (abas grandes com a
+        contagem), a SITUACAO do cadastro (fichas coloridas) e os FILTROS
+        (cada um com o seu icone); embaixo, quantas pessoas e o que esta
+        ligado, desligavel peca por peca.
+      */}
+      <section aria-label="Buscar e filtrar a equipe" className="overflow-hidden rounded-card border border-line bg-surface shadow-card">
+        <div className="relative overflow-hidden bg-gradient-to-br from-navy-900 via-navy-800 to-[#1e3a8a] px-4 py-4 text-white sm:px-5">
+          <span aria-hidden="true" className="cmd-grade-pontos pointer-events-none absolute inset-0 opacity-70" />
+          <span aria-hidden="true" className="cmd-orbe pointer-events-none absolute -top-20 -right-10 size-64 rounded-full bg-gold-500/15 blur-3xl" />
+          <div className="relative flex flex-col gap-4 xl:flex-row xl:items-end">
+            <div className="min-w-0 flex-1">
+              <RotuloDoAndar icone={<Search className="size-3.5" />} claro htmlFor="busca-integrantes">
+                Buscar pessoa
+              </RotuloDoAndar>
+              <BuscaDaEquipe
+                id="busca-integrantes"
+                valor={term}
+                onChange={setTerm}
+                rotulo="Buscar pessoas por nome, telefone, CPF, título, bairro, rua, zona e seção ou responsável"
+                dica={somenteBasico ? 'nome ou telefone' : 'nome, telefone, CPF, título, bairro, rua ou responsável'}
+              />
+            </div>
+            {botaoPdfDeLideres || botaoExportar || podeCriar ? (
+              <div className="min-w-0">
+                <RotuloDoAndar icone={<Zap className="size-3.5" />} claro>
+                  Ações
+                </RotuloDoAndar>
+                <div className="flex flex-wrap items-center gap-2">
+                  {podeExportar && contagens.lideres > 0 ? (
+                    <AcaoDaBarra icone={<FileText className="size-4" />} rotulo="PDF dos líderes" titulo="Baixar o PDF dos líderes por referência" onClick={() => setPdfDeLideres(true)} />
+                  ) : null}
+                  {podeExportar ? (
+                    <AcaoDaBarra icone={<Download className="size-4" />} rotulo="Exportar" titulo={rotuloExportar} onClick={exportar} disabled={filtered.length === 0} />
+                  ) : null}
+                  {podeCriar ? (
+                    <>
+                      <AcaoDaBarra icone={<FileSpreadsheet className="size-4" />} rotulo="Planilha" titulo="Importar pessoas de uma planilha" onClick={() => setPlanilhaAberta(true)} />
+                      {/* O principal: dourado, maior, impossivel de nao achar. */}
+                      <button
+                        type="button"
+                        onClick={openCreate}
+                        title={rotuloAdicionar}
+                        aria-label={rotuloAdicionar}
+                        className="group inline-flex min-h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-gold-400 to-gold-500 px-4 text-sm font-bold text-navy-900 shadow-[0_10px_24px_-10px_rgba(242,193,78,0.9)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(242,193,78,1)] focus-visible:ring-4 focus-visible:ring-gold-400/50 focus-visible:outline-none"
+                      >
+                        <span className="flex size-7 items-center justify-center rounded-lg bg-navy-900/10 transition-transform group-hover:scale-110">
+                          <UserPlus aria-hidden="true" className="size-4" />
+                        </span>
+                        Adicionar
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </div>
         </div>
@@ -581,147 +619,187 @@ function ListaDoTime({
         {/* Na pagina do Lider a lista inteira e a Equipe dele, e ele ve so
             o basico: os filtros sao de quem ve o time todo. */}
         {!somenteBasico ? (
-          <div className="space-y-3">
-            {/* Os dois recortes que mais se usa, sempre a vista. */}
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:justify-between">
-              <Segmentos
-                rotulo="Nível"
-                valor={nivel}
-                onChange={(v) => setNivel(v as 'todos' | 'referencia' | TeamTier)}
-                opcoes={[
-                  { valor: 'todos', rotulo: 'Todos', quantidade: ordered.length },
-                  { valor: 'LIDER', rotulo: 'Líderes', quantidade: contagens.lideres },
-                  { valor: 'EQUIPE', rotulo: 'Liderados', quantidade: contagens.equipe },
-                  // O time agrupado pela referencia dos Lideres (a Equipe herda a do Lider).
-                  { valor: 'referencia', rotulo: 'Por referência', quantidade: contagens.referencias, icone: <BookmarkCheck className="size-3.5" /> },
-                ]}
-              />
-              <Segmentos
-                rotulo="Situação"
-                valor={situacao}
-                onChange={(v) => setSituacao(v as typeof situacao)}
-                opcoes={[
-                  { valor: 'todas', rotulo: 'Todas' },
-                  { valor: 'conferir', rotulo: 'Para conferir', quantidade: contagens.conferir, tom: 'danger' },
-                  { valor: 'incompleto', rotulo: 'Incompletos', quantidade: contagens.incompleto, tom: 'warning' },
-                  { valor: 'em-ordem', rotulo: 'Em ordem', quantidade: contagens.emOrdem, tom: 'success' },
-                ]}
-              />
+          <div className="space-y-4 px-4 py-4 sm:px-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+              <div className="min-w-0">
+                <RotuloDoAndar icone={<Eye className="size-3.5" />}>Mostrar</RotuloDoAndar>
+                <AbasDoNivel
+                  valor={nivel}
+                  onChange={(v) => setNivel(v as 'todos' | 'referencia' | TeamTier)}
+                  opcoes={[
+                    { valor: 'todos', rotulo: 'Todos', quantidade: ordered.length, icone: <Users className="size-4" /> },
+                    { valor: 'LIDER', rotulo: 'Líderes', quantidade: contagens.lideres, icone: <Crown className="size-4" /> },
+                    { valor: 'EQUIPE', rotulo: 'Liderados', quantidade: contagens.equipe, icone: <UserRound className="size-4" /> },
+                    // O time agrupado pela referencia dos Lideres (a Equipe herda a do Lider).
+                    { valor: 'referencia', rotulo: 'Por referência', quantidade: contagens.referencias, icone: <BookmarkCheck className="size-4" />, sufixo: 'refs.' },
+                  ]}
+                />
+              </div>
+              <div className="min-w-0">
+                <RotuloDoAndar icone={<ClipboardCheck className="size-3.5" />}>Situação do cadastro</RotuloDoAndar>
+                <FichasDeSituacao
+                  valor={situacao}
+                  onChange={(v) => setSituacao(v as typeof situacao)}
+                  opcoes={[
+                    { valor: 'todas', rotulo: 'Todas', quantidade: ordered.length },
+                    { valor: 'conferir', rotulo: 'Para conferir', quantidade: contagens.conferir, tom: 'danger' },
+                    { valor: 'incompleto', rotulo: 'Incompletos', quantidade: contagens.incompleto, tom: 'warning' },
+                    { valor: 'em-ordem', rotulo: 'Em ordem', quantidade: contagens.emOrdem, tom: 'success' },
+                  ]}
+                />
+              </div>
             </div>
 
-            {/* O resto dos recortes em grade, cada um com o nome em cima e a
-                contagem em cada opcao. So aparece o filtro que tem o que
-                filtrar. */}
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-              {responsaveis.length > 1 ? (
-                <FiltroEmCaixa
-                  id="filtro-responsavel"
-                  rotulo="Líder / quem cadastrou"
-                  valor={recruiter}
-                  padrao="todos"
-                  onChange={setRecruiter}
-                  opcoes={[
-                    { valor: 'todos', rotulo: 'Qualquer um' },
-                    ...responsaveis.map((option) => ({
-                      valor: option.key,
-                      rotulo: `${option.label} (${option.count})`,
-                    })),
-                  ]}
-                />
-              ) : null}
-              {referencias.length > 0 ? (
-                <FiltroEmCaixa
-                  id="filtro-referencia"
-                  rotulo="Referência"
-                  valor={referencia}
-                  padrao="todas"
-                  onChange={setReferencia}
-                  opcoes={[
-                    { valor: 'todas', rotulo: 'Todas' },
-                    ...referencias.map((opcao) => ({
-                      valor: opcao.valor,
-                      rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
-                    })),
-                  ]}
-                />
-              ) : null}
-              {fotos.sim + fotos.nao > 0 ? (
-                <FiltroEmCaixa
-                  id="filtro-foto"
-                  rotulo="Verificado por foto"
-                  valor={foto}
-                  padrao="todos"
-                  onChange={(v) => setFoto(v as FiltroDeFoto)}
-                  opcoes={[
-                    { valor: 'todos', rotulo: 'Todos' },
-                    { valor: 'sim', rotulo: `Sim (${fotos.sim})` },
-                    { valor: 'nao', rotulo: `Não (${fotos.nao})` },
-                    ...(fotos.sem > 0 ? [{ valor: 'sem', rotulo: `Não informado (${fotos.sem})` }] : []),
-                  ]}
-                />
-              ) : null}
-              {zonas.length > 1 ? (
-                <FiltroEmCaixa
-                  id="filtro-zona"
-                  rotulo="Zona eleitoral"
-                  valor={zona}
-                  padrao="todas"
-                  onChange={setZona}
-                  opcoes={[
-                    { valor: 'todas', rotulo: 'Todas' },
-                    ...zonas.map((opcao) => ({
-                      valor: opcao.valor,
-                      rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
-                    })),
-                  ]}
-                />
-              ) : null}
-              {tags.length > 0 ? (
-                <FiltroEmCaixa
-                  id="filtro-tag"
-                  rotulo="Tag do Líder"
-                  valor={tag}
-                  padrao="todas"
-                  onChange={setTag}
-                  opcoes={[
-                    { valor: 'todas', rotulo: 'Todas' },
-                    ...tags.map((opcao) => ({
-                      valor: opcao.valor,
-                      rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
-                    })),
-                  ]}
-                />
-              ) : null}
-            </div>
+            {/* O resto dos recortes em grade, cada um com o seu icone, o nome
+                em cima e a contagem em cada opcao. So aparece o filtro que
+                tem o que filtrar. */}
+            {responsaveis.length > 1 || referencias.length > 0 || fotos.sim + fotos.nao > 0 || zonas.length > 1 || tags.length > 0 ? (
+              <div className="rounded-xl border border-dashed border-line bg-ink-50/50 p-3">
+                <RotuloDoAndar icone={<SlidersHorizontal className="size-3.5" />}>Filtrar por</RotuloDoAndar>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+                  {responsaveis.length > 1 ? (
+                    <FiltroEmCaixa
+                      id="filtro-responsavel"
+                      icone={<UserRound className="size-3.5" />}
+                      rotulo="Líder / quem cadastrou"
+                      valor={recruiter}
+                      padrao="todos"
+                      onChange={setRecruiter}
+                      opcoes={[
+                        { valor: 'todos', rotulo: 'Qualquer um' },
+                        ...responsaveis.map((option) => ({
+                          valor: option.key,
+                          rotulo: `${option.label} (${option.count})`,
+                        })),
+                      ]}
+                    />
+                  ) : null}
+                  {referencias.length > 0 ? (
+                    <FiltroEmCaixa
+                      id="filtro-referencia"
+                      icone={<BookmarkCheck className="size-3.5" />}
+                      rotulo="Referência"
+                      valor={referencia}
+                      padrao="todas"
+                      onChange={setReferencia}
+                      opcoes={[
+                        { valor: 'todas', rotulo: 'Todas' },
+                        ...referencias.map((opcao) => ({
+                          valor: opcao.valor,
+                          rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                        })),
+                      ]}
+                    />
+                  ) : null}
+                  {fotos.sim + fotos.nao > 0 ? (
+                    <FiltroEmCaixa
+                      id="filtro-foto"
+                      icone={<Camera className="size-3.5" />}
+                      rotulo="Verificado por foto"
+                      valor={foto}
+                      padrao="todos"
+                      onChange={(v) => setFoto(v as FiltroDeFoto)}
+                      opcoes={[
+                        { valor: 'todos', rotulo: 'Todos' },
+                        { valor: 'sim', rotulo: `Sim (${fotos.sim})` },
+                        { valor: 'nao', rotulo: `Não (${fotos.nao})` },
+                        ...(fotos.sem > 0 ? [{ valor: 'sem', rotulo: `Não informado (${fotos.sem})` }] : []),
+                      ]}
+                    />
+                  ) : null}
+                  {zonas.length > 1 ? (
+                    <FiltroEmCaixa
+                      id="filtro-zona"
+                      icone={<MapPin className="size-3.5" />}
+                      rotulo="Zona eleitoral"
+                      valor={zona}
+                      padrao="todas"
+                      onChange={setZona}
+                      opcoes={[
+                        { valor: 'todas', rotulo: 'Todas' },
+                        ...zonas.map((opcao) => ({
+                          valor: opcao.valor,
+                          rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                        })),
+                      ]}
+                    />
+                  ) : null}
+                  {tags.length > 0 ? (
+                    <FiltroEmCaixa
+                      id="filtro-tag"
+                      icone={<Tag className="size-3.5" />}
+                      rotulo="Tag do Líder"
+                      valor={tag}
+                      padrao="todas"
+                      onChange={setTag}
+                      opcoes={[
+                        { valor: 'todas', rotulo: 'Todas' },
+                        ...tags.map((opcao) => ({
+                          valor: opcao.valor,
+                          rotulo: `${opcao.rotulo} (${opcao.quantidade})`,
+                        })),
+                      ]}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
-        {/* O que esta ligado, dito em uma linha — e desligavel peca por peca. */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3 text-sm">
-          <span className="font-semibold text-ink-900 tabular-nums">
-            {filtered.length === ordered.length
-              ? `${ordered.length} ${ordered.length === 1 ? 'pessoa' : 'pessoas'}`
-              : `${filtered.length} de ${ordered.length}`}
+        {/* O RESULTADO: quantas pessoas e o que esta ligado — cada filtro sai num toque. */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-line bg-ink-50/70 px-4 py-3 sm:px-5">
+          <span className="inline-flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-navy-900 text-gold-400">
+              <Users aria-hidden="true" className="size-4" />
+            </span>
+            <span className="text-base font-bold text-ink-900 tabular-nums">
+              {filtered.length === ordered.length ? (
+                <>
+                  {ordered.length.toLocaleString('pt-BR')} <span className="text-sm font-medium text-ink-500">{ordered.length === 1 ? 'pessoa' : 'pessoas'}</span>
+                </>
+              ) : (
+                <>
+                  {filtered.length.toLocaleString('pt-BR')}{' '}
+                  <span className="text-sm font-medium text-ink-500">de {ordered.length.toLocaleString('pt-BR')} pessoas</span>
+                </>
+              )}
+            </span>
           </span>
+          {filtrosAtivos.length ? (
+            <span aria-hidden="true" className="mx-1 hidden h-6 w-px bg-line sm:block" />
+          ) : null}
+          {filtrosAtivos.length ? (
+            <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+              <Filter aria-hidden="true" className="size-3.5" /> Ligados:
+            </span>
+          ) : null}
           {filtrosAtivos.map((filtro) => (
             <button
               key={filtro.id}
               type="button"
               onClick={filtro.limpar}
-              className="inline-flex items-center gap-1 rounded-pill bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700 transition-colors hover:bg-accent-100"
+              className="group inline-flex min-h-8 items-center gap-1.5 rounded-pill border border-accent-600/30 bg-accent-50 py-1 pr-1 pl-3 text-xs font-semibold text-accent-700 transition-colors hover:border-danger-600/40 hover:bg-danger-50 hover:text-danger-700"
               aria-label={`Tirar o filtro ${filtro.rotulo}`}
+              title="Tirar este filtro"
             >
               {filtro.rotulo}
-              <X aria-hidden="true" className="size-3" />
+              <span className="flex size-5 items-center justify-center rounded-full bg-accent-600/15 transition-colors group-hover:bg-danger-600 group-hover:text-white">
+                <X aria-hidden="true" className="size-3" />
+              </span>
             </button>
           ))}
           {filtrosAtivos.length > 1 ? (
-            <button type="button" onClick={limparTudo} className="text-xs font-medium text-ink-500 hover:text-ink-900">
-              Limpar tudo
+            <button
+              type="button"
+              onClick={limparTudo}
+              className="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-xs font-semibold text-ink-700 transition-colors hover:border-danger-600 hover:text-danger-700"
+            >
+              <X aria-hidden="true" className="size-3.5" /> Limpar tudo
             </button>
           ) : null}
         </div>
-      </div>
+      </section>
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -1016,40 +1094,244 @@ function AchadoEm({ campos }: { campos: CampoDaBusca[] | undefined }) {
   );
 }
 
-/** Botoes lado a lado, com a contagem: um so ligado por vez. */
-function Segmentos({
+/** O nome de cada andar da central: pequeno, em caixa alta, com o icone. */
+function RotuloDoAndar({
+  icone,
+  children,
+  claro = false,
+  htmlFor,
+}: {
+  icone: ReactNode;
+  children: ReactNode;
+  claro?: boolean;
+  htmlFor?: string;
+}) {
+  const classe = cn(
+    'mb-2 flex items-center gap-1.5 text-[0.625rem] font-bold tracking-[0.16em] uppercase',
+    claro ? 'text-gold-400' : 'text-ink-500',
+  );
+  return htmlFor ? (
+    <label htmlFor={htmlFor} className={classe}>
+      <span aria-hidden="true">{icone}</span>
+      {children}
+    </label>
+  ) : (
+    <p className={classe}>
+      <span aria-hidden="true">{icone}</span>
+      {children}
+    </p>
+  );
+}
+
+/**
+ * A busca grande da Equipe: branca sobre o azul-marinho, com a lupa, o
+ * "limpar" e o atalho "/" (de qualquer lugar da pagina, o cursor vai para ela).
+ */
+function BuscaDaEquipe({
+  id,
+  valor,
+  onChange,
   rotulo,
+  dica,
+}: {
+  id: string;
+  valor: string;
+  onChange: (valor: string) => void;
+  rotulo: string;
+  dica: string;
+}) {
+  const campo = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const alvo = e.target as HTMLElement | null;
+      if (alvo && (alvo.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(alvo.tagName))) return;
+      e.preventDefault();
+      campo.current?.focus();
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  }, []);
+  return (
+    <div className="relative flex items-center">
+      <Search aria-hidden="true" className="pointer-events-none absolute left-4 z-10 size-5 text-ink-400" />
+      <input
+        ref={campo}
+        id={id}
+        type="search"
+        value={valor}
+        aria-label={rotulo}
+        placeholder={dica.charAt(0).toUpperCase() + dica.slice(1)}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && valor) {
+            e.stopPropagation();
+            onChange('');
+          }
+        }}
+        className="min-h-12 w-full rounded-xl border-2 border-transparent bg-white pr-20 pl-12 text-base text-ink-900 shadow-[0_10px_24px_-14px_rgba(0,0,0,0.6)] placeholder:text-ink-400 focus:border-gold-400 focus:ring-4 focus:ring-gold-400/30 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+      />
+      {valor ? (
+        <button
+          type="button"
+          onClick={() => {
+            onChange('');
+            campo.current?.focus();
+          }}
+          aria-label="Limpar a busca"
+          className="absolute right-2 z-10 inline-flex min-h-8 items-center gap-1 rounded-lg bg-ink-100 px-2.5 text-xs font-semibold text-ink-700 transition-colors hover:bg-danger-50 hover:text-danger-700"
+        >
+          <X aria-hidden="true" className="size-3.5" /> Limpar
+        </button>
+      ) : (
+        <kbd
+          title="Aperte / para buscar"
+          className="pointer-events-none absolute right-3 z-10 hidden rounded-md border border-ink-200 bg-ink-50 px-2 py-0.5 font-sans text-xs font-semibold text-ink-500 sm:inline"
+        >
+          /
+        </kbd>
+      )}
+    </div>
+  );
+}
+
+/** Uma acao da barra de cima: botao de verdade (borda, icone em quadradinho, sobe no hover). */
+function AcaoDaBarra({
+  icone,
+  rotulo,
+  titulo,
+  onClick,
+  disabled = false,
+}: {
+  icone: ReactNode;
+  rotulo: string;
+  titulo: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={titulo}
+      aria-label={titulo}
+      className="group inline-flex min-h-12 items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3.5 text-sm font-semibold text-white backdrop-blur transition-all hover:-translate-y-0.5 hover:border-white/50 hover:bg-white/20 focus-visible:ring-4 focus-visible:ring-white/30 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40"
+    >
+      <span aria-hidden="true" className="flex size-7 items-center justify-center rounded-lg bg-white/15 text-gold-400 transition-transform group-hover:scale-110">
+        {icone}
+      </span>
+      {rotulo}
+    </button>
+  );
+}
+
+/**
+ * "Mostrar": abas grandes, cada uma com icone, nome e a contagem em
+ * destaque. A escolhida fica azul-marinho com o numero em ouro.
+ */
+function AbasDoNivel({
   valor,
   onChange,
   opcoes,
 }: {
-  rotulo: string;
   valor: string;
   onChange: (valor: string) => void;
-  opcoes: { valor: string; rotulo: string; quantidade?: number; tom?: 'danger' | 'warning' | 'success'; icone?: ReactNode }[];
+  opcoes: { valor: string; rotulo: string; quantidade: number; icone: ReactNode; sufixo?: string }[];
 }) {
-  const ponto = { danger: 'bg-danger-600', warning: 'bg-warning-600', success: 'bg-success-600' };
   return (
-    <div role="group" aria-label={rotulo} className="flex flex-wrap items-center gap-1 rounded-control bg-ink-50 p-1">
-      {opcoes.map((opcao) => {
-        const ativo = opcao.valor === valor;
+    <div role="tablist" aria-label="Mostrar" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {opcoes.map((o) => {
+        const ativo = o.valor === valor;
         return (
           <button
-            key={opcao.valor}
+            key={o.valor}
             type="button"
-            aria-pressed={ativo}
-            onClick={() => onChange(opcao.valor)}
+            role="tab"
+            aria-selected={ativo}
+            onClick={() => onChange(o.valor)}
             className={cn(
-              'inline-flex min-h-9 items-center gap-1.5 rounded-[calc(var(--radius-control)-2px)] px-3 text-xs font-medium whitespace-nowrap transition-colors',
-              ativo ? 'bg-surface text-ink-900 shadow-card' : 'text-ink-500 hover:text-ink-900',
+              'group relative flex min-h-[4.25rem] flex-col justify-between overflow-hidden rounded-xl border-2 px-3 py-2.5 text-left transition-all',
+              ativo
+                ? 'border-navy-900 bg-navy-900 text-white shadow-[0_12px_24px_-14px_rgba(15,30,53,0.9)]'
+                : 'border-line bg-surface text-ink-700 hover:-translate-y-0.5 hover:border-navy-300 hover:shadow-card',
             )}
           >
-            {opcao.tom ? <span aria-hidden="true" className={cn('size-1.5 rounded-full', ponto[opcao.tom])} /> : null}
-            {opcao.icone ? <span aria-hidden="true" className={ativo ? 'text-gold-600' : 'text-ink-400'}>{opcao.icone}</span> : null}
-            {opcao.rotulo}
-            {opcao.quantidade !== undefined ? (
-              <span className={cn('tabular-nums', ativo ? 'text-ink-500' : 'text-ink-400')}>{opcao.quantidade}</span>
-            ) : null}
+            <span className="flex items-center gap-1.5 text-xs font-semibold">
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'flex size-6 items-center justify-center rounded-md transition-colors',
+                  ativo ? 'bg-gold-400 text-navy-900' : 'bg-ink-100 text-ink-500 group-hover:bg-navy-900 group-hover:text-gold-400',
+                )}
+              >
+                {o.icone}
+              </span>
+              {o.rotulo}
+            </span>
+            <span className={cn('text-xl leading-none font-black tabular-nums', ativo ? 'text-gold-400' : 'text-ink-900')}>
+              {o.quantidade.toLocaleString('pt-BR')}
+              {o.sufixo ? <span className={cn('ml-1 text-[0.6875rem] font-semibold', ativo ? 'text-white/60' : 'text-ink-400')}>{o.sufixo}</span> : null}
+            </span>
+            {ativo ? <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-0.5 rounded-pill bg-gold-400" /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * "Situação do cadastro": fichas coloridas (vermelho, ambar, verde), cada
+ * uma com a bolinha, o nome e a contagem. A escolhida fica cheia na cor.
+ */
+function FichasDeSituacao({
+  valor,
+  onChange,
+  opcoes,
+}: {
+  valor: string;
+  onChange: (valor: string) => void;
+  opcoes: { valor: string; rotulo: string; quantidade: number; tom?: 'danger' | 'warning' | 'success' }[];
+}) {
+  const TONS = {
+    danger: { ponto: 'bg-danger-600', borda: 'border-danger-600/30 hover:border-danger-600', cheio: 'border-danger-600 bg-danger-600 text-white', texto: 'text-danger-700' },
+    warning: { ponto: 'bg-warning-600', borda: 'border-warning-600/30 hover:border-warning-600', cheio: 'border-warning-600 bg-warning-600 text-white', texto: 'text-warning-600' },
+    success: { ponto: 'bg-success-600', borda: 'border-success-600/30 hover:border-success-600', cheio: 'border-success-600 bg-success-600 text-white', texto: 'text-success-700' },
+  };
+  return (
+    <div role="group" aria-label="Situação do cadastro" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {opcoes.map((o) => {
+        const ativo = o.valor === valor;
+        const tom = o.tom ? TONS[o.tom] : null;
+        return (
+          <button
+            key={o.valor}
+            type="button"
+            aria-pressed={ativo}
+            onClick={() => onChange(o.valor)}
+            className={cn(
+              'group flex min-h-[4.25rem] flex-col justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-all hover:-translate-y-0.5',
+              ativo
+                ? tom
+                  ? `${tom.cheio} shadow-card`
+                  : 'border-navy-900 bg-navy-900 text-white shadow-card'
+                : tom
+                  ? `bg-surface ${tom.borda}`
+                  : 'border-line bg-surface hover:border-navy-300',
+            )}
+          >
+            <span className={cn('flex items-center gap-1.5 text-xs font-semibold', !ativo && (tom ? tom.texto : 'text-ink-700'))}>
+              {tom ? (
+                <span aria-hidden="true" className={cn('size-2.5 rounded-full', ativo ? 'bg-white' : tom.ponto, !ativo && 'animate-pulse')} />
+              ) : (
+                <span aria-hidden="true" className={cn('size-2.5 rounded-full', ativo ? 'bg-gold-400' : 'bg-ink-400')} />
+              )}
+              {o.rotulo}
+            </span>
+            <span className={cn('text-xl leading-none font-black tabular-nums', ativo ? 'text-white' : 'text-ink-900')}>
+              {o.quantidade.toLocaleString('pt-BR')}
+            </span>
           </button>
         );
       })}
@@ -1064,6 +1346,7 @@ function Segmentos({
  */
 function FiltroEmCaixa({
   id,
+  icone,
   rotulo,
   valor,
   padrao,
@@ -1071,6 +1354,8 @@ function FiltroEmCaixa({
   opcoes,
 }: {
   id: string;
+  /** O icone do filtro, ao lado do nome: bate o olho e sabe qual e. */
+  icone?: ReactNode;
   rotulo: string;
   valor: string;
   padrao: string;
@@ -1083,11 +1368,20 @@ function FiltroEmCaixa({
       <span
         id={`${id}-rotulo`}
         className={cn(
-          'wrap-break-word text-[0.6875rem] font-semibold tracking-[0.08em] uppercase',
+          'flex items-center gap-1.5 wrap-break-word text-[0.6875rem] font-semibold tracking-[0.08em] uppercase',
           ligado ? 'text-accent-700' : 'text-ink-500',
         )}
       >
+        {icone ? (
+          <span
+            aria-hidden="true"
+            className={cn('flex size-5 items-center justify-center rounded-md', ligado ? 'bg-accent-600 text-white' : 'bg-surface text-ink-500 ring-1 ring-line')}
+          >
+            {icone}
+          </span>
+        ) : null}
         {rotulo}
+        {ligado ? <span className="ml-auto rounded-pill bg-accent-600 px-1.5 text-[0.5625rem] font-bold tracking-normal text-white normal-case">ligado</span> : null}
       </span>
       <Dropdown
         id={id}

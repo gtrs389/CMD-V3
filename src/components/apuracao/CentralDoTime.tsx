@@ -7,7 +7,7 @@ import type { ClientSummary } from '@/lib/types';
 import { useClient, useClientSummaries } from '@/hooks/use-clients';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials, matchesSearch } from '@/lib/utils/text';
-import { MobilizationMap, type PedidoDeVotacao } from '@/components/dashboard/MobilizationMap';
+import { MobilizationMap, type EstadoDoMapa, type PedidoDeVotacao } from '@/components/dashboard/MobilizationMap';
 import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import { Spinner } from '@/components/ui/Spinner';
 import { CarregandoVotacao } from '@/components/dashboard/votacao/CarregandoVotacao';
@@ -58,6 +58,8 @@ interface CentralDoTimeProps {
   onTime: (time: TimeDaSala | null) => void;
   pedido: PedidoDeVotacao | null;
   onCandidatosDoMapa: (candidatos: CandidatoDaVotacao[]) => void;
+  /** Os filtros, o placar e a escola aberta no mapa, a cada mudanca (a Sala guarda). */
+  onEstadoDoMapa?: (estado: EstadoDoMapa) => void;
   marcados: CandidatoMarcado[];
   fallbackCenter?: { latitude: number; longitude: number };
   mapaRef: RefObject<HTMLDivElement | null>;
@@ -75,6 +77,7 @@ export function CentralDoTime({
   onTime,
   pedido,
   onCandidatosDoMapa,
+  onEstadoDoMapa,
   marcados,
   fallbackCenter,
   mapaRef,
@@ -186,6 +189,7 @@ export function CentralDoTime({
                 naSala
                 pedidoDeVotacao={pedido}
                 onCandidatosChange={onCandidatosDoMapa}
+                onEstadoDoMapa={onEstadoDoMapa}
                 fallbackCenter={fallbackCenter}
               />
             </div>
