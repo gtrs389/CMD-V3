@@ -22,7 +22,7 @@ import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 import { BotaoVoltar } from './EscolhaDoMunicipio';
 import { chaveDaReferenciaDoLider, referenciasDosLideres } from '@/lib/domain/sala-de-confronto';
-import { MarcaDaBarra } from './MarcaDaBarra';
+import { MarcaDaBarra, RotuloDaBarra, RotuloDaEstimativa } from './MarcaDaBarra';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -807,8 +807,9 @@ function Secoes({
                 )}
               </div>
 
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1.5">
                 {/* Estimativa: com Lideres selecionados, a parte deles em ouro escuro. */}
+                <RotuloDaEstimativa dosLideres={escolhido ? dele : 0} className="-mb-1 sm:pr-14" />
                 <div className="flex items-center gap-2" title={`estimativa: ${formatNumber(s.estimativa)}`}>
                   <MarcaDaBarra />
                   <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
@@ -831,7 +832,15 @@ function Secoes({
                   </span>
                 </div>
                 {candidatos.map((c, k) => (
-                  <div key={c.rotulo} className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(s.apurado[k] ?? 0)}`}>
+                  <div key={c.rotulo} className="space-y-0.5">
+                  <RotuloDaBarra
+                    candidato={{ ...c, cor: varios ? c.cor : '#e0a426' }}
+                    votos={s.apurado[k] ?? 0}
+                    totalDaSecao={varios ? s.apurado.reduce((t, n) => t + n, 0) : 0}
+                    campeao={varios && (s.apurado[k] ?? 0) > 0 && (s.apurado[k] ?? 0) === Math.max(...s.apurado)}
+                    className="sm:pr-14"
+                  />
+                  <div className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(s.apurado[k] ?? 0)}`}>
                     <MarcaDaBarra candidato={{ ...c, cor: varios ? c.cor : '#e0a426' }} />
                     <div className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
                       <div
@@ -842,6 +851,7 @@ function Secoes({
                     <span className={cn('w-12 text-right text-xs font-semibold tabular-nums', varios ? 'text-ink-900' : 'text-gold-700')}>
                       {formatNumber(s.apurado[k] ?? 0)}
                     </span>
+                  </div>
                   </div>
                 ))}
                 {/* Quem cadastrou a gente desta secao, sem precisar tocar em nada. */}

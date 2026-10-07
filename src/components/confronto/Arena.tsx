@@ -12,7 +12,7 @@ import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import type { CandidatoNoRaioX } from '@/components/dashboard/votacao/RaioXDaEscola';
-import { MarcaDaBarra } from '@/components/dashboard/votacao/MarcaDaBarra';
+import { MarcaDaBarra, RotuloDaBarra, RotuloDaEstimativa } from '@/components/dashboard/votacao/MarcaDaBarra';
 
 /**
  * As pecas da arena da Sala de Confronto: os dois lados, o placar do meio,
@@ -655,8 +655,9 @@ export function SecaoPorSecao({
                   ) : null}
                 </div>
 
-                <div className="min-w-0 space-y-1">
+                <div className="min-w-0 space-y-1.5">
                   {/* A gente do time: com Lideres marcados, a parte deles em ouro escuro. */}
+                  <RotuloDaEstimativa dosLideres={s.dosLideres} className={cn('-mb-1 sm:pr-16', semGente && 'opacity-50')} />
                   <div className={cn('flex items-center gap-2', semGente && 'opacity-50')} title={`Estimativa do time: ${formatNumber(s.estimativa)}`}>
                     <MarcaDaBarra />
                     <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
@@ -680,7 +681,14 @@ export function SecaoPorSecao({
                   </div>
                   {/* O seu lado. */}
                   {esquerda.map((c, k) => (
-                    <BarraDoCandidato key={c.id ?? c.rotulo} candidato={c} votos={s.esquerda[k] ?? 0} largura={largura(s.esquerda[k] ?? 0)} />
+                    <BarraDoCandidato
+                      key={c.id ?? c.rotulo}
+                      candidato={c}
+                      votos={s.esquerda[k] ?? 0}
+                      largura={largura(s.esquerda[k] ?? 0)}
+                      totalDaSecao={s.totalEsquerda + s.totalDireita}
+                      campeao={(s.esquerda[k] ?? 0) > 0 && (s.esquerda[k] ?? 0) === Math.max(...s.esquerda, ...s.direita)}
+                    />
                   ))}
                   {/* Os adversarios, depois do traco vermelho. */}
                   {direita.length ? (
@@ -691,7 +699,14 @@ export function SecaoPorSecao({
                         <span className="h-px flex-1 bg-[#e5484d]/30" />
                       </div>
                       {direita.map((c, k) => (
-                        <BarraDoCandidato key={c.id ?? c.rotulo} candidato={c} votos={s.direita[k] ?? 0} largura={largura(s.direita[k] ?? 0)} />
+                        <BarraDoCandidato
+                          key={c.id ?? c.rotulo}
+                          candidato={c}
+                          votos={s.direita[k] ?? 0}
+                          largura={largura(s.direita[k] ?? 0)}
+                          totalDaSecao={s.totalEsquerda + s.totalDireita}
+                          campeao={(s.direita[k] ?? 0) > 0 && (s.direita[k] ?? 0) === Math.max(...s.esquerda, ...s.direita)}
+                        />
                       ))}
                     </>
                   ) : null}
@@ -708,14 +723,31 @@ export function SecaoPorSecao({
 }
 
 /** A barra de um candidato numa secao: a foto no comeco, a cor dele e os votos na ponta. */
-function BarraDoCandidato({ candidato: c, votos, largura }: { candidato: CandidatoNoRaioX; votos: number; largura: string }) {
+function BarraDoCandidato({
+  candidato: c,
+  votos,
+  largura,
+  totalDaSecao,
+  campeao,
+}: {
+  candidato: CandidatoNoRaioX;
+  votos: number;
+  largura: string;
+  totalDaSecao: number;
+  campeao: boolean;
+}) {
   return (
-    <div className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(votos)}`}>
+    <div className="space-y-0.5">
+      <RotuloDaBarra candidato={c} votos={votos} totalDaSecao={totalDaSecao} campeao={campeao} />
+      <div className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(votos)}`}>
       <MarcaDaBarra candidato={c} />
       <div className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
         <div className="h-full rounded-pill transition-[width] duration-700 ease-out" style={{ width: largura, background: c.cor }} />
       </div>
-      <span className="w-14 text-right text-xs font-semibold text-ink-900 tabular-nums">{formatNumber(votos)}</span>
+      <span className={cn('w-14 text-right text-xs font-semibold tabular-nums', campeao ? 'text-base font-black text-ink-900' : 'text-ink-900')}>
+        {formatNumber(votos)}
+      </span>
+      </div>
     </div>
   );
 }
