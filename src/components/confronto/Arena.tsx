@@ -12,6 +12,7 @@ import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import type { CandidatoNoRaioX } from '@/components/dashboard/votacao/RaioXDaEscola';
+import { MarcaDaBarra } from '@/components/dashboard/votacao/MarcaDaBarra';
 
 /**
  * As pecas da arena da Sala de Confronto: os dois lados, o placar do meio,
@@ -471,9 +472,11 @@ export function CartaoDosLideres({ duelo, lideres }: { duelo: Duelo; lideres: Li
 }
 
 /**
- * Secao por secao, como borboleta: as barras do seu lado crescem para a
- * esquerda e as do adversario para a direita, a partir do meio, cada
- * candidato na cor dele. No meio, a secao, a gente do time e a dos Lideres.
+ * Secao por secao, no mesmo desenho do Raio-X da escola: a barra da gente
+ * do time (com a parte dos Lideres marcados em ouro), uma barra por
+ * candidato com a foto dele no comeco — o seu lado e, depois do traco, os
+ * adversarios —, todas na mesma escala, e embaixo quem cadastrou a gente
+ * daquela secao, com a referencia. Do lado, quem levou a secao e por quanto.
  */
 export function SecaoPorSecao({
   secoes,
@@ -507,7 +510,8 @@ export function SecaoPorSecao({
   const zonas = [...new Set(secoes.map((s) => s.zona ?? '?'))];
   const setZona = onZona;
   const daZona = zona ? secoes.filter((s) => (s.zona ?? '?') === zona) : secoes;
-  const maior = Math.max(1, ...secoes.map((s) => Math.max(s.totalEsquerda, s.totalDireita)));
+  const maior = Math.max(1, ...secoes.map((s) => Math.max(s.estimativa, ...s.esquerda, ...s.direita)));
+  const largura = (v: number) => `${v > 0 ? Math.max(2, (v / maior) * 100) : 0}%`;
   const contagem: Record<Filtro, number> = {
     todas: daZona.length,
     ganhas: daZona.filter((s) => s.vencedor === 'ESQUERDA').length,
@@ -546,7 +550,7 @@ export function SecaoPorSecao({
           <p className="text-xs text-ink-500">
             {semAdversario
               ? 'Os votos do seu lado em cada seção, com a gente do time e quem cadastrou'
-              : 'Seu lado cresce para a esquerda, os adversários para a direita'}
+              : 'A gente do time, o seu lado e os adversários, seção por seção, com quem cadastrou'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -594,80 +598,103 @@ export function SecaoPorSecao({
           {visiveis.map((s, i) => {
             const ganhou = !semAdversario && s.vencedor === 'ESQUERDA';
             const perdeu = !semAdversario && s.vencedor === 'DIREITA';
+            const semGente = s.estimativa <= 0;
             return (
               <li
                 key={s.chave}
                 className={cn(
-                  'cmd-cascata grid grid-cols-[minmax(0,1fr)_6.5rem_minmax(0,1fr)] items-center gap-1 px-2 sm:gap-2 py-2.5 sm:grid-cols-[minmax(0,1fr)_11rem_minmax(0,1fr)] sm:px-4',
-                  ganhou && 'bg-[#2a78d6]/[0.04]',
-                  perdeu && 'bg-[#e5484d]/[0.05]',
+                  'cmd-cascata grid grid-cols-[5.75rem_minmax(0,1fr)] items-start gap-3 px-4 py-3',
+                  ganhou && 'bg-[#2a78d6]/[0.035]',
+                  perdeu && 'bg-[#e5484d]/[0.045]',
                 )}
-                style={
-                  {
-                    '--cmd-atraso': `${Math.min(i, 16) * 25}ms`,
-                  } as CSSProperties
-                }
+                style={{ '--cmd-atraso': `${Math.min(i, 16) * 25}ms` } as CSSProperties}
               >
-                {/* Seu lado: da direita para a esquerda. */}
-                <Barras candidatos={esquerda} votos={s.esquerda} total={s.totalEsquerda} maior={maior} venceu={ganhou || semAdversario} lado="esquerda" />
-
-                <div className="flex flex-col items-center text-center">
-                  <span
-                    hidden={semAdversario}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[0.625rem] font-bold tracking-wide uppercase',
-                      ganhou ? 'bg-[#2a78d6] text-white' : perdeu ? 'bg-[#e5484d] text-white' : 'bg-ink-100 text-ink-500',
-                    )}
-                  >
-                    {ganhou ? (
-                      <>
-                        <Crown aria-hidden="true" className="size-3" /> venceu
-                      </>
-                    ) : perdeu ? (
-                      'perdeu'
-                    ) : s.vencedor === 'EMPATE' ? (
-                      'empate'
-                    ) : (
-                      'sem votos'
-                    )}
-                  </span>
-                  <span className="mt-1 text-sm font-bold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</span>
-                  <span className="text-[0.625rem] text-ink-500">Zona {s.zona ?? '?'}</span>
-                  <span className="mt-1 flex flex-wrap justify-center gap-1">
+                {/* A secao e o resultado dela. */}
+                <div className="min-w-0 pt-1">
+                  <p className="text-sm font-semibold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</p>
+                  <p className="text-[0.6875rem] text-ink-500">Zona {s.zona ?? '?'}</p>
+                  {semAdversario ? null : (
                     <span
                       className={cn(
-                        'inline-flex items-center gap-0.5 rounded-pill px-1.5 text-[0.625rem] font-semibold tabular-nums',
-                        s.estimativa > 0 ? 'bg-navy-900 text-white' : 'bg-ink-100 text-ink-400',
+                        'mt-1.5 inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[0.625rem] font-bold tracking-wide uppercase',
+                        ganhou ? 'bg-[#2a78d6] text-white' : perdeu ? 'bg-[#e5484d] text-white' : 'bg-ink-100 text-ink-500',
                       )}
-                      title="Pessoas do time que votam nesta seção"
                     >
-                      <Users aria-hidden="true" className="size-2.5" /> {formatNumber(s.estimativa)}
+                      {ganhou ? (
+                        <>
+                          <Crown aria-hidden="true" className="size-3" /> venceu
+                        </>
+                      ) : perdeu ? (
+                        'perdeu'
+                      ) : s.vencedor === 'EMPATE' ? (
+                        'empate'
+                      ) : (
+                        'sem votos'
+                      )}
                     </span>
-                    {s.dosLideres > 0 ? (
-                      <span
-                        className="inline-flex items-center gap-0.5 rounded-pill bg-gold-400 px-1.5 text-[0.625rem] font-bold text-navy-900 tabular-nums"
-                        title="Pessoas dos líderes selecionados nesta seção"
-                      >
-                        ★ {formatNumber(s.dosLideres)}
-                      </span>
-                    ) : null}
-                  </span>
+                  )}
+                  {semAdversario ? null : (
+                    <p className="mt-1 text-[0.6875rem] font-bold tabular-nums">
+                      <span style={{ color: AZUL }}>{formatNumber(s.totalEsquerda)}</span>
+                      <span className="text-ink-400"> × </span>
+                      <span style={{ color: VERMELHO }}>{formatNumber(s.totalDireita)}</span>
+                    </p>
+                  )}
                   {perdeu ? (
-                    <span className="mt-0.5 text-[0.625rem] font-semibold text-danger-700 tabular-nums">faltaram {formatNumber(1 - s.saldo)}</span>
+                    <p className="text-[0.625rem] font-semibold text-danger-700 tabular-nums">faltaram {formatNumber(1 - s.saldo)}</p>
                   ) : ganhou ? (
-                    <span className="mt-0.5 text-[0.625rem] font-semibold text-accent-700 tabular-nums">+{formatNumber(s.saldo)}</span>
+                    <p className="text-[0.625rem] font-semibold text-accent-700 tabular-nums">+{formatNumber(s.saldo)}</p>
+                  ) : null}
+                  {semGente ? (
+                    <p className="mt-1 inline-flex rounded-pill bg-ink-200 px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide whitespace-nowrap text-ink-500 uppercase">
+                      sem gente
+                    </p>
                   ) : null}
                 </div>
 
-                {/* Adversarios: da esquerda para a direita. */}
-                {semAdversario ? (
-                  <span aria-hidden="true" />
-                ) : (
-                  <Barras candidatos={direita} votos={s.direita} total={s.totalDireita} maior={maior} venceu={perdeu} lado="direita" />
-                )}
-
-                {/* Quem cadastrou a gente desta secao, com a referencia de cada um. */}
-                <LideresDaSecao lideres={lideres} chave={s.chave} estimativa={s.estimativa} selecionados={selecionados} />
+                <div className="min-w-0 space-y-1">
+                  {/* A gente do time: com Lideres marcados, a parte deles em ouro escuro. */}
+                  <div className={cn('flex items-center gap-2', semGente && 'opacity-50')} title={`Estimativa do time: ${formatNumber(s.estimativa)}`}>
+                    <MarcaDaBarra />
+                    <div className="flex h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
+                      <div className="flex h-full overflow-hidden rounded-pill transition-[width] duration-700 ease-out" style={{ width: largura(s.estimativa) }}>
+                        {s.dosLideres > 0 ? (
+                          <div className="h-full bg-gold-600" style={{ width: `${(s.dosLideres / Math.max(1, s.estimativa)) * 100}%` }} />
+                        ) : null}
+                        <div className={cn('h-full flex-1', s.dosLideres > 0 ? 'bg-navy-300' : 'bg-navy-800')} />
+                      </div>
+                    </div>
+                    <span className="w-14 text-right text-xs font-semibold text-ink-900 tabular-nums">
+                      {s.dosLideres > 0 ? (
+                        <>
+                          <span className="text-gold-700">{formatNumber(s.dosLideres)}</span>
+                          <span className="font-normal text-ink-400">/{formatNumber(s.estimativa)}</span>
+                        </>
+                      ) : (
+                        formatNumber(s.estimativa)
+                      )}
+                    </span>
+                  </div>
+                  {/* O seu lado. */}
+                  {esquerda.map((c, k) => (
+                    <BarraDoCandidato key={c.id ?? c.rotulo} candidato={c} votos={s.esquerda[k] ?? 0} largura={largura(s.esquerda[k] ?? 0)} />
+                  ))}
+                  {/* Os adversarios, depois do traco vermelho. */}
+                  {direita.length ? (
+                    <>
+                      <div className="flex items-center gap-2 py-0.5" aria-hidden="true">
+                        <span className="h-px flex-1 bg-[#e5484d]/30" />
+                        <span className="text-[0.5625rem] font-bold tracking-[0.14em] text-[#e5484d] uppercase">× adversários</span>
+                        <span className="h-px flex-1 bg-[#e5484d]/30" />
+                      </div>
+                      {direita.map((c, k) => (
+                        <BarraDoCandidato key={c.id ?? c.rotulo} candidato={c} votos={s.direita[k] ?? 0} largura={largura(s.direita[k] ?? 0)} />
+                      ))}
+                    </>
+                  ) : null}
+                  {/* Quem cadastrou a gente desta secao, com a referencia de cada um. */}
+                  <LideresDaSecao lideres={lideres} chave={s.chave} estimativa={s.estimativa} selecionados={selecionados} />
+                </div>
               </li>
             );
           })}
@@ -677,7 +704,20 @@ export function SecaoPorSecao({
   );
 }
 
-/** Os Lideres de uma secao, do que mais cadastrou ali para o que menos, numa linha inteira embaixo do duelo. */
+/** A barra de um candidato numa secao: a foto no comeco, a cor dele e os votos na ponta. */
+function BarraDoCandidato({ candidato: c, votos, largura }: { candidato: CandidatoNoRaioX; votos: number; largura: string }) {
+  return (
+    <div className="flex items-center gap-2" title={`${c.nome}: ${formatNumber(votos)}`}>
+      <MarcaDaBarra candidato={c} />
+      <div className="h-2.5 flex-1 overflow-hidden rounded-pill bg-ink-100">
+        <div className="h-full rounded-pill transition-[width] duration-700 ease-out" style={{ width: largura, background: c.cor }} />
+      </div>
+      <span className="w-14 text-right text-xs font-semibold text-ink-900 tabular-nums">{formatNumber(votos)}</span>
+    </div>
+  );
+}
+
+/** Os Lideres de uma secao, do que mais cadastrou ali para o que menos. */
 function LideresDaSecao({
   lideres,
   chave,
@@ -696,7 +736,7 @@ function LideresDaSecao({
   const semLider = Math.max(0, estimativa - daSecao.reduce((t, x) => t + x.n, 0));
   if (daSecao.length === 0 && semLider === 0) return null;
   return (
-    <ul className="col-span-3 flex flex-wrap justify-center gap-1 pt-1" aria-label="Quem cadastrou nesta seção">
+    <ul className="flex flex-wrap gap-1 pt-1" aria-label="Quem cadastrou nesta seção">
       {daSecao.map(({ l, n }) => {
         const ativo = selecionados?.has(l.id);
         return (
@@ -728,59 +768,6 @@ function LideresDaSecao({
         </li>
       ) : null}
     </ul>
-  );
-}
-
-/** As barras de um lado numa secao: um segmento por candidato, na cor dele, e o total na ponta. */
-export function Barras({
-  candidatos,
-  votos,
-  total,
-  maior,
-  venceu,
-  lado,
-}: {
-  candidatos: CandidatoNoRaioX[];
-  votos: number[];
-  total: number;
-  maior: number;
-  venceu: boolean;
-  lado: 'esquerda' | 'direita';
-}) {
-  const esquerda = lado === 'esquerda';
-  // O total vai colado na ponta da barra; a barra cheia deixa espaco para ele.
-  const fracao = total > 0 ? Math.max(0.02, total / maior) : 0;
-  return (
-    <div className={cn('flex min-w-0 items-center', esquerda && 'flex-row-reverse')}>
-      <div
-        className={cn(
-          'flex h-5 min-w-0 overflow-hidden transition-[width] duration-700 ease-out',
-          esquerda ? 'flex-row-reverse rounded-l-md' : 'rounded-r-md',
-          !venceu && 'opacity-60',
-        )}
-        style={{ width: `calc((100% - 2.5rem) * ${fracao})` }}
-      >
-        {candidatos.map((c, k) =>
-          (votos[k] ?? 0) > 0 ? (
-            <span
-              key={c.id ?? c.rotulo}
-              className="h-full border-white/40 first:border-0"
-              style={{
-                width: `${((votos[k] ?? 0) / Math.max(1, total)) * 100}%`,
-                background: c.cor,
-                [esquerda ? 'borderRightWidth' : 'borderLeftWidth']: 1,
-              }}
-              title={`${c.nome}: ${formatNumber(votos[k] ?? 0)}`}
-            />
-          ) : null,
-        )}
-      </div>
-      <span
-        className={cn('min-w-10 shrink-0 px-1.5 text-sm font-bold tabular-nums', esquerda ? 'text-right' : 'text-left', venceu ? 'text-ink-900' : 'text-ink-400')}
-      >
-        {formatNumber(total)}
-      </span>
-    </div>
   );
 }
 

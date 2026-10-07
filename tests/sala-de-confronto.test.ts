@@ -8,6 +8,7 @@ import {
   parteDaEsquerda,
   placarDosLideres,
   porZona,
+  referenciasDosLideres,
   resumoDoDuelo,
   votosDoComparativo,
   votosNaEscola,
@@ -124,5 +125,19 @@ describe('sala de confronto', () => {
     expect(escola?.estimativa).toBe(5);
     expect(escolaDaSala(doFelix, [[]], { chave: 'tse:h', pinos: ['c-humberto'] })?.chave).toBe('campanha:c-humberto');
     expect(escolaDaSala(doFelix, [[]], { chave: 'x', pinos: ['outro'] })).toBeNull();
+  });
+
+  it('as referências dos líderes da escola: "Roberval" e "ROBERVAL " são uma só; sem referência por último', () => {
+    const r = referenciasDosLideres([
+      { referencia: 'Roberval', cadastrados: 2 },
+      { referencia: 'ROBERVAL ', cadastrados: 3 },
+      { referencia: null, cadastrados: 9 },
+      { referencia: 'Hugo', cadastrados: 1 },
+    ]);
+    expect(r.map((o) => [o.rotulo, o.lideres, o.pessoas])).toEqual([
+      ['Roberval', 2, 5],
+      ['Hugo', 1, 1],
+      [null, 1, 9],
+    ]);
   });
 });
