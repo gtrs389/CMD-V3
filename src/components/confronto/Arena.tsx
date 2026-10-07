@@ -1,313 +1,44 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, Crown, Flame, MapPin, Plus, Search, Swords, Target, Trophy, Users, X, Zap } from 'lucide-react';
-import type { EscolaNoComparativo, LiderNoRaioX } from '@/lib/domain/confronto';
-import { montarDuelo, parteDaEsquerda, votosDoComparativo, votosNaEscola, type SecaoNoDuelo } from '@/lib/domain/sala-de-confronto';
-import {
-  cargosDaVotacao,
-  filtrarCandidatos,
-  fotoDoCandidatoUrl,
-  rotuloDoCandidato,
-  type CandidatoDaVotacao,
-  type VotacaoNoMapa,
-} from '@/lib/domain/votacao-tse';
+import { useMemo, useState, type CSSProperties } from 'react';
+import { AlertTriangle, Check, Crown, Flame, Plus, Search, Swords, Target, Trophy, Users, X, Zap } from 'lucide-react';
+import type { LiderNoRaioX } from '@/lib/domain/confronto';
+import type { Duelo, SecaoNoDuelo } from '@/lib/domain/sala-de-confronto';
+import { cargosDaVotacao, filtrarCandidatos, fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
 import { Contador } from '@/components/ui/Contador';
 import { Spinner } from '@/components/ui/Spinner';
 import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
-import { api } from '@/lib/repositories/http/api';
-import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
-import { BotaoVoltar } from './EscolhaDoMunicipio';
-import { corDoCandidato } from './cores';
-import type { CandidatoNoRaioX } from './RaioXDaEscola';
+import type { CandidatoNoRaioX } from '@/components/dashboard/votacao/RaioXDaEscola';
 
 /**
- * Sala de Confronto: a escola do raio-x virada arena.
- *
- * Do lado ESQUERDO, os candidatos que vieram do mapa (os escolhidos antes);
- * do lado DIREITO, quem o usuario chamar para o duelo — quantos quiser, de
- * qualquer cargo. Os votos de cada lado se somam secao por secao: quem tem
- * mais leva a secao. Em cima, o placar e o cabo de guerra; no meio, o que
- * importa (secoes vencidas, a mais disputada, quantos votos faltaram para
- * virar, o que aconteceu onde os Lideres selecionados tem gente); embaixo,
- * secao por secao, as barras de um lado contra as do outro.
- *
- * Abre por cima do raio-x, na tela inteira; o voltar vermelho (ou o Esc)
- * volta para ele com tudo como estava — inclusive os Lideres selecionados.
+ * As pecas da arena da Sala de Confronto: os dois lados, o placar do meio,
+ * o cabo de guerra, as leituras, secao por secao em borboleta, o ranking e
+ * a gaveta dos adversarios. Do lado ESQUERDO (azul), os candidatos que
+ * vieram do mapa; do DIREITO (vermelho), os adversarios chamados na sala.
  */
 
 /** As cores dos dois lados: azul (o nosso) e vermelho (o adversario). */
-const AZUL = '#2a78d6';
-const VERMELHO = '#e5484d';
+export const AZUL = '#2a78d6';
+export const VERMELHO = '#e5484d';
 
 /** Quantos nomes a lista do seletor mostra de cada vez. */
 const LEVA = 50;
 
-type Filtro = 'todas' | 'ganhas' | 'perdidas' | 'empates' | 'lideres';
+export type Filtro = 'todas' | 'ganhas' | 'perdidas' | 'empates' | 'lideres';
 
-interface Lutador extends CandidatoNoRaioX {
+
+export interface Lutador extends CandidatoNoRaioX {
   /** Ainda chegando (a votacao do adversario e buscada ao entrar). */
   carregando?: boolean;
   erro?: boolean;
 }
 
-export function SalaDeConfronto({
-  escola,
-  candidatos,
-  lideres,
-  secaoNoFiltro = false,
-  onClose,
-}: {
-  escola: EscolaNoComparativo;
-  /** O lado esquerdo: os candidatos do raio-x, na ordem do apurado da escola. */
-  candidatos: CandidatoNoRaioX[];
-  /** Os Lideres selecionados no raio-x (podem ser nenhum). */
-  lideres: LiderNoRaioX[];
-  /** O mapa esta filtrado por uma secao: o duelo fica so nas secoes do raio-x. */
-  secaoNoFiltro?: boolean;
-  onClose: () => void;
-}) {
-  const loader = useCallback(() => api<{ candidatos: CandidatoDaVotacao[] }>('/api/votacao'), []);
-  const { data, error: erroDaLista } = useRepositoryQuery(loader);
-  const lista = useMemo(() => data?.candidatos ?? [], [data]);
-
-  const [adversarios, setAdversarios] = useState<CandidatoDaVotacao[]>([]);
-  const [votacoes, setVotacoes] = useState<Record<string, VotacaoNoMapa | 'erro'>>({});
-  const [escolhendo, setEscolhendo] = useState(false);
-  const [filtro, setFiltro] = useState<Filtro>('todas');
-
-  const idsDaEsquerda = useMemo(() => new Set(candidatos.map((c) => c.id).filter(Boolean)), [candidatos]);
-  /** O primeiro da esquerda na lista da votacao: o ano, o estado, o turno e o cargo de partida. */
-  const base = useMemo(() => lista.find((c) => idsDaEsquerda.has(c.id)) ?? null, [lista, idsDaEsquerda]);
-  const daEleicao = useMemo(() => (base ? lista.filter((c) => c.ano === base.ano && c.uf === base.uf) : lista), [lista, base]);
-
-  function adicionar(c: CandidatoDaVotacao) {
-    if (idsDaEsquerda.has(c.id) || adversarios.some((a) => a.id === c.id)) return;
-    setAdversarios((atual) => [...atual, c]);
-    if (votacoes[c.id] && votacoes[c.id] !== 'erro') return;
-    setVotacoes((atual) => {
-      const novo = { ...atual };
-      delete novo[c.id];
-      return novo;
-    });
-    api<VotacaoNoMapa>(`/api/votacao/${encodeURIComponent(c.id)}`)
-      .then((v) => setVotacoes((atual) => ({ ...atual, [c.id]: v })))
-      .catch(() => setVotacoes((atual) => ({ ...atual, [c.id]: 'erro' })));
-  }
-  const remover = (id: string) => setAdversarios((atual) => atual.filter((a) => a.id !== id));
-
-  // As cores da direita nao repetem as da esquerda.
-  const direita = useMemo((): Lutador[] => {
-    const usadas = new Set(candidatos.map((c) => c.cor.toLowerCase()));
-    const cores: string[] = [];
-    for (let k = 0; cores.length < adversarios.length; k += 1) {
-      if (!usadas.has(corDoCandidato(k).toLowerCase())) cores.push(corDoCandidato(k));
-    }
-    return adversarios.map((c, i) => {
-      const cor = cores[i];
-      const v = votacoes[c.id];
-      return {
-        id: c.id,
-        nome: c.nome,
-        rotulo: rotuloDoCandidato(c),
-        cor,
-        cargo: c.cargoCodigo,
-        foto: fotoDoCandidatoUrl(c),
-        carregando: v === undefined,
-        erro: v === 'erro',
-      };
-    });
-  }, [adversarios, votacoes, candidatos]);
-
-  /** So os adversarios que ja chegaram entram na conta (na ordem da direita). */
-  const prontos = direita.filter((c) => !c.carregando && !c.erro);
-  const duelo = useMemo(() => {
-    const esquerda = candidatos.map((_, i) => votosDoComparativo(escola, i));
-    const dir = adversarios
-      .map((a) => votacoes[a.id])
-      .filter((v): v is VotacaoNoMapa => v !== undefined && v !== 'erro')
-      .map((v) => votosNaEscola(escola, [...v.noMapa, ...v.foraDoMapa], secaoNoFiltro));
-    return montarDuelo(escola, esquerda, dir, lideres);
-  }, [escola, candidatos, adversarios, votacoes, lideres, secaoNoFiltro]);
-
-  const temAdversario = prontos.length > 0;
-  const parte = parteDaEsquerda(duelo);
-
-  // Esc: fecha o seletor, se aberto; senao volta para o raio-x.
-  const seletorAberto = useRef(false);
-  useEffect(() => {
-    seletorAberto.current = escolhendo;
-  }, [escolhendo]);
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      if (seletorAberto.current) setEscolhendo(false);
-      else onClose();
-    };
-    document.addEventListener('keydown', aoTeclar, true);
-    return () => document.removeEventListener('keydown', aoTeclar, true);
-  }, [onClose]);
-
-  const sugestoes = useMemo(() => {
-    if (!base) return [];
-    return filtrarCandidatos(daEleicao, {
-      turno: base.turno,
-      cargoCodigo: base.cargoCodigo,
-      busca: '',
-    })
-      .filter((c) => !idsDaEsquerda.has(c.id) && !adversarios.some((a) => a.id === c.id))
-      .slice(0, 4);
-  }, [base, daEleicao, idsDaEsquerda, adversarios]);
-
-  const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
-  const nSecoes = duelo.secoes.length;
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Sala de Confronto: ${escola.titulo}`}
-      className="fixed inset-0 z-50 flex animate-fade-in flex-col bg-canvas"
-    >
-      {/* CABECALHO */}
-      <header className="relative shrink-0 overflow-hidden bg-gradient-to-r from-[#0d1f4d] via-navy-900 to-[#4a0d16] px-4 py-4 text-white sm:px-6">
-        <span aria-hidden="true" className="cmd-grade-pontos pointer-events-none absolute inset-0" />
-        <span aria-hidden="true" className="cmd-orbe pointer-events-none absolute -top-24 -left-16 size-72 rounded-full bg-[#2a78d6]/30 blur-3xl" />
-        <span aria-hidden="true" className="cmd-orbe pointer-events-none absolute -right-16 -bottom-28 size-80 rounded-full bg-[#e5484d]/30 blur-3xl" />
-        <div className="relative mx-auto flex max-w-[1600px] flex-wrap items-start gap-4">
-          <BotaoVoltar onClick={onClose} rotulo="Raio-X" />
-          <div className="min-w-0 flex-1">
-            <p className="inline-flex items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-[0.6875rem] font-bold tracking-[0.16em] text-white uppercase ring-1 ring-white/15">
-              <Swords aria-hidden="true" className="size-3.5 text-gold-400" /> Sala de Confronto
-            </p>
-            <h2 className="mt-2 text-xl leading-tight font-bold wrap-break-word sm:text-2xl">{escola.titulo}</h2>
-            {onde ? (
-              <p className="mt-0.5 flex items-start gap-1.5 text-sm text-white/70">
-                <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-                <span className="wrap-break-word">{onde}</span>
-              </p>
-            ) : null}
-            <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-white/70">
-              <span>
-                <b className="text-white tabular-nums">{formatNumber(nSecoes)}</b> {nSecoes === 1 ? 'seção' : 'seções'} em disputa
-              </span>
-              <span>
-                estimativa do time <b className="text-white tabular-nums">{formatNumber(escola.estimativa)}</b>
-              </span>
-              {lideres.length ? (
-                <span className="inline-flex items-center gap-1">
-                  <Users aria-hidden="true" className="size-3.5 text-gold-400" />
-                  <b className="text-gold-400 tabular-nums">{lideres.length}</b> {lideres.length === 1 ? 'líder selecionado' : 'líderes selecionados'}
-                </span>
-              ) : null}
-            </p>
-          </div>
-        </div>
-      </header>
-
-      <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
-          {/* A ARENA: esquerda x direita */}
-          <section
-            aria-label="Placar do confronto"
-            className="animate-fade-up overflow-hidden rounded-card bg-gradient-to-br from-navy-900 via-navy-800 to-[#2b0f1c] p-4 text-white shadow-overlay sm:p-5"
-          >
-            <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <Lado
-                titulo="Seu lado"
-                subtitulo="Os candidatos que você escolheu"
-                cor={AZUL}
-                lutadores={candidatos}
-                votos={duelo.esquerda}
-                total={duelo.totalEsquerda}
-                totalDaEscola={duelo.totalEsquerda + duelo.totalDireita}
-              />
-
-              <Centro esquerda={duelo.totalEsquerda} direita={duelo.totalDireita} vitorias={duelo.vitorias} temAdversario={temAdversario} />
-
-              <Lado
-                titulo="Adversários"
-                subtitulo="Quem vai para o confronto"
-                cor={VERMELHO}
-                lutadores={direita}
-                votos={direita.map((c) => {
-                  const i = prontos.findIndex((p) => p.id === c.id);
-                  return i >= 0 ? duelo.direita[i] : 0;
-                })}
-                total={duelo.totalDireita}
-                totalDaEscola={duelo.totalEsquerda + duelo.totalDireita}
-                direita
-                onRemover={remover}
-                onAdicionar={() => setEscolhendo(true)}
-                vazio={
-                  <ChamadaDoAdversario sugestoes={sugestoes} carregando={!data && !erroDaLista} onEscolher={adicionar} onAbrir={() => setEscolhendo(true)} />
-                }
-              />
-            </div>
-
-            <CaboDeGuerra parte={parte} ativo={temAdversario} />
-          </section>
-
-          {temAdversario ? (
-            <>
-              <Leituras duelo={duelo} lideres={lideres} />
-              <SecaoPorSecao
-                secoes={duelo.secoes}
-                esquerda={candidatos}
-                direita={prontos}
-                filtro={filtro}
-                onFiltro={setFiltro}
-                comLideres={lideres.length > 0}
-              />
-              <Ranking esquerda={candidatos} votosEsquerda={duelo.esquerda} direita={prontos} votosDireita={duelo.direita} />
-            </>
-          ) : (
-            <div className="rounded-card border-2 border-dashed border-line bg-surface px-4 py-10 text-center">
-              <span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-danger-600 to-[#e0457b] text-white shadow-[0_12px_26px_-12px_rgba(220,38,38,0.9)]">
-                <Swords aria-hidden="true" className="size-7" />
-              </span>
-              <p className="mt-3 text-base font-bold text-ink-900">Chame alguém para o confronto</p>
-              <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
-                Escolha um ou mais candidatos do lado direito. Assim que os votos chegarem, a escola vira duelo: seção por seção, quem venceu, por quanto, e o
-                que aconteceu onde os seus líderes têm gente.
-              </p>
-              {direita.some((c) => c.carregando) ? (
-                <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-accent-700">
-                  <Spinner className="size-4" /> Buscando os votos…
-                </p>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {escolhendo ? (
-        <Seletor
-          lista={daEleicao}
-          base={base}
-          carregando={!data && !erroDaLista}
-          erro={Boolean(erroDaLista)}
-          naEsquerda={idsDaEsquerda}
-          naDireita={new Set(adversarios.map((a) => a.id))}
-          onAdicionar={adicionar}
-          onRemover={remover}
-          onClose={() => setEscolhendo(false)}
-        />
-      ) : null}
-    </div>,
-    document.body,
-  );
-}
-
-/* ---------------------------------------------------------------------- */
 
 /** Um lado da arena: os candidatos com foto, votos na escola e a parte de cada um. */
-function Lado({
+export function Lado({
   titulo,
   subtitulo,
   cor,
@@ -427,7 +158,7 @@ function Lado({
 }
 
 /** O lado direito vazio: a chamada e as sugestoes (os mais votados do mesmo cargo). */
-function ChamadaDoAdversario({
+export function ChamadaDoAdversario({
   sugestoes,
   carregando,
   onEscolher,
@@ -485,7 +216,7 @@ function ChamadaDoAdversario({
 }
 
 /** O meio da arena: o placar grande e as secoes vencidas de cada lado. */
-function Centro({
+export function Centro({
   esquerda,
   direita,
   vitorias,
@@ -556,7 +287,7 @@ function Centro({
 }
 
 /** O cabo de guerra: a parte de cada lado nos votos da escola, com o no no ponto de equilibrio. */
-function CaboDeGuerra({ parte, ativo }: { parte: number; ativo: boolean }) {
+export function CaboDeGuerra({ parte, ativo }: { parte: number; ativo: boolean }) {
   const p = ativo ? parte : 50;
   return (
     <div className="mt-5">
@@ -598,7 +329,7 @@ function CaboDeGuerra({ parte, ativo }: { parte: number; ativo: boolean }) {
 const textoDaSecao = (s: Pick<SecaoNoDuelo, 'zona' | 'secao'>) => `Seção ${s.secao ?? '?'} · Zona ${s.zona ?? '?'}`;
 
 /** O que importa, em cartoes: secoes, a mais disputada, a virada, os Lideres. */
-function Leituras({ duelo, lideres }: { duelo: ReturnType<typeof montarDuelo>; lideres: LiderNoRaioX[] }) {
+export function Leituras({ duelo, lideres }: { duelo: Duelo; lideres: LiderNoRaioX[] }) {
   const cartoes: {
     icone: React.ReactNode;
     titulo: string;
@@ -680,7 +411,7 @@ function Leituras({ duelo, lideres }: { duelo: ReturnType<typeof montarDuelo>; l
 }
 
 /** Onde os Lideres selecionados tem gente: o duelo so nessas secoes. */
-function CartaoDosLideres({ duelo, lideres }: { duelo: ReturnType<typeof montarDuelo>; lideres: LiderNoRaioX[] }) {
+export function CartaoDosLideres({ duelo, lideres }: { duelo: Duelo; lideres: LiderNoRaioX[] }) {
   const d = duelo.dosLideres;
   if (!d) {
     return (
@@ -688,7 +419,7 @@ function CartaoDosLideres({ duelo, lideres }: { duelo: ReturnType<typeof montarD
         <p className="flex items-center gap-2 font-semibold text-ink-700">
           <Users aria-hidden="true" className="size-4" /> Nenhum líder selecionado
         </p>
-        <p className="mt-1 text-xs">Volte ao Raio-X e selecione um ou mais líderes: aqui aparece o duelo só nas seções onde a gente deles vota.</p>
+        <p className="mt-1 text-xs">Marque um ou mais líderes no placar dos líderes, logo abaixo: aqui aparece o duelo só nas seções onde a gente deles vota.</p>
       </div>
     );
   }
@@ -744,13 +475,18 @@ function CartaoDosLideres({ duelo, lideres }: { duelo: ReturnType<typeof montarD
  * esquerda e as do adversario para a direita, a partir do meio, cada
  * candidato na cor dele. No meio, a secao, a gente do time e a dos Lideres.
  */
-function SecaoPorSecao({
+export function SecaoPorSecao({
   secoes,
   esquerda,
   direita,
   filtro,
   onFiltro,
   comLideres,
+  lideres = [],
+  selecionados,
+  zona,
+  onZona,
+  semAdversario = false,
 }: {
   secoes: SecaoNoDuelo[];
   esquerda: CandidatoNoRaioX[];
@@ -758,23 +494,39 @@ function SecaoPorSecao({
   filtro: Filtro;
   onFiltro: (f: Filtro) => void;
   comLideres: boolean;
+  /** Todos os Lideres da escola: cada secao mostra quem cadastrou ali. */
+  lideres?: LiderNoRaioX[];
+  /** Os Lideres selecionados (ficam em ouro). */
+  selecionados?: ReadonlySet<string>;
+  /** A zona escolhida (nula: todas), controlada de fora (os cartoes das zonas tambem escolhem). */
+  zona: string | null;
+  onZona: (zona: string | null) => void;
+  /** Ainda sem adversario: so os votos do seu lado contra a gente do time, sem vencedor. */
+  semAdversario?: boolean;
 }) {
+  const zonas = [...new Set(secoes.map((s) => s.zona ?? '?'))];
+  const setZona = onZona;
+  const daZona = zona ? secoes.filter((s) => (s.zona ?? '?') === zona) : secoes;
   const maior = Math.max(1, ...secoes.map((s) => Math.max(s.totalEsquerda, s.totalDireita)));
   const contagem: Record<Filtro, number> = {
-    todas: secoes.length,
-    ganhas: secoes.filter((s) => s.vencedor === 'ESQUERDA').length,
-    perdidas: secoes.filter((s) => s.vencedor === 'DIREITA').length,
-    empates: secoes.filter((s) => s.vencedor === 'EMPATE' || s.vencedor === 'SEM_VOTOS').length,
-    lideres: secoes.filter((s) => s.dosLideres > 0).length,
+    todas: daZona.length,
+    ganhas: daZona.filter((s) => s.vencedor === 'ESQUERDA').length,
+    perdidas: daZona.filter((s) => s.vencedor === 'DIREITA').length,
+    empates: daZona.filter((s) => s.vencedor === 'EMPATE' || s.vencedor === 'SEM_VOTOS').length,
+    lideres: daZona.filter((s) => s.dosLideres > 0).length,
   };
   const opcoes: [Filtro, string][] = [
     ['todas', 'Todas'],
-    ['ganhas', 'Vencidas'],
-    ['perdidas', 'Perdidas'],
-    ['empates', 'Empates'],
+    ...(semAdversario
+      ? []
+      : ([
+          ['ganhas', 'Vencidas'],
+          ['perdidas', 'Perdidas'],
+          ['empates', 'Empates'],
+        ] as [Filtro, string][])),
     ...(comLideres ? ([['lideres', 'Com os líderes']] as [Filtro, string][]) : []),
   ];
-  const visiveis = secoes.filter((s) =>
+  const visiveis = daZona.filter((s) =>
     filtro === 'ganhas'
       ? s.vencedor === 'ESQUERDA'
       : filtro === 'perdidas'
@@ -791,8 +543,31 @@ function SecaoPorSecao({
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div>
           <h3 className="text-sm font-semibold text-ink-900">Seção por seção</h3>
-          <p className="text-xs text-ink-500">Seu lado cresce para a esquerda, os adversários para a direita</p>
+          <p className="text-xs text-ink-500">
+            {semAdversario
+              ? 'Os votos do seu lado em cada seção, com a gente do time e quem cadastrou'
+              : 'Seu lado cresce para a esquerda, os adversários para a direita'}
+          </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {zonas.length > 1 ? (
+          <div role="group" aria-label="Zona" className="flex flex-wrap gap-1 rounded-[1.25rem] border border-line bg-ink-50 p-0.5">
+            {[null, ...zonas].map((z) => (
+              <button
+                key={z ?? 'todas'}
+                type="button"
+                aria-pressed={zona === z}
+                onClick={() => setZona(z)}
+                className={cn(
+                  'min-h-8 rounded-pill px-3 text-xs font-semibold transition-colors',
+                  zona === z ? 'bg-gold-400 text-navy-900 shadow-card' : 'text-ink-700 hover:text-ink-900',
+                )}
+              >
+                {z === null ? 'Todas as zonas' : `Zona ${z}`}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div role="group" aria-label="Quais seções" className="flex flex-wrap gap-1 rounded-[1.25rem] border border-line bg-ink-50 p-0.5">
           {opcoes.map(([valor, rotulo]) => (
             <button
@@ -809,6 +584,7 @@ function SecaoPorSecao({
             </button>
           ))}
         </div>
+        </div>
       </header>
 
       {visiveis.length === 0 ? (
@@ -816,8 +592,8 @@ function SecaoPorSecao({
       ) : (
         <ol className="divide-y divide-line">
           {visiveis.map((s, i) => {
-            const ganhou = s.vencedor === 'ESQUERDA';
-            const perdeu = s.vencedor === 'DIREITA';
+            const ganhou = !semAdversario && s.vencedor === 'ESQUERDA';
+            const perdeu = !semAdversario && s.vencedor === 'DIREITA';
             return (
               <li
                 key={s.chave}
@@ -833,10 +609,11 @@ function SecaoPorSecao({
                 }
               >
                 {/* Seu lado: da direita para a esquerda. */}
-                <Barras candidatos={esquerda} votos={s.esquerda} total={s.totalEsquerda} maior={maior} venceu={ganhou} lado="esquerda" />
+                <Barras candidatos={esquerda} votos={s.esquerda} total={s.totalEsquerda} maior={maior} venceu={ganhou || semAdversario} lado="esquerda" />
 
                 <div className="flex flex-col items-center text-center">
                   <span
+                    hidden={semAdversario}
                     className={cn(
                       'inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[0.625rem] font-bold tracking-wide uppercase',
                       ganhou ? 'bg-[#2a78d6] text-white' : perdeu ? 'bg-[#e5484d] text-white' : 'bg-ink-100 text-ink-500',
@@ -883,7 +660,14 @@ function SecaoPorSecao({
                 </div>
 
                 {/* Adversarios: da esquerda para a direita. */}
-                <Barras candidatos={direita} votos={s.direita} total={s.totalDireita} maior={maior} venceu={perdeu} lado="direita" />
+                {semAdversario ? (
+                  <span aria-hidden="true" />
+                ) : (
+                  <Barras candidatos={direita} votos={s.direita} total={s.totalDireita} maior={maior} venceu={perdeu} lado="direita" />
+                )}
+
+                {/* Quem cadastrou a gente desta secao, com a referencia de cada um. */}
+                <LideresDaSecao lideres={lideres} chave={s.chave} estimativa={s.estimativa} selecionados={selecionados} />
               </li>
             );
           })}
@@ -893,8 +677,62 @@ function SecaoPorSecao({
   );
 }
 
+/** Os Lideres de uma secao, do que mais cadastrou ali para o que menos, numa linha inteira embaixo do duelo. */
+function LideresDaSecao({
+  lideres,
+  chave,
+  estimativa,
+  selecionados,
+}: {
+  lideres: LiderNoRaioX[];
+  chave: string;
+  estimativa: number;
+  selecionados?: ReadonlySet<string>;
+}) {
+  const daSecao = lideres
+    .map((l) => ({ l, n: l.porSecao[chave] ?? 0 }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.l.nome.localeCompare(b.l.nome, 'pt-BR'));
+  const semLider = Math.max(0, estimativa - daSecao.reduce((t, x) => t + x.n, 0));
+  if (daSecao.length === 0 && semLider === 0) return null;
+  return (
+    <ul className="col-span-3 flex flex-wrap justify-center gap-1 pt-1" aria-label="Quem cadastrou nesta seção">
+      {daSecao.map(({ l, n }) => {
+        const ativo = selecionados?.has(l.id);
+        return (
+          <li
+            key={l.id}
+            className={cn(
+              'inline-flex max-w-full items-center gap-1 rounded-pill border py-0.5 pr-1 pl-0.5 text-[0.6875rem]',
+              ativo ? 'border-gold-500 bg-gold-50' : 'border-line bg-surface',
+            )}
+            title={`${l.nome}: ${n} ${n === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} nesta seção`}
+          >
+            <span
+              className={cn(
+                'flex size-5 shrink-0 items-center justify-center rounded-full text-[0.5625rem] font-bold',
+                ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400',
+              )}
+            >
+              {initials(l.nome)}
+            </span>
+            <span className="min-w-0 font-semibold wrap-break-word text-ink-900">{l.nome}</span>
+            <SeloDaReferencia referencia={l.referencia} compacto />
+            <span className="rounded-pill bg-navy-900 px-1.5 text-[0.625rem] font-bold text-white tabular-nums">{n}</span>
+          </li>
+        );
+      })}
+      {semLider > 0 ? (
+        <li className="inline-flex items-center gap-1 rounded-pill border border-dashed border-ink-200 px-2 py-0.5 text-[0.6875rem] text-ink-500">
+          sem líder <b className="tabular-nums">{semLider}</b>
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
 /** As barras de um lado numa secao: um segmento por candidato, na cor dele, e o total na ponta. */
-function Barras({
+export function Barras({
   candidatos,
   votos,
   total,
@@ -947,7 +785,7 @@ function Barras({
 }
 
 /** Todos os candidatos da sala, do mais votado na escola para o menos, com o lado de cada um. */
-function Ranking({
+export function Ranking({
   esquerda,
   votosEsquerda,
   direita,
@@ -1025,7 +863,7 @@ function Ranking({
  * cargo. Os da esquerda nao aparecem; os ja chamados ficam marcados (tocar
  * de novo tira do confronto).
  */
-function Seletor({
+export function Seletor({
   lista,
   base,
   carregando,

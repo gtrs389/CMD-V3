@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { ArrowDownRight, ArrowUpRight, Check, CheckCheck, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Check, CheckCheck, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -21,7 +22,6 @@ import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 import { BotaoVoltar } from './EscolhaDoMunicipio';
 import { MarcaDaBarra } from './MarcaDaBarra';
-import { SalaDeConfronto } from './SalaDeConfronto';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -37,8 +37,9 @@ import { SalaDeConfronto } from './SalaDeConfronto';
  * cadastrou em cada secao aparece sozinho, sem clique: na grade "Lider x
  * Secao" e em cada secao da lista. Todo Lider leva a tag da referencia.
  * Da para selecionar UM OU MAIS Lideres: a gente deles acende junta, na
- * grade e nas barras. "Enviar para sala de confronto" leva a escola, os
- * candidatos e os Lideres selecionados para o duelo contra outros candidatos.
+ * grade e nas barras. "Enviar para sala de confronto" guarda a escola, os
+ * candidatos e os Lideres selecionados na pagina Sala de Confronto (menu
+ * lateral), onde ela vira duelo contra outros candidatos.
  */
 
 const LEITURA: Record<LeituraDoConfronto, { texto: string; classe: string; icone: React.ReactNode } | null> = {
@@ -913,7 +914,7 @@ export function RaioXDaEscola({
   onClose,
   onVerPessoas,
   pdf,
-  secaoNoFiltro = false,
+  onEnviarParaSala,
 }: {
   /** A escola com o apurado de cada candidato (um so: `comoComparativo`). */
   escola: EscolaNoComparativo;
@@ -928,8 +929,8 @@ export function RaioXDaEscola({
   onVerPessoas?: () => void;
   /** O botao do relatorio do time (um candidato ou todos juntos). */
   pdf?: React.ReactNode;
-  /** O mapa esta filtrado por uma secao: a Sala de Confronto fica so nela. */
-  secaoNoFiltro?: boolean;
+  /** Guarda a escola na Sala de Confronto, com os Lideres selecionados; devolve o id dela na sala. */
+  onEnviarParaSala?: (lideres: LiderNoRaioX[]) => Promise<{ id: string }>;
 }) {
   /** Os Lideres selecionados: nenhum, um ou varios. */
   const [foco, setFoco] = useState<ReadonlySet<string>>(() => new Set());
@@ -941,12 +942,7 @@ export function RaioXDaEscola({
       else novo.add(id);
       return novo;
     });
-  const [sala, setSala] = useState(false);
-  // Com a Sala aberta, o Esc e dela (volta para o raio-x), nao do raio-x.
-  const salaAberta = useRef(false);
-  useEffect(() => {
-    salaAberta.current = sala;
-  }, [sala]);
+
   const onde = [escola.endereco, [escola.cidade, escola.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ');
   const varios = candidatos.length > 1;
   const um = candidatos[0];
@@ -957,7 +953,7 @@ export function RaioXDaEscola({
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !salaAberta.current) {
+      if (e.key === 'Escape') {
         e.stopPropagation();
         onClose();
       }
@@ -1017,7 +1013,7 @@ export function RaioXDaEscola({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-center">
-            <BotaoDaSala onClick={() => setSala(true)} lideres={selecionados.length} />
+            {onEnviarParaSala ? <BotaoDaSala onEnviar={() => onEnviarParaSala(selecionados)} lideres={selecionados.length} /> : null}
             <BotaoPdfDaEscola onBaixar={baixar} claro />
           </div>
         </div>
@@ -1075,44 +1071,93 @@ export function RaioXDaEscola({
             ) : null}
             {pdf}
             <BotaoPdfDaEscola onBaixar={baixar} compacto />
-            <BotaoDaSala onClick={() => setSala(true)} lideres={selecionados.length} compacto />
+            {onEnviarParaSala ? <BotaoDaSala onEnviar={() => onEnviarParaSala(selecionados)} lideres={selecionados.length} compacto /> : null}
           </div>
         </div>
       </div>
-
-      {sala ? (
-        <SalaDeConfronto
-          escola={escola}
-          candidatos={candidatos}
-          lideres={selecionados}
-          secaoNoFiltro={secaoNoFiltro}
-          onClose={() => setSala(false)}
-        />
-      ) : null}
     </div>,
     document.body,
   );
 }
 
 /**
- * "Enviar para sala de confronto": a escola, os candidatos e os Lideres
- * selecionados vao para o duelo. Vermelho de arena, com as espadas.
+ * "Enviar para sala de confronto": guarda a escola, os candidatos e os
+ * Lideres selecionados na Sala de Confronto (a pagina do menu lateral).
+ * Enviada, o botao vira o atalho para abrir o confronto dela la. Reenviar
+ * (com outros Lideres, por exemplo) atualiza a mesma escola na sala.
  */
-function BotaoDaSala({ onClick, lideres, compacto = false }: { onClick: () => void; lideres: number; compacto?: boolean }) {
+function BotaoDaSala({ onEnviar, lideres, compacto = false }: { onEnviar: () => Promise<{ id: string }>; lideres: number; compacto?: boolean }) {
+  const [estado, setEstado] = useState<'parado' | 'enviando' | 'erro'>('parado');
+  const [enviada, setEnviada] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  async function enviar() {
+    if (estado === 'enviando') return;
+    setEstado('enviando');
+    try {
+      const { id } = await onEnviar();
+      setEnviada(id);
+      setEstado('parado');
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível enviar.');
+      setEstado('erro');
+      window.setTimeout(() => setEstado('parado'), 4500);
+    }
+  }
+  const tamanho = compacto
+    ? 'min-h-9 px-3 text-xs'
+    : 'min-h-10 px-4 text-sm shadow-[0_10px_24px_-10px_rgba(220,38,38,0.85)] hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(220,38,38,0.95)]';
+
+  if (enviada && estado !== 'enviando') {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Link
+          href={`/confronto?escola=${encodeURIComponent(enviada)}`}
+          className={cn(
+            'group cmd-chip-entra inline-flex items-center gap-2 rounded-pill bg-success-600 font-bold text-white transition-all duration-300 hover:bg-success-700',
+            tamanho,
+          )}
+        >
+          <Check aria-hidden="true" className="size-4" strokeWidth={3} />
+          Na sala · abrir o confronto
+          <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-0.5" />
+        </Link>
+        <button
+          type="button"
+          onClick={enviar}
+          title="Enviar de novo (com os líderes selecionados agora)"
+          className={cn(
+            'inline-flex items-center justify-center rounded-pill border font-semibold transition-colors',
+            compacto ? 'min-h-9 border-line px-2.5 text-xs text-ink-700 hover:bg-ink-50' : 'min-h-10 border-white/30 px-3 text-xs text-white hover:bg-white/10',
+          )}
+        >
+          Atualizar
+        </button>
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={enviar}
+      disabled={estado === 'enviando'}
+      aria-live="polite"
+      title={estado === 'erro' && erro ? erro : 'Guardar esta escola na Sala de Confronto'}
       className={cn(
-        'group relative inline-flex items-center gap-2 overflow-hidden rounded-pill bg-gradient-to-r from-danger-600 via-[#e0457b] to-danger-600 bg-[length:200%_100%] font-bold text-white transition-all duration-500 hover:bg-right',
-        compacto
-          ? 'min-h-9 px-3 text-xs'
-          : 'min-h-10 px-4 text-sm shadow-[0_10px_24px_-10px_rgba(220,38,38,0.85)] hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-10px_rgba(220,38,38,0.95)]',
+        'group relative inline-flex items-center gap-2 overflow-hidden rounded-pill font-bold text-white transition-all duration-500 disabled:cursor-wait',
+        estado === 'erro'
+          ? 'bg-danger-700'
+          : 'bg-gradient-to-r from-danger-600 via-[#e0457b] to-danger-600 bg-[length:200%_100%] hover:bg-right',
+        tamanho,
       )}
     >
-      <Swords aria-hidden="true" className="size-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
-      Enviar para sala de confronto
-      {lideres > 0 ? (
+      {estado === 'enviando' ? (
+        <Spinner className="size-4" />
+      ) : (
+        <Swords aria-hidden="true" className="size-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+      )}
+      {estado === 'enviando' ? 'Enviando…' : estado === 'erro' ? 'Não deu: tente de novo' : 'Enviar para sala de confronto'}
+      {lideres > 0 && estado === 'parado' ? (
         <span className="rounded-pill bg-white/20 px-1.5 py-px text-[0.625rem] font-bold tabular-nums" title="Líderes selecionados que vão junto">
           +{lideres} {lideres === 1 ? 'líder' : 'líderes'}
         </span>

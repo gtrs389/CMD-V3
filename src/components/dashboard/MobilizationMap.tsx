@@ -35,6 +35,7 @@ import {
   pinosDoConfronto,
   recortar,
   type EscolaNoComparativo,
+  type LiderNoRaioX,
 } from '@/lib/domain/confronto';
 import type { MapFocus, ModoVotacao } from './MapCanvas';
 import { MapControlButton, MapControlStack, MapPanel } from './MapControls';
@@ -52,6 +53,7 @@ import {
   baixarPdfDoRankingDeVotos,
 } from './pdf-do-mapa';
 import { AndamentoAoVivo, BotaoDaVotacao } from './votacao/VotacaoTse';
+import type { EscolaNaSala } from '@/lib/domain/sala-de-confronto';
 import { RaioXDaEscola, type CandidatoNoRaioX } from './votacao/RaioXDaEscola';
 import { PlacarDosCandidatos } from './votacao/PlacarDosCandidatos';
 import { CarregandoVotacao } from './votacao/CarregandoVotacao';
@@ -535,6 +537,62 @@ export function MobilizationMap({
   const corDoEscolhido = (c: CandidatoDaVotacao) => corDo(Math.max(0, candidatos.findIndex((x) => x.id === c.id)));
   /** Quem a escola mostra: os ligados no mapa (um so, quando so um esta ligado). */
   const candidatosDaEscola = comparativoDosAtivos ? ativos : ativos.slice(0, 1);
+
+  /** A escola do raio-x com o apurado de cada candidato da escola (um so: o confronto dele). */
+  const escolaComparadaDoRaioX = useMemo(
+    () =>
+      escolaDoRaioX
+        ? (comparativoDosAtivos?.escolas.find((e) => e.pinosDaCampanha.some((p) => escolaDoRaioX.pinosDaCampanha.includes(p))) ?? null)
+        : null,
+    [escolaDoRaioX, comparativoDosAtivos],
+  );
+
+  /**
+   * "Enviar para sala de confronto": a escola do raio-x vai para a Sala de
+   * Confronto com os candidatos dela (o lado esquerdo), os Lideres
+   * selecionados e o recorte do mapa (Lider, referencia, secao) — para a
+   * estimativa la ser a mesma daqui.
+   */
+  const enviarParaSala = useCallback(
+    async (lideres: LiderNoRaioX[]) => {
+      if (!escolaDoRaioX) throw new Error('Abra uma escola primeiro.');
+      const escola = escolaComparadaDoRaioX ?? comoComparativo(escolaDoRaioX);
+      const rotulo = [
+        query.leader ? `Líder: ${options.leaders.find((l) => l.id === query.leader)?.name ?? 'escolhido'}` : null,
+        query.references.length
+          ? `Referência: ${query.references.map((r) => options.references.find((o) => o.value === r)?.label ?? r).join(', ')}`
+          : null,
+        query.section ? (options.sections.find((o) => o.value === query.section)?.label ?? `Seção ${query.section}`) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const { escola: salva } = await api<{ escola: EscolaNaSala }>('/api/confrontos', {
+        method: 'POST',
+        body: {
+          clientId: clientId ?? null,
+          chave: escola.chave,
+          titulo: escola.titulo,
+          endereco: escola.endereco,
+          cidade: escola.cidade,
+          uf: escola.uf,
+          pinos: escola.pinosDaCampanha,
+          esquerda: candidatosDaEscola,
+          lideres: lideres.map((l) => ({ id: l.id, nome: l.nome })),
+          recorte: { leader: query.leader, references: query.references, section: query.section, rotulo: rotulo || null },
+          resumo: {
+            estimativa: escola.estimativa,
+            secoes: escola.secoes.filter((x) => x.zona || x.secao).length,
+            zonas: [...new Set(escola.secoes.map((x) => x.zona).filter((z): z is string => Boolean(z)))],
+            lideres: lideresDoRaioX?.lideres.length ?? 0,
+            apurado: escola.apurado,
+            esquerda: escola.apurado.reduce((t, n) => t + n, 0),
+          },
+        },
+      });
+      return salva;
+    },
+    [escolaDoRaioX, escolaComparadaDoRaioX, query.leader, query.references, query.section, options, clientId, candidatosDaEscola, lideresDoRaioX],
+  );
 
   /** O Lider escolhido no filtro, com o que ele cadastrou no mapa inteiro. */
   const liderEscolhido = query.leader ? (options.leaders.find((l) => l.id === query.leader) ?? null) : null;
@@ -1374,11 +1432,7 @@ export function MobilizationMap({
 
       {escolaDoRaioX && candidato ? (
         <RaioXDaEscola
-          escola={
-            (comparativoDosAtivos?.escolas.find((e) => e.pinosDaCampanha.some((p) => escolaDoRaioX.pinosDaCampanha.includes(p))) ??
-              null) ||
-            comoComparativo(escolaDoRaioX)
-          }
+          escola={escolaComparadaDoRaioX ?? comoComparativo(escolaDoRaioX)}
           candidatos={candidatosDaEscola.map(
             (c): CandidatoNoRaioX => ({
               id: c.id,
@@ -1403,7 +1457,7 @@ export function MobilizationMap({
               : undefined
           }
           pdf={menuDoPdf}
-          secaoNoFiltro={Boolean(secaoEscolhida)}
+          onEnviarParaSala={enviarParaSala}
         />
       ) : null}
 
