@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import {
   BarChart3,
   BookmarkCheck,
@@ -11,12 +11,24 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Copy,
+  MapPin,
+  School,
   ShieldCheck,
   UserRound,
   Users,
 } from 'lucide-react';
 import type { Member } from '@/lib/types';
 import { equipePorReferencia, type GrupoDaReferencia } from '@/lib/domain/equipe-por-referencia';
+import {
+  indiceDeLocais,
+  numeroEleitoral,
+  ondeAEquipeVota,
+  type LocalDeVotacao,
+  type OndeAEquipeVota,
+} from '@/lib/domain/onde-a-equipe-vota';
+import { api } from '@/lib/repositories/http/api';
+import { useRepositoryQuery } from '@/hooks/use-repository-query';
+import { Spinner } from '@/components/ui/Spinner';
 import { SEM_REFERENCIA } from '@/lib/domain/filtros-da-equipe';
 import { corDoCandidato } from '@/components/dashboard/votacao/cores';
 import { Avatar } from '@/components/ui/Avatar';
@@ -39,6 +51,10 @@ const EQUIPE_DE_CARA = 12;
  * grupo). Embaixo, um cartao por referencia — Lideres, Equipe, quanto do
  * time — que abre os Lideres dela, cada um com a Equipe dele. A Equipe
  * herda a referencia do Lider. Busca e filtros da lista continuam valendo.
+ *
+ * Cada referencia mostra tambem ONDE a gente dela vota: as escolas (pela
+ * zona e secao de cada pessoa, na tabela de locais do TSE), com as secoes
+ * de cada uma. Uma consulta so, com as zonas de todo mundo do recorte.
  */
 export function EquipePorReferencia({
   pessoas,
@@ -54,6 +70,36 @@ export function EquipePorReferencia({
   onAbrirLider: (m: Member) => void;
 }) {
   const grupos = useMemo(() => equipePorReferencia(pessoas, time), [pessoas, time]);
+
+  // As escolas: os locais do TSE das zonas do recorte, numa consulta so.
+  const clientId = time[0]?.clientId ?? pessoas[0]?.clientId ?? null;
+  const zonas = useMemo(
+    () =>
+      [...new Set(pessoas.map((m) => numeroEleitoral(m.zone)).filter((z): z is number => z !== null))]
+        .sort((a, b) => a - b)
+        .slice(0, 40)
+        .join(','),
+    [pessoas],
+  );
+  const loaderDosLocais = useCallback(
+    () =>
+      clientId && zonas
+        ? api<{ locais: LocalDeVotacao[] }>(`/api/clients/${encodeURIComponent(clientId)}/locais-de-votacao?zonas=${zonas}`)
+        : Promise.resolve({ locais: [] as LocalDeVotacao[] }),
+    [clientId, zonas],
+  );
+  const locais = useRepositoryQuery(loaderDosLocais);
+  const indice = useMemo(() => indiceDeLocais(locais.data?.locais ?? []), [locais.data]);
+  /** Onde a gente de cada referencia vota (Lideres do recorte + Equipe). */
+  const escolasDe = useMemo(() => {
+    const m = new Map<string, OndeAEquipeVota>();
+    if (!locais.data && !locais.error) return m;
+    for (const g of grupos) {
+      const gente = g.lideres.flatMap((l) => [...(l.lider && l.liderNoRecorte ? [l.lider] : []), ...l.equipe]);
+      m.set(g.chave, ondeAEquipeVota(gente, indice));
+    }
+    return m;
+  }, [grupos, indice, locais.data, locais.error]);
   const totalGeral = Math.max(1, grupos.reduce((t, g) => t + g.total, 0));
   const totalDeLideres = grupos.reduce((t, g) => t + g.totalDeLideres, 0);
   const maior = Math.max(1, ...grupos.map((g) => g.total));
@@ -164,6 +210,13 @@ export function EquipePorReferencia({
                     <Users aria-hidden="true" className="size-3.5" />
                     <b className="text-ink-900 tabular-nums">{formatNumber(g.totalDaEquipe)}</b> {g.totalDaEquipe === 1 ? 'liderado' : 'liderados'}
                   </span>
+                  {escolasDe.get(g.chave) ? (
+                    <span className="inline-flex items-center gap-1">
+                      <School aria-hidden="true" className="size-3.5" />
+                      <b className="text-ink-900 tabular-nums">{formatNumber(escolasDe.get(g.chave)!.escolas.length)}</b>{' '}
+                      {escolasDe.get(g.chave)!.escolas.length === 1 ? 'escola' : 'escolas'}
+                    </span>
+                  ) : null}
                   {g.cadastrosRepetidos ? (
                     <span
                       className="inline-flex items-center gap-1 text-warning-600"
@@ -189,6 +242,9 @@ export function EquipePorReferencia({
             </button>
 
             {aberto ? (
+              <EscolasDaReferencia rotulo={g.rotulo} cor={c} dados={escolasDe.get(g.chave) ?? null} carregando={locais.loading} total={g.total} />
+            ) : null}
+            {aberto ? (
               <ul className="animate-fade-in divide-y divide-line border-t border-line">
                 {g.lideres.map((l) => (
                   <LinhaDoLider key={l.lider?.id ?? 'orfaos'} linha={l} cor={c} maior={Math.max(1, ...g.lideres.map((x) => x.equipe.length))} onAbrirPessoa={onAbrirPessoa} onAbrirLider={onAbrirLider} />
@@ -199,6 +255,130 @@ export function EquipePorReferencia({
         );
       })}
     </div>
+  );
+}
+
+/** Quantas escolas aparecem antes do "ver todas". */
+const ESCOLAS_DE_CARA = 6;
+
+/**
+ * Onde a gente de uma referencia vota: as escolas, da que tem mais gente
+ * para a que tem menos, cada uma com a barra na cor da referencia, a parte
+ * do grupo e as secoes com mais gente; em cima, as zonas.
+ */
+function EscolasDaReferencia({
+  rotulo,
+  cor,
+  dados,
+  carregando,
+  total,
+}: {
+  rotulo: string;
+  cor: string;
+  dados: OndeAEquipeVota | null;
+  carregando: boolean;
+  total: number;
+}) {
+  const [todas, setTodas] = useState(false);
+  if (!dados) {
+    return carregando ? (
+      <p className="flex items-center gap-2 border-t border-line px-4 py-3 text-xs text-ink-500 sm:px-5">
+        <Spinner className="size-3.5" /> Buscando as escolas de cada seção…
+      </p>
+    ) : null;
+  }
+  const maior = Math.max(1, ...dados.escolas.map((e) => e.total));
+  const visiveis = todas ? dados.escolas : dados.escolas.slice(0, ESCOLAS_DE_CARA);
+  const localizados = dados.escolas.reduce((t, e) => t + e.total, 0);
+
+  return (
+    <section aria-label={`Escolas de ${rotulo}`} className="animate-fade-in border-t border-line bg-ink-50/40 px-4 py-3.5 sm:px-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="flex items-center gap-2 text-sm font-bold text-ink-900">
+          <span className="flex size-7 items-center justify-center rounded-lg text-white" style={{ background: cor }}>
+            <School aria-hidden="true" className="size-4" />
+          </span>
+          Onde a gente de {rotulo} vota
+        </h4>
+        <p className="text-[0.6875rem] text-ink-500">
+          {formatNumber(dados.escolas.length)} {dados.escolas.length === 1 ? 'escola' : 'escolas'} · {formatNumber(localizados)} de{' '}
+          {formatNumber(total)} com a escola identificada
+          {dados.semZonaSecao ? ` · ${formatNumber(dados.semZonaSecao)} sem zona/seção` : ''}
+          {dados.semLocal ? ` · ${formatNumber(dados.semLocal)} com seção fora da tabela do TSE` : ''}
+        </p>
+      </div>
+
+      {dados.zonas.length ? (
+        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Zonas">
+          {dados.zonas.map((z) => (
+            <li key={z.zona} className="inline-flex items-center gap-1 rounded-pill bg-navy-900 px-2 py-0.5 text-[0.6875rem] font-bold text-white">
+              Zona {z.zona}
+              <span className="rounded-pill bg-white/20 px-1 tabular-nums">{formatNumber(z.total)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {dados.escolas.length === 0 ? (
+        <p className="mt-3 text-xs text-ink-500">Nenhuma escola identificada: falta zona e seção nos cadastros.</p>
+      ) : (
+        <ol className="mt-3 grid gap-2 lg:grid-cols-2">
+          {visiveis.map((e, i) => (
+            <li
+              key={e.local.id}
+              className="cmd-cascata rounded-control border border-line bg-surface p-2.5"
+              style={{ '--cmd-atraso': `${Math.min(i, 8) * 35}ms` } as CSSProperties}
+            >
+              <div className="flex items-start gap-2.5">
+                <span
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-[0.6875rem] font-bold text-white tabular-nums"
+                  style={{ background: i < 3 ? cor : '#94a3b8' }}
+                >
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm leading-snug font-semibold wrap-break-word text-ink-900">{e.local.nome}</p>
+                  <p className="flex items-center gap-1 text-[0.6875rem] text-ink-500">
+                    <MapPin aria-hidden="true" className="size-3 shrink-0" />
+                    <span className="truncate">{[e.local.endereco, e.local.cidade].filter(Boolean).join(' · ') || `Zona ${e.local.zona}`}</span>
+                  </p>
+                </div>
+                <span className="shrink-0 text-right tabular-nums">
+                  <span className="block text-base leading-none font-bold text-ink-900">{formatNumber(e.total)}</span>
+                  <span className="block text-[0.625rem] text-ink-500">{Math.round((e.total / Math.max(1, total)) * 100)}% do grupo</span>
+                </span>
+              </div>
+              <span className="mt-2 block h-1.5 overflow-hidden rounded-pill bg-ink-100">
+                <span className="cmd-barra-viva block h-full rounded-pill" style={{ width: `${Math.max(4, (e.total / maior) * 100)}%`, background: cor }} />
+              </span>
+              <span className="mt-2 flex flex-wrap gap-1">
+                <span className="text-[0.625rem] font-semibold text-ink-500">Zona {e.local.zona} ·</span>
+                {e.secoes.slice(0, 8).map((s) => (
+                  <span
+                    key={s.secao}
+                    className="inline-flex items-center gap-0.5 rounded-pill border border-line bg-ink-50 px-1.5 text-[0.625rem] font-semibold text-ink-700 tabular-nums"
+                  >
+                    Seção {s.secao}
+                    <span className="rounded-pill bg-navy-900 px-1 text-[0.5625rem] text-white">{s.total}</span>
+                  </span>
+                ))}
+                {e.secoes.length > 8 ? <span className="text-[0.625rem] text-ink-500">+{e.secoes.length - 8} seções</span> : null}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {dados.escolas.length > ESCOLAS_DE_CARA ? (
+        <button
+          type="button"
+          onClick={() => setTodas((t) => !t)}
+          className="mt-2.5 inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-xs font-semibold text-accent-700 hover:border-accent-600"
+        >
+          {todas ? 'Mostrar menos' : `Ver todas as ${formatNumber(dados.escolas.length)} escolas`}
+          <ChevronDown aria-hidden="true" className={cn('size-4 transition-transform', todas && 'rotate-180')} />
+        </button>
+      ) : null}
+    </section>
   );
 }
 
