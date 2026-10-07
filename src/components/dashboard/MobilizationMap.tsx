@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Maximize2, MapPin as MapPinIcon, RefreshCw, SlidersHorizontal, Trophy, X } from 'lucide-react';
+import { BookmarkCheck, Maximize2, MapPin as MapPinIcon, RefreshCw, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import {
   DEFAULT_MAP_QUERY,
   activeFilterCount,
   applyMapQuery,
   mapOptions,
+  lideresDasReferencias,
   placeOfLeader,
+  placeOfLeaders,
   placeOfSection,
   placeVotes,
   type MapQuery,
@@ -339,13 +341,22 @@ export function MobilizationMap({
    */
   const lider = query.leader;
   const secaoEscolhida = query.section;
+  /** Referencia no filtro: os Lideres dela (a estimativa passa a ser so a gente deles). */
+  const referenciasEscolhidas = query.references;
+  const lideresDaReferencia = useMemo(
+    () => (referenciasEscolhidas.length ? lideresDasReferencias(data, referenciasEscolhidas) : null),
+    [data, referenciasEscolhidas],
+  );
+  /** Algum recorte de gente (Lider ou referencia): a votacao mostra so as escolas dela. */
+  const recorteDeGente = Boolean(lider || lideresDaReferencia);
   const campanhaDoRecorte = useMemo(
     () =>
       (data?.pollingPlaces ?? [])
-        .map((p) => (lider ? placeOfLeader(p, lider) : p))
+        .map((p) => (lideresDaReferencia ? placeOfLeaders(p, lideresDaReferencia) : p))
+        .map((p) => (p && lider ? placeOfLeader(p, lider) : p))
         .map((p) => (p && secaoEscolhida ? placeOfSection(p, secaoEscolhida) : p))
         .filter((p): p is PollingPlacePin => p !== null),
-    [data, lider, secaoEscolhida],
+    [data, lider, lideresDaReferencia, secaoEscolhida],
   );
   /** A estimativa do recorte contra os votos de uma votacao (com a secao do filtro, se houver). */
   const confrontarVotacao = useCallback(
@@ -371,9 +382,9 @@ export function MobilizationMap({
   const pinosDaVotacao = useMemo(
     () =>
       confronto
-        ? pinosDoConfronto(lider ? recortar(confronto, new Set(confronto.doTime.map((e) => e.chave))) : confronto)
+        ? pinosDoConfronto(recorteDeGente ? recortar(confronto, new Set(confronto.doTime.map((e) => e.chave))) : confronto)
         : null,
-    [confronto, lider],
+    [confronto, recorteDeGente],
   );
   const destaques = useMemo(
     () => new Map((confronto?.doTime ?? []).map((e) => [e.chave, { estimativa: e.estimativa, apurado: e.apurado }])),
@@ -430,7 +441,7 @@ export function MobilizationMap({
    * aplicam de novo sobre os pinos do TSE.
    */
   const recorte = useMemo<MapQuery>(
-    () => (candidato ? { ...query, kind: 'POLLING_PLACE', leader: null, section: null } : query),
+    () => (candidato ? { ...query, kind: 'POLLING_PLACE', leader: null, references: [], section: null } : query),
     [candidato, query],
   );
   /**
@@ -447,7 +458,8 @@ export function MobilizationMap({
       ...(pinosDaVotacao?.foraDoMapa ?? []),
     ];
     const daVotacao = mapOptions({ pins: [], pollingPlaces }, query.state, query.zone);
-    return { ...daVotacao, leaders: mapOptions(data, null).leaders };
+    const daCampanha = mapOptions(data, null);
+    return { ...daVotacao, leaders: daCampanha.leaders, references: daCampanha.references };
   }, [candidato, votacoes, pinosDaVotacao, fonte, data, query.state, query.zone]);
   /** O numero de cada escola no pino: com zona escolhida, so as secoes dela. */
   const valorDoLocal = useCallback((place: PollingPlacePin) => placeVotes(place, recorte.zone), [recorte.zone]);
@@ -789,6 +801,65 @@ export function MobilizationMap({
     </div>
   ) : null;
 
+  /**
+   * As referencias escolhidas no filtro (sem Lider escolhido): quais, quantos
+   * Lideres, quantas pessoas eles cadastraram e, na votacao, quanto o
+   * candidato teve nas escolas deles.
+   */
+  const referenciasNoFiltro = options.references.filter((r) => query.references.includes(r.value));
+  const pessoasDaReferencia = referenciasNoFiltro.reduce((t, r) => t + r.people, 0);
+  const lideresNaReferencia = referenciasNoFiltro.reduce((t, r) => t + r.leaders, 0);
+  const faixaDaReferencia =
+    referenciasNoFiltro.length > 0 && !liderEscolhido ? (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-card border border-gold-500/40 bg-gradient-to-r from-gold-50 to-surface px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-navy-900 text-gold-400">
+            <BookmarkCheck className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">
+              {referenciasNoFiltro.length === 1 ? 'Referência' : `${referenciasNoFiltro.length} referências`}
+            </p>
+            <p className="wrap-break-word text-sm font-semibold text-ink-900">{referenciasNoFiltro.map((r) => r.label).join(' · ')}</p>
+          </div>
+        </div>
+        <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-500">
+          <div className="flex items-baseline gap-1">
+            <dd className="text-lg leading-none font-bold text-navy-900 tabular-nums">{formatNumber(lideresNaReferencia)}</dd>
+            <dt>{lideresNaReferencia === 1 ? 'líder' : 'líderes'}</dt>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <dd className="text-lg leading-none font-bold text-navy-900 tabular-nums">{formatNumber(pessoasDaReferencia)}</dd>
+            <dt>{pessoasDaReferencia === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'}</dt>
+          </div>
+          {candidato && confrontoNoRecorte ? (
+            <div className="flex items-baseline gap-1">
+              <dd className="text-lg leading-none font-bold tabular-nums" style={{ color: '#b7801a' }}>
+                {formatNumber(confrontoNoRecorte.apuradoNasEscolasDoTime)}
+              </dd>
+              <dt>
+                {confrontoNoRecorte.apuradoNasEscolasDoTime === 1 ? 'voto real' : 'votos reais'} de {candidato.nome} nas escolas deles
+                {conversaoDoLider !== null ? ` · ${Math.round(conversaoDoLider).toLocaleString('pt-BR')}% da expectativa` : ''}
+              </dt>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-1">
+              <dd className="text-lg leading-none font-bold text-navy-900 tabular-nums">{formatNumber(selection.placeCount)}</dd>
+              <dt>{selection.placeCount === 1 ? 'escola' : 'escolas'}</dt>
+            </div>
+          )}
+        </dl>
+        <button
+          type="button"
+          onClick={() => setQuery({ ...query, references: [] })}
+          className="ml-auto inline-flex min-h-8 items-center gap-1 rounded-pill border border-line bg-surface px-2.5 text-xs font-medium text-ink-700 hover:bg-ink-50"
+        >
+          <X aria-hidden="true" className="size-3.5" />
+          Todas as referências
+        </button>
+      </div>
+    ) : null;
+
   /** No destaque, a contagem vira quatro numeros grandes que correm ate o valor. */
   const contagemDestaque = totals ? (
     <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -838,7 +909,7 @@ export function MobilizationMap({
     const doRecorte =
       c.id === candidato?.id
         ? confrontoNoRecorte
-        : activeFilterCount(recorte) === 0 && !query.leader
+        : activeFilterCount(recorte) === 0 && !recorteDeGente
           ? confrontoDele
           : recortar(confrontoDele, new Set(confrontoDele.escolas.filter((e) => e.pinosDaCampanha.some((p) => pinos.has(p))).map((e) => e.chave)));
     await baixarPdfDoConfronto({
@@ -1070,6 +1141,7 @@ export function MobilizationMap({
           <MapFiltersBar query={query} onChange={setQuery} options={options} dense municipiosMultiplos={candidato !== null} />
 
           {faixaDoLider}
+          {faixaDaReferencia}
 
           {destaque ? null : contagem}
         </header>
@@ -1190,6 +1262,7 @@ export function MobilizationMap({
                 {barraDaVotacao}
                 <MapFiltersBar query={query} onChange={setQuery} options={options} municipiosMultiplos={candidato !== null} />
                 {faixaDoLider}
+                {faixaDaReferencia}
 
                 {podeLocalizar && pendentes > 0 ? (
                   <Button variant="secondary" onClick={localizar} disabled={resolving} fullWidth>

@@ -33,6 +33,7 @@ import {
   type MemberRow,
   type MemberVerificationRow,
   type PollingPlaceRow,
+  type UserRow,
 } from '@/lib/supabase/tables';
 import {
   deleteRows,
@@ -806,12 +807,68 @@ function liderDoIntegrante(
 }
 
 /**
+ * A referencia de cada Lider do time (o filtro "Referência" do mapa), pela
+ * chave que a Equipe usa para apontar para ele — o usuario dele ou, sem
+ * usuario, o vinculo da planilha — e tambem pela chave do nome.
+ *
+ * Com a planilha ligada, o que a linha do Lider na aba dele diz vale (como
+ * na lista do time), e os Lideres que so existem na planilha entram tambem.
+ * Banco sem a coluna de referencia (antes da migration 051): sem filtro,
+ * nunca sem mapa.
+ */
+async function referenciasDosLideres(clientId: string): Promise<Record<string, string>> {
+  const [linhas, planilha] = await Promise.all([
+    selectRows<Pick<MemberRow, 'id' | 'name' | 'reference'>>(TABLES.members, {
+      select: 'id,name,reference',
+      // So os Lideres: quem nao foi cadastrado por alguem da Equipe.
+      filters: { client_id: `eq.${clientId}`, or: '(recruited_by_role.is.null,recruited_by_role.neq.EQUIPE)' },
+    }).catch(() => [] as Pick<MemberRow, 'id' | 'name' | 'reference'>[]),
+    equipeDaPlanilha(clientId).catch(() => null),
+  ]);
+  const usuarios = linhas.length
+    ? await selectRows<Pick<UserRow, 'id' | 'member_id'>>(TABLES.users, {
+        select: 'id,member_id',
+        filters: { member_id: inFilter(linhas.map((row) => row.id)) },
+      }).catch(() => [] as Pick<UserRow, 'id' | 'member_id'>[])
+    : [];
+  const usuarioDe = new Map(usuarios.map((row) => [row.member_id, row.id]));
+
+  const referencias: Record<string, string> = {};
+  const anotar = (chave: string | null | undefined, nome: string, referencia: string | null | undefined) => {
+    const texto = referencia?.replace(/\s+/g, ' ').trim();
+    if (!texto) return;
+    if (chave) referencias[chave] = texto;
+    const peloNome = leaderKey(null, nome);
+    if (peloNome && !referencias[peloNome]) referencias[peloNome] = texto;
+  };
+
+  for (const row of linhas) {
+    const linhaDaAba = planilha?.dadosDoLider.get(row.id);
+    const chave = usuarioDe.get(row.id) ?? planilha?.vinculoDoLider.get(row.id) ?? null;
+    anotar(chave, row.name, linhaDaAba?.reference || row.reference);
+  }
+  for (const membro of planilha?.membros ?? []) {
+    if (membro.tier === 'LIDER') anotar(membro.userId, membro.name, membro.reference);
+  }
+  return referencias;
+}
+
+/**
  * Monta o mapa para o painel.
  *
  * Nada sensivel sai daqui: sem CPF, telefone, endereco residencial completo,
  * numero, ou qualquer parte do retorno da consulta cadastral.
  */
 export async function mapOverview(clientId?: string): Promise<MapOverviewPayload> {
+  // Mapa do TIME: junto, a referencia de cada Lider (o filtro "Referência").
+  if (clientId) {
+    const [payload, referencias] = await Promise.all([montarMapa(clientId), referenciasDosLideres(clientId)]);
+    return { ...payload, referencias };
+  }
+  return montarMapa();
+}
+
+async function montarMapa(clientId?: string): Promise<MapOverviewPayload> {
   // Mapa do TIME: o recorte e do banco, pelos integrantes dele — inclusive
   // quando ele e o proprio Time DEMO, que dentro da propria pagina mostra
   // tudo. Mapa GERAL: os Times DEMO ficam de fora, como em toda metrica

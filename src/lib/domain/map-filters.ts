@@ -1,6 +1,7 @@
 import { matchesSearch, normalizeSearch } from '@/lib/utils/text';
 import {
   filterPins,
+  leaderKey,
   sectionKey,
   sectionLabel,
   type MapFilter,
@@ -53,6 +54,13 @@ export interface MapQuery {
    * ele nao cadastrou ninguem.
    */
   leader: string | null;
+  /**
+   * So as Equipes dos Lideres destas referencias (chaves de
+   * `chaveDaReferenciaNoMapa`; `SEM_REFERENCIA_NO_MAPA` para os Lideres sem
+   * nenhuma). Varias de uma vez: vale o Lider de QUALQUER uma. Como o filtro
+   * de Lider, a escola passa a contar so a gente deles.
+   */
+  references: string[];
 }
 
 export const DEFAULT_MAP_QUERY: MapQuery = {
@@ -65,7 +73,45 @@ export const DEFAULT_MAP_QUERY: MapQuery = {
   section: null,
   minVotes: 0,
   leader: null,
+  references: [],
 };
+
+/** A opcao dos Lideres sem referencia no filtro do mapa. */
+export const SEM_REFERENCIA_NO_MAPA = '__sem-referencia__';
+
+/** "ROBERVAL", "Roberval " e "robervál" sao a mesma referencia. */
+export function chaveDaReferenciaNoMapa(texto: string | null | undefined): string {
+  return normalizeSearch((texto ?? '').replace(/\s+/g, ' ').trim());
+}
+
+/** A referencia escrita do Lider (pela chave dele ou, sem usuario, pelo nome), ou nulo. */
+export function referenciaDoLider(
+  referencias: Readonly<Record<string, string>> | undefined,
+  lider: { id: string; name: string },
+): string | null {
+  if (!referencias) return null;
+  return referencias[lider.id] ?? referencias[leaderKey(null, lider.name) ?? ''] ?? null;
+}
+
+/**
+ * Os Lideres (chaves) das referencias escolhidas, entre os que aparecem no
+ * mapa — nas escolas ou nos pinos de moradia da Equipe.
+ */
+export function lideresDasReferencias(
+  payload: Pick<MapOverviewPayload, 'pins' | 'pollingPlaces' | 'referencias'> | null | undefined,
+  escolhidas: readonly string[],
+): Set<string> {
+  const alvo = new Set(escolhidas);
+  const nomes = new Map<string, string>();
+  for (const place of payload?.pollingPlaces ?? []) for (const l of place.leaders ?? []) nomes.set(l.id, l.name);
+  for (const pin of payload?.pins ?? []) if (pin.leaderId && !nomes.has(pin.leaderId)) nomes.set(pin.leaderId, '');
+  const lideres = new Set<string>();
+  for (const [id, name] of nomes) {
+    const chave = chaveDaReferenciaNoMapa(referenciaDoLider(payload?.referencias, { id, name }));
+    if (alvo.has(chave || SEM_REFERENCIA_NO_MAPA)) lideres.add(id);
+  }
+  return lideres;
+}
 
 /** Cortes de tamanho oferecidos na tela. */
 export const MIN_VOTES_STEPS = [0, 5, 10, 25, 50, 100] as const;
@@ -127,6 +173,35 @@ export function placeOfLeader(place: PollingPlacePin, leader: string): PollingPl
   };
 }
 
+/**
+ * A escola vista por VARIOS Lideres (os de uma referencia): total, genero e
+ * secoes somados so com quem eles cadastraram ali. Nulo quando nenhum deles
+ * cadastrou ninguem nela.
+ */
+export function placeOfLeaders(place: PollingPlacePin, lideres: ReadonlySet<string>): PollingPlacePin | null {
+  const deles = (place.leaders ?? []).filter((row) => lideres.has(row.id) && row.total > 0);
+  if (deles.length === 0) return null;
+  if (deles.length === 1) return placeOfLeader(place, deles[0].id);
+  const sections: PollingPlacePin['sections'] = [];
+  for (const l of deles) {
+    for (const row of l.sections) {
+      const mesma = sections.find((x) => sectionKey(x) === sectionKey(row));
+      if (mesma) mesma.total += row.total;
+      else sections.push({ ...row });
+    }
+  }
+  const soma = (campo: 'total' | 'men' | 'women' | 'others') => deles.reduce((t, l) => t + l[campo], 0);
+  return {
+    ...place,
+    total: soma('total'),
+    men: soma('men'),
+    women: soma('women'),
+    others: soma('others'),
+    sections,
+    leaders: deles,
+  };
+}
+
 /** O local esta em algum dos municipios escolhidos (nenhum escolhido: todos). */
 function emAlgumMunicipio(city: string | null, cities: readonly string[] | undefined): boolean {
   if (!cities?.length) return true;
@@ -173,8 +248,9 @@ export function placeOfSection(place: PollingPlacePin, chave: string): PollingPl
   };
 }
 
-function matchesPin(pin: MapPin, query: MapQuery): boolean {
+function matchesPin(pin: MapPin, query: MapQuery, daReferencia: ReadonlySet<string> | null): boolean {
   if (query.leader && pin.leaderId !== query.leader) return false;
+  if (daReferencia && (!pin.leaderId || !daReferencia.has(pin.leaderId))) return false;
   if (query.section && sectionKey({ zone: pin.zone, section: pin.section }) !== query.section) return false;
   if (query.state && normalizeSearch(pin.state) !== normalizeSearch(query.state)) return false;
   if (query.city && normalizeSearch(pin.city) !== normalizeSearch(query.city)) return false;
@@ -225,19 +301,22 @@ export interface MapSelection {
  * filtro.
  */
 export function applyMapQuery(
-  payload: Pick<MapOverviewPayload, 'pins' | 'pollingPlaces'> | null | undefined,
+  payload: Pick<MapOverviewPayload, 'pins' | 'pollingPlaces' | 'referencias'> | null | undefined,
   query: MapQuery,
 ): MapSelection {
+  // Referencia escolhida: vale a Equipe de qualquer Lider dela.
+  const daReferencia = query.references?.length ? lideresDasReferencias(payload, query.references) : null;
   const pins =
     query.kind === 'POLLING_PLACE'
       ? []
-      : filterPins(payload?.pins ?? [], 'RESIDENCE').filter((pin) => matchesPin(pin, query));
+      : filterPins(payload?.pins ?? [], 'RESIDENCE').filter((pin) => matchesPin(pin, query, daReferencia));
 
   const places =
     query.kind === 'RESIDENCE'
       ? []
       : (payload?.pollingPlaces ?? [])
-          .map((place) => (query.leader ? placeOfLeader(place, query.leader) : place))
+          .map((place) => (daReferencia ? placeOfLeaders(place, daReferencia) : place))
+          .map((place) => (place && query.leader ? placeOfLeader(place, query.leader) : place))
           .map((place) => (place && query.section ? placeOfSection(place, query.section) : place))
           .filter((place): place is PollingPlacePin => place !== null && matchesPlace(place, query));
 
@@ -265,6 +344,22 @@ export interface MapOptions {
   sections: { value: string; label: string; zone: string | null }[];
   /** Os Lideres com gente cadastrada que vota em alguma escola do mapa. */
   leaders: LeaderOption[];
+  /**
+   * As referencias dos Lideres do mapa, de A a Z, e "Sem referência" por
+   * ultimo. Vazio no mapa geral (sem referencias no retorno).
+   */
+  references: ReferenceOption[];
+}
+
+export interface ReferenceOption {
+  /** Chave da referencia, ou `SEM_REFERENCIA_NO_MAPA`. */
+  value: string;
+  /** A forma mais escrita dela. */
+  label: string;
+  /** Lideres dela que aparecem no mapa. */
+  leaders: number;
+  /** Pessoas que esses Lideres cadastraram nas escolas do mapa. */
+  people: number;
 }
 
 export interface LeaderOption {
@@ -274,6 +369,8 @@ export interface LeaderOption {
   people: number;
   /** Escolas onde ele tem alguem. */
   places: number;
+  /** A referencia escrita dele, ou nulo sem referencia (ou no mapa geral). */
+  reference: string | null;
 }
 
 function sortText(values: Iterable<string>): string[] {
@@ -287,7 +384,7 @@ function sortText(values: Iterable<string>): string[] {
  * escolher uma cidade sempre devolve alguma coisa.
  */
 export function mapOptions(
-  payload: Pick<MapOverviewPayload, 'pins' | 'pollingPlaces'> | null | undefined,
+  payload: Pick<MapOverviewPayload, 'pins' | 'pollingPlaces' | 'referencias'> | null | undefined,
   state: string | null,
   zone: string | null = null,
 ): MapOptions {
@@ -340,7 +437,13 @@ export function mapOptions(
   const lideres = new Map<string, LeaderOption>();
   for (const place of places) {
     for (const row of place.leaders ?? []) {
-      const atual = lideres.get(row.id) ?? { id: row.id, name: row.name, people: 0, places: 0 };
+      const atual = lideres.get(row.id) ?? {
+        id: row.id,
+        name: row.name,
+        people: 0,
+        places: 0,
+        reference: referenciaDoLider(payload?.referencias, row),
+      };
       atual.people += row.total;
       atual.places += 1;
       lideres.set(row.id, atual);
@@ -348,11 +451,40 @@ export function mapOptions(
   }
   const leaders = [...lideres.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
+  // As referencias saem dos Lideres do mapa: cada uma com quantos Lideres e
+  // quantas pessoas, e o rotulo na forma mais escrita.
+  const porReferencia = new Map<string, { formas: Map<string, number>; leaders: number; people: number }>();
+  if (payload?.referencias) {
+    for (const l of leaders) {
+      const chave = chaveDaReferenciaNoMapa(l.reference) || SEM_REFERENCIA_NO_MAPA;
+      const grupo = porReferencia.get(chave) ?? { formas: new Map(), leaders: 0, people: 0 };
+      if (l.reference) {
+        const forma = l.reference.replace(/\s+/g, ' ').trim();
+        grupo.formas.set(forma, (grupo.formas.get(forma) ?? 0) + 1);
+      }
+      grupo.leaders += 1;
+      grupo.people += l.people;
+      porReferencia.set(chave, grupo);
+    }
+  }
+  const references = [...porReferencia.entries()]
+    .map(([value, g]) => ({
+      value,
+      label: value === SEM_REFERENCIA_NO_MAPA ? 'Sem referência' : [...g.formas.entries()].sort((a, b) => b[1] - a[1])[0][0],
+      leaders: g.leaders,
+      people: g.people,
+    }))
+    .sort(
+      (a, b) =>
+        Number(a.value === SEM_REFERENCIA_NO_MAPA) - Number(b.value === SEM_REFERENCIA_NO_MAPA) ||
+        a.label.localeCompare(b.label, 'pt-BR'),
+    );
+
   const sections = [...secoes.values()]
     .sort((a, b) => a.ordem[0] - b.ordem[0] || a.ordem[1] - b.ordem[1])
     .map(({ value, label, zone: z }) => ({ value, label, zone: z }));
 
-  return { states: sortText(states), cities: sortText(cities), zones: sortText(zones), sections, leaders };
+  return { states: sortText(states), cities: sortText(cities), zones: sortText(zones), sections, leaders, references };
 }
 
 /* -------------------------------------------------------------------------
@@ -419,6 +551,7 @@ export function activeFilterCount(query: MapQuery): number {
   if (query.section) total += 1;
   if (query.minVotes > 0) total += 1;
   if (query.leader) total += 1;
+  if (query.references?.length) total += 1;
   return total;
 }
 

@@ -127,8 +127,8 @@ describe('filtro de Lider no mapa', () => {
 
   it('oferece os Lideres com quantas pessoas e escolas, em ordem de nome', () => {
     expect(mapOptions(payload, null).leaders).toEqual([
-      { id: JOSE, name: 'José Carlos', people: 4, places: 2 },
-      { id: MARIA, name: 'Maria Lima', people: 3, places: 2 },
+      { id: JOSE, name: 'José Carlos', people: 4, places: 2, reference: null },
+      { id: MARIA, name: 'Maria Lima', people: 3, places: 2, reference: null },
     ]);
   });
 
