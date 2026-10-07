@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   AcumuladorDeVotacao,
+  PREFIXO_DA_SOMA,
   PlanilhaInvalida,
+  candidatoSomado,
   camposDaLinha,
   cargosDaVotacao,
   chaveDoFavorito,
@@ -11,6 +13,8 @@ import {
   rotuloDoCandidato,
   textoDosTotais,
   separadorDe,
+  somarEscolas,
+  somarVotacoes,
   tipoDoVoto,
   type LocalDoTse,
 } from '@/lib/domain/votacao-tse';
@@ -201,5 +205,85 @@ describe('favoritos no seletor', () => {
     expect(
       filtrarCandidatos(LISTA, { turno: 1, cargoCodigo: null, busca: '', favoritos, soFavoritos: true }).map((x) => x.nome),
     ).toEqual(['BIA']);
+  });
+});
+
+describe('varios candidatos somados no mapa', () => {
+  const pino = (id: string, secoes: [string, string, number][]) => ({
+    locationId: id,
+    latitude: -9.4,
+    longitude: -36.6,
+    title: id,
+    address: null,
+    city: 'PALMEIRA DOS ÍNDIOS',
+    state: 'AL',
+    imageUrl: null,
+    total: secoes.reduce((t, s) => t + s[2], 0),
+    men: 0,
+    women: 0,
+    others: secoes.reduce((t, s) => t + s[2], 0),
+    sections: secoes.map(([zone, section, total]) => ({ zone, section, total })),
+  });
+  const candidato = (id: string, nome: string, numero: string, cargo: string, total: number) => ({
+    id,
+    ano: 2026,
+    turno: 1,
+    uf: 'AL',
+    cargoCodigo: cargo === 'Deputado Federal' ? 6 : 7,
+    cargo,
+    numero,
+    nome,
+    tipo: 'CANDIDATO' as const,
+    total,
+    totalOficial: 999,
+    sqcand: '123',
+  });
+
+  it('soma o mesmo local num pino so, secao a secao, sem mexer nas listas de entrada', () => {
+    const a = [pino('tse:1', [['15', '10', 4], ['15', '11', 1]]), pino('tse:2', [['15', '20', 7]])];
+    const b = [pino('tse:1', [['15', '10', 2], ['15', '12', 3]])];
+    const soma = somarEscolas([a, b]);
+    expect(soma.map((p) => [p.locationId, p.total])).toEqual([
+      ['tse:1', 10],
+      ['tse:2', 7],
+    ]);
+    expect(soma[0].sections).toEqual([
+      { zone: '15', section: '10', total: 6 },
+      { zone: '15', section: '11', total: 1 },
+      { zone: '15', section: '12', total: 3 },
+    ]);
+    // As listas de cada candidato continuam as dele (o placar ainda as usa).
+    expect(a[0].total).toBe(5);
+    expect(a[0].sections[0].total).toBe(4);
+  });
+
+  it('o candidato somado diz quem entrou na conta e nunca colide com um id de verdade', () => {
+    const nivaldo = candidato('c1', 'NIVALDO ALBUQUERQUE', '4400', 'Deputado Federal', 535);
+    const paulinho = candidato('c2', 'PAULINHO MENDONÇA', '15100', 'Deputado Estadual', 902);
+    const soma = candidatoSomado([nivaldo, paulinho]);
+    expect(soma.id.startsWith(PREFIXO_DA_SOMA)).toBe(true);
+    expect(soma.nome).toBe('NIVALDO ALBUQUERQUE + PAULINHO MENDONÇA');
+    expect(soma.numero).toBe('4400 + 15100');
+    expect(soma.cargo).toBe('Deputado Federal + Deputado Estadual');
+    expect(soma.total).toBe(1437);
+    expect(soma.totalOficial).toBeNull();
+    expect(candidatoSomado([nivaldo])).toBe(nivaldo);
+    const muitos = candidatoSomado([nivaldo, paulinho, nivaldo, paulinho].map((c, i) => ({ ...c, id: `x${i}` })));
+    expect(muitos.nome).toBe('4 candidatos somados');
+  });
+
+  it('a votacao somada junta os pinos com e sem ponto no mapa', () => {
+    const v = (id: string, noMapa: ReturnType<typeof pino>[], foraDoMapa: ReturnType<typeof pino>[]) => ({
+      candidato: candidato(id, id, id, 'Deputado Estadual', 0),
+      noMapa,
+      foraDoMapa,
+    });
+    const soma = somarVotacoes([
+      v('a', [pino('tse:1', [['1', '1', 2]])], [pino('tse:9', [['1', '9', 1]])]),
+      v('b', [pino('tse:1', [['1', '1', 3]])], []),
+    ]);
+    expect(soma.noMapa.map((p) => p.total)).toEqual([5]);
+    expect(soma.foraDoMapa.map((p) => p.total)).toEqual([1]);
+    expect(soma.candidato.id).toBe(`${PREFIXO_DA_SOMA}a+b`);
   });
 });

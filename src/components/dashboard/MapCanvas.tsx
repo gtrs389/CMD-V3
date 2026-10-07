@@ -214,6 +214,8 @@ interface OpcoesDaEscola {
   /** Nome da escola: aparece quando o mouse passa por cima. */
   titulo: string | null;
   foto: string | null;
+  /** Varios candidatos somados: a parte de cada um, na cor dele. */
+  partes?: readonly { cor: string; valor: number }[] | null;
 }
 
 /**
@@ -275,6 +277,21 @@ function escolaElement(o: OpcoesDaEscola): HTMLElement {
 
   capsula.append(icone, numero);
 
+  // Varios candidatos somados: uma faixa embaixo da etiqueta, com a parte de
+  // cada um na cor dele — de longe ja se ve quem puxou os votos da escola.
+  const somaDasPartes = (o.partes ?? []).reduce((t, p) => t + p.valor, 0);
+  if (o.partes && o.partes.length > 1 && somaDasPartes > 0) {
+    const faixa = document.createElement('span');
+    faixa.className = 'cmd-escola-partes';
+    for (const parte of o.partes) {
+      if (parte.valor <= 0) continue;
+      const pedaco = document.createElement('span');
+      pedaco.style.cssText = `flex:${parte.valor} 0 0;background:${parte.cor}`;
+      faixa.append(pedaco);
+    }
+    capsula.append(faixa);
+  }
+
   // Escola do time na votacao: a conversao (apurado / estimativa) colada no numero.
   if (o.destaque && o.destaque.estimativa > 0) {
     const conv = Math.round((o.destaque.apurado / o.destaque.estimativa) * 100);
@@ -312,6 +329,7 @@ function escolaElement(o: OpcoesDaEscola): HTMLElement {
   // Leitura para quem passa o mouse ou usa leitor de tela.
   const partes = [o.titulo ?? 'Local de votação', `${o.valor.toLocaleString('pt-BR')} ${o.votacao ? 'votos' : 'votos estimados'}`];
   if (o.destaque) partes.push(`estimativa do time ${o.destaque.estimativa.toLocaleString('pt-BR')}`);
+  if (o.partes && o.partes.length > 1) partes.push(o.partes.map((p) => p.valor.toLocaleString('pt-BR')).join(' + '));
   root.title = partes.join(' · ');
   return root;
 }
@@ -581,6 +599,14 @@ export interface ModoVotacao {
   destaques?: ReadonlyMap<string, { estimativa: number; apurado: number }>;
   /** Abre o raio-x da escola: estimativa x apuracao, secao por secao. */
   onRaioX?: (locationId: string) => void;
+  /**
+   * Varios candidatos somados no mapa: quem entra na conta (na ordem e na
+   * cor de cada um) e quantos votos cada um teve em cada escola.
+   */
+  partes?: {
+    candidatos: readonly { nome: string; cor: string }[];
+    porLocal: ReadonlyMap<string, readonly number[]>;
+  };
 }
 
 /** O numero de cada escola no recorte e a posicao dela: tamanho e medalha do pino. */
@@ -600,6 +626,8 @@ function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: Modo
         {formatNumber(estimatedVotes(place))}
       </p>
 
+      {votacao?.partes ? <PartesNoBalao place={place} partes={votacao.partes} /> : null}
+
       {votacao ? null : (
         <dl className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-xs text-ink-500">
           {voteBreakdown(place).map((item) => (
@@ -617,6 +645,33 @@ function PlaceVotes({ place, votacao }: { place: PollingPlacePin; votacao?: Modo
 
       <p className="mt-1 text-[0.625rem] text-ink-500 italic">{votacao?.nota ?? ESTIMATED_VOTES_HINT}</p>
     </section>
+  );
+}
+
+/** Varios candidatos somados: quanto cada um teve nesta escola, na cor dele. */
+function PartesNoBalao({ place, partes }: { place: PollingPlacePin; partes: NonNullable<ModoVotacao['partes']> }) {
+  const valores = partes.porLocal.get(place.locationId) ?? [];
+  const soma = valores.reduce((t, v) => t + v, 0);
+  return (
+    <ul className="mt-1.5 space-y-1 border-t border-brand-100 pt-1.5">
+      {partes.candidatos
+        .map((c, i) => ({ ...c, valor: valores[i] ?? 0 }))
+        .sort((a, b) => b.valor - a.valor)
+        .map((c) => (
+          <li key={c.nome} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-ink-900">
+                <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ background: c.cor }} />
+                <span className="wrap-break-word">{c.nome}</span>
+              </span>
+              <span className="mt-0.5 block h-1 overflow-hidden rounded-pill bg-white">
+                <span className="block h-full rounded-pill" style={{ width: `${soma ? Math.max(4, (c.valor / soma) * 100) : 0}%`, background: c.cor }} />
+              </span>
+            </span>
+            <span className="text-xs font-bold text-navy-900 tabular-nums">{formatNumber(c.valor)}</span>
+          </li>
+        ))}
+    </ul>
   );
 }
 
@@ -705,6 +760,11 @@ function PlaceMarker({
    * Lideres e apuracao), em vez de um balao pequeno com um botao para ele.
    */
   const raioX = destaque && votacao?.onRaioX ? votacao.onRaioX : null;
+  const valoresDasPartes = votacao?.partes?.porLocal.get(place.locationId);
+  // A chave das partes: muda so quando os numeros (ou as cores) mudam.
+  const chaveDasPartes = votacao?.partes
+    ? votacao.partes.candidatos.map((c, i) => `${c.cor}:${valoresDasPartes?.[i] ?? 0}`).join('|')
+    : '';
   const eventos = useMemo(() => (raioX ? { click: () => raioX(place.locationId) } : undefined), [raioX, place.locationId]);
   // A etiqueta da escola: fachada (ou predio), numero, medalha e nome.
   const icon = useMemo(
@@ -719,10 +779,13 @@ function PlaceMarker({
         atraso: atrasoDeEntrada(`local:${place.locationId}`),
         titulo: place.title,
         foto: place.imageUrl,
+        partes: votacao?.partes
+          ? votacao.partes.candidatos.map((c, i) => ({ cor: c.cor, valor: valoresDasPartes?.[i] ?? 0 }))
+          : null,
       }),
-    // `destaque` muda de objeto a cada leitura: entram os numeros dele.
+    // `destaque` e as partes mudam de objeto a cada leitura: entram os numeros deles.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [medida.valor, medida.forca, medida.posicao, destaque?.estimativa, destaque?.apurado, votacao, apagado, place.locationId, place.title, place.imageUrl],
+    [medida.valor, medida.forca, medida.posicao, destaque?.estimativa, destaque?.apurado, votacao, apagado, place.locationId, place.title, place.imageUrl, chaveDasPartes],
   );
 
   return (

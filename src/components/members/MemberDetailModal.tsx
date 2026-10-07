@@ -38,6 +38,7 @@ import {
 import { TierBadge } from './TierBadge';
 import { TransferRecruiterModal } from './TransferRecruiterModal';
 import { EditarTagModal, TagDoLider } from './TagDoLider';
+import { TagDaReferencia } from './TagDaReferencia';
 
 interface MemberDetailModalProps {
   open: boolean;
@@ -305,6 +306,7 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="text-lg font-semibold break-words text-ink-900">{member.name}</h3>
             <TagDoLider member={member} className="text-xs" />
+            {!somenteBasico ? <TagDaReferencia member={member} className="text-xs" /> : null}
             {/* A tag e do Lider: e nele que se coloca, e a Equipe acompanha. */}
             {podeEditar && member.tier === 'LIDER' && !somenteBasico ? (
               <button
@@ -421,13 +423,8 @@ export function MemberSheetBody({ client, member }: { client: Client; member: Me
             <div className="min-w-0">
               <dt className="text-xs text-ink-500">Cadastrado em</dt>
               <dd className="font-medium break-words text-ink-900">
-                {/* Da planilha vem so o DIA ("DATA DE CADASTRO"): sem hora
-                    inventada. Sem a coluna preenchida, sem data. */}
-                {member.semDataDeCadastro
-                  ? '—'
-                  : member.fromSheet
-                    ? formatDate(member.createdAt)
-                    : formatDateTime(member.createdAt)}
+                {/* So o DIA, nunca a hora. Sem a coluna preenchida (planilha), sem data. */}
+                {member.semDataDeCadastro ? '—' : formatDate(member.createdAt)}
               </dd>
             </div>
             <div className="min-w-0">

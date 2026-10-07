@@ -27,12 +27,13 @@ import {
 import { ALAGOAS_CENTER } from '@/lib/domain/demo-catalog';
 import { inviteIsLive } from '@/lib/domain/invite-expiration';
 import { copyText } from '@/lib/utils/clipboard';
-import { byNewest, formatLastActivity, formatRelative, startOfMonthIso } from '@/lib/utils/date';
+import { byNewest, formatDate, formatRelative, startOfMonthIso } from '@/lib/utils/date';
 import { formatNumber, initials, pluralize } from '@/lib/utils/text';
 import { invitePath } from '@/lib/utils/url';
 import { useOrigin } from '@/hooks/use-origin';
 import { useNavegador } from '@/components/members/NavegadorDePessoas';
 import { TagDoLider } from '@/components/members/TagDoLider';
+import { TagDaReferencia } from '@/components/members/TagDaReferencia';
 import { useSession } from '@/components/layout/SessionProvider';
 import { useToast } from '@/components/ui/Toast';
 import { MobilizationMap } from '@/components/dashboard/MobilizationMap';
@@ -199,6 +200,7 @@ export function ClientOverviewPanel({
         userId: member.userId,
         name: member.name,
         tag: member.tag,
+        reference: member.reference ?? null,
         photo: member.photo,
         count: member.userId ? (porResponsavel.get(member.userId) ?? 0) : 0,
       }))
@@ -801,7 +803,7 @@ function RecentMembersCard({
                       {memberPlace(member)}
                     </td>
                     <td className="px-3 py-2.5 text-xs whitespace-nowrap text-ink-500">
-                      {formatLastActivity(member.createdAt)}
+                      {formatDate(member.createdAt)}
                     </td>
                   </tr>
                 ))}
@@ -832,7 +834,7 @@ function RecentMembersCard({
                   <p className="wrap-break-word text-sm font-semibold text-ink-900">{member.name}</p>
                   <p className="mt-0.5 wrap-break-word text-xs text-ink-500">{memberPlace(member)}</p>
                   <p className="mt-0.5 text-xs text-ink-500">
-                    {formatLastActivity(member.createdAt)}
+                    {formatDate(member.createdAt)}
                   </p>
                 </div>
 
@@ -858,6 +860,8 @@ interface RankingRow {
   name: string;
   /** Tag do Lider (migration 048), ao lado do nome. */
   tag: string | null;
+  /** Referencia do Lider (a coluna da planilha); nula vira a tag "Sem referência". */
+  reference: string | null;
   photo: string | null;
   count: number;
 }
@@ -971,7 +975,7 @@ function RankingCard({
               )}
 
               <div className="min-w-0 flex-1">
-                <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-ink-900">
+                <p className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm font-semibold text-ink-900">
                   <span className="min-w-0 wrap-break-word">
                     {row.name}
                     {row.userId && row.userId === currentUserId ? (
@@ -979,6 +983,7 @@ function RankingCard({
                     ) : null}
                   </span>
                   <TagDoLider member={{ tier: 'LIDER', tag: row.tag, recruitedBy: null }} />
+                  <TagDaReferencia member={{ tier: 'LIDER', reference: row.reference }} />
                 </p>
 
                 {/* Barra proporcional ao primeiro colocado: a diferenca

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ArrowRight, Vote, X } from 'lucide-react';
 import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
 import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
-import { CORES_DOS_CANDIDATOS, MAXIMO_DE_CANDIDATOS } from './cores';
+import { corDoCandidato } from './cores';
 import { cn } from '@/lib/utils/cn';
 import { CentralDeCandidatos } from './CentralDeCandidatos';
 
@@ -15,6 +15,9 @@ import { CentralDeCandidatos } from './CentralDeCandidatos';
  * O botao abre a Central de candidatos (`CentralDeCandidatos`), onde a lista
  * inteira e filtrada no navegador e o ADMIN geral envia a planilha do TSE.
  */
+
+/** Quantos rostos a barra mostra antes do "+N". */
+const ROSTOS = 6;
 
 export function BotaoDaVotacao({
   selecionados,
@@ -74,7 +77,7 @@ export function BotaoDaVotacao({
                 Ver no mapa onde cada candidato teve voto
               </span>
               <span className="mt-0.5 block text-xs leading-snug text-white/70">
-                Escolha até {MAXIMO_DE_CANDIDATOS} candidatos e compare com a estimativa do time — escola, zona e seção.
+                Escolha quantos candidatos quiser e compare com a estimativa do time — escola, zona e seção.
               </span>
             </span>
 
@@ -100,16 +103,25 @@ export function BotaoDaVotacao({
             <Vote aria-hidden="true" className="size-5" />
           </span>
           <ul className="flex -space-x-2" aria-label="Candidatos no mapa">
-            {selecionados.map((c, i) => (
+            {/* Sem limite de candidatos: seis rostos e um "+N" com o resto. */}
+            {selecionados.slice(0, ROSTOS).map((c, i) => (
               <li
                 key={c.id}
                 title={c.nome}
                 className="rounded-full ring-[2.5px] ring-offset-2 ring-offset-surface"
-                style={{ '--tw-ring-color': selecionados.length > 1 ? CORES_DOS_CANDIDATOS[i] : '#e0a426' } as React.CSSProperties}
+                style={{ '--tw-ring-color': selecionados.length > 1 ? corDoCandidato(i) : '#e0a426' } as React.CSSProperties}
               >
                 <FotoDoCandidato cargo={c.cargoCodigo} sqcand={c.sqcand ?? null} src={fotoDoCandidatoUrl(c)} nome={c.nome} tamanho="sm" />
               </li>
             ))}
+            {selecionados.length > ROSTOS ? (
+              <li
+                title={selecionados.slice(ROSTOS).map((c) => c.nome).join(', ')}
+                className="relative flex size-9 items-center justify-center rounded-full bg-navy-900 text-[0.6875rem] font-bold text-gold-400 ring-[2.5px] ring-surface"
+              >
+                +{selecionados.length - ROSTOS}
+              </li>
+            ) : null}
           </ul>
           <div className="min-w-0 flex-1">
             <p className="text-[0.625rem] font-bold tracking-[0.14em] text-accent-700 uppercase">Votação 2026 no mapa</p>

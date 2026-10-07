@@ -15,7 +15,15 @@ import {
   type MapQuery,
 } from '@/lib/domain/map-filters';
 import type { MapOverviewPayload, PollingPlacePin } from '@/lib/domain/map-pin';
-import { fotoDoCandidatoUrl, rotuloDoCandidato, textoDosTotais, type CandidatoDaVotacao, type VotacaoNoMapa } from '@/lib/domain/votacao-tse';
+import {
+  candidatoSomado,
+  fotoDoCandidatoUrl,
+  rotuloDoCandidato,
+  somarVotacoes,
+  textoDosTotais,
+  type CandidatoDaVotacao,
+  type VotacaoNoMapa,
+} from '@/lib/domain/votacao-tse';
 import {
   compararCandidatos,
   comoComparativo,
@@ -47,7 +55,7 @@ import { PlacarDosCandidatos } from './votacao/PlacarDosCandidatos';
 import { CarregandoVotacao } from './votacao/CarregandoVotacao';
 import { EscolaPorEscola } from './votacao/EscolaPorEscola';
 import { MenuDoPdf, type OpcaoDoPdf } from './votacao/MenuDoPdf';
-import { CORES_DOS_CANDIDATOS } from './votacao/cores';
+import { corDoCandidato } from './votacao/cores';
 import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
 import { api } from '@/lib/repositories/http/api';
 import { useIsDesktop } from '@/hooks/use-desktop';
@@ -211,15 +219,23 @@ export function MobilizationMap({
    * mapa da campanha.
    */
   /**
-   * Ate quatro candidatos de uma vez (a dobradinha de federal e estadual, por
-   * exemplo): todos contra a mesma estimativa do time. O mapa desenha um de
-   * cada vez — o `ativo` —, e o placar acima troca qual.
+   * Quantos candidatos quiser (a dobradinha de federal e estadual, a chapa
+   * inteira): todos contra a mesma estimativa do time. O placar acima escolhe
+   * quais o mapa desenha — um so, ou varios juntos, com os votos somados em
+   * cada escola e a parte de cada um na cor dele.
    */
   const [candidatos, setCandidatos] = useState<CandidatoDaVotacao[]>([]);
   /** A escola do raio-x (estimativa x apuracao), pela chave do confronto. */
   const [raioX, setRaioX] = useState<string | null>(null);
-  const [ativoId, setAtivoId] = useState<string | null>(null);
-  const candidato = candidatos.find((c) => c.id === ativoId) ?? candidatos[0] ?? null;
+  const [ativosIds, setAtivosIds] = useState<string[]>([]);
+  /** Os candidatos que o mapa desenha agora (ao menos um, enquanto houver escolha). */
+  const ativos = useMemo(() => {
+    const ligados = candidatos.filter((c) => ativosIds.includes(c.id));
+    return ligados.length ? ligados : candidatos.slice(0, 1);
+  }, [candidatos, ativosIds]);
+  const somados = ativos.length > 1;
+  /** O que o mapa desenha: o candidato ativo, ou os ativos somados num so. */
+  const candidato = useMemo(() => (ativos.length ? candidatoSomado(ativos) : null), [ativos]);
   const loaderDaVotacao = useCallback(
     () =>
       candidatos.length
@@ -235,7 +251,12 @@ export function MobilizationMap({
     const ok = lista.length === candidatos.length && lista.every((v, i) => v.candidato.id === candidatos[i].id);
     return ok ? lista : null;
   }, [consultaDaVotacao.data, candidatos]);
-  const votacao = (candidato && votacoes?.find((v) => v.candidato.id === candidato.id)) || null;
+  /** A votacao do mapa: a do ativo, ou a dos ativos somada escola a escola. */
+  const votacao = useMemo(() => {
+    if (!votacoes || ativos.length === 0) return null;
+    const dosAtivos = ativos.map((c) => votacoes.find((v) => v.candidato.id === c.id));
+    return dosAtivos.every((v): v is VotacaoNoMapa => Boolean(v)) ? somarVotacoes(dosAtivos) : null;
+  }, [votacoes, ativos]);
   const erroVotacao = Boolean(candidato && !votacao && consultaDaVotacao.error);
   // Enquanto a votacao estiver na tela, a apuracao anda: boletim novo
   // redesenha os pinos sozinho.
@@ -259,7 +280,7 @@ export function MobilizationMap({
         if (!vivo || !achado) return;
         // Chegada a pagina: nada a desfazer, so a escolha.
         setCandidatos([achado]);
-        setAtivoId(achado.id);
+        setAtivosIds([achado.id]);
         window.history.replaceState(null, '', window.location.pathname);
         secao.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       })
@@ -280,7 +301,7 @@ export function MobilizationMap({
     const escolhidos = pedidoDeVotacao.candidatos;
     const quadro = requestAnimationFrame(() => {
       setCandidatos(escolhidos);
-      setAtivoId(escolhidos[0]?.id ?? null);
+      setAtivosIds(escolhidos[0] ? [escolhidos[0].id] : []);
       setFocusPlace(null);
       setOpenPlace(null);
       setRaioX(null);
@@ -293,8 +314,11 @@ export function MobilizationMap({
     onCandidatosChange?.(escolhidos);
     const entrando = candidatos.length === 0 && escolhidos.length > 0;
     setCandidatos(escolhidos);
-    // O candidato do mapa continua o mesmo, se ainda estiver na escolha.
-    setAtivoId((atual) => (escolhidos.some((c) => c.id === atual) ? atual : (escolhidos[0]?.id ?? null)));
+    // Os candidatos do mapa continuam os mesmos, se ainda estiverem na escolha.
+    setAtivosIds((atual) => {
+      const ficam = atual.filter((id) => escolhidos.some((c) => c.id === id));
+      return ficam.length ? ficam : escolhidos[0] ? [escolhidos[0].id] : [];
+    });
     setFocusPlace(null);
     setOpenPlace(null);
     setRaioX(null);
@@ -323,22 +347,26 @@ export function MobilizationMap({
         .filter((p): p is PollingPlacePin => p !== null),
     [data, lider, secaoEscolhida],
   );
-  const confrontos = useMemo(
-    () =>
-      votacoes
-        ? votacoes.map((v) => {
-            const tse = [...v.noMapa, ...v.foraDoMapa];
-            return confrontar(
-              campanhaDoRecorte,
-              secaoEscolhida
-                ? tse.map((p) => placeOfSection(p, secaoEscolhida)).filter((p): p is PollingPlacePin => p !== null)
-                : tse,
-            );
-          })
-        : null,
-    [votacoes, campanhaDoRecorte, secaoEscolhida],
+  /** A estimativa do recorte contra os votos de uma votacao (com a secao do filtro, se houver). */
+  const confrontarVotacao = useCallback(
+    (v: VotacaoNoMapa) => {
+      const tse = [...v.noMapa, ...v.foraDoMapa];
+      return confrontar(
+        campanhaDoRecorte,
+        secaoEscolhida
+          ? tse.map((p) => placeOfSection(p, secaoEscolhida)).filter((p): p is PollingPlacePin => p !== null)
+          : tse,
+      );
+    },
+    [campanhaDoRecorte, secaoEscolhida],
   );
-  const confronto = (candidato && confrontos?.[candidatos.findIndex((c) => c.id === candidato.id)]) || null;
+  const confrontos = useMemo(() => (votacoes ? votacoes.map(confrontarVotacao) : null), [votacoes, confrontarVotacao]);
+  /** O confronto do mapa: o do ativo (ja calculado) ou o dos ativos somados. */
+  const confronto = useMemo(() => {
+    if (!votacao || !candidato) return null;
+    if (!somados) return confrontos?.[candidatos.findIndex((c) => c.id === candidato.id)] ?? null;
+    return confrontarVotacao(votacao);
+  }, [votacao, candidato, somados, confrontos, candidatos, confrontarVotacao]);
   /** Com Lider no filtro, o mapa da votacao mostra so as escolas dele. */
   const pinosDaVotacao = useMemo(
     () =>
@@ -358,12 +386,36 @@ export function MobilizationMap({
     [escolaDoRaioX, campanhaDoRecorte],
   );
 
+  /**
+   * Varios no mapa: a parte de cada um em cada escola (com a zona e a secao
+   * do filtro), na cor dele — a barra colorida no pino e as linhas do balao.
+   */
+  const partes = useMemo(() => {
+    if (!somados || !votacoes) return undefined;
+    const porLocal = new Map<string, number[]>();
+    ativos.forEach((c, k) => {
+      const v = votacoes.find((x) => x.candidato.id === c.id);
+      for (const p of [...(v?.noMapa ?? []), ...(v?.foraDoMapa ?? [])]) {
+        const recortado = secaoEscolhida ? placeOfSection(p, secaoEscolhida) : p;
+        if (!recortado) continue;
+        const linha = porLocal.get(p.locationId) ?? ativos.map(() => 0);
+        linha[k] += placeVotes(recortado, query.zone);
+        porLocal.set(p.locationId, linha);
+      }
+    });
+    return {
+      candidatos: ativos.map((c) => ({ nome: c.nome, cor: corDoCandidato(candidatos.findIndex((x) => x.id === c.id)) })),
+      porLocal,
+    };
+  }, [somados, votacoes, ativos, candidatos, secaoEscolhida, query.zone]);
+
   const modoVotacao: ModoVotacao | undefined = candidato
     ? {
-        rotulo: `Votos de ${candidato.nome} (${candidato.numero})`,
+        rotulo: somados ? `Votos somados · ${ativos.length} candidatos` : `Votos de ${candidato.nome} (${candidato.numero})`,
         nota: 'Resultado oficial do TSE, seção por seção',
         destaques,
         onRaioX: setRaioX,
+        partes,
       }
     : undefined;
 
@@ -432,7 +484,7 @@ export function MobilizationMap({
     };
   }, [comparativoCompleto, confrontoNoRecorte]);
   /** A cor de cada candidato: com um so, a apuracao segue em ouro. */
-  const corDo = (i: number) => (candidatos.length > 1 ? CORES_DOS_CANDIDATOS[i] : '#e0a426');
+  const corDo = (i: number) => (candidatos.length > 1 ? corDoCandidato(i) : '#e0a426');
 
   /** O Lider escolhido no filtro, com o que ele cadastrou no mapa inteiro. */
   const liderEscolhido = query.leader ? (options.leaders.find((l) => l.id === query.leader) ?? null) : null;
@@ -565,7 +617,7 @@ export function MobilizationMap({
       zone={query.zone}
       activeId={focusPlace?.locationId ?? null}
       onFocus={focar}
-      titulo={`Onde ${candidato.nome} teve mais votos`}
+      titulo={somados ? `Onde ${candidato.nome} tiveram mais votos (somados)` : `Onde ${candidato.nome} teve mais votos`}
       destaques={destaques}
       nota="Resultado oficial do TSE, seção por seção. O PDF traz também os locais sem ponto no mapa."
       onDownload={() =>
@@ -742,7 +794,7 @@ export function MobilizationMap({
     <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {(candidato
         ? [
-            { rotulo: `Votos de ${candidato.nome}`, valor: selection.votes + votosForaDoMapa, forte: true },
+            { rotulo: somados ? `Votos somados (${ativos.length})` : `Votos de ${candidato.nome}`, valor: selection.votes + votosForaDoMapa, forte: true },
             { rotulo: 'Locais no mapa', valor: selection.placeCount },
             { rotulo: 'Seções com voto', valor: [...selection.places, ...foraDoMapa].reduce((s, p) => s + p.sections.length, 0) },
             { rotulo: 'Locais sem ponto', valor: foraDoMapa.length },
@@ -849,9 +901,11 @@ export function MobilizationMap({
               ? 'Não foi possível carregar a votação deste candidato.'
               : votacao === null
                 ? 'Carregando a votação…'
-                : candidatos.length > 1
-                  ? `${candidatos.length} candidatos contra a mesma estimativa do time. O mapa mostra os votos de ${candidato.nome} (${textoDosTotais(votacao.candidato)}); toque em outro candidato no placar para trocar.`
-                  : `${rotuloDoCandidato(candidato)} · ${textoDosTotais(votacao.candidato)}. O mapa mostra os votos dele por escola, zona e seção.`}
+                : somados
+                  ? `${ativos.length} de ${candidatos.length} candidatos no mapa, com os votos somados escola a escola (${textoDosTotais(votacao.candidato)}). A barra colorida de cada escola mostra a parte de cada um; toque no placar para ligar ou desligar.`
+                  : candidatos.length > 1
+                    ? `${candidatos.length} candidatos contra a mesma estimativa do time. O mapa mostra os votos de ${candidato.nome} (${textoDosTotais(votacao.candidato)}); toque em outros no placar para somar no mapa.`
+                    : `${rotuloDoCandidato(candidato)} · ${textoDosTotais(votacao.candidato)}. O mapa mostra os votos dele por escola, zona e seção.`}
           </p>
           <AndamentoAoVivo
             className="mb-0"
@@ -875,10 +929,26 @@ export function MobilizationMap({
                 ? confrontoNoRecorte.apuradoNasEscolasDoTime
                 : null,
           }))}
-          ativoId={candidato.id}
-          onAtivo={(id) => {
-            setAtivoId(id);
+          ativosIds={ativos.map((c) => c.id)}
+          onAlternar={(id) => {
+            // Liga ou desliga no mapa; o ultimo ligado nunca sai (o mapa precisa de alguem).
+            setAtivosIds(() => {
+              const atuais = ativos.map((c) => c.id);
+              if (!atuais.includes(id)) return [...atuais, id];
+              return atuais.length > 1 ? atuais.filter((x) => x !== id) : atuais;
+            });
             setOpenPlace(null);
+            setRaioX(null);
+          }}
+          onSo={(id) => {
+            setAtivosIds([id]);
+            setOpenPlace(null);
+            setRaioX(null);
+          }}
+          onTodos={() => {
+            setAtivosIds(candidatos.map((c) => c.id));
+            setOpenPlace(null);
+            setRaioX(null);
           }}
           onRemover={(id) => escolherCandidatos(candidatos.filter((c) => c.id !== id))}
           pdf={menuDoPdf}

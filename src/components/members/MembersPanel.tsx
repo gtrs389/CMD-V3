@@ -46,11 +46,13 @@ import { submitOwnSurveyAnswer } from '@/lib/repositories';
 import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
 import { TagDoLider } from './TagDoLider';
+import { TagDaReferencia } from './TagDaReferencia';
 import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
 import { verificadoPorFotoParaGravar } from '@/lib/domain/csv-import';
 import {
   SEM_REFERENCIA,
   SEM_ZONA,
+  chaveDaReferencia,
   contarFotos,
   opcoesDeReferencia,
   opcoesDeZona,
@@ -327,6 +329,12 @@ function ListaDoTime({
   function filtrarPelaTag(member: Member) {
     const daPessoa = tagDaPessoa(member);
     if (daPessoa) setTag(daPessoa);
+  }
+
+  /** A tag da referencia do Lider vira atalho: todos da mesma referencia (ou todos sem). */
+  function filtrarPelaReferencia(member: Member) {
+    const chave = chaveDaReferencia(member) || SEM_REFERENCIA;
+    if (referencias.some((o) => o.valor === chave)) setReferencia(chave);
   }
 
   /** Clicar no nome: Lider abre o painel dele; os outros, a ficha. */
@@ -732,7 +740,7 @@ function ListaDoTime({
                     <div className="flex items-start gap-3">
                       <Avatar name={member.name} src={member.photo} size="md" />
                       <div className="min-w-0 flex-1">
-                        <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => abrir(member)}
@@ -741,6 +749,7 @@ function ListaDoTime({
                             {member.name}
                           </button>
                           <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
+                          {!somenteBasico ? <TagDaReferencia member={member} onClick={() => filtrarPelaReferencia(member)} /> : null}
                         </span>
                         {!somenteBasico ? <SeloDaLinha member={member} /> : null}
                         <AchadoEm campos={achadoEm.get(member.id)} />
@@ -852,7 +861,7 @@ function ListaDoTime({
                       <div className="flex items-center gap-3">
                         <Avatar name={member.name} src={member.photo} size="sm" />
                         <span className="min-w-0">
-                          <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => abrir(member)}
@@ -862,6 +871,7 @@ function ListaDoTime({
                               {member.name}
                             </button>
                             <TagDoLider member={member} onClick={somenteBasico ? undefined : () => filtrarPelaTag(member)} />
+                            {!somenteBasico ? <TagDaReferencia member={member} onClick={() => filtrarPelaReferencia(member)} /> : null}
                           </span>
                           {!somenteBasico ? <SeloDaLinha member={member} /> : null}
                           {!somenteBasico && member.email ? (
@@ -901,10 +911,7 @@ function ListaDoTime({
                           {member.reference ? (
                             <button
                               type="button"
-                              onClick={() => {
-                                const opcao = referencias.find((o) => o.rotulo.toLowerCase() === member.reference!.trim().toLowerCase());
-                                if (opcao) setReferencia(opcao.valor);
-                              }}
+                              onClick={() => filtrarPelaReferencia(member)}
                               title={`Filtrar pela referência ${member.reference}`}
                               className="block max-w-full wrap-break-word rounded-pill bg-ink-100 px-2 py-0.5 text-left text-xs font-medium text-ink-700 transition-colors hover:bg-accent-50 hover:text-accent-700"
                             >

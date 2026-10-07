@@ -58,6 +58,14 @@ const SEM_SECAO = chaveDaSecao(null, null);
 const zonasDe = (e: EscolaNoComparativo) => [...new Set(e.secoes.map((x) => x.zona).filter(Boolean))].join(', ') || '—';
 const primeiroNome = (nome: string) => nomeProprio(nome).split(' ')[0];
 
+/** Quantos candidatos cabem lado a lado na capa e nos numeros. */
+const POR_LINHA = 4;
+
+/** Fatias de `n`: os cartoes viram linhas. */
+function emLinhas<T>(itens: T[], n: number): T[][] {
+  return Array.from({ length: Math.ceil(itens.length / n) }, (_, i) => itens.slice(i * n, (i + 1) * n));
+}
+
 /** Diferenca com sinal, verde ou vermelha. */
 function Diferenca({ valor, tamanho = 8 }: { valor: number; tamanho?: number }) {
   return (
@@ -77,15 +85,17 @@ function Capa({ candidatos }: { candidatos: CandidatoNoPdf[] }) {
       <Text style={{ fontSize: 13, color: C.white, fontFamily: 'Helvetica-Bold', marginTop: 3 }}>
         {s(`${candidatos.length} candidatos contra a mesma estimativa do time`)}
       </Text>
-      <View style={{ flexDirection: 'row', marginTop: 12 }}>
+      {/* Ate quatro numa linha; mais que isso, quebram em linhas de quatro. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12 }}>
         {candidatos.map((c, i) => (
           <View
             key={c.numero + c.cargo}
             style={{
-              flex: 1,
+              ...(candidatos.length > POR_LINHA ? { width: '23.5%' } : { flex: 1 }),
               flexDirection: 'row',
               alignItems: 'center',
-              marginLeft: i ? 8 : 0,
+              marginLeft: i % POR_LINHA ? 8 : 0,
+              marginTop: i >= POR_LINHA ? 8 : 0,
               padding: 7,
               borderRadius: 5,
               backgroundColor: '#16263f',
@@ -358,8 +368,9 @@ export function PdfDoComparativo({ comparativo, candidatos, lideres = {}, gerado
 
         <Capa candidatos={candidatos} />
 
-        <LinhaDeKpis>
-          {[
+        {/* A estimativa e os candidatos, cinco por linha: com muitos, nada fica espremido. */}
+        {emLinhas(
+          [
             <Kpi key="est" valor={num(estimativaTotal)} rotulo="votos estimados pelo time" nota={`${num(escolas.length)} escolas`} tom={C.navy} />,
             ...candidatos.map((c, i) => {
               const conv = conversao({ estimativa: estimativaTotal, apurado: apuradoNasEscolasDoTime[i] ?? 0 });
@@ -373,8 +384,11 @@ export function PdfDoComparativo({ comparativo, candidatos, lideres = {}, gerado
                 />
               );
             }),
-          ]}
-        </LinhaDeKpis>
+          ],
+          POR_LINHA + 1,
+        ).map((linha, k) => (
+          <LinhaDeKpis key={k}>{linha}</LinhaDeKpis>
+        ))}
 
         <View style={{ flexDirection: 'row', backgroundColor: OURO_FUNDO, borderLeftWidth: 3, borderLeftColor: OURO, paddingVertical: 6, paddingHorizontal: 8, marginTop: 4, marginBottom: 6 }}>
           <Text style={{ fontSize: 7.8, color: C.ink2, lineHeight: 1.45 }}>
@@ -421,7 +435,7 @@ export function PdfDoComparativo({ comparativo, candidatos, lideres = {}, gerado
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: C.white }}>{s(`estimativa ${num(e.estimativa)}`)}</Text>
-                <View style={{ flexDirection: 'row', marginTop: 2 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 260, marginTop: 2 }}>
                   {candidatos.map((c, k) => (
                     <View key={c.numero + c.cargo} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: k ? 7 : 0 }}>
                       <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.cor, marginRight: 3 }} />
