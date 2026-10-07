@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { MapPin, PollingPlacePin } from '@/lib/domain/map-pin';
+import { referenciaDoLider } from '@/lib/domain/map-filters';
+import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import {
   clusterPins,
   estimatedVotes,
@@ -676,11 +678,19 @@ function PartesNoBalao({ place, partes }: { place: PollingPlacePin; partes: NonN
 }
 
 /** Quem cadastrou a estimativa da escola: os maiores Lideres, com quantas pessoas cada um. */
+/**
+ * As referencias dos Lideres do time (`MapOverviewPayload.referencias`), para
+ * o balao da escola mostrar a tag de cada um. Ausente no mapa geral.
+ */
+const ReferenciasDoMapa = createContext<Readonly<Record<string, string>> | undefined>(undefined);
+
 function LideresNoBalao({ place }: { place: PollingPlacePin }) {
+  const referencias = useContext(ReferenciasDoMapa);
   const lideres = [...(place.leaders ?? [])].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'pt-BR'));
   if (lideres.length === 0) return null;
   const maior = lideres[0].total;
-  const mostrar = lideres.slice(0, 5);
+  // Todos, sem "e mais": o balao rola por dentro quando a lista e longa.
+  const mostrar = lideres;
   return (
     <div className="mt-2 border-t border-brand-100 pt-1.5">
       <p className="mb-1 text-[0.625rem] font-semibold tracking-wide text-brand-800 uppercase">
@@ -690,7 +700,10 @@ function LideresNoBalao({ place }: { place: PollingPlacePin }) {
         {mostrar.map((l) => (
           <li key={l.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
             <span className="min-w-0">
-              <span className="block wrap-break-word text-xs font-medium text-ink-900">{l.name}</span>
+              <span className="flex flex-wrap items-center gap-1">
+                <span className="wrap-break-word text-xs font-medium text-ink-900">{l.name}</span>
+                <SeloDaReferencia referencia={referencias ? referenciaDoLider(referencias, l) : undefined} compacto />
+              </span>
               <span className="mt-0.5 block h-1 overflow-hidden rounded-pill bg-white">
                 <span className="block h-full rounded-pill bg-navy-800" style={{ width: `${Math.max(6, (l.total / maior) * 100)}%` }} />
               </span>
@@ -865,7 +878,10 @@ export default function MapCanvas({
   fallbackCenter,
   votacao,
   valorDoLocal,
+  referencias,
 }: {
+  /** As referencias dos Lideres do time: a tag de cada um no balao da escola. */
+  referencias?: Readonly<Record<string, string>>;
   pins: MapPin[];
   places?: PollingPlacePin[];
   onOpenPlace?: (place: PollingPlacePin) => void;
@@ -920,61 +936,63 @@ export default function MapCanvas({
   );
 
   return (
-    <MapContainer
-      center={
-        fallbackCenter ? [fallbackCenter.latitude, fallbackCenter.longitude] : [-14.235, -51.9253]
-      }
-      zoom={fallbackCenter ? 8 : 4}
-      // A rodinha do mouse da zoom direto, sem Ctrl: em cima do mapa, rolar
-      // aproxima e afasta. Passos menores deixam o zoom suave, sem pulos.
-      scrollWheelZoom
-      wheelPxPerZoomLevel={90}
-      wheelDebounceTime={30}
-      zoomSnap={0.25}
-      zoomDelta={0.5}
-      preferCanvas
-      // Sem a faixa de credito no canto do mapa.
-      attributionControl={false}
-      // O + / - sai do canto superior esquerdo: la ficam os controles do
-      // proprio mapa (tela cheia, filtros, ranking). Embaixo a direita ele
-      // ainda fica na altura do polegar no celular.
-      zoomControl={false}
-      // `isolate`: as camadas do Leaflet (z 400 a 1000) nunca passam por
-      // cima de uma janela aberta na pagina.
-      className="isolate h-full w-full"
-    >
-      <ZoomControl position="bottomright" />
-      <TileLayer url={TILE_URL} maxZoom={19} />
+    <ReferenciasDoMapa.Provider value={referencias}>
+      <MapContainer
+        center={
+          fallbackCenter ? [fallbackCenter.latitude, fallbackCenter.longitude] : [-14.235, -51.9253]
+        }
+        zoom={fallbackCenter ? 8 : 4}
+        // A rodinha do mouse da zoom direto, sem Ctrl: em cima do mapa, rolar
+        // aproxima e afasta. Passos menores deixam o zoom suave, sem pulos.
+        scrollWheelZoom
+        wheelPxPerZoomLevel={90}
+        wheelDebounceTime={30}
+        zoomSnap={0.25}
+        zoomDelta={0.5}
+        preferCanvas
+        // Sem a faixa de credito no canto do mapa.
+        attributionControl={false}
+        // O + / - sai do canto superior esquerdo: la ficam os controles do
+        // proprio mapa (tela cheia, filtros, ranking). Embaixo a direita ele
+        // ainda fica na altura do polegar no celular.
+        zoomControl={false}
+        // `isolate`: as camadas do Leaflet (z 400 a 1000) nunca passam por
+        // cima de uma janela aberta na pagina.
+        className="isolate h-full w-full"
+      >
+        <ZoomControl position="bottomright" />
+        <TileLayer url={TILE_URL} maxZoom={19} />
 
-      <FitBounds pins={focus} />
-      <ZoomWatcher onChange={setZoom} />
-      <FlyToPlace focus={focusPlace} markers={markers} />
-      <Resizer trigger={resizeKey} />
+        <FitBounds pins={focus} />
+        <ZoomWatcher onChange={setZoom} />
+        <FlyToPlace focus={focusPlace} markers={markers} />
+        <Resizer trigger={resizeKey} />
 
-      {clusters.map((cluster) => (
-        <ClusterMarker
-          key={cluster.id}
-          cluster={cluster}
-          onOpenMember={onOpenMember ?? (() => {})}
-          renderLider={renderLiderActions}
-        />
-      ))}
+        {clusters.map((cluster) => (
+          <ClusterMarker
+            key={cluster.id}
+            cluster={cluster}
+            onOpenMember={onOpenMember ?? (() => {})}
+            renderLider={renderLiderActions}
+          />
+        ))}
 
-      {places.map((place) => (
-        <PlaceMarker
-          key={place.locationId}
-          place={place}
-          medida={medidas.get(place.locationId) ?? { valor: estimatedVotes(place), forca: 0, posicao: Number.POSITIVE_INFINITY }}
-          onOpen={onOpenPlace ?? (() => {})}
-          onDownload={onDownloadPlace}
-          votacao={votacao}
-          onReady={(marker) => {
-            if (marker) markers.current.set(place.locationId, marker);
-            else markers.current.delete(place.locationId);
-          }}
-        />
-      ))}
-    </MapContainer>
+        {places.map((place) => (
+          <PlaceMarker
+            key={place.locationId}
+            place={place}
+            medida={medidas.get(place.locationId) ?? { valor: estimatedVotes(place), forca: 0, posicao: Number.POSITIVE_INFINITY }}
+            onOpen={onOpenPlace ?? (() => {})}
+            onDownload={onDownloadPlace}
+            votacao={votacao}
+            onReady={(marker) => {
+              if (marker) markers.current.set(place.locationId, marker);
+              else markers.current.delete(place.locationId);
+            }}
+          />
+        ))}
+      </MapContainer>
+    </ReferenciasDoMapa.Provider>
   );
 }
 

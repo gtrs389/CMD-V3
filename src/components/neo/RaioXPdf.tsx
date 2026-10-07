@@ -206,6 +206,11 @@ function Lideres({ escola, lideres }: { escola: EscolaNoComparativo; lideres: Li
             </View>
             <View style={{ flex: 1, paddingRight: 10 }}>
               <Text hyphenationCallback={semHifen} style={{ fontSize: 8.8, fontFamily: 'Helvetica-Bold', color: C.ink }}>{s(l.nome)}</Text>
+              {l.referencia !== undefined ? (
+                <Text style={{ fontSize: 6.8, color: l.referencia ? '#9a6a0b' : C.faint, marginTop: 1 }}>
+                  {s(l.referencia ? `Referência: ${l.referencia}` : 'Sem referência')}
+                </Text>
+              ) : null}
               <View style={{ flexDirection: 'row', marginTop: 3 }}>
                 <Barra valor={l.cadastrados} maior={maior} cor={NAVY_BARRA} altura={4} />
               </View>

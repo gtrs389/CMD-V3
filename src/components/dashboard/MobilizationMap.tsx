@@ -65,6 +65,7 @@ import { useRepositoryQuery } from '@/hooks/use-repository-query';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { Button } from '@/components/ui/Button';
+import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { useSession } from '@/components/layout/SessionProvider';
 import { Spinner } from '@/components/ui/Spinner';
 import { Contador } from '@/components/ui/Contador';
@@ -411,8 +412,8 @@ export function MobilizationMap({
   const escolaDoRaioX = raioX ? (confronto?.escolas.find((e) => e.chave === raioX) ?? null) : null;
   /** Quem cadastrou a estimativa da escola do raio-x, Lider a Lider (no recorte de Lider e secao). */
   const lideresDoRaioX = useMemo(
-    () => (escolaDoRaioX ? lideresNoRaioX(escolaDoRaioX, campanhaDoRecorte) : null),
-    [escolaDoRaioX, campanhaDoRecorte],
+    () => (escolaDoRaioX ? lideresNoRaioX(escolaDoRaioX, campanhaDoRecorte, data?.referencias) : null),
+    [escolaDoRaioX, campanhaDoRecorte, data?.referencias],
   );
 
   /**
@@ -627,8 +628,8 @@ export function MobilizationMap({
     );
   }
   const lideresDaEscola = useCallback(
-    (e: EscolaNoComparativo) => lideresNoRaioX(e, campanhaDoRecorte).lideres,
-    [campanhaDoRecorte],
+    (e: EscolaNoComparativo) => lideresNoRaioX(e, campanhaDoRecorte, data?.referencias).lideres,
+    [campanhaDoRecorte, data?.referencias],
   );
   const recorteEmTexto =
     [
@@ -787,7 +788,10 @@ export function MobilizationMap({
         </span>
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-semibold tracking-wide text-gold-700 uppercase">Líder</p>
-          <p className="wrap-break-word text-sm font-semibold text-ink-900">{liderEscolhido.name}</p>
+          <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink-900">
+            <span className="wrap-break-word">{liderEscolhido.name}</span>
+            <SeloDaReferencia referencia={data?.referencias ? liderEscolhido.reference : undefined} compacto />
+          </p>
         </div>
       </div>
       <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-500">
@@ -1223,6 +1227,7 @@ export function MobilizationMap({
                 onDownloadPlace={candidato ? undefined : (place) => baixarPdfDaEscola(place, clientId, recorte.leader)}
                 votacao={modoVotacao}
                 valorDoLocal={valorDoLocal}
+                referencias={data?.referencias}
                 onOpenMember={abrirFicha}
                 renderLiderActions={renderLiderActions}
                 focusPlace={focusPlace}
