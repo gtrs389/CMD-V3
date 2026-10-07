@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
 import { Contador } from '@/components/ui/Contador';
 import { LideresDaEscola } from './LideresDaEscola';
+import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 
 /**
  * Expectativa x votos reais, ESCOLA POR ESCOLA.
@@ -361,6 +362,7 @@ export function EscolaPorEscola({
                             {initials(l.nome)}
                           </span>
                           <span className="font-semibold wrap-break-word text-ink-900">{l.nome}</span>
+                          <SeloDaReferencia referencia={l.referencia} compacto />
                           <span className="rounded-pill bg-navy-900 px-1.5 text-[0.625rem] font-bold text-white tabular-nums">{l.cadastrados}</span>
                         </li>
                       ))}

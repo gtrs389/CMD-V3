@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, Check, FileDown, Minus, ScanSearch, Users, X } from 'lucide-react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
+import { ArrowDownRight, ArrowUpRight, Check, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -13,11 +14,12 @@ import {
 } from '@/lib/domain/confronto';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
-import { Modal } from '@/components/ui/Modal';
 import { Contador } from '@/components/ui/Contador';
 import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
 import { Spinner } from '@/components/ui/Spinner';
+import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { baixarPdfDoRaioX } from '../pdf-do-mapa';
+import { BotaoVoltar } from './EscolhaDoMunicipio';
 
 /**
  * Raio-X da escola: o que o time esperava ali (estimativa da campanha: uma
@@ -27,8 +29,12 @@ import { baixarPdfDoRaioX } from '../pdf-do-mapa';
  *
  * Duas cores fixas, com nome escrito do lado (nunca so a cor): azul-marinho
  * e a estimativa, ouro e a apuracao. Com varios candidatos, cada um tem a
- * propria cor (a mesma do placar e do PDF), sempre com o nome ao lado. Tocar
- * um Lider acende, em cada secao, a parte da estimativa que e dele.
+ * propria cor (a mesma do placar e do PDF), sempre com o nome ao lado.
+ *
+ * Abre na TELA INTEIRA, com o voltar vermelho. Quantas pessoas cada Lider
+ * cadastrou em cada secao aparece sozinho, sem clique: na grade "Lider x
+ * Secao" e em cada secao da lista. Todo Lider leva a tag da referencia.
+ * Tocar um Lider ainda acende a parte dele, na grade e nas barras.
  */
 
 const LEITURA: Record<LeituraDoConfronto, { texto: string; classe: string; icone: React.ReactNode } | null> = {
@@ -305,7 +311,7 @@ function Lideres({
       {lideres.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-ink-500">Nenhum líder registrado nos cadastros desta escola.</p>
       ) : (
-        <ol className="max-h-[26rem] divide-y divide-line overflow-y-auto">
+        <ol className="max-h-[32rem] divide-y divide-line overflow-y-auto">
           {lideres.map((l, i) => {
             const ativo = l.id === foco;
             const parte = escola.estimativa > 0 ? Math.round((l.cadastrados / escola.estimativa) * 100) : 0;
@@ -331,6 +337,11 @@ function Lideres({
                   </span>
                   <span className="min-w-0">
                     <span className="block wrap-break-word text-sm font-semibold text-ink-900">{l.nome}</span>
+                    {l.referencia !== undefined ? (
+                      <span className="mt-0.5 block">
+                        <SeloDaReferencia referencia={l.referencia} compacto />
+                      </span>
+                    ) : null}
                     <span className="mt-1 block h-1.5 overflow-hidden rounded-pill bg-ink-100">
                       <span
                         className={cn('block h-full rounded-pill transition-[width] duration-700 ease-out', ativo ? 'bg-gold-500' : 'bg-navy-800')}
@@ -375,7 +386,7 @@ function Lideres({
             {candidatos.length === 1 && votosNasSecoesDele[0] === 1 ? 'voto' : 'votos'}.
           </p>
         ) : lideres.length > 0 ? (
-          <p>Toque em um líder para ver, seção por seção, onde está a gente dele.</p>
+          <p>Toque em um líder para acender a gente dele na grade e nas seções.</p>
         ) : null}
       </footer>
     </section>
@@ -387,10 +398,13 @@ function Secoes({
   escola,
   candidatos,
   escolhido,
+  lideres,
 }: {
   escola: EscolaNoComparativo;
   candidatos: CandidatoNoRaioX[];
   escolhido: LiderNoRaioX | null;
+  /** Os Lideres da escola: cada secao mostra, sozinha, quantos cada um cadastrou ali. */
+  lideres: LiderNoRaioX[];
 }) {
   const varios = candidatos.length > 1;
   const maior = Math.max(1, ...escola.secoes.map((s) => Math.max(s.estimativa, ...s.apurado)));
@@ -428,7 +442,7 @@ function Secoes({
         </p>
       </header>
 
-      <ol className="max-h-[26rem] divide-y divide-line overflow-y-auto">
+      <ol className="max-h-[32rem] divide-y divide-line overflow-y-auto">
         {escola.secoes.map((s, i) => {
           const comSecao = Boolean(s.zona || s.secao);
           const dele = escolhido ? (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) : 0;
@@ -489,6 +503,8 @@ function Secoes({
                     </span>
                   </div>
                 ))}
+                {/* Quem cadastrou a gente desta secao, sem precisar tocar em nada. */}
+                <LideresDaSecao lideres={lideres} chave={chaveDaSecao(s.zona, s.secao)} estimativa={s.estimativa} foco={escolhido?.id ?? null} />
               </div>
 
               {varios ? null : (
@@ -517,6 +533,226 @@ function Secoes({
           );
         })}
       </ol>
+    </section>
+  );
+}
+
+/** Os Lideres de uma secao, do que mais cadastrou ali para o que menos, cada um com a referencia. */
+function LideresDaSecao({
+  lideres,
+  chave,
+  estimativa,
+  foco,
+}: {
+  lideres: LiderNoRaioX[];
+  chave: string;
+  estimativa: number;
+  foco: string | null;
+}) {
+  const daSecao = lideres
+    .map((l) => ({ l, n: l.porSecao[chave] ?? 0 }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.l.nome.localeCompare(b.l.nome, 'pt-BR'));
+  const semLider = Math.max(0, estimativa - daSecao.reduce((t, x) => t + x.n, 0));
+  if (daSecao.length === 0 && semLider === 0) return null;
+  return (
+    <ul className="flex flex-wrap gap-1 pt-1" aria-label="Quem cadastrou nesta seção">
+      {daSecao.map(({ l, n }) => (
+        <li
+          key={l.id}
+          className={cn(
+            'inline-flex max-w-full items-center gap-1 rounded-pill border py-0.5 pr-1 pl-0.5 text-[0.6875rem] transition-colors',
+            foco === l.id ? 'border-gold-500 bg-gold-50' : 'border-line bg-surface',
+          )}
+          title={`${l.nome}: ${n} ${n === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} nesta seção`}
+        >
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-navy-900 text-[0.5625rem] font-bold text-gold-400">
+            {initials(l.nome)}
+          </span>
+          <span className="min-w-0 font-semibold wrap-break-word text-ink-900">{l.nome}</span>
+          <SeloDaReferencia referencia={l.referencia} compacto />
+          <span className="rounded-pill bg-navy-900 px-1.5 text-[0.625rem] font-bold text-white tabular-nums">{n}</span>
+        </li>
+      ))}
+      {semLider > 0 ? (
+        <li className="inline-flex items-center gap-1 rounded-pill border border-dashed border-ink-200 px-2 py-0.5 text-[0.6875rem] text-ink-500">
+          sem líder <b className="tabular-nums">{semLider}</b>
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+/**
+ * A grade "Lider x Secao": uma linha por Lider (com a referencia), uma
+ * coluna por secao, e em cada celula quantas pessoas ele cadastrou ali —
+ * quanto mais gente, mais escura. Embaixo, a estimativa e os votos de cada
+ * candidato na mesma secao: bate o olho e ve de quem era a forca de cada
+ * secao e quanto dela virou voto.
+ */
+function GradeLiderPorSecao({
+  escola,
+  lideres,
+  diretos,
+  candidatos,
+  foco,
+  onFoco,
+}: {
+  escola: EscolaNoComparativo;
+  lideres: LiderNoRaioX[];
+  diretos: number;
+  candidatos: CandidatoNoRaioX[];
+  foco: string | null;
+  onFoco: (id: string | null) => void;
+}) {
+  const secoes = escola.secoes.filter((s) => s.zona || s.secao);
+  const semSecao = escola.secoes.find((s) => !s.zona && !s.secao) ?? null;
+  const colunas = [...secoes, ...(semSecao ? [semSecao] : [])];
+  if (colunas.length === 0 || lideres.length === 0) return null;
+
+  const valor = (l: LiderNoRaioX, s: (typeof colunas)[number]) => l.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0;
+  const maiorCelula = Math.max(1, ...lideres.flatMap((l) => colunas.map((s) => valor(l, s))));
+  const semLiderNa = (s: (typeof colunas)[number]) => Math.max(0, s.estimativa - lideres.reduce((t, l) => t + valor(l, s), 0));
+  const zonas = [...new Set(secoes.map((s) => s.zona).filter(Boolean))];
+
+  /** A celula: a cor escurece com a quantidade (navy), e o ouro marca o Lider em foco. */
+  const celula = (n: number, ativo: boolean): CSSProperties => {
+    if (n <= 0) return {};
+    const forca = 0.12 + 0.78 * (n / maiorCelula);
+    return ativo
+      ? { background: `rgba(224, 164, 38, ${forca})`, color: forca > 0.55 ? '#0f1e35' : '#7a5410' }
+      : { background: `rgba(15, 30, 53, ${forca})`, color: forca > 0.5 ? '#ffffff' : '#0f1e35' };
+  };
+
+  return (
+    <section aria-label="Pessoas de cada líder em cada seção" className="overflow-hidden rounded-card border border-line bg-surface">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+          <Grid3x3 aria-hidden="true" className="size-4 text-accent-600" />
+          Quem cadastrou em cada seção
+        </h3>
+        <p className="text-xs text-ink-500">
+          {formatNumber(lideres.length)} {lideres.length === 1 ? 'líder' : 'líderes'} × {formatNumber(secoes.length)}{' '}
+          {secoes.length === 1 ? 'seção' : 'seções'}
+          {zonas.length ? ` · Zona ${zonas.join(', ')}` : ''} · quanto mais escuro, mais gente
+        </p>
+      </header>
+      <div className="scrollbar-slim overflow-x-auto">
+        <table className="w-full border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr>
+              <th scope="col" className="sticky left-0 z-10 min-w-[15rem] border-b border-line bg-ink-50 px-4 py-2 text-left text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+                Líder
+              </th>
+              {colunas.map((s) => (
+                <th key={chaveDaSecao(s.zona, s.secao)} scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-2 py-2 text-center">
+                  {s.zona || s.secao ? (
+                    <>
+                      <span className="block text-xs font-bold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</span>
+                      <span className="block text-[0.625rem] text-ink-500">Zona {s.zona ?? '?'}</span>
+                    </>
+                  ) : (
+                    <span className="block text-[0.625rem] leading-tight text-ink-500">sem seção</span>
+                  )}
+                </th>
+              ))}
+              <th scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-3 py-2 text-right text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+                Total
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {lideres.map((l) => {
+              const ativo = foco === l.id;
+              return (
+                <tr key={l.id} className={cn('group', foco && !ativo && 'opacity-45')}>
+                  <th scope="row" className={cn('sticky left-0 z-10 border-b border-line px-4 py-2 text-left font-normal', ativo ? 'bg-gold-50' : 'bg-surface group-hover:bg-ink-50')}>
+                    <button type="button" onClick={() => onFoco(ativo ? null : l.id)} aria-pressed={ativo} className="flex w-full min-w-0 items-center gap-2 text-left">
+                      <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-bold', ativo ? 'bg-gold-500 text-navy-900' : 'bg-navy-900 text-gold-400')}>
+                        {initials(l.nome)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold wrap-break-word text-ink-900">{l.nome}</span>
+                        <SeloDaReferencia referencia={l.referencia} compacto />
+                      </span>
+                    </button>
+                  </th>
+                  {colunas.map((s) => {
+                    const n = valor(l, s);
+                    return (
+                      <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line p-1 text-center">
+                        <span
+                          className={cn(
+                            'flex h-8 items-center justify-center rounded-md text-xs font-bold tabular-nums transition-colors',
+                            n <= 0 && 'text-ink-200',
+                          )}
+                          style={celula(n, ativo)}
+                          title={`${l.nome} · Seção ${s.secao ?? '?'}: ${n} ${n === 1 ? 'pessoa' : 'pessoas'}`}
+                        >
+                          {n > 0 ? formatNumber(n) : '·'}
+                        </span>
+                      </td>
+                    );
+                  })}
+                  <td className="border-b border-line px-3 py-2 text-right text-sm font-bold text-navy-900 tabular-nums">{formatNumber(l.cadastrados)}</td>
+                </tr>
+              );
+            })}
+            {diretos > 0 ? (
+              <tr>
+                <th scope="row" className="sticky left-0 z-10 border-b border-line bg-surface px-4 py-2 text-left text-xs font-normal text-ink-500">
+                  Sem líder registrado
+                </th>
+                {colunas.map((s) => (
+                  <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line p-1 text-center text-xs text-ink-500 tabular-nums">
+                    {semLiderNa(s) || '·'}
+                  </td>
+                ))}
+                <td className="border-b border-line px-3 py-2 text-right text-sm font-semibold text-ink-500 tabular-nums">{formatNumber(diretos)}</td>
+              </tr>
+            ) : null}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row" className="sticky left-0 z-10 border-b border-line bg-ink-50 px-4 py-2 text-left text-xs font-semibold text-navy-900">
+                Estimativa do time
+              </th>
+              {colunas.map((s) => (
+                <td key={chaveDaSecao(s.zona, s.secao)} className="border-b border-line bg-ink-50 px-1 py-2 text-center text-sm font-bold text-navy-900 tabular-nums">
+                  {formatNumber(s.estimativa)}
+                </td>
+              ))}
+              <td className="border-b border-line bg-ink-50 px-3 py-2 text-right text-sm font-bold text-navy-900 tabular-nums">{formatNumber(escola.estimativa)}</td>
+            </tr>
+            {candidatos.map((c, k) => (
+              <tr key={c.rotulo}>
+                <th scope="row" className="sticky left-0 z-10 border-b border-line bg-surface px-4 py-2 text-left text-xs font-semibold text-ink-900">
+                  <span className="flex items-center gap-1.5">
+                    <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: candidatos.length > 1 ? c.cor : '#e0a426' }} />
+                    <span className="wrap-break-word">Votos de {c.nome}</span>
+                  </span>
+                </th>
+                {colunas.map((s) => {
+                  const votos = s.apurado[k] ?? 0;
+                  const abaixo = (s.zona || s.secao) && s.estimativa > 0 && votos < s.estimativa;
+                  return (
+                    <td
+                      key={chaveDaSecao(s.zona, s.secao)}
+                      className={cn('border-b border-line px-1 py-2 text-center text-sm font-bold tabular-nums', abaixo ? 'text-danger-700' : 'text-ink-900')}
+                    >
+                      {s.zona || s.secao ? formatNumber(votos) : '—'}
+                    </td>
+                  );
+                })}
+                <td className="border-b border-line px-3 py-2 text-right text-sm font-bold text-ink-900 tabular-nums">{formatNumber(escola.apurado[k] ?? 0)}</td>
+              </tr>
+            ))}
+          </tfoot>
+        </table>
+      </div>
+      <p className="border-t border-line px-4 py-2 text-[0.6875rem] text-ink-500">
+        Em vermelho, a seção onde o candidato teve menos votos do que o time estimava. Toque num líder para acender a gente dele.
+      </p>
     </section>
   );
 }
@@ -551,68 +787,108 @@ export function RaioXDaEscola({
   const um = candidatos[0];
   const baixar = () => baixarPdfDoRaioX({ escola, candidatos, lideres });
 
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      size="xl"
-      title={`Raio-X: ${escola.titulo}`}
-      header={
-        <div className="min-w-0">
-          <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-navy-900 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400">
-            <ScanSearch aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="wrap-break-word">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
-          </p>
-          <h2 className="mt-2 text-lg leading-tight font-bold text-ink-900 sm:text-xl">{escola.titulo}</h2>
-          {onde ? <p className="mt-0.5 text-sm text-ink-500">{onde}</p> : null}
-          <div className="mt-3">
-            <BotaoPdfDaEscola onBaixar={baixar} />
+  // Tela inteira: a pagina de tras nao rola, e o Esc volta para o mapa.
+  useEffect(() => {
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', aoTeclar, true);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener('keydown', aoTeclar, true);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={`Raio-X: ${escola.titulo}`} className="fixed inset-0 z-50 flex animate-fade-in flex-col bg-canvas">
+      {/* CABECALHO: voltar, a escola e o PDF. */}
+      <header className="relative shrink-0 overflow-hidden bg-gradient-to-br from-navy-900 via-navy-800 to-[#1e3a8a] px-4 py-4 text-white sm:px-6">
+        <span aria-hidden="true" className="cmd-grade-pontos pointer-events-none absolute inset-0" />
+        <span aria-hidden="true" className="cmd-orbe pointer-events-none absolute -top-24 -right-10 size-72 rounded-full bg-gold-500/20 blur-3xl" />
+        <div className="relative mx-auto flex max-w-[1600px] flex-wrap items-start gap-4">
+          <BotaoVoltar onClick={onClose} rotulo="Mapa" />
+          <div className="min-w-0 flex-1">
+            <p className="inline-flex max-w-full items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-1 text-[0.6875rem] font-semibold text-gold-400 ring-1 ring-white/15">
+              <ScanSearch aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="wrap-break-word">Raio-X · {varios ? candidatos.map((c) => c.nome).join(' × ') : um?.rotulo}</span>
+            </p>
+            <h2 className="mt-2 text-xl leading-tight font-bold wrap-break-word sm:text-2xl">{escola.titulo}</h2>
+            {onde ? (
+              <p className="mt-0.5 flex items-start gap-1.5 text-sm text-white/70">
+                <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                <span className="wrap-break-word">{onde}</span>
+              </p>
+            ) : null}
+            <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/70">
+              <span>
+                <b className="text-white tabular-nums">{formatNumber(lideres.length)}</b> {lideres.length === 1 ? 'líder' : 'líderes'}
+              </span>
+              <span>
+                <b className="text-white tabular-nums">{formatNumber(escola.secoes.filter((x) => x.zona || x.secao).length)}</b> seções
+              </span>
+              <span>
+                estimativa de <b className="text-white tabular-nums">{formatNumber(escola.estimativa)}</b>
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 self-center">
+            <BotaoPdfDaEscola onBaixar={baixar} claro />
           </div>
         </div>
-      }
-    >
-      <div className="space-y-4">
-        {varios ? (
-          <PlacarComparado escola={escola} candidatos={candidatos} />
-        ) : (
-          <Placar estimativa={escola.estimativa} apurado={escola.apurado[0] ?? 0} candidato={um?.nome ?? ''} />
-        )}
+      </header>
 
-        <p className="rounded-control border-l-4 border-gold-500 bg-gold-50 px-3 py-2 text-sm text-ink-900">
-          {varios
-            ? fraseComparada(escola, candidatos)
-            : fraseDaEscola({ estimativa: escola.estimativa, apurado: escola.apurado[0] ?? 0 }, um?.nome ?? '')}
-        </p>
+      <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[1600px] space-y-4 px-4 py-5 sm:px-6">
+          {varios ? (
+            <PlacarComparado escola={escola} candidatos={candidatos} />
+          ) : (
+            <Placar estimativa={escola.estimativa} apurado={escola.apurado[0] ?? 0} candidato={um?.nome ?? ''} />
+          )}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-          <Lideres escola={escola} lideres={lideres} diretos={diretos} foco={foco} onFoco={setFoco} candidatos={candidatos} />
-          <Secoes escola={escola} candidatos={candidatos} escolhido={escolhido} />
-        </div>
+          <p className="rounded-control border-l-4 border-gold-500 bg-gold-50 px-3 py-2 text-sm text-ink-900">
+            {varios
+              ? fraseComparada(escola, candidatos)
+              : fraseDaEscola({ estimativa: escola.estimativa, apurado: escola.apurado[0] ?? 0 }, um?.nome ?? '')}
+          </p>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
-          {escolhido ? (
-            <button
-              type="button"
-              onClick={() => setFoco(null)}
-              className="mr-auto inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line px-3 text-xs font-medium text-ink-700 hover:bg-ink-50"
-            >
-              <X aria-hidden="true" className="size-3.5" /> Ver todos os líderes
-            </button>
-          ) : null}
-          {onVerPessoas ? (
-            <button
-              type="button"
-              onClick={onVerPessoas}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-brand-200 px-3 text-xs font-semibold text-brand-800 hover:bg-brand-50"
-            >
-              <Users aria-hidden="true" className="size-3.5" /> Ver quem vota aqui
-            </button>
-          ) : null}
-          {pdf}
-          <BotaoPdfDaEscola onBaixar={baixar} compacto />
+          <GradeLiderPorSecao escola={escola} lideres={lideres} diretos={diretos} candidatos={candidatos} foco={foco} onFoco={setFoco} />
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+            <Lideres escola={escola} lideres={lideres} diretos={diretos} foco={foco} onFoco={setFoco} candidatos={candidatos} />
+            <Secoes escola={escola} candidatos={candidatos} escolhido={escolhido} lideres={lideres} />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
+            {escolhido ? (
+              <button
+                type="button"
+                onClick={() => setFoco(null)}
+                className="mr-auto inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line px-3 text-xs font-medium text-ink-700 hover:bg-ink-50"
+              >
+                <X aria-hidden="true" className="size-3.5" /> Ver todos os líderes
+              </button>
+            ) : null}
+            {onVerPessoas ? (
+              <button
+                type="button"
+                onClick={onVerPessoas}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-brand-200 px-3 text-xs font-semibold text-brand-800 hover:bg-brand-50"
+              >
+                <Users aria-hidden="true" className="size-3.5" /> Ver quem vota aqui
+              </button>
+            ) : null}
+            {pdf}
+            <BotaoPdfDaEscola onBaixar={baixar} compacto />
+          </div>
         </div>
       </div>
-    </Modal>
+    </div>,
+    document.body,
   );
 }
 
@@ -620,7 +896,7 @@ export function RaioXDaEscola({
  * "Baixar PDF desta escola": o mesmo Raio-X que esta aberto, em PDF. Mostra
  * que esta gerando (fotos e paginas levam um instante) e confirma ao fim.
  */
-function BotaoPdfDaEscola({ onBaixar, compacto = false }: { onBaixar: () => Promise<void>; compacto?: boolean }) {
+function BotaoPdfDaEscola({ onBaixar, compacto = false, claro = false }: { onBaixar: () => Promise<void>; compacto?: boolean; claro?: boolean }) {
   const [estado, setEstado] = useState<'parado' | 'gerando' | 'pronto' | 'erro'>('parado');
   async function clicar() {
     if (estado === 'gerando') return;
@@ -647,7 +923,9 @@ function BotaoPdfDaEscola({ onBaixar, compacto = false }: { onBaixar: () => Prom
           ? 'bg-success-600 text-white'
           : estado === 'erro'
             ? 'bg-danger-600 text-white'
-            : 'bg-navy-900 text-gold-400 hover:bg-navy-800',
+            : claro
+              ? 'bg-gradient-to-r from-gold-400 to-gold-500 text-navy-900 hover:shadow-[0_14px_28px_-10px_rgba(242,193,78,0.9)]'
+              : 'bg-navy-900 text-gold-400 hover:bg-navy-800',
       )}
     >
       {estado === 'gerando' ? (

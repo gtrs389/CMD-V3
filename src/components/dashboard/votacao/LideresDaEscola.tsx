@@ -6,6 +6,7 @@ import type { EscolaNoComparativo, LiderNoRaioX } from '@/lib/domain/confronto';
 import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/utils/cn';
 import { formatNumber, initials } from '@/lib/utils/text';
+import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 
 /**
  * Todos os Lideres que cadastraram gente numa escola, no lugar do "+32":
@@ -157,6 +158,7 @@ export function LideresDaEscola({
                         {initials(l.nome)}
                       </span>
                       <span className="min-w-0 text-sm font-semibold wrap-break-word text-ink-900">{l.nome}</span>
+                      <SeloDaReferencia referencia={l.referencia} compacto />
                       {emFoco ? (
                         <span className="shrink-0 rounded-pill bg-gold-400 px-1.5 py-0.5 text-[0.625rem] font-bold text-navy-900">no filtro</span>
                       ) : null}

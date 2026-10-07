@@ -1,5 +1,6 @@
 import type { PollingPlacePin } from './map-pin';
 import { sectionKey } from './map-pin';
+import { referenciaDoLider } from './map-filters';
 
 /**
  * Estimativa x apuracao: o que o time esperava em cada escola, e o que o
@@ -355,6 +356,11 @@ export interface LiderNoRaioX {
   cadastrados: number;
   /** Secao (`chaveDaSecao`) -> pessoas dele ali. */
   porSecao: Record<string, number>;
+  /**
+   * A referencia do Lider (a coluna da planilha). Nulo: ele nao tem. Ausente:
+   * nao se sabe (o mapa geral nao traz referencias) — e a tag nao aparece.
+   */
+  referencia?: string | null;
 }
 
 /** A mesma chave de secao do confronto: zona e secao sem zero a esquerda. */
@@ -369,13 +375,21 @@ export const chaveDaSecao = (zona: string | null, secao: string | null) => secti
 export function lideresNoRaioX(
   escola: Pick<EscolaNoConfronto, 'pinosDaCampanha' | 'estimativa'>,
   campanha: readonly PollingPlacePin[],
+  /** As referencias dos Lideres do time (`MapOverviewPayload.referencias`). */
+  referencias?: Readonly<Record<string, string>>,
 ): { lideres: LiderNoRaioX[]; diretos: number } {
   const pinos = new Set(escola.pinosDaCampanha);
   const porLider = new Map<string, LiderNoRaioX>();
   for (const pin of campanha) {
     if (!pinos.has(pin.locationId)) continue;
     for (const l of pin.leaders ?? []) {
-      const atual = porLider.get(l.id) ?? { id: l.id, nome: l.name, cadastrados: 0, porSecao: {} };
+      const atual = porLider.get(l.id) ?? {
+        id: l.id,
+        nome: l.name,
+        cadastrados: 0,
+        porSecao: {},
+        ...(referencias ? { referencia: referenciaDoLider(referencias, l) } : {}),
+      };
       atual.cadastrados += l.total;
       for (const s of l.sections) {
         const k = chaveDaSecao(s.zone, s.section);
