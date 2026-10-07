@@ -191,7 +191,13 @@ export function lerAbaDoSheets(titulo: string, linhas: string[][]): AbaLida {
 
     const achados = { ...indices };
     for (const campo of ORDEM) {
-      const posicao = chaves.findIndex((chave) => CABECALHOS[campo].includes(chave));
+      let posicao = chaves.findIndex((chave) => CABECALHOS[campo].includes(chave));
+      // "REFERÊNCIAS", "REFERÊNCIA DO LÍDER", "REF.": ainda e a coluna da
+      // referencia. Sem isso, o cabecalho escrito de outro jeito caia na
+      // posicao padrao e a referencia saia de outra coluna (ou vazia).
+      if (posicao === -1 && campo === 'reference') {
+        posicao = chaves.findIndex((chave) => chave.startsWith('referencia') || chave === 'ref');
+      }
       if (posicao !== -1) achados[campo] = posicao;
     }
     indices = achados;
@@ -259,8 +265,27 @@ export interface GrupoDoLider {
    * A linha do PROPRIO Lider na aba dele, quando existe. Nao vira Equipe
    * dele mesmo — vira os dados dele: corrigir o Lider na planilha corrige o
    * Lider na tela.
+   *
+   * A REFERENCIA do Lider sai dela; vazia (ou sem a linha dele na aba),
+   * vale a referencia que mais aparece nas linhas da aba — como a coluna
+   * LIDER, a REFERENCIA se repete na aba inteira. Sem a linha dele, a
+   * linha vem so com a referencia: o resto do Lider continua o do banco.
    */
   linhaDoLider?: PessoaDaAba;
+}
+
+/** A referencia que mais aparece nas pessoas (a primeira, no empate), ou vazio. */
+export function referenciaMaisComum(pessoas: readonly Pick<PessoaDaAba, 'reference'>[]): string {
+  const contagem = new Map<string, { forma: string; vezes: number; ordem: number }>();
+  pessoas.forEach((p, ordem) => {
+    const forma = (p.reference ?? '').trim();
+    const chave = chaveDoNome(forma);
+    if (!chave) return;
+    const atual = contagem.get(chave) ?? { forma, vezes: 0, ordem };
+    atual.vezes += 1;
+    contagem.set(chave, atual);
+  });
+  return [...contagem.values()].sort((a, b) => b.vezes - a.vezes || a.ordem - b.ordem)[0]?.forma ?? '';
 }
 
 export interface PlanoDaPlanilha {
@@ -313,15 +338,36 @@ export function planejarPlanilha(abas: AbaLida[], lideres: LiderDoTime[]): Plano
     const grupo = grupos.get(chaveDoGrupo) ?? { lider, abas: [], pessoas: [] };
     grupo.abas.push(aba.titulo);
 
-    const chaveDoLider = chaveDoNome(lider.name);
+    // A linha do Lider: o nome dele no sistema, o nome completo da coluna
+    // LIDER ou o nome da aba ("FELIX" na aba e na linha dele).
+    const nomesDoLider = new Set([chaveDoNome(lider.name), chaveDoNome(aba.lider), chaveDoNome(aba.titulo)].filter(Boolean));
     for (const pessoa of aba.pessoas) {
-      if (chaveDoNome(pessoa.name) === chaveDoLider) {
+      if (nomesDoLider.has(chaveDoNome(pessoa.name))) {
         grupo.linhaDoLider ??= pessoa;
         continue;
       }
       grupo.pessoas.push(pessoa);
     }
     grupos.set(chaveDoGrupo, grupo);
+  }
+
+  // A referencia do Lider: a da linha dele ou, vazia, a que mais aparece na aba.
+  for (const grupo of grupos.values()) {
+    if (grupo.linhaDoLider?.reference) continue;
+    const daAba = referenciaMaisComum(grupo.pessoas);
+    if (!daAba) continue;
+    grupo.linhaDoLider = grupo.linhaDoLider
+      ? { ...grupo.linhaDoLider, reference: daAba }
+      : {
+          name: grupo.lider.name,
+          phone: '',
+          voterId: '',
+          zone: '',
+          section: '',
+          reference: daAba,
+          photoVerified: '',
+          registeredAt: '',
+        };
   }
 
   return { grupos: [...grupos.values()], abasIgnoradas, linhasIgnoradas };

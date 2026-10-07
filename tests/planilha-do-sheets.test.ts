@@ -397,6 +397,60 @@ describe('Líder de cada aba', () => {
   });
 });
 
+describe('referência do Líder pela planilha', () => {
+  const lideres = [{ memberId: 'cp-lider', name: 'Félix Silva Targino' }];
+  const linha = (nome: string, referencia: string) => [nome, '', '', '', '', 'Felix Silva Targino', referencia, ''];
+
+  it('sem a linha do Líder na aba, vale a REFERÊNCIA que mais aparece nela', () => {
+    const plano = planejarPlanilha(
+      [lerAbaDoSheets('FELIX SILVA TARGINO', [CABECALHO, linha('Ana', 'ROBERVAL'), linha('Bia', 'Roberval'), linha('Cris', 'JHC'), linha('Duda', '')])],
+      lideres,
+    );
+    // So a referencia: o resto do Lider continua o do banco.
+    expect(plano.grupos[0].linhaDoLider).toMatchObject({ reference: 'ROBERVAL', phone: '', zone: '', voterId: '' });
+    expect(plano.grupos[0].pessoas).toHaveLength(4);
+  });
+
+  it('a linha do próprio Líder manda; vazia, vale a da aba', () => {
+    const comLinha = planejarPlanilha(
+      [lerAbaDoSheets('FELIX SILVA TARGINO', [CABECALHO, linha('Félix Silva Targino', 'PASTOR'), linha('Ana', 'ROBERVAL')])],
+      lideres,
+    );
+    expect(comLinha.grupos[0].linhaDoLider?.reference).toBe('PASTOR');
+    const linhaVazia = planejarPlanilha(
+      [lerAbaDoSheets('FELIX SILVA TARGINO', [CABECALHO, linha('Félix Silva Targino', ''), linha('Ana', 'ROBERVAL')])],
+      lideres,
+    );
+    expect(linhaVazia.grupos[0].linhaDoLider).toMatchObject({ name: 'Félix Silva Targino', reference: 'ROBERVAL' });
+  });
+
+  it('acha a linha do Líder pelo nome da aba ou da coluna LÍDER', () => {
+    const plano = planejarPlanilha(
+      [lerAbaDoSheets('FÉLIX', [CABECALHO, linha('FELIX', 'PASTOR'), linha('Ana', 'ROBERVAL')])],
+      lideres,
+    );
+    expect(plano.grupos[0].linhaDoLider?.reference).toBe('PASTOR');
+    expect(plano.grupos[0].pessoas.map((p) => p.name)).toEqual(['Ana']);
+  });
+
+  it('cabeçalho "REFERÊNCIA DO LÍDER" ainda é a coluna da referência, fora da posição padrão', () => {
+    const aba = lerAbaDoSheets('X', [
+      ['NOME', 'REFERÊNCIA DO LÍDER', 'ZONA'],
+      ['Ana Lima', 'ROBERVAL', '10'],
+    ]);
+    expect(aba.pessoas[0]).toMatchObject({ name: 'Ana Lima', reference: 'ROBERVAL', zone: '10' });
+  });
+
+  it('Líder novo (só na planilha) também leva a referência da aba', () => {
+    const plano = planejarPlanilha(
+      [lerAbaDoSheets('ADALBERTO', [CABECALHO, ['Ana', '', '', '', '', 'Adalberto Souza Lima', 'ROBERVAL', '']])],
+      lideres,
+    );
+    expect(plano.grupos[0].lider.tipo).toBe('novo');
+    expect(plano.grupos[0].linhaDoLider?.reference).toBe('ROBERVAL');
+  });
+});
+
 describe('quem do banco aparece na cópia', () => {
   it('no time oficial, nada muda', async () => {
     expect(await sheetVisibilityFilter(OFICIAL)).toEqual({});
