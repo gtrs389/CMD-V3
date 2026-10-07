@@ -44,6 +44,7 @@ import { MapRanking } from './MapRanking';
 import { MemberSheetPanel } from './MemberSheetPanel';
 import { PlaceMembersPanel } from './PlaceMembersPanel';
 import { MapaCarregando } from './MapaCarregando';
+import { BuscaDeEscolasNoMapa } from './BuscaDeEscolasNoMapa';
 import {
   baixarPdfDaEscola,
   baixarPdfDoComparativo,
@@ -719,6 +720,44 @@ export function MobilizationMap({
       />
     ) : null;
 
+  /**
+   * As escolas da busca sobre o mapa: na votacao, as do confronto (com os
+   * votos); na campanha, as do recorte da tela (com a gente do time).
+   */
+  const escolasDaBusca = useMemo(
+    () =>
+      candidato && confronto
+        ? confronto.escolas.map((e) => ({
+            chave: e.chave,
+            titulo: e.titulo,
+            endereco: e.endereco,
+            cidade: e.cidade,
+            valor: e.apurado,
+            latitude: e.latitude,
+            longitude: e.longitude,
+            noMapa: e.noMapa,
+            pino: null as PollingPlacePin | null,
+          }))
+        : selection.places.map((p) => ({
+            chave: p.locationId,
+            titulo: p.title ?? 'Local de votação',
+            endereco: p.address,
+            cidade: p.city,
+            valor: valorDoLocal(p),
+            latitude: p.latitude,
+            longitude: p.longitude,
+            noMapa: true,
+            pino: p as PollingPlacePin | null,
+          })),
+    [candidato, confronto, selection.places, valorDoLocal],
+  );
+  /** A escola escolhida na busca: o mapa voa ate ela e abre o balao; na votacao sem ponto, abre o raio-x. */
+  function escolherNaBusca(e: (typeof escolasDaBusca)[number]) {
+    if (e.pino) return focar(e.pino);
+    if (e.noMapa) setFocusPlace({ locationId: e.chave, latitude: e.latitude, longitude: e.longitude, nonce: Date.now() });
+    else setRaioX(e.chave);
+  }
+
   const painelRanking = candidato ? (
     <MapRanking
       places={selection.places}
@@ -1340,6 +1379,11 @@ export function MobilizationMap({
                 />
               ) : null}
             </MapControlStack>
+          ) : null}
+
+          {/* Buscar escola, direto sobre o mapa. */}
+          {pronto ? (
+            <BuscaDeEscolasNoMapa escolas={escolasDaBusca} rotuloDoValor={candidato ? 'votos' : 'pessoas'} onEscolher={escolherNaBusca} />
           ) : null}
 
           {/* Filtros flutuantes: so existem em tela cheia. */}

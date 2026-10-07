@@ -96,6 +96,39 @@ interface Marcacao {
 /** O ultimo time aberto na Sala: conveniencia deste navegador. */
 const CHAVE_DO_TIME = 'cmd:sala:time';
 
+/**
+ * A escolha de cada time na Sala, lembrada neste navegador: os candidatos
+ * marcados na bandeja e os que estavam no mapa (com o municipio). Voltar a
+ * Sala — ou recarregar a pagina — devolve tudo como estava, sem escolher os
+ * candidatos de novo.
+ */
+const CHAVE_DA_ESCOLHA = 'cmd:sala:escolha';
+
+interface EscolhaGuardada {
+  marcados: CandidatoMarcado[];
+  mapa: { candidatos: CandidatoDaVotacao[]; municipios: string[] } | null;
+}
+
+function lerEscolhas(): Record<string, EscolhaGuardada> {
+  try {
+    const salvo = JSON.parse(window.localStorage.getItem(CHAVE_DA_ESCOLHA) ?? '{}') as unknown;
+    return salvo && typeof salvo === 'object' ? (salvo as Record<string, EscolhaGuardada>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function guardarEscolha(time: string, escolha: EscolhaGuardada) {
+  try {
+    const todas = lerEscolhas();
+    if (escolha.marcados.length === 0 && !escolha.mapa) delete todas[time];
+    else todas[time] = escolha;
+    window.localStorage.setItem(CHAVE_DA_ESCOLHA, JSON.stringify(todas));
+  } catch {
+    // Sem armazenamento (aba anonima, cota cheia): a escolha vale ate recarregar.
+  }
+}
+
 const UF_NOME: Record<string, string> = { AL: 'Alagoas' };
 const pct = (n: number, casas = 2) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
 /** O Contador so corre inteiros: a porcentagem corre em centesimos. */
@@ -197,6 +230,32 @@ export function SalaDeApuracao() {
   const [noMapa, setNoMapa] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** O que esta no mapa agora (candidatos e municipio): e o que volta ao reabrir a Sala. */
+  const [ultimoNoMapa, setUltimoNoMapa] = useState<EscolhaGuardada['mapa']>(null);
+
+  // A escolha de cada time: guardada a cada mudanca, devolvida ao voltar.
+  const chaveDoTime = time?.id ?? (podeEscolherTime ? null : (user?.candidateId ?? 'time'));
+  const restaurado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!chaveDoTime || restaurado.current === chaveDoTime) return;
+    const escolha = lerEscolhas()[chaveDoTime];
+    const quadro = requestAnimationFrame(() => {
+      restaurado.current = chaveDoTime;
+      setParaOMapa(escolha?.marcados ?? []);
+      setUltimoNoMapa(escolha?.mapa ?? null);
+      if (escolha?.mapa?.candidatos.length) {
+        setPedido({ candidatos: escolha.mapa.candidatos, vez: Date.now(), municipios: escolha.mapa.municipios });
+        setNoMapa(escolha.mapa.candidatos.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
+      } else {
+        setNoMapa('');
+      }
+    });
+    return () => cancelAnimationFrame(quadro);
+  }, [chaveDoTime]);
+  useEffect(() => {
+    if (!chaveDoTime || restaurado.current !== chaveDoTime) return;
+    guardarEscolha(chaveDoTime, { marcados: paraOMapa, mapa: ultimoNoMapa });
+  }, [chaveDoTime, paraOMapa, ultimoNoMapa]);
   useEffect(() => {
     if (!aviso) return;
     const t = window.setTimeout(() => setAviso(null), 6000);
@@ -275,6 +334,7 @@ export function SalaDeApuracao() {
     setEscolhendoMunicipio(null);
     // A espera aparece no proprio mapa enquanto a votacao de cada um chega.
     setPedido({ candidatos: prontos, vez: Date.now(), municipios });
+    setUltimoNoMapa({ candidatos: prontos, municipios });
     setNoMapa(prontos.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
     if (faltam.length) setAviso(`Ainda sem votos por seção: ${faltam.join(', ')}. Os outros já estão no mapa.`);
     requestAnimationFrame(irParaOMapa);
@@ -296,6 +356,7 @@ export function SalaDeApuracao() {
       })),
     );
     setNoMapa(lista.map((c) => chaveDoMarcado(c.cargoCodigo, c.numero)).join('|'));
+    setUltimoNoMapa((atual) => (lista.length ? { candidatos: lista, municipios: atual?.municipios ?? [] } : null));
   }, []);
 
   const jaNoMapa = paraOMapa.length > 0 && paraOMapa.map((m) => m.chave).join('|') === noMapa;
