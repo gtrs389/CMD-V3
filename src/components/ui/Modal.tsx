@@ -6,7 +6,7 @@ import { ArrowLeft, X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { IconButton } from './IconButton';
 
-type Size = 'sm' | 'md' | 'lg' | 'xl';
+type Size = 'sm' | 'md' | 'lg' | 'xl' | 'tela';
 
 const SIZES: Record<Size, string> = {
   sm: 'sm:max-w-md',
@@ -14,6 +14,12 @@ const SIZES: Record<Size, string> = {
   lg: 'sm:max-w-3xl',
   /** Paineis de leitura com duas colunas (raio-x da escola). */
   xl: 'sm:max-w-5xl',
+  /**
+   * Tela inteira (painel do Lider): sem caixa, sem X — o `header` e o
+   * cabecalho inteiro, com o voltar dele, e o conteudo cuida das margens.
+   * A pilha, o Escape e o foco continuam os mesmos.
+   */
+  tela: '',
 };
 
 interface ModalProps {
@@ -97,6 +103,7 @@ export function Modal({
   }, [busy, onBack, onClose]);
 
   const active = open && !inactive;
+  const tela = size === 'tela';
 
   useEffect(() => {
     if (!active) return;
@@ -160,7 +167,8 @@ export function Modal({
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4',
+        'fixed inset-0 z-50 flex',
+        !tela && 'items-end justify-center sm:items-center sm:p-4',
         // `invisible`, e nao `hidden`: guarda a rolagem de dentro.
         inactive && 'pointer-events-none invisible',
       )}
@@ -180,40 +188,51 @@ export function Modal({
         aria-label={title}
         tabIndex={-1}
         className={cn(
-          'relative flex max-h-[92dvh] w-full flex-col bg-surface shadow-overlay',
-          'animate-slide-up rounded-t-2xl sm:animate-scale-in sm:rounded-card',
-          'border border-line/70 sm:border-line',
-          SIZES[size],
+          tela
+            ? 'relative flex h-dvh w-full animate-fade-in flex-col bg-canvas'
+            : [
+                'relative flex max-h-[92dvh] w-full flex-col bg-surface shadow-overlay',
+                'animate-slide-up rounded-t-2xl sm:animate-scale-in sm:rounded-card',
+                'border border-line/70 sm:border-line',
+                SIZES[size],
+              ],
         )}
       >
-        {/* Alca do painel deslizante: so no celular, so como sinal visual de
-            que da para arrastar/fechar. */}
-        <span
-          aria-hidden="true"
-          className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-pill bg-ink-200 sm:hidden"
-        />
-        <div
-          className={cn(
-            'flex items-start justify-between gap-3 px-4 pt-4 sm:px-5',
-            chrome === 'plain' ? 'pb-1' : 'border-b border-line pb-4',
-          )}
-        >
-          <div className="min-w-0 flex-1">
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                disabled={busy}
-                className="-ml-1 mb-1 inline-flex min-h-8 max-w-full items-center gap-1 rounded-control px-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
-              >
-                <ArrowLeft aria-hidden="true" className="size-3.5 shrink-0" />
-                <span className="wrap-break-word">Voltar{backLabel ? ` para ${backLabel}` : ''}</span>
-              </button>
-            ) : null}
-            {header ?? (
-              <>
-                <h2 className="text-base font-semibold text-ink-900">{title}</h2>
-                {description ? <p className="mt-1 text-sm text-ink-500">{description}</p> : null}
+        {tela ? (
+          <>
+            {header}
+            <div className="scrollbar-slim min-h-0 flex-1 overflow-y-auto">{children}</div>
+          </>
+        ) : (
+          <>
+            {/* Alca do painel deslizante: so no celular, so como sinal visual de
+                que da para arrastar/fechar. */}
+            <span
+              aria-hidden="true"
+              className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-pill bg-ink-200 sm:hidden"
+            />
+            <div
+              className={cn(
+                'flex items-start justify-between gap-3 px-4 pt-4 sm:px-5',
+                chrome === 'plain' ? 'pb-1' : 'border-b border-line pb-4',
+              )}
+            >
+              <div className="min-w-0 flex-1">
+                {onBack ? (
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    disabled={busy}
+                    className="-ml-1 mb-1 inline-flex min-h-8 max-w-full items-center gap-1 rounded-control px-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
+                  >
+                    <ArrowLeft aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span className="wrap-break-word">Voltar{backLabel ? ` para ${backLabel}` : ''}</span>
+                  </button>
+                ) : null}
+                {header ?? (
+                  <>
+                    <h2 className="text-base font-semibold text-ink-900">{title}</h2>
+                    {description ? <p className="mt-1 text-sm text-ink-500">{description}</p> : null}
               </>
             )}
           </div>
@@ -245,6 +264,8 @@ export function Modal({
             {footer}
           </div>
         ) : null}
+          </>
+        )}
       </div>
     </div>,
     document.body,

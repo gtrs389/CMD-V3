@@ -1,6 +1,8 @@
 import 'server-only';
-import { TABLES, type PollingPlaceRow } from '@/lib/supabase/tables';
+import { TABLES, type ClientRow, type PollingPlaceRow } from '@/lib/supabase/tables';
 import { selectOne, selectRows } from '@/lib/supabase/rest';
+import { ENDERECO_FIXO } from '@/lib/domain/csv-import';
+import type { LocalDeVotacao } from '@/lib/domain/onde-a-equipe-vota';
 
 /**
  * Local de votacao a partir da tabela do TSE (migration 042).
@@ -112,4 +114,25 @@ export function pollingPlaceAddress(place: PollingPlaceRow): string | null {
   ].filter((parte): parte is string => Boolean(parte));
 
   return partes.length > 0 ? partes.join(', ') : null;
+}
+
+/**
+ * Os locais das zonas pedidas, na UF do time (sem UF gravada, a do endereco
+ * fixo), no formato que a tela usa (`LocalDeVotacao`).
+ */
+export async function locaisDasZonasDoTime(clientId: string, zonas: number[]): Promise<LocalDeVotacao[]> {
+  if (zonas.length === 0) return [];
+  const time = await selectOne<Pick<ClientRow, 'state_uf'>>(TABLES.clients, {
+    select: 'state_uf',
+    filters: { id: `eq.${clientId}` },
+  }).catch(() => null);
+  const linhas = await pollingPlacesOfZones(time?.state_uf ?? ENDERECO_FIXO.state, zonas);
+  return linhas.map((place) => ({
+    id: place.id,
+    nome: place.name,
+    endereco: pollingPlaceAddress(place),
+    cidade: place.city,
+    zona: place.zone,
+    secoes: place.sections,
+  }));
 }

@@ -54,10 +54,11 @@ export function SeloDaReferencia({
       ? tom === 'escuro'
         ? 'bg-gold-400/15 text-gold-400 ring-1 ring-gold-400/40 ring-inset'
         : 'bg-gold-50 text-gold-700 ring-1 ring-gold-500/40 ring-inset'
-      : tom === 'escuro'
-        ? 'border border-dashed border-white/30 text-white/60'
-        : 'border border-dashed border-ink-300 bg-surface text-ink-500',
-    onClick && (texto ? 'transition-colors hover:bg-gold-100' : 'transition-colors hover:border-danger-200 hover:text-danger-700'),
+      : // Sem referencia: vermelho, para a falta saltar aos olhos.
+        tom === 'escuro'
+        ? 'border border-dashed border-danger-200/60 bg-danger-600/25 text-danger-200'
+        : 'border border-dashed border-danger-600/50 bg-danger-50 text-danger-700',
+    onClick && (texto ? 'transition-colors hover:bg-gold-100' : 'transition-colors hover:border-danger-600 hover:bg-danger-600 hover:text-white'),
     className,
   );
   const icone = compacto ? 'size-2.5 shrink-0' : 'size-3 shrink-0';
