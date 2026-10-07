@@ -479,21 +479,31 @@ function Secoes({
           const comSecao = Boolean(s.zona || s.secao);
           const dele = escolhido ? (escolhido.porSecao[chaveDaSecao(s.zona, s.secao)] ?? 0) : 0;
           const apagada = escolhido !== null && dele === 0;
+          // Ninguem do recorte (do time, do Lider, da referencia) vota aqui: a
+          // secao fica cinza — so os votos dela, sem a gente da campanha.
+          const semGente = comSecao && s.estimativa <= 0;
           const diferenca = (s.apurado[0] ?? 0) - s.estimativa;
           return (
             <li
               key={`${s.zona}/${s.secao}/${i}`}
               className={cn(
-                'grid items-center gap-3 px-4 py-2.5 transition-opacity duration-300',
+                'grid items-center gap-3 px-4 py-2.5 transition-[opacity,filter] duration-300',
                 varios ? 'grid-cols-[5.5rem_minmax(0,1fr)]' : 'grid-cols-[5.5rem_minmax(0,1fr)_auto]',
                 apagada && 'opacity-35',
+                semGente && !apagada && 'bg-ink-50 opacity-60 grayscale hover:opacity-90',
               )}
+              title={semGente ? 'Ninguém deste recorte vota nesta seção' : undefined}
             >
               <div className="min-w-0">
                 {comSecao ? (
                   <>
-                    <p className="text-sm font-semibold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</p>
+                    <p className={cn('text-sm font-semibold tabular-nums', semGente ? 'text-ink-500' : 'text-ink-900')}>Seção {s.secao ?? '?'}</p>
                     <p className="text-[0.6875rem] text-ink-500">Zona {s.zona ?? '?'}</p>
+                    {semGente ? (
+                      <p className="mt-1 inline-flex rounded-pill bg-ink-200 px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide whitespace-nowrap text-ink-500 uppercase">
+                        sem gente
+                      </p>
+                    ) : null}
                   </>
                 ) : (
                   <p className="text-xs leading-tight text-ink-500">Sem zona/seção no cadastro</p>
@@ -700,7 +710,12 @@ function GradeLiderPorSecao({
                     Líder
                   </th>
                   {colunas.map((s) => (
-                    <th key={chaveDaSecao(s.zona, s.secao)} scope="col" className="min-w-[4.5rem] border-b border-line bg-ink-50 px-2 py-2 text-center">
+                    <th
+                      key={chaveDaSecao(s.zona, s.secao)}
+                      scope="col"
+                      className={cn('min-w-[4.5rem] border-b border-line bg-ink-50 px-2 py-2 text-center', s.estimativa <= 0 && 'opacity-45')}
+                      title={s.estimativa <= 0 ? 'Ninguém deste recorte vota nesta seção' : undefined}
+                    >
                       {s.zona || s.secao ? (
                         <>
                           <span className="block text-xs font-bold text-ink-900 tabular-nums">Seção {s.secao ?? '?'}</span>
@@ -793,7 +808,10 @@ function GradeLiderPorSecao({
                       return (
                         <td
                           key={chaveDaSecao(s.zona, s.secao)}
-                          className={cn('border-b border-line px-1 py-2 text-center text-sm font-bold tabular-nums', abaixo ? 'text-danger-700' : 'text-ink-900')}
+                          className={cn(
+                            'border-b border-line px-1 py-2 text-center text-sm font-bold tabular-nums',
+                            abaixo ? 'text-danger-700' : s.estimativa <= 0 ? 'bg-ink-50 text-ink-400' : 'text-ink-900',
+                          )}
                         >
                           {s.zona || s.secao ? formatNumber(votos) : '—'}
                         </td>
