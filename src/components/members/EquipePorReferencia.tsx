@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  Copy,
   ShieldCheck,
   UserRound,
   Users,
@@ -163,6 +164,16 @@ export function EquipePorReferencia({
                     <Users aria-hidden="true" className="size-3.5" />
                     <b className="text-ink-900 tabular-nums">{formatNumber(g.totalDaEquipe)}</b> {g.totalDaEquipe === 1 ? 'liderado' : 'liderados'}
                   </span>
+                  {g.cadastrosRepetidos ? (
+                    <span
+                      className="inline-flex items-center gap-1 text-warning-600"
+                      title="A mesma pessoa cadastrada mais de uma vez aparece uma vez só, com a marca de repetido"
+                    >
+                      <Copy aria-hidden="true" className="size-3.5" />
+                      <b className="tabular-nums">{formatNumber(g.cadastrosRepetidos)}</b>{' '}
+                      {g.cadastrosRepetidos === 1 ? 'cadastro repetido contado uma vez' : 'cadastros repetidos contados uma vez'}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="mt-2 block h-2 overflow-hidden rounded-pill bg-ink-100">
                   <span className="cmd-barra-viva block h-full rounded-pill" style={{ width: `${Math.max(3, (g.total / maior) * 100)}%`, background: c }} />
@@ -228,6 +239,7 @@ function LinhaDoLider({
               <span className="flex flex-wrap items-center gap-1.5">
                 <span className="text-sm font-semibold wrap-break-word text-ink-900 group-hover:text-brand-700 group-hover:underline">{lider.name}</span>
                 <TierBadge tier="LIDER" />
+                <MarcaDeRepetido outros={linha.repetidos[lider.id]} />
                 <TagDoLider member={lider} />
                 {!linha.liderNoRecorte ? <span className="rounded-pill bg-ink-100 px-1.5 py-0.5 text-[0.625rem] font-semibold text-ink-500">fora do filtro</span> : null}
               </span>
@@ -301,6 +313,7 @@ function LinhaDoLider({
               >
                 <Avatar name={m.name} src={m.photo} size="xs" />
                 <span className="min-w-0 wrap-break-word font-medium">{m.name}</span>
+                <MarcaDeRepetido outros={linha.repetidos[m.id]} />
               </button>
             </li>
           ))}
@@ -318,5 +331,22 @@ function LinhaDoLider({
         </ul>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * A pessoa cadastrada mais de uma vez: aparece uma vez so, com "2×" e, ao
+ * passar o mouse, quem mais a cadastrou.
+ */
+function MarcaDeRepetido({ outros }: { outros?: string[] }) {
+  if (!outros?.length) return null;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-0.5 rounded-pill bg-warning-50 px-1.5 text-[0.625rem] font-bold text-warning-600 ring-1 ring-warning-600/30 ring-inset tabular-nums"
+      title={`Cadastrada ${outros.length + 1} vezes. Também por: ${outros.join('; ')}`}
+    >
+      <Copy aria-hidden="true" className="size-2.5" />
+      {outros.length + 1}×
+    </span>
   );
 }
