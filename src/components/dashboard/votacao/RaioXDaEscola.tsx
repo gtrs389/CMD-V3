@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Check, CheckCheck, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BookmarkCheck, BookmarkX, Check, CheckCheck, Filter, ChevronDown, FileDown, Grid3x3, MapPin, Minus, ScanSearch, Swords, Users, X } from 'lucide-react';
 import {
   chaveDaSecao,
   conversao,
@@ -21,6 +21,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { SeloDaReferencia } from '@/components/members/TagDaReferencia';
 import { baixarPdfDoRaioX } from '../pdf-do-mapa';
 import { BotaoVoltar } from './EscolhaDoMunicipio';
+import { chaveDaReferenciaDoLider, referenciasDosLideres } from '@/lib/domain/sala-de-confronto';
 import { MarcaDaBarra } from './MarcaDaBarra';
 
 /**
@@ -337,6 +338,8 @@ function Lideres({
   onTodos,
   onLimpar,
   candidatos,
+  referencias,
+  onReferencia,
 }: {
   escola: EscolaNoComparativo;
   lideres: LiderNoRaioX[];
@@ -346,7 +349,13 @@ function Lideres({
   onTodos: () => void;
   onLimpar: () => void;
   candidatos: CandidatoNoRaioX[];
+  /** As referencias escolhidas no filtro (chaves): a lista mostra so os Lideres delas. */
+  referencias: ReadonlySet<string>;
+  onReferencia: (chave: string) => void;
 }) {
+  // Sem referencia nenhuma conhecida (o mapa geral), o filtro nao aparece.
+  const opcoes = lideres.some((l) => l.referencia !== undefined) ? referenciasDosLideres(lideres) : [];
+  const visiveis = referencias.size ? lideres.filter((l) => referencias.has(chaveDaReferenciaDoLider(l))) : lideres;
   const maior = Math.max(1, ...lideres.map((l) => l.cadastrados));
   const selecionados = lideres.filter((l) => foco.has(l.id));
   const algum = selecionados.length > 0;
@@ -397,13 +406,49 @@ function Lideres({
             ) : null}
           </div>
         ) : null}
+        {opcoes.length > 1 || (opcoes.length === 1 && referencias.size > 0) ? (
+          <div className="w-full">
+            <p className="flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wide text-ink-500 uppercase">
+              <Filter aria-hidden="true" className="size-3.5 text-gold-600" /> Filtrar por referência
+            </p>
+            <div role="group" aria-label="Filtrar por referência" className="mt-1.5 flex flex-wrap gap-1">
+              {opcoes.map((o) => {
+                const ativa = referencias.has(o.chave);
+                const sem = o.rotulo === null;
+                return (
+                  <button
+                    key={o.chave}
+                    type="button"
+                    aria-pressed={ativa}
+                    onClick={() => onReferencia(o.chave)}
+                    title={`${o.lideres} ${o.lideres === 1 ? 'líder' : 'líderes'}, ${formatNumber(o.pessoas)} ${o.pessoas === 1 ? 'pessoa' : 'pessoas'} nesta escola`}
+                    className={cn(
+                      'inline-flex min-h-8 items-center gap-1 rounded-pill border px-2.5 text-[0.6875rem] font-semibold transition-all',
+                      ativa
+                        ? sem
+                          ? 'border-danger-600 bg-danger-600 text-white shadow-card'
+                          : 'border-gold-500 bg-gold-400 text-navy-900 shadow-card'
+                        : sem
+                          ? 'border-dashed border-danger-600/50 bg-danger-50 text-danger-700 hover:border-danger-600'
+                          : 'border-gold-500/40 bg-gold-50 text-gold-700 hover:border-gold-500',
+                    )}
+                  >
+                    {sem ? <BookmarkX aria-hidden="true" className="size-3" /> : <BookmarkCheck aria-hidden="true" className="size-3" />}
+                    {o.rotulo ?? 'Sem referência'}
+                    <span className={cn('rounded-pill px-1 text-[0.5625rem] font-bold tabular-nums', ativa ? 'bg-white/30' : 'bg-white')}>{o.lideres}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </header>
 
       {lideres.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-ink-500">Nenhum líder registrado nos cadastros desta escola.</p>
       ) : (
         <ol className="max-h-[32rem] divide-y divide-line overflow-y-auto">
-          {lideres.map((l, i) => {
+          {visiveis.map((l, i) => {
             const ativo = foco.has(l.id);
             const parte = escola.estimativa > 0 ? Math.round((l.cadastrados / escola.estimativa) * 100) : 0;
             return (
@@ -935,6 +980,30 @@ export function RaioXDaEscola({
   /** Os Lideres selecionados: nenhum, um ou varios. */
   const [foco, setFoco] = useState<ReadonlySet<string>>(() => new Set());
   const selecionados = lideres.filter((l) => foco.has(l.id));
+  /**
+   * Filtro por referencia: escolher uma referencia mostra so os Lideres dela
+   * e ja seleciona todos eles (a gente deles acende nas secoes); tirar a
+   * referencia tira os Lideres dela da selecao.
+   */
+  const [referencias, setReferencias] = useState<ReadonlySet<string>>(() => new Set());
+  function alternarReferencia(chave: string) {
+    const dela = lideres.filter((l) => chaveDaReferenciaDoLider(l) === chave).map((l) => l.id);
+    const ligando = !referencias.has(chave);
+    setReferencias((atual) => {
+      const novo = new Set(atual);
+      if (ligando) novo.add(chave);
+      else novo.delete(chave);
+      return novo;
+    });
+    setFoco((atual) => {
+      const novo = new Set(atual);
+      for (const id of dela) {
+        if (ligando) novo.add(id);
+        else novo.delete(id);
+      }
+      return novo;
+    });
+  }
   const alternar = (id: string) =>
     setFoco((atual) => {
       const novo = new Set(atual);
@@ -1040,9 +1109,14 @@ export function RaioXDaEscola({
               diretos={diretos}
               foco={foco}
               onAlternar={alternar}
-              onTodos={() => setFoco(new Set(lideres.map((l) => l.id)))}
-              onLimpar={() => setFoco(new Set())}
+              onTodos={() => setFoco(new Set(lideres.filter((l) => !referencias.size || referencias.has(chaveDaReferenciaDoLider(l))).map((l) => l.id)))}
+              onLimpar={() => {
+                setFoco(new Set());
+                setReferencias(new Set());
+              }}
               candidatos={candidatos}
+              referencias={referencias}
+              onReferencia={alternarReferencia}
             />
             <Secoes escola={escola} candidatos={candidatos} selecionados={selecionados} lideres={lideres} />
           </div>
@@ -1054,7 +1128,10 @@ export function RaioXDaEscola({
             {selecionados.length ? (
               <button
                 type="button"
-                onClick={() => setFoco(new Set())}
+                onClick={() => {
+                  setFoco(new Set());
+                  setReferencias(new Set());
+                }}
                 className="mr-auto inline-flex min-h-9 items-center gap-1.5 rounded-pill border border-line px-3 text-xs font-medium text-ink-700 hover:bg-ink-50"
               >
                 <X aria-hidden="true" className="size-3.5" /> Limpar seleção ({selecionados.length})

@@ -1,7 +1,7 @@
 import type { MapOverviewPayload, PollingPlacePin } from './map-pin';
 import { sectionKey } from './map-pin';
 import { chaveDaSecao, confrontar, type EscolaNoComparativo, type EscolaNoConfronto, type LiderNoRaioX } from './confronto';
-import { lideresDasReferencias, placeOfLeader, placeOfLeaders, placeOfSection } from './map-filters';
+import { SEM_REFERENCIA_NO_MAPA, chaveDaReferenciaNoMapa, lideresDasReferencias, placeOfLeader, placeOfLeaders, placeOfSection } from './map-filters';
 import type { CandidatoDaVotacao } from './votacao-tse';
 
 /**
@@ -419,4 +419,33 @@ export interface EnvioParaASala {
   lideres: { id: string; nome: string }[];
   recorte: RecorteDaSala;
   resumo: Partial<ResumoDaEscolaNaSala>;
+}
+
+/** A chave da referencia de um Lider no filtro (a mesma do mapa); `SEM_REFERENCIA_NO_MAPA` sem nenhuma. */
+export function chaveDaReferenciaDoLider(l: Pick<LiderNoRaioX, 'referencia'>): string {
+  return chaveDaReferenciaNoMapa(l.referencia?.replace(/\s+/g, ' ').trim() || null) || SEM_REFERENCIA_NO_MAPA;
+}
+
+/** Uma referencia no filtro: a chave (do mapa), o rotulo e quanta gente ela tem nesta escola. */
+export interface OpcaoDeReferencia {
+  chave: string;
+  rotulo: string | null;
+  lideres: number;
+  pessoas: number;
+}
+
+/** As referencias dos Lideres, da que tem mais gente para a que tem menos; "Sem referência" por ultimo. */
+export function referenciasDosLideres(lideres: readonly Pick<LiderNoRaioX, 'referencia' | 'cadastrados'>[]): OpcaoDeReferencia[] {
+  const porChave = new Map<string, OpcaoDeReferencia>();
+  for (const l of lideres) {
+    const texto = l.referencia?.replace(/\s+/g, ' ').trim() || null;
+    const chave = chaveDaReferenciaDoLider(l);
+    const atual = porChave.get(chave) ?? { chave, rotulo: chave === SEM_REFERENCIA_NO_MAPA ? null : texto, lideres: 0, pessoas: 0 };
+    atual.lideres += 1;
+    atual.pessoas += l.cadastrados;
+    porChave.set(chave, atual);
+  }
+  return [...porChave.values()].sort(
+    (a, b) => Number(a.rotulo === null) - Number(b.rotulo === null) || b.pessoas - a.pessoas || (a.rotulo ?? '').localeCompare(b.rotulo ?? '', 'pt-BR'),
+  );
 }

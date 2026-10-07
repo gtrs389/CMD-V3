@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Bookmark, Check, CheckCheck, Grid3x3, MapPin, Search, Swords, Users, X } from 'lucide-react';
+import { Bookmark, BookmarkCheck, BookmarkX, Check, CheckCheck, ChevronDown, Filter, Grid3x3, MapPin, Search, Swords, Users, X } from 'lucide-react';
 import type { MapOverviewPayload } from '@/lib/domain/map-pin';
 import { lideresNoRaioX } from '@/lib/domain/confronto';
+import { FotoDoCandidato } from '@/components/apuracao/FotoDoCandidato';
 import {
   campanhaDoRecorte,
   escolaDaSala,
@@ -14,7 +15,9 @@ import {
   resumoDoDuelo,
   votacaoDoRecorte,
   votosNaEscola,
+  referenciasDosLideres,
   type EscolaNaSala,
+  type OpcaoDeReferencia,
   type PlacarDoLider,
   type ZonaNoDuelo,
 } from '@/lib/domain/sala-de-confronto';
@@ -134,8 +137,22 @@ export function ConfrontoDaEscola({
   }
 
   // ---- A conta, toda pura (`sala-de-confronto.ts`).
-  const recorte = registro.recorte;
-  const campanha = useMemo(() => campanhaDoRecorte(mapa.data, recorte), [mapa.data, recorte]);
+  /**
+   * Filtro por referencia, aqui dentro: so a gente dos Lideres das
+   * referencias escolhidas (vazio: o recorte do envio). A estimativa, os
+   * Lideres, as zonas e as secoes passam a contar so essa gente.
+   */
+  const [referencias, setReferencias] = useState<string[]>([]);
+  const recorteDoEnvio = registro.recorte;
+  const recorte = useMemo(
+    () => (referencias.length ? { ...recorteDoEnvio, references: referencias } : recorteDoEnvio),
+    [recorteDoEnvio, referencias],
+  );
+  const campanhaDoEnvio = useMemo(() => campanhaDoRecorte(mapa.data, recorteDoEnvio), [mapa.data, recorteDoEnvio]);
+  const campanha = useMemo(
+    () => (referencias.length ? campanhaDoRecorte(mapa.data, recorte) : campanhaDoEnvio),
+    [referencias.length, mapa.data, recorte, campanhaDoEnvio],
+  );
   const pinsDe = useCallback(
     (id: string) => {
       const v = votacoes[id];
@@ -158,6 +175,13 @@ export function ConfrontoDaEscola({
     () => (escola ? lideresNoRaioX(escola, campanha, mapa.data?.referencias).lideres : []),
     [escola, campanha, mapa.data?.referencias],
   );
+  /** As referencias dos Lideres desta escola (no recorte do envio): as opcoes do filtro. */
+  const opcoesDeReferencia = useMemo(() => {
+    if (!mapa.data || !esquerdaPronta) return [];
+    const tse = registro.esquerda.map((c) => pinsDe(c.id)).filter((p): p is NonNullable<typeof p> => p !== null);
+    const daEscola = escolaDaSala(campanhaDoEnvio, tse, { chave: registro.chave, pinos: registro.pinos });
+    return daEscola ? referenciasDosLideres(lideresNoRaioX(daEscola, campanhaDoEnvio, mapa.data.referencias).lideres) : [];
+  }, [mapa.data, esquerdaPronta, registro.esquerda, registro.chave, registro.pinos, campanhaDoEnvio, pinsDe]);
   const lideresMarcados = useMemo(() => lideres.filter((l) => selecionados.has(l.id)), [lideres, selecionados]);
 
   const esquerda = useMemo(
@@ -197,7 +221,8 @@ export function ConfrontoDaEscola({
   // O placar desta leitura volta para a lista (so quando muda: sem laco).
   const ultimo = useRef('');
   useEffect(() => {
-    if (!pronto || direita.some((c) => c.carregando)) return;
+    // Com o filtro de referencia ligado, o placar e de um recorte so: nao vai para a lista.
+    if (!pronto || referencias.length || direita.some((c) => c.carregando)) return;
     const resumo = resumoDoDuelo(duelo, base, lideres.length);
     const chave = JSON.stringify(resumo);
     const antes = registro.resumo;
@@ -213,7 +238,7 @@ export function ConfrontoDaEscola({
     api<{ escola: EscolaNaSala }>(`/api/confrontos/${registro.id}`, { method: 'PATCH', body: { resumo } })
       .then(({ escola: salva }) => onMudou(salva))
       .catch(() => undefined);
-  }, [pronto, direita, duelo, base, lideres.length, registro.id, registro.resumo, onMudou]);
+  }, [pronto, referencias.length, direita, duelo, base, lideres.length, registro.id, registro.resumo, onMudou]);
 
   function alternarLider(id: string) {
     const antes = selecionados;
@@ -327,6 +352,15 @@ export function ConfrontoDaEscola({
             </p>
           ) : null}
 
+          <FiltroDeReferencia
+            opcoes={opcoesDeReferencia}
+            escolhidas={referencias}
+            onEscolher={(chave) =>
+              setReferencias((atual) => (atual.includes(chave) ? atual.filter((r) => r !== chave) : [...atual, chave]))
+            }
+            onLimpar={() => setReferencias([])}
+          />
+
           {/* A ARENA */}
           <section
             aria-label="Placar do confronto"
@@ -372,15 +406,7 @@ export function ConfrontoDaEscola({
 
           {temAdversario ? <Leituras duelo={duelo} lideres={lideresMarcados} /> : null}
 
-          <PainelDasZonas zonas={zonas} zona={zona} onZona={setZona} temAdversario={temAdversario} />
-
-          <PlacarDosLideres
-            placares={placares}
-            selecionados={selecionados}
-            onAlternar={alternarLider}
-            onTodos={marcarTodos}
-            temAdversario={temAdversario}
-          />
+          <PainelDasZonas zonas={zonas} zona={zona} onZona={setZona} temAdversario={temAdversario} esquerda={esquerda} direita={prontos} />
 
           <SecaoPorSecao
             secoes={duelo.secoes}
@@ -397,6 +423,15 @@ export function ConfrontoDaEscola({
           />
 
           {temAdversario ? <Ranking esquerda={esquerda} votosEsquerda={duelo.esquerda} direita={prontos} votosDireita={duelo.direita} /> : null}
+
+          {/* Por ultimo, e fechado: abre no botao. */}
+          <PlacarDosLideres
+            placares={placares}
+            selecionados={selecionados}
+            onAlternar={alternarLider}
+            onTodos={marcarTodos}
+            temAdversario={temAdversario}
+          />
         </>
       )}
 
@@ -454,11 +489,16 @@ function PainelDasZonas({
   zona,
   onZona,
   temAdversario,
+  esquerda,
+  direita,
 }: {
   zonas: ZonaNoDuelo[];
   zona: string | null;
   onZona: (zona: string | null) => void;
   temAdversario: boolean;
+  /** Os candidatos de cada lado (na ordem dos votos das secoes): a foto e os votos de cada um na zona. */
+  esquerda: CandidatoNoRaioX[];
+  direita: CandidatoNoRaioX[];
 }) {
   if (zonas.length === 0) return null;
   return (
@@ -529,6 +569,33 @@ function PainelDasZonas({
                     <span className="h-full flex-1" style={{ background: total > 0 ? VERMELHO : undefined }} />
                   </div>
                 ) : null}
+                {/* Cada candidato na zona: a foto, o nome e os votos dele. */}
+                <div className={cn('mt-3 grid gap-2', temAdversario && 'sm:grid-cols-2')}>
+                  {[
+                    { lado: 'esquerda' as const, candidatos: esquerda, votos: esquerda.map((_, k) => z.secoes.reduce((t, s) => t + (s.esquerda[k] ?? 0), 0)) },
+                    ...(temAdversario
+                      ? [{ lado: 'direita' as const, candidatos: direita, votos: direita.map((_, k) => z.secoes.reduce((t, s) => t + (s.direita[k] ?? 0), 0)) }]
+                      : []),
+                  ].map((grupo) => (
+                    <ul
+                      key={grupo.lado}
+                      className="space-y-1.5 rounded-control p-2"
+                      style={{ background: grupo.lado === 'esquerda' ? `${AZUL}0f` : `${VERMELHO}0f`, boxShadow: `inset 3px 0 0 ${grupo.lado === 'esquerda' ? AZUL : VERMELHO}` }}
+                    >
+                      {grupo.candidatos.map((c, k) => (
+                        <li key={c.id ?? c.rotulo} className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0 rounded-full ring-2 ring-offset-1 ring-offset-surface" style={{ '--tw-ring-color': c.cor } as CSSProperties}>
+                            <FotoDoCandidato cargo={c.cargo} sqcand={null} src={c.foto} nome={c.nome} tamanho="sm" className="ring-0" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink-900">{c.nome}</span>
+                          <span className="text-base font-black tabular-nums" style={{ color: c.cor }}>
+                            {formatNumber(grupo.votos[k] ?? 0)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ))}
+                </div>
                 {/* Um quadradinho por secao. */}
                 <div className="mt-3 flex flex-wrap gap-1" aria-hidden="true">
                   {z.secoes.map((s) => (
@@ -580,7 +647,7 @@ function PlacarDosLideres({
   temAdversario: boolean;
 }) {
   const [busca, setBusca] = useState('');
-  const [aberta, setAberta] = useState(true);
+  const [aberta, setAberta] = useState(false);
   const semAcento = (t: string) =>
     t
       .normalize('NFD')
@@ -592,7 +659,7 @@ function PlacarDosLideres({
 
   return (
     <section aria-label="Placar dos líderes" className="overflow-hidden rounded-card border border-line bg-surface">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+      <header className={cn('flex flex-wrap items-center justify-between gap-3 px-4 py-3', aberta && 'border-b border-line')}>
         <button type="button" onClick={() => setAberta((a) => !a)} aria-expanded={aberta} className="flex min-w-0 items-center gap-2 text-left">
           <span className="flex size-7 items-center justify-center rounded-lg bg-navy-900 text-gold-400">
             <Users aria-hidden="true" className="size-4" />
@@ -612,7 +679,19 @@ function PlacarDosLideres({
         </button>
         {placares.length ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            {placares.length > 6 ? (
+            <button
+              type="button"
+              onClick={() => setAberta((a) => !a)}
+              aria-expanded={aberta}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-1.5 rounded-pill px-3.5 text-xs font-bold transition-colors',
+                aberta ? 'border border-line text-ink-700 hover:bg-ink-50' : 'bg-navy-900 text-gold-400 hover:bg-navy-800',
+              )}
+            >
+              {aberta ? 'Fechar o placar' : 'Abrir o placar dos líderes'}
+              <ChevronDown aria-hidden="true" className={cn('size-4 transition-transform duration-300', aberta && 'rotate-180')} />
+            </button>
+            {aberta && placares.length > 6 ? (
               <label className="relative flex items-center">
                 <span className="sr-only">Buscar líder</span>
                 <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 size-3.5 text-ink-400" />
@@ -625,7 +704,7 @@ function PlacarDosLideres({
                 />
               </label>
             ) : null}
-            {marcados < placares.length ? (
+            {aberta && marcados < placares.length ? (
               <button
                 type="button"
                 onClick={() => onTodos(true)}
@@ -765,6 +844,85 @@ function PlacarDosLideres({
           })}
         </ol>
       )}
+    </section>
+  );
+}
+
+/**
+ * "Filtrar por referência", dentro da escola: um botao por referencia (com
+ * quantos Lideres e quanta gente ela tem aqui). Escolher uma ou mais faz a
+ * sala inteira contar so a gente delas.
+ */
+function FiltroDeReferencia({
+  opcoes,
+  escolhidas,
+  onEscolher,
+  onLimpar,
+}: {
+  opcoes: OpcaoDeReferencia[];
+  escolhidas: string[];
+  onEscolher: (chave: string) => void;
+  onLimpar: () => void;
+}) {
+  if (opcoes.length === 0) return null;
+  const nomes = opcoes.filter((o) => escolhidas.includes(o.chave)).map((o) => o.rotulo ?? 'Sem referência');
+  return (
+    <section aria-label="Filtrar por referência" className="rounded-card border border-line bg-surface px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-gold-400 text-navy-900">
+            <Filter aria-hidden="true" className="size-4" />
+          </span>
+          Filtrar por referência
+          {nomes.length ? (
+            <span className="text-xs font-normal text-ink-500">
+              · contando só a gente de <b className="text-gold-700">{nomes.join(', ')}</b>
+            </span>
+          ) : (
+            <span className="text-xs font-normal text-ink-500">· toque numa ou mais</span>
+          )}
+        </p>
+        {nomes.length ? (
+          <button
+            type="button"
+            onClick={onLimpar}
+            className="inline-flex min-h-8 items-center gap-1 rounded-pill border border-line px-2.5 text-[0.6875rem] font-semibold text-ink-700 hover:bg-ink-50"
+          >
+            <X aria-hidden="true" className="size-3.5" /> Todas as referências
+          </button>
+        ) : null}
+      </div>
+      <div role="group" aria-label="Referências" className="mt-2.5 flex flex-wrap gap-1.5">
+        {opcoes.map((o) => {
+          const ativa = escolhidas.includes(o.chave);
+          const sem = o.rotulo === null;
+          return (
+            <button
+              key={o.chave}
+              type="button"
+              aria-pressed={ativa}
+              onClick={() => onEscolher(o.chave)}
+              className={cn(
+                'inline-flex min-h-9 items-center gap-1.5 rounded-pill border px-3 text-xs font-semibold transition-all hover:-translate-y-0.5',
+                ativa
+                  ? sem
+                    ? 'border-danger-600 bg-danger-600 text-white shadow-card'
+                    : 'border-gold-500 bg-gold-400 text-navy-900 shadow-card'
+                  : sem
+                    ? 'border-dashed border-danger-600/50 bg-danger-50 text-danger-700'
+                    : 'border-gold-500/40 bg-gold-50 text-gold-700',
+              )}
+            >
+              {sem ? <BookmarkX aria-hidden="true" className="size-3.5" /> : <BookmarkCheck aria-hidden="true" className="size-3.5" />}
+              {o.rotulo ?? 'Sem referência'}
+              <span className={cn('rounded-pill px-1.5 text-[0.625rem] font-bold tabular-nums', ativa ? 'bg-white/30' : 'bg-white')}>
+                {o.lideres} {o.lideres === 1 ? 'líder' : 'líderes'} · {formatNumber(o.pessoas)}
+              </span>
+              {ativa ? <Check aria-hidden="true" className="size-3.5" strokeWidth={3} /> : null}
+            </button>
+          );
+        })}
+      </div>
     </section>
   );
 }
