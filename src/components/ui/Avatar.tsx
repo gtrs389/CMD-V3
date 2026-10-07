@@ -2,9 +2,11 @@
 import { cn } from '@/lib/utils/cn';
 import { initials } from '@/lib/utils/text';
 
-type Size = 'sm' | 'md' | 'lg' | 'xl';
+type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
 const SIZES: Record<Size, string> = {
+  /** Chips (o time por referencia). */
+  xs: 'size-6 text-[0.5625rem]',
   sm: 'size-9 text-xs',
   md: 'size-11 text-sm',
   lg: 'size-14 text-base',

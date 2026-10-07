@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   BarChart3,
+  BookmarkCheck,
   Check,
   Download,
   Eye,
@@ -47,6 +48,7 @@ import { RecruitedBy } from './RecruitedBy';
 import { TierBadge } from './TierBadge';
 import { TagDoLider } from './TagDoLider';
 import { TagDaReferencia } from './TagDaReferencia';
+import { EquipePorReferencia } from './EquipePorReferencia';
 import { NavegadorDePessoas, useNavegador } from './NavegadorDePessoas';
 import { verificadoPorFotoParaGravar } from '@/lib/domain/csv-import';
 import {
@@ -163,8 +165,9 @@ function ListaDoTime({
   // Filtro por responsavel pelo cadastro. Recorte de leitura apenas: o que
   // chega da API ja vem limitado pela hierarquia, no servidor.
   const [recruiter, setRecruiter] = useState(filtroDeResponsavel?.responsavel ?? 'todos');
-  // Filtro por nivel: Lideres, Equipe ou todos. Tambem so leitura.
-  const [nivel, setNivel] = useState<'todos' | TeamTier>('todos');
+  // Filtro por nivel: Lideres, Equipe ou todos — ou o time agrupado por
+  // referencia ('referencia'), que troca a lista pelo painel agrupado.
+  const [nivel, setNivel] = useState<'todos' | 'referencia' | TeamTier>('todos');
   // Filtro pela tag do Lider: o Lider e a Equipe dele juntos. Tambem so
   // leitura.
   const [tag, setTag] = useState('todas');
@@ -231,7 +234,7 @@ function ListaDoTime({
     const achadoEm = new Map<string, CampoDaBusca[]>();
     const filtered = ordered.filter((member) => {
       if (recruiter !== 'todos' && recruiterKey(member) !== recruiter) return false;
-      if (nivel !== 'todos' && member.tier !== nivel) return false;
+      if ((nivel === 'LIDER' || nivel === 'EQUIPE') && member.tier !== nivel) return false;
       if (!passaNoFiltroDeTag(member, tag)) return false;
       if (situacao === 'conferir' && !precisaConferir(member)) return false;
       if (situacao === 'incompleto' && !cadastroIncompleto(member)) return false;
@@ -261,6 +264,7 @@ function ListaDoTime({
       conferir: ordered.filter((m) => precisaConferir(m)).length,
       incompleto: ordered.filter((m) => cadastroIncompleto(m)).length,
       emOrdem: ordered.filter((m) => !precisaConferir(m) && !cadastroIncompleto(m)).length,
+      referencias: new Set(ordered.filter((m) => m.tier === 'LIDER').map((m) => chaveDaReferencia(m)).filter(Boolean)).size,
     }),
     [ordered],
   );
@@ -268,7 +272,11 @@ function ListaDoTime({
   const filtrosAtivos = [
     term.trim() ? { id: 'busca', rotulo: `“${term.trim()}”`, limpar: () => setTerm('') } : null,
     nivel !== 'todos'
-      ? { id: 'nivel', rotulo: nivel === 'LIDER' ? 'Líderes' : 'Equipe', limpar: () => setNivel('todos') }
+      ? {
+          id: 'nivel',
+          rotulo: nivel === 'LIDER' ? 'Líderes' : nivel === 'EQUIPE' ? 'Equipe' : 'Por referência',
+          limpar: () => setNivel('todos'),
+        }
       : null,
     tag !== 'todas'
       ? { id: 'tag', rotulo: tag === SEM_TAG ? 'Sem tag' : `Tag ${tag}`, limpar: () => setTag('todas') }
@@ -579,11 +587,13 @@ function ListaDoTime({
               <Segmentos
                 rotulo="Nível"
                 valor={nivel}
-                onChange={(v) => setNivel(v as 'todos' | TeamTier)}
+                onChange={(v) => setNivel(v as 'todos' | 'referencia' | TeamTier)}
                 opcoes={[
                   { valor: 'todos', rotulo: 'Todos', quantidade: ordered.length },
                   { valor: 'LIDER', rotulo: 'Líderes', quantidade: contagens.lideres },
                   { valor: 'EQUIPE', rotulo: 'Liderados', quantidade: contagens.equipe },
+                  // O time agrupado pela referencia dos Lideres (a Equipe herda a do Lider).
+                  { valor: 'referencia', rotulo: 'Por referência', quantidade: contagens.referencias, icone: <BookmarkCheck className="size-3.5" /> },
                 ]}
               />
               <Segmentos
@@ -729,6 +739,8 @@ function ListaDoTime({
             </Button>
           }
         />
+      ) : nivel === 'referencia' ? (
+        <EquipePorReferencia pessoas={filtered} time={ordered} onAbrirPessoa={verFicha} onAbrirLider={verPainel} />
       ) : (
         <>
           {/* Celular e tablet: cartoes empilhados */}
@@ -1014,7 +1026,7 @@ function Segmentos({
   rotulo: string;
   valor: string;
   onChange: (valor: string) => void;
-  opcoes: { valor: string; rotulo: string; quantidade?: number; tom?: 'danger' | 'warning' | 'success' }[];
+  opcoes: { valor: string; rotulo: string; quantidade?: number; tom?: 'danger' | 'warning' | 'success'; icone?: ReactNode }[];
 }) {
   const ponto = { danger: 'bg-danger-600', warning: 'bg-warning-600', success: 'bg-success-600' };
   return (
@@ -1033,6 +1045,7 @@ function Segmentos({
             )}
           >
             {opcao.tom ? <span aria-hidden="true" className={cn('size-1.5 rounded-full', ponto[opcao.tom])} /> : null}
+            {opcao.icone ? <span aria-hidden="true" className={ativo ? 'text-gold-600' : 'text-ink-400'}>{opcao.icone}</span> : null}
             {opcao.rotulo}
             {opcao.quantidade !== undefined ? (
               <span className={cn('tabular-nums', ativo ? 'text-ink-500' : 'text-ink-400')}>{opcao.quantidade}</span>
