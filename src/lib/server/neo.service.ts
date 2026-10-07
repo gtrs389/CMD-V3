@@ -8,6 +8,13 @@ import {
   type AnaliseDoNeo,
   type ResumoParaONeo,
 } from '@/lib/domain/neo';
+import {
+  NEO_CONFRONTO_INSTRUCOES,
+  NEO_CONFRONTO_SCHEMA,
+  lerRespostaDoConfronto,
+  type MensagemDoChat,
+  type RespostaDoNeoNoConfronto,
+} from '@/lib/domain/neo-do-confronto';
 
 /**
  * O NEO, pela API da OpenAI (Responses API, com Structured Outputs).
@@ -129,4 +136,51 @@ export async function analisarComONeo(
     throw new NeoFalhou('RESPOSTA_INVALIDA');
   }
   return analise;
+}
+
+/**
+ * O NEO conversando na Sala de Confronto: a pergunta, as ultimas mensagens e
+ * o contexto da escola (o radar, ja calculado no navegador). Resposta curta,
+ * com as secoes que viram "print" no chat.
+ */
+export async function conversarNoConfronto(
+  entrada: { pergunta: string; historico: MensagemDoChat[]; contexto: unknown },
+  opcoes: { fetch?: typeof fetch } = {},
+): Promise<RespostaDoNeoNoConfronto> {
+  const chave = process.env.OPENAI_API_KEY?.trim();
+  if (!chave) throw new NeoFalhou('SEM_CONFIGURACAO');
+
+  const chamar = opcoes.fetch ?? fetch;
+  let resposta: Response;
+  try {
+    resposta = await chamar(ENDPOINT, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${chave}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modeloDoNeo(),
+        instructions: NEO_CONFRONTO_INSTRUCOES,
+        input: [
+          { role: 'user', content: `Contexto da escola, em JSON:\n\n${JSON.stringify(entrada.contexto)}` },
+          ...entrada.historico.slice(-6).map((m) => ({ role: m.autor === 'eu' ? 'user' : 'assistant', content: m.texto })),
+          { role: 'user', content: entrada.pergunta },
+        ],
+        text: { format: { type: 'json_schema', name: 'resposta_no_confronto', strict: true, schema: NEO_CONFRONTO_SCHEMA } },
+        max_output_tokens: 1500,
+        store: false,
+      }),
+      signal: AbortSignal.timeout(45_000),
+      cache: 'no-store',
+    });
+  } catch (error) {
+    const nome = (error as { name?: string })?.name;
+    throw new NeoFalhou(nome === 'TimeoutError' || nome === 'AbortError' ? 'DEMOROU' : 'INDISPONIVEL');
+  }
+  if (!resposta.ok) {
+    console.warn('[cmd] NEO (confronto): a OpenAI respondeu %s', resposta.status);
+    throw new NeoFalhou(codigoDoStatus(resposta.status));
+  }
+  const corpo = await resposta.json().catch(() => null);
+  const lida = lerRespostaDoConfronto(textoDaResposta(corpo));
+  if (!lida) throw new NeoFalhou('RESPOSTA_INVALIDA');
+  return lida;
 }

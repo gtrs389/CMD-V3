@@ -44,6 +44,7 @@ import {
   type Filtro,
   type Lutador,
 } from './Arena';
+import { NeoDoConfronto } from './NeoDoConfronto';
 
 /**
  * O confronto de UMA escola da sala, ao vivo.
@@ -452,6 +453,9 @@ export function ConfrontoDaEscola({
           />
 
           {temAdversario ? <Ranking esquerda={esquerda} votosEsquerda={duelo.esquerda} direita={prontos} votosDireita={duelo.direita} /> : null}
+
+          {/* O NEO: o chat flutuante, que ja chega lendo a escola. */}
+          <NeoDoConfronto titulo={registro.titulo} duelo={duelo} esquerda={esquerda} direita={prontos} lideres={lideres} />
 
           {/* Por ultimo, e fechado: abre no botao. */}
           <PlacarDosLideres
