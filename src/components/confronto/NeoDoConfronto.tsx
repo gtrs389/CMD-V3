@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { AlertTriangle, Bot, Copy, Download, Send, Sparkles, TrendingUp, Users, X } from 'lucide-react';
+import { AlertTriangle, Bot, Copy, Download, Send, TrendingUp, Users, X } from 'lucide-react';
 import type { LiderNoRaioX } from '@/lib/domain/confronto';
 import type { Duelo, SecaoNoDuelo } from '@/lib/domain/sala-de-confronto';
 import { candidatoDoRotulo, radarDoNeo, type Achado, type Radar } from '@/lib/domain/radar-do-neo';
@@ -229,7 +229,8 @@ export function NeoDoConfronto({
             <OrbeDoNeo tamanho="md" />
             <div className="relative min-w-0 flex-1">
               <p className="flex items-center gap-1.5 text-sm font-bold">
-                NEO <Sparkles aria-hidden="true" className="size-3.5 text-gold-400" />
+                NEO
+                <span className="rounded-pill bg-gold-400 px-1.5 py-px text-[0.5625rem] font-bold tracking-wide text-navy-900 uppercase">IA</span>
               </p>
               <p className="truncate text-[0.6875rem] text-white/65">{digitando ? 'analisando…' : `lendo ${titulo}`}</p>
             </div>
