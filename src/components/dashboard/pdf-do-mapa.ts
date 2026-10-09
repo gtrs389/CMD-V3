@@ -12,6 +12,7 @@ import {
   type LiderNoRaioX,
 } from '@/lib/domain/confronto';
 import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
+import { relatorioDeZeradas, type ModoDasZeradas, type SecoesDoMunicipioPayload } from '@/lib/domain/secoes-zeradas';
 import { api } from '@/lib/repositories/http/api';
 import { baixarArquivo } from '@/lib/utils/download';
 
@@ -318,4 +319,47 @@ export async function baixarPdfDoRaioX({
     geradoEm: new Date().toISOString(),
   });
   baixarArquivo(`raio-x_${slug(escola.titulo)}_${dataDoArquivo()}.pdf`, blob);
+}
+
+/**
+ * As secoes zeradas do municipio escolhido: todas as secoes das escolas
+ * onde os candidatos tiveram 0 voto, com a gente do time e quanto cada Lider
+ * cadastrou na escola e em cada secao.
+ */
+export async function baixarPdfDasZeradas({
+  candidatos,
+  municipios,
+  campanha,
+  modo,
+  query,
+  time,
+}: {
+  candidatos: { candidato: CandidatoDaVotacao; cor: string }[];
+  municipios: string[];
+  /** As escolas da campanha no recorte do mapa (Lider, referencia): delas sai a gente do time. */
+  campanha: readonly PollingPlacePin[];
+  modo: ModoDasZeradas;
+  query: MapQuery | null;
+  time: string;
+}): Promise<void> {
+  const params = new URLSearchParams({ candidatos: candidatos.map(({ candidato }) => candidato.id).join(',') });
+  for (const m of municipios) params.append('municipio', m);
+  const [payload, { gerarPdfDasZeradas }, fotos] = await Promise.all([
+    api<SecoesDoMunicipioPayload>(`/api/votacao/secoes-zeradas?${params}`),
+    import('@/components/neo/SecoesZeradasPdf'),
+    Promise.all(candidatos.map(({ candidato }) => fotoComoDataUrl(candidato))),
+  ]);
+  // A resposta vem na ordem pedida, sem quem nao foi achado.
+  const achados = candidatos.flatMap((c, i) => (payload.candidatos.includes(c.candidato.id) ? [{ ...c, foto: fotos[i] }] : []));
+  const relatorio = relatorioDeZeradas(payload, campanha, modo);
+  // So o recorte de gente: o municipio ja esta no titulo e a secao do filtro nao vale aqui.
+  const recorte = recorteEmPalavras(query ? { ...query, cities: [], city: null, state: null, section: null, zone: null, minVotes: 0, search: '' } : null, campanha);
+  const blob = await gerarPdfDasZeradas({
+    relatorio,
+    candidatos: achados.map(({ candidato: c, cor, foto }) => ({ nome: c.nome, numero: c.numero, cargo: c.cargo, cor, foto })),
+    recorte,
+    geradoEm: new Date().toISOString(),
+  });
+  const nomes = achados.map(({ candidato: c }) => `${slug(c.nome)}-${c.numero}`).join('_x_');
+  baixarArquivo(`secoes-zeradas_${slug(municipios.join('-'))}_${nomes}_${slug(time)}_${dataDoArquivo()}.pdf`, blob);
 }
