@@ -6,8 +6,14 @@ import {
   type VotacaoDoCandidato,
   type VotacaoNoMapa,
 } from '@/lib/domain/votacao-tse';
+import {
+  escolasDoMunicipio,
+  municipioParaComparar,
+  padraoDoMunicipio,
+  type SecoesDoMunicipioPayload,
+} from '@/lib/domain/secoes-zeradas';
 import { deleteRows, selectOne, selectRows, upsertRows } from '@/lib/supabase/rest';
-import { TABLES, type ElectionSectionRow, type ElectionVotesRow } from '@/lib/supabase/tables';
+import { TABLES, type ElectionSectionRow, type ElectionVotesRow, type PollingPlaceRow } from '@/lib/supabase/tables';
 import { notFound } from './http';
 import { pollingPlacesOfZones } from './polling-place.service';
 
@@ -154,4 +160,61 @@ export async function votacaoNoMapa(id: string): Promise<VotacaoNoMapa> {
       secoes,
     ),
   };
+}
+
+/**
+ * Todas as secoes das escolas dos municipios pedidos, com os votos de cada
+ * candidato — o zero incluso. E o que o PDF das secoes zeradas precisa: a
+ * votacao de um candidato so traz onde ele teve voto.
+ *
+ * O universo de secoes e o da eleicao do primeiro candidato (ano e estado).
+ */
+export async function secoesDosMunicipios(ids: string[], municipios: string[]): Promise<SecoesDoMunicipioPayload> {
+  const rows = await selectRows<ElectionVotesRow>(TABLES.electionVotes, {
+    select: `${RESUMO},sections`,
+    filters: { id: `in.(${ids.join(',')})` },
+  });
+  const porId = new Map(rows.map((r) => [r.id, r]));
+  const candidatos = ids.map((id) => porId.get(id)).filter((r): r is ElectionVotesRow => Boolean(r));
+  if (candidatos.length === 0) throw notFound('Nenhum dos candidatos foi encontrado na votação.');
+  const { year, uf } = candidatos[0];
+
+  const lista = await Promise.all(
+    municipios.map(async (municipio) => {
+      const alvo = municipioParaComparar(municipio);
+      const secoes = (
+        await selectRows<ElectionSectionRow>(TABLES.electionSections, {
+          select: 'id,zone,section,city,place_number,place_name,place_address',
+          filters: { year: `eq.${year}`, uf: `eq.${uf}`, city: `ilike.${padraoDoMunicipio(municipio)}` },
+        })
+      ).filter((s) => municipioParaComparar(s.city) === alvo);
+      // Planilha de secoes sem o municipio: os locais de votacao do TSE dizem
+      // quais secoes votam ali.
+      if (secoes.length === 0) {
+        const doMunicipio = (
+          await selectRows<PollingPlaceRow>(TABLES.pollingPlaces, {
+            select: '*',
+            filters: { uf: `eq.${uf}`, city: `ilike.${padraoDoMunicipio(municipio)}` },
+          }).catch(() => [] as PollingPlaceRow[])
+        ).filter((l) => municipioParaComparar(l.city) === alvo);
+        for (const l of doMunicipio) {
+          for (const section of l.sections) {
+            secoes.push({ id: '', year, uf, zone: l.zone, section, city_code: null, city: l.city, place_number: null, place_name: l.name, place_address: l.address });
+          }
+        }
+      }
+      const zonas = [...new Set(secoes.map((s) => s.zone))];
+      const locais = await pollingPlacesOfZones(uf, zonas);
+      return {
+        municipio,
+        escolas: escolasDoMunicipio(
+          secoes,
+          uf,
+          locais.map((l) => ({ ...l, latitude: null, longitude: null })),
+          candidatos.map((c) => (c.year === year && c.uf === uf ? c.sections : [])),
+        ),
+      };
+    }),
+  );
+  return { candidatos: candidatos.map((c) => c.id), municipios: lista };
 }
