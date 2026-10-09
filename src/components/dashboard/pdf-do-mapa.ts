@@ -12,7 +12,7 @@ import {
   type LiderNoRaioX,
 } from '@/lib/domain/confronto';
 import { fotoDoCandidatoUrl, type CandidatoDaVotacao } from '@/lib/domain/votacao-tse';
-import { relatorioDeZeradas, type ModoDasZeradas, type SecoesDoMunicipioPayload } from '@/lib/domain/secoes-zeradas';
+import { relatorioDeZeradas, type SecoesDoMunicipioPayload } from '@/lib/domain/secoes-zeradas';
 import { api } from '@/lib/repositories/http/api';
 import { baixarArquivo } from '@/lib/utils/download';
 
@@ -322,15 +322,15 @@ export async function baixarPdfDoRaioX({
 }
 
 /**
- * As secoes zeradas do municipio escolhido: todas as secoes das escolas
- * onde os candidatos tiveram 0 voto, com a gente do time e quanto cada Lider
+ * As secoes com 0 voto do municipio escolhido: toda secao onde qualquer um
+ * dos candidatos teve 0 voto, no desenho do "Seção por seção" do Raio-X, com a gente do time e quanto cada Lider
  * cadastrou na escola e em cada secao.
  */
 export async function baixarPdfDasZeradas({
   candidatos,
   municipios,
   campanha,
-  modo,
+  referencias,
   query,
   time,
 }: {
@@ -338,7 +338,8 @@ export async function baixarPdfDasZeradas({
   municipios: string[];
   /** As escolas da campanha no recorte do mapa (Lider, referencia): delas sai a gente do time. */
   campanha: readonly PollingPlacePin[];
-  modo: ModoDasZeradas;
+  /** As referencias dos Lideres (a tag ao lado do nome). */
+  referencias?: Readonly<Record<string, string>>;
   query: MapQuery | null;
   time: string;
 }): Promise<void> {
@@ -351,7 +352,7 @@ export async function baixarPdfDasZeradas({
   ]);
   // A resposta vem na ordem pedida, sem quem nao foi achado.
   const achados = candidatos.flatMap((c, i) => (payload.candidatos.includes(c.candidato.id) ? [{ ...c, foto: fotos[i] }] : []));
-  const relatorio = relatorioDeZeradas(payload, campanha, modo);
+  const relatorio = relatorioDeZeradas(payload, campanha, referencias);
   // So o recorte de gente: o municipio ja esta no titulo e a secao do filtro nao vale aqui.
   const recorte = recorteEmPalavras(query ? { ...query, cities: [], city: null, state: null, section: null, zone: null, minVotes: 0, search: '' } : null, campanha);
   const blob = await gerarPdfDasZeradas({
