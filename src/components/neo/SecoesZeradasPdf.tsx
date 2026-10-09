@@ -1,15 +1,16 @@
-import { Document, Page, Text, View, pdf } from '@react-pdf/renderer';
+import { Document, Page, Path, Svg, Text, View, pdf } from '@react-pdf/renderer';
 import { appConfig } from '@/config/app.config';
-import type { EscolaComZeradas, RelatorioDeZeradas, SecaoZerada } from '@/lib/domain/secoes-zeradas';
-import { C, Cabecalho, Kpi, LinhaDeKpis, Rodape, num, s, st } from './pdf-base';
+import type { EscolaComZeradas, LiderNaZerada, RelatorioDeZeradas, SecaoZerada } from '@/lib/domain/secoes-zeradas';
+import { Cabecalho, Rodape, num, s, st } from './pdf-base';
 import { FotoNoPdf } from './FotoNoPdf';
-import { OURO, OURO_FUNDO, Parte, VERMELHO, nomeProprio, rotuloDaColuna, semHifen } from './ConfrontoPdf';
+import { nomeProprio, semHifen } from './ConfrontoPdf';
 
 /**
- * PDF das secoes zeradas: em cada escola do municipio, as secoes onde os
- * candidatos escolhidos tiveram 0 voto — e, em cada uma, quantas pessoas do
- * time votam ali e quantas cada Lider cadastrou. Secao zerada com gente do
- * time vem em vermelho: tinha voto prometido e nao veio nenhum.
+ * PDF das secoes com 0 voto, no mesmo desenho do "Seção por seção" do
+ * Raio-X da escola: em cada secao, a barra da gente do time, a barra de cada
+ * candidato (foto, nome, numero, cargo) e os Lideres que cadastraram gente
+ * ali, com a referencia e a quantidade. Entra toda secao onde QUALQUER um dos
+ * candidatos teve 0 voto — e quem zerou leva a etiqueta vermelha "0 VOTO".
  */
 
 export interface CandidatoDasZeradas {
@@ -28,224 +29,324 @@ export interface PdfDasZeradasProps {
   geradoEm: string;
 }
 
-const VERMELHO_FUNDO = '#fdecea';
-const primeiroNome = (nome: string) => nomeProprio(nome).split(' ')[0];
+/** As cores da tela (globals.css). */
+const T = {
+  navy900: '#0f1e35',
+  navy800: '#16263f',
+  navy300: '#8ea6c4',
+  gold50: '#fdf6e3',
+  gold400: '#f2c14e',
+  gold500: '#e0a426',
+  gold700: '#7a5410',
+  ink900: '#17212b',
+  ink500: '#4b5967',
+  ink400: '#5a6875',
+  ink200: '#c7d0d9',
+  ink100: '#e7ecf1',
+  ink50: '#f4f6f9',
+  line: '#dde3ea',
+  danger50: '#fcedec',
+  danger600: '#b42318',
+  danger700: '#8e1c13',
+};
+
 const plural = (n: number, um: string, varios: string) => `${num(n)} ${n === 1 ? um : varios}`;
+const iniciais = (nome: string) => {
+  const partes = nome.trim().split(/\s+/).filter((p) => p.length > 2);
+  return ((partes[0]?.[0] ?? '') + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase() || '?';
+};
 
-/** Larguras das colunas da tabela de secoes. */
-const COL = { zona: 30, secao: 38, candidato: 40, gente: 46 };
+/* -------------------------------------------------------------------------
+   Icones (os mesmos tracos do lucide da tela)
+   ------------------------------------------------------------------------- */
 
-function Capa({ relatorio, candidatos, recorte }: Pick<PdfDasZeradasProps, 'relatorio' | 'candidatos' | 'recorte'>) {
-  const nomes = candidatos.map((c) => primeiroNome(c.nome));
-  const quem = nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(', ')} e ${nomes.at(-1)}`;
-  const onde = relatorio.municipios.join(', ');
+function Icone({ d, tamanho, cor, grosso = 2 }: { d: string[]; tamanho: number; cor: string; grosso?: number }) {
   return (
-    <View style={{ backgroundColor: C.navy, borderRadius: 6, paddingVertical: 14, paddingHorizontal: 14, marginBottom: 12 }}>
-      <Text style={{ fontSize: 7.5, letterSpacing: 1.5, color: OURO, fontFamily: 'Helvetica-Bold' }}>{s('SEÇÕES ZERADAS · VOTAÇÃO DO TSE')}</Text>
-      <Text style={{ fontSize: 14, color: C.white, fontFamily: 'Helvetica-Bold', marginTop: 3, lineHeight: 1.25 }}>
-        {s(
-          relatorio.modo === 'TODOS'
-            ? `Onde ${quem} ${candidatos.length === 1 ? 'teve' : 'tiveram'} 0 voto em ${onde}`
-            : `Onde ${candidatos.length === 1 ? quem : 'algum dos candidatos'} teve 0 voto em ${onde}`,
-        )}
+    <Svg viewBox="0 0 24 24" width={tamanho} height={tamanho}>
+      {d.map((p) => (
+        <Path key={p} d={p} stroke={cor} strokeWidth={grosso} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+    </Svg>
+  );
+}
+const PESSOAS = ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'];
+const MARCADOR = ['m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z', 'm9 10 2 2 4-4'];
+const SEM_MARCADOR = ['m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z', 'm14.5 7.5-5 5', 'm9.5 7.5 5 5'];
+const COROA = [
+  'M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z',
+  'M5 21h14',
+];
+
+/* -------------------------------------------------------------------------
+   As pecas da secao
+   ------------------------------------------------------------------------- */
+
+/** Coluna do numero na ponta da barra. */
+const NUMERO = 34;
+/** Recuo do rotulo: o tamanho da marca (foto ou icone) e o espaco ate a barra. */
+const RECUO = 24;
+
+function Barra({ valor, escala, cor }: { valor: number; escala: number; cor: string }) {
+  const largura = valor > 0 ? Math.max(2, (valor / Math.max(1, escala)) * 100) : 0;
+  return (
+    <View style={{ flex: 1, height: 7, backgroundColor: T.ink100, borderRadius: 3.5 }}>
+      {largura ? <View style={{ width: `${largura}%`, height: 7, backgroundColor: cor, borderRadius: 3.5 }} /> : null}
+    </View>
+  );
+}
+
+function SeloDaReferencia({ referencia }: { referencia: string | null | undefined }) {
+  if (referencia === undefined) return null;
+  const texto = referencia?.replace(/\s+/g, ' ').trim() || null;
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 7,
+        paddingVertical: 1,
+        paddingHorizontal: 3.5,
+        marginLeft: 3,
+        backgroundColor: texto ? T.gold50 : T.danger50,
+        borderWidth: 0.6,
+        borderColor: texto ? '#ecd9a8' : '#e8b4af',
+        borderStyle: texto ? 'solid' : 'dashed',
+      }}
+    >
+      <Icone d={texto ? MARCADOR : SEM_MARCADOR} tamanho={5.5} cor={texto ? T.gold700 : T.danger700} grosso={2.6} />
+      <Text style={{ fontSize: 5.6, fontFamily: 'Helvetica-Bold', color: texto ? T.gold700 : T.danger700, marginLeft: 1.8, letterSpacing: 0.2 }}>
+        {s(texto ? texto.toUpperCase() : 'Sem referência')}
       </Text>
-      <Text style={{ fontSize: 7.6, color: C.navy3, marginTop: 3 }}>
-        {s(
-          [
-            relatorio.modo === 'TODOS' || candidatos.length === 1
-              ? 'Seções em que nenhum dos candidatos escolhidos teve voto'
-              : 'Seções em que pelo menos um dos candidatos escolhidos teve 0 voto',
-            recorte ? `gente do time: ${recorte}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        )}
+    </View>
+  );
+}
+
+function ChipDoLider({ l }: { l: LiderNaZerada }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 0.7,
+        borderColor: T.line,
+        borderRadius: 9,
+        paddingVertical: 1.5,
+        paddingLeft: 1.5,
+        paddingRight: 2,
+        marginRight: 3,
+        marginTop: 3,
+        backgroundColor: '#ffffff',
+      }}
+    >
+      <View style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: T.navy900, justifyContent: 'center', alignItems: 'center', marginRight: 2.5 }}>
+        <Text style={{ fontSize: 4.6, fontFamily: 'Helvetica-Bold', color: T.gold400 }}>{s(iniciais(l.nome))}</Text>
+      </View>
+      <Text hyphenationCallback={semHifen} style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: T.ink900 }}>
+        {s(nomeProprio(l.nome))}
       </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 10 }}>
-        {candidatos.map((c, i) => (
-          <View
-            key={c.numero + c.cargo}
-            style={{
-              width: candidatos.length > 2 ? '32%' : '49%',
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginRight: '1%',
-              marginTop: i >= (candidatos.length > 2 ? 3 : 2) ? 6 : 0,
-              padding: 6,
-              borderRadius: 5,
-              backgroundColor: '#16263f',
-              borderLeftWidth: 3,
-              borderLeftColor: c.cor,
-            }}
-          >
-            <FotoNoPdf src={c.foto} nome={c.nome} tamanho={32} anel={c.cor} />
-            <View style={{ flex: 1, marginLeft: 7 }}>
-              <Text hyphenationCallback={semHifen} style={{ fontSize: 8.4, fontFamily: 'Helvetica-Bold', color: C.white, maxLines: 1, textOverflow: 'ellipsis' }}>
-                {s(nomeProprio(c.nome))}
-              </Text>
-              <Text style={{ fontSize: 6.6, color: C.navy3, marginTop: 1.5 }}>{s(`${c.numero} · ${c.cargo}`)}</Text>
-              <Text style={{ fontSize: 6.6, color: OURO, marginTop: 1.5, fontFamily: 'Helvetica-Bold' }}>
-                {s(`0 voto em ${plural(relatorio.totais.zeradasPorCandidato[i] ?? 0, 'seção', 'seções')} de ${num(relatorio.totais.secoesDoMunicipio)}`)}
-              </Text>
-            </View>
-          </View>
-        ))}
+      <SeloDaReferencia referencia={l.referencia} />
+      <View style={{ backgroundColor: T.navy900, borderRadius: 5, paddingHorizontal: 3.5, paddingVertical: 0.8, marginLeft: 3 }}>
+        <Text style={{ fontSize: 6.2, fontFamily: 'Helvetica-Bold', color: '#ffffff' }}>{num(l.pessoas)}</Text>
       </View>
     </View>
   );
 }
 
-/** "Félix 7 · Ana 2": os Lideres da secao, numa linha que quebra. */
-function TextoDosLideres({ lideres, max = 6 }: { lideres: { nome: string; pessoas: number }[]; max?: number }) {
-  if (lideres.length === 0) return <Text style={{ fontSize: 7, color: C.faint }}>—</Text>;
-  const resto = lideres.length - max;
-  return (
-    <Text style={{ fontSize: 7, color: C.ink2, lineHeight: 1.35 }}>
-      {lideres.slice(0, max).map((l, i) => (
-        <Text key={l.nome + i}>
-          {i ? s(' · ') : ''}
-          {s(nomeProprio(l.nome))} <Text style={{ fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.pessoas)}</Text>
-        </Text>
-      ))}
-      {resto > 0 ? s(` · +${resto}`) : ''}
-    </Text>
-  );
-}
-
-/** O voto de um candidato na secao: 0 em vermelho, com a bolinha da cor dele. */
-function Voto({ votos, cor }: { votos: number; cor: string }) {
-  return (
-    <View style={{ width: COL.candidato, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
-      <View style={{ width: 4.5, height: 4.5, borderRadius: 2.25, backgroundColor: cor, marginRight: 3 }} />
-      <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: votos <= 0 ? VERMELHO : C.ink }}>{num(votos)}</Text>
-    </View>
-  );
-}
-
-function CabecalhoDaTabela({ candidatos }: { candidatos: CandidatoDasZeradas[] }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f6f8fb', paddingVertical: 4, paddingHorizontal: 8, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
-      <Text style={[rotuloDaColuna, { width: COL.zona }]}>ZONA</Text>
-      <Text style={[rotuloDaColuna, { width: COL.secao }]}>{s('SEÇÃO')}</Text>
-      {candidatos.map((c) => (
-        <Text key={c.numero + c.cargo} style={[rotuloDaColuna, { width: COL.candidato, textAlign: 'right', maxLines: 1 }]}>
-          {s(primeiroNome(c.nome).toUpperCase().slice(0, 9))}
-        </Text>
-      ))}
-      <Text style={[rotuloDaColuna, { width: COL.gente, textAlign: 'right' }]}>DO TIME</Text>
-      <Text style={[rotuloDaColuna, { flex: 1, paddingLeft: 10 }]}>{s('LÍDERES QUE CADASTRARAM NA SEÇÃO')}</Text>
-    </View>
-  );
-}
-
-function LinhaDaSecao({ z, candidatos, ultima }: { z: SecaoZerada; candidatos: CandidatoDasZeradas[]; ultima: boolean }) {
+/** Uma secao: igual a linha do "Seção por seção" da tela. */
+function LinhaDaSecao({
+  z,
+  candidatos,
+  escala,
+  ultima,
+}: {
+  z: SecaoZerada;
+  candidatos: CandidatoDasZeradas[];
+  escala: number;
+  ultima: boolean;
+}) {
+  const varios = candidatos.length > 1;
+  const total = z.votos.reduce((t, v) => t + v, 0);
+  const maior = Math.max(...z.votos);
+  const semLider = Math.max(0, z.gente - z.lideres.reduce((t, l) => t + l.pessoas, 0));
   const alarme = z.gente > 0;
   return (
     <View
       wrap={false}
       style={{
         flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-        backgroundColor: alarme ? VERMELHO_FUNDO : C.white,
-        borderBottomWidth: ultima ? 0 : 0.5,
-        borderBottomColor: C.line,
-        borderLeftWidth: 2.5,
-        borderLeftColor: alarme ? VERMELHO : C.white,
+        paddingVertical: 8,
+        paddingRight: 12,
+        paddingLeft: 9,
+        borderBottomWidth: ultima ? 0 : 0.6,
+        borderBottomColor: T.line,
+        borderLeftWidth: 3,
+        borderLeftColor: alarme ? T.danger600 : T.ink200,
       }}
     >
-      <Text style={{ width: COL.zona - 2.5, fontSize: 8, color: C.muted }}>{z.zona}</Text>
-      <Text style={{ width: COL.secao, fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.navy }}>{z.secao}</Text>
-      {candidatos.map((c, i) => (
-        <Voto key={c.numero + c.cargo} votos={z.votos[i] ?? 0} cor={c.cor} />
-      ))}
-      <Text style={{ width: COL.gente, textAlign: 'right', fontSize: 9, fontFamily: 'Helvetica-Bold', color: alarme ? VERMELHO : C.faint }}>
-        {alarme ? num(z.gente) : '0'}
-      </Text>
-      <View style={{ flex: 1, paddingLeft: 10 }}>
-        <TextoDosLideres lideres={z.lideres} />
+      <View style={{ width: 66, paddingTop: 2 }}>
+        <Text style={{ fontSize: 10.5, fontFamily: 'Helvetica-Bold', color: T.ink900 }}>{s(`Seção ${z.secao}`)}</Text>
+        <Text style={{ fontSize: 7, color: T.ink500, marginTop: 1.5 }}>{s(`Zona ${z.zona}`)}</Text>
+        {alarme ? (
+          <View style={{ alignSelf: 'flex-start', marginTop: 4, backgroundColor: T.danger600, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1.2 }}>
+            <Text style={{ fontSize: 5.4, fontFamily: 'Helvetica-Bold', color: '#ffffff', letterSpacing: 0.4 }}>TINHA GENTE</Text>
+          </View>
+        ) : (
+          <View style={{ alignSelf: 'flex-start', marginTop: 4, backgroundColor: T.ink100, borderRadius: 6, paddingHorizontal: 4, paddingVertical: 1.2 }}>
+            <Text style={{ fontSize: 5.4, fontFamily: 'Helvetica-Bold', color: T.ink500, letterSpacing: 0.4 }}>SEM GENTE</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={{ flex: 1 }}>
+        {/* A gente do time. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: RECUO, paddingRight: NUMERO }}>
+          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: T.navy900 }}>
+            Gente do time
+            <Text style={{ fontFamily: 'Helvetica', color: T.ink500 }}>{s('  ·  cadastrados que votam aqui')}</Text>
+          </Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+          <View style={{ width: 17, height: 17, borderRadius: 8.5, backgroundColor: T.navy900, justifyContent: 'center', alignItems: 'center', marginRight: RECUO - 17 }}>
+            <Icone d={PESSOAS} tamanho={8.5} cor={T.gold400} />
+          </View>
+          <Barra valor={z.gente} escala={escala} cor={T.navy800} />
+          <Text style={{ width: NUMERO, textAlign: 'right', fontSize: 8.6, fontFamily: 'Helvetica-Bold', color: T.ink900 }}>{num(z.gente)}</Text>
+        </View>
+
+        {/* Cada candidato: rotulo em cima, barra embaixo. */}
+        {candidatos.map((c, i) => {
+          const votos = z.votos[i] ?? 0;
+          const zerou = votos <= 0;
+          const campeao = varios && votos > 0 && votos === maior;
+          return (
+            <View key={c.numero + c.cargo} style={{ marginTop: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', paddingLeft: RECUO, paddingRight: NUMERO }}>
+                {campeao ? (
+                  <View style={{ width: 9, height: 9, borderRadius: 4.5, backgroundColor: T.gold400, justifyContent: 'center', alignItems: 'center', marginRight: 3 }}>
+                    <Icone d={COROA} tamanho={5.5} cor={T.navy900} grosso={2.8} />
+                  </View>
+                ) : null}
+                <Text hyphenationCallback={semHifen} style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: T.ink900 }}>
+                  {s(c.nome)}
+                </Text>
+                <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: T.ink400, marginLeft: 3 }}>{c.numero}</Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginLeft: 4,
+                    borderWidth: 0.6,
+                    borderColor: `${c.cor}66`,
+                    backgroundColor: `${c.cor}14`,
+                    borderRadius: 6,
+                    paddingHorizontal: 3.5,
+                    paddingVertical: 0.8,
+                  }}
+                >
+                  <View style={{ width: 3.5, height: 3.5, borderRadius: 1.75, backgroundColor: c.cor, marginRight: 2 }} />
+                  <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#334155' }}>{s(c.cargo)}</Text>
+                </View>
+                <View style={{ flex: 1 }} />
+                {zerou ? (
+                  <View style={{ backgroundColor: T.danger600, borderRadius: 6, paddingHorizontal: 4.5, paddingVertical: 1.2 }}>
+                    <Text style={{ fontSize: 5.8, fontFamily: 'Helvetica-Bold', color: '#ffffff', letterSpacing: 0.4 }}>0 VOTO</Text>
+                  </View>
+                ) : varios && total > 0 ? (
+                  <Text style={{ fontSize: 6.2, fontFamily: 'Helvetica-Bold', color: T.ink500 }}>{s(`${Math.round((votos / total) * 100)}% da seção`)}</Text>
+                ) : null}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                <View style={{ marginRight: RECUO - 17 }}>
+                  <FotoNoPdf src={c.foto} nome={c.nome} tamanho={17} anel={c.cor} />
+                </View>
+                <Barra valor={votos} escala={escala} cor={c.cor} />
+                <Text style={{ width: NUMERO, textAlign: 'right', fontSize: 8.6, fontFamily: 'Helvetica-Bold', color: zerou ? T.danger600 : T.ink900 }}>{num(votos)}</Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Quem cadastrou a gente desta secao. */}
+        {z.lideres.length || semLider ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+            {z.lideres.map((l) => (
+              <ChipDoLider key={l.id} l={l} />
+            ))}
+            {semLider ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 0.7, borderStyle: 'dashed', borderColor: T.ink200, borderRadius: 9, paddingVertical: 2.5, paddingHorizontal: 5, marginTop: 3 }}>
+                <Text style={{ fontSize: 6.8, color: T.ink500 }}>{s('sem líder ')}</Text>
+                <Text style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: T.ink500 }}>{num(semLider)}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );
 }
 
+/** A escola: o cabecalho (como o do Raio-X) e as secoes com 0 voto. */
 function CartaoDaEscola({ e, posicao, candidatos }: { e: EscolaComZeradas; posicao: number; candidatos: CandidatoDasZeradas[] }) {
-  const todasZeradas = e.zeradas.length === e.totalDeSecoes;
   return (
-    <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, marginBottom: 9, overflow: 'hidden' }}>
-      <View wrap={false} minPresenceAhead={60}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.navy, paddingVertical: 7, paddingHorizontal: 9 }}>
-          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: OURO, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
-            <Text style={{ fontSize: 7.6, fontFamily: 'Helvetica-Bold', color: C.navy }}>{posicao}</Text>
+    <View style={{ borderWidth: 0.8, borderColor: T.line, borderRadius: 7, marginBottom: 12, overflow: 'hidden', backgroundColor: '#ffffff' }}>
+      <View wrap={false} minPresenceAhead={120} style={{ backgroundColor: T.navy900, paddingVertical: 9, paddingHorizontal: 11 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: T.gold400, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}>
+            <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: T.navy900 }}>{posicao}</Text>
           </View>
           <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text hyphenationCallback={semHifen} style={{ fontSize: 9.4, fontFamily: 'Helvetica-Bold', color: C.white, maxLines: 2, textOverflow: 'ellipsis' }}>
+            <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: T.gold400, letterSpacing: 1.2 }}>{s('ESCOLA · SEÇÕES COM 0 VOTO')}</Text>
+            <Text hyphenationCallback={semHifen} style={{ fontSize: 10.5, fontFamily: 'Helvetica-Bold', color: '#ffffff', marginTop: 1.5 }}>
               {s(e.titulo)}
             </Text>
-            <Text style={{ fontSize: 6.8, color: C.navy3, marginTop: 1.5 }}>
+            <Text style={{ fontSize: 6.8, color: T.navy300, marginTop: 2 }}>
               {s([e.endereco, e.cidade, `Zona ${e.zonas.join(', ')}`].filter(Boolean).join(' · '))}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: todasZeradas ? '#ff9b91' : OURO }}>
-              {s(`${num(e.zeradas.length)} de ${plural(e.totalDeSecoes, 'seção zerada', 'seções zeradas')}`)}
-            </Text>
-            <Text style={{ fontSize: 6.8, color: C.navy3, marginTop: 1.5 }}>
-              {s(`${plural(e.genteNaEscola, 'pessoa', 'pessoas')} do time na escola · ${num(e.genteNasZeradas)} nas zeradas`)}
+            <View style={{ backgroundColor: T.danger600, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2.5 }}>
+              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: '#ffffff' }}>
+                {s(`${num(e.zeradas.length)} de ${plural(e.totalDeSecoes, 'seção', 'seções')} com 0 voto`)}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 6.8, color: T.navy300, marginTop: 3 }}>
+              {s(`${plural(e.genteNaEscola, 'pessoa', 'pessoas')} do time na escola · ${num(e.genteNasZeradas)} nessas seções`)}
             </Text>
           </View>
         </View>
 
-        {/* Os votos da escola inteira: zerou nas secoes, mas teve voto ao lado? */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 9, backgroundColor: '#f6f8fb', borderBottomWidth: 0.6, borderBottomColor: C.line }}>
-          <Text style={[rotuloDaColuna, { marginRight: 6 }]}>VOTOS NA ESCOLA</Text>
+        {/* Os votos de cada candidato na escola inteira. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 7 }}>
           {candidatos.map((c, i) => (
-            <View key={c.numero + c.cargo} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 9 }}>
-              <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.cor, marginRight: 3 }} />
-              <Text style={{ fontSize: 7.2, color: C.ink2 }}>{s(primeiroNome(c.nome))} </Text>
-              <Text style={{ fontSize: 7.4, fontFamily: 'Helvetica-Bold', color: (e.votosNaEscola[i] ?? 0) > 0 ? C.ink : VERMELHO }}>{num(e.votosNaEscola[i] ?? 0)}</Text>
+            <View
+              key={c.numero + c.cargo}
+              style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.navy800, borderRadius: 9, paddingVertical: 2, paddingLeft: 2, paddingRight: 6, marginRight: 4, marginTop: 2 }}
+            >
+              <FotoNoPdf src={c.foto} nome={c.nome} tamanho={13} anel={c.cor} />
+              <Text style={{ fontSize: 6.6, color: T.navy300, marginLeft: 4 }}>{s(`${nomeProprio(c.nome).split(' ')[0]} na escola `)}</Text>
+              <Text style={{ fontSize: 7.2, fontFamily: 'Helvetica-Bold', color: (e.votosNaEscola[i] ?? 0) > 0 ? '#ffffff' : '#ff9b91' }}>{num(e.votosNaEscola[i] ?? 0)}</Text>
             </View>
           ))}
         </View>
-
-        {e.lideres.length ? (
-          <View style={{ paddingVertical: 5, paddingHorizontal: 9, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
-            <Text style={[rotuloDaColuna, { marginBottom: 3 }]}>{s('LÍDERES NA ESCOLA · CADASTROU NA ESCOLA (NAS SEÇÕES ZERADAS)')}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              {e.lideres.map((l) => (
-                <View
-                  key={l.id}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    borderWidth: 0.6,
-                    borderColor: l.nasZeradas ? '#f2b8b3' : C.line,
-                    backgroundColor: l.nasZeradas ? VERMELHO_FUNDO : C.white,
-                    borderRadius: 8,
-                    paddingVertical: 2,
-                    paddingHorizontal: 6,
-                    marginRight: 4,
-                    marginBottom: 3,
-                  }}
-                >
-                  <Text style={{ fontSize: 7, color: C.ink2 }}>{s(nomeProprio(l.nome))} </Text>
-                  <Text style={{ fontSize: 7.2, fontFamily: 'Helvetica-Bold', color: C.navy }}>{num(l.pessoas)}</Text>
-                  {l.nasZeradas ? <Text style={{ fontSize: 6.8, fontFamily: 'Helvetica-Bold', color: VERMELHO }}>{s(` (${num(l.nasZeradas)})`)}</Text> : null}
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : (
-          <Text style={{ fontSize: 7, color: C.faint, paddingVertical: 4, paddingHorizontal: 9, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
-            {s('Nenhuma pessoa do time cadastrada nesta escola.')}
-          </Text>
-        )}
-        <CabecalhoDaTabela candidatos={candidatos} />
       </View>
+
       {e.zeradas.map((z, i) => (
-        <LinhaDaSecao key={z.chave} z={z} candidatos={candidatos} ultima={i === e.zeradas.length - 1} />
+        <LinhaDaSecao key={z.chave} z={z} candidatos={candidatos} escala={e.escala} ultima={i === e.zeradas.length - 1} />
       ))}
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------
+   O documento
+   ------------------------------------------------------------------------- */
+
+function Numero({ valor, rotulo, nota, cor }: { valor: number; rotulo: string; nota: string; cor: string }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 0.8, borderColor: T.line, borderRadius: 7, paddingVertical: 8, paddingHorizontal: 10 }}>
+      <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: T.ink500, letterSpacing: 0.8 }}>{s(rotulo.toUpperCase())}</Text>
+      <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: cor, marginTop: 2 }}>{num(valor)}</Text>
+      <Text style={{ fontSize: 6.6, color: T.ink400, marginTop: 1 }}>{s(nota)}</Text>
     </View>
   );
 }
@@ -253,132 +354,84 @@ function CartaoDaEscola({ e, posicao, candidatos }: { e: EscolaComZeradas; posic
 export function PdfDasZeradas({ relatorio, candidatos, recorte, geradoEm }: PdfDasZeradasProps) {
   const { totais } = relatorio;
   const quando = new Date(geradoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  const maiorLider = Math.max(1, ...relatorio.lideres.map((l) => l.nasZeradas));
+  const onde = relatorio.municipios.join(', ');
   return (
-    <Document title={`Seções zeradas · ${relatorio.municipios.join(', ')}`} author={appConfig.name}>
-      <Page size="A4" style={st.page}>
-        <Cabecalho esquerda={`Seções zeradas · ${relatorio.municipios.join(', ')}`} direita={appConfig.name} />
+    <Document title={`Seções com 0 voto · ${onde}`} author={appConfig.name}>
+      <Page size="A4" style={[st.page, { backgroundColor: '#eef2f6' }]}>
+        <Cabecalho esquerda={`Seções com 0 voto · ${onde}`} direita={appConfig.name} />
         <Rodape texto={`Gerado em ${quando} · votação oficial do TSE × cadastro do time`} />
 
-        <Capa relatorio={relatorio} candidatos={candidatos} recorte={recorte} />
-
-        <LinhaDeKpis>
-          {[
-            <Kpi
-              key="s"
-              valor={num(totais.secoesZeradas)}
-              rotulo="seções zeradas"
-              nota={`de ${num(totais.secoesDoMunicipio)} seções do município`}
-              tom={VERMELHO}
-            />,
-            <Kpi key="e" valor={num(totais.escolasComZerada)} rotulo="escolas com seção zerada" nota={`de ${num(totais.escolasDoMunicipio)} escolas`} />,
-            <Kpi key="g" valor={num(totais.zeradasComGente)} rotulo="zeradas com gente do time" nota="tinha gente e veio zero" tom={VERMELHO} />,
-            <Kpi key="p" valor={num(totais.genteNasZeradas)} rotulo="pessoas do time nas zeradas" nota="cadastradas pelo time" tom={C.gold} />,
-          ]}
-        </LinhaDeKpis>
-
-        <View style={{ flexDirection: 'row', backgroundColor: OURO_FUNDO, borderLeftWidth: 3, borderLeftColor: OURO, paddingVertical: 6, paddingHorizontal: 8, marginTop: 2, marginBottom: 4 }}>
-          <Text style={{ fontSize: 7.6, color: C.ink2, lineHeight: 1.45 }}>
-            <Text style={{ fontFamily: 'Helvetica-Bold' }}>{s('Como ler: ')}</Text>
+        {/* Abertura: os candidatos, como no placar da tela. */}
+        <View style={{ backgroundColor: T.navy900, borderRadius: 8, paddingVertical: 13, paddingHorizontal: 14, marginBottom: 9 }}>
+          <Text style={{ fontSize: 6.8, letterSpacing: 1.5, color: T.gold400, fontFamily: 'Helvetica-Bold' }}>{s('SEÇÕES COM 0 VOTO · VOTAÇÃO DO TSE')}</Text>
+          <Text style={{ fontSize: 15, color: '#ffffff', fontFamily: 'Helvetica-Bold', marginTop: 3 }}>{s(onde)}</Text>
+          <Text style={{ fontSize: 7.4, color: T.navy300, marginTop: 3, lineHeight: 1.4 }}>
             {s(
-              'todas as seções do município entram na conta — inclusive as que não aparecem no mapa, porque o TSE não lista o zero. "Do time" são as pessoas cadastradas pelo time que votam na seção; ao lado, quantas cada líder cadastrou ali. Linha em vermelho: seção zerada onde o time tinha gente. Nos líderes da escola, o número é quanto ele cadastrou na escola e, entre parênteses, quanto disso está nas seções zeradas.',
+              [
+                candidatos.length > 1
+                  ? 'Toda seção onde qualquer um dos candidatos teve 0 voto, escola por escola'
+                  : 'Toda seção onde o candidato teve 0 voto, escola por escola',
+                recorte ? `gente do time: ${recorte}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · '),
             )}
           </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 9 }}>
+            {candidatos.map((c, i) => (
+              <View
+                key={c.numero + c.cargo}
+                style={{
+                  width: '49%',
+                  marginRight: i % 2 === 0 ? '2%' : 0,
+                  marginTop: i >= 2 ? 6 : 0,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: T.navy800,
+                  borderRadius: 7,
+                  padding: 7,
+                  borderLeftWidth: 3,
+                  borderLeftColor: c.cor,
+                }}
+              >
+                <FotoNoPdf src={c.foto} nome={c.nome} tamanho={34} anel={c.cor} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text hyphenationCallback={semHifen} style={{ fontSize: 8.6, fontFamily: 'Helvetica-Bold', color: '#ffffff', maxLines: 1, textOverflow: 'ellipsis' }}>
+                    {s(c.nome)}
+                  </Text>
+                  <Text style={{ fontSize: 6.8, color: T.navy300, marginTop: 1.5 }}>{s(`${c.numero} · ${c.cargo}`)}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', marginLeft: 6 }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: '#ff9b91' }}>{num(totais.zeradasPorCandidato[i] ?? 0)}</Text>
+                  <Text style={{ fontSize: 5.8, color: T.navy300 }}>{s('seções com 0')}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={{ flexDirection: 'row', marginBottom: 12 }} wrap={false}>
+          <Numero valor={totais.secoesZeradas} rotulo="Seções com 0 voto" nota={`de ${num(totais.secoesDoMunicipio)} seções do município`} cor={T.danger600} />
+          <View style={{ width: 6 }} />
+          <Numero valor={totais.escolasComZerada} rotulo="Escolas" nota={`de ${num(totais.escolasDoMunicipio)} escolas`} cor={T.navy900} />
+          <View style={{ width: 6 }} />
+          <Numero valor={totais.zeradasComGente} rotulo="Tinha gente do time" nota="seções com 0 e gente cadastrada" cor={T.danger600} />
+          <View style={{ width: 6 }} />
+          <Numero valor={totais.genteNasZeradas} rotulo="Pessoas do time" nota="cadastradas nessas seções" cor={T.gold700} />
         </View>
 
         {totais.secoesZeradas === 0 ? (
-          <View style={{ marginTop: 16, padding: 14, borderRadius: 5, backgroundColor: C.successSoft }}>
-            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.success }}>{s('Nenhuma seção zerada.')}</Text>
-            <Text style={{ fontSize: 8, color: C.ink2, marginTop: 3 }}>
-              {s(totais.secoesDoMunicipio ? 'Os candidatos escolhidos tiveram voto em todas as seções do município.' : 'A votação não tem as seções deste município.')}
+          <View style={{ padding: 14, borderRadius: 7, backgroundColor: '#e6f3eb' }}>
+            <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: '#17693a' }}>{s('Nenhuma seção com 0 voto.')}</Text>
+            <Text style={{ fontSize: 8, color: T.ink500, marginTop: 3 }}>
+              {s(totais.secoesDoMunicipio ? 'Os candidatos tiveram voto em todas as seções do município.' : 'A votação não tem as seções deste município.')}
             </Text>
           </View>
         ) : null}
 
-        {relatorio.alarmes.length ? (
-          <>
-            <Parte numero={1} titulo="O alarme: tinha gente do time e veio zero" texto="As seções zeradas onde o time tem mais gente cadastrada — o primeiro lugar para olhar." />
-            <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, overflow: 'hidden' }}>
-              <View style={{ flexDirection: 'row', backgroundColor: '#f6f8fb', paddingVertical: 4, paddingHorizontal: 8, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
-                <Text style={[rotuloDaColuna, { width: 18 }]}>#</Text>
-                <Text style={[rotuloDaColuna, { width: 62 }]}>{s('ZONA / SEÇÃO')}</Text>
-                <Text style={[rotuloDaColuna, { flex: 1.2 }]}>ESCOLA</Text>
-                <Text style={[rotuloDaColuna, { width: 44, textAlign: 'right' }]}>DO TIME</Text>
-                <Text style={[rotuloDaColuna, { flex: 1, paddingLeft: 10 }]}>{s('LÍDERES')}</Text>
-              </View>
-              {relatorio.alarmes.map((z, i) => (
-                <View
-                  key={`${z.escola}-${z.chave}`}
-                  wrap={false}
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderBottomWidth: i === relatorio.alarmes.length - 1 ? 0 : 0.5, borderBottomColor: C.line }}
-                >
-                  <Text style={{ width: 18, fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.faint }}>{i + 1}</Text>
-                  <Text style={{ width: 62, fontSize: 8.6, fontFamily: 'Helvetica-Bold', color: C.navy }}>{s(`${z.zona} / ${z.secao}`)}</Text>
-                  <Text hyphenationCallback={semHifen} style={{ flex: 1.2, fontSize: 7.6, color: C.ink, maxLines: 2, textOverflow: 'ellipsis', paddingRight: 6 }}>
-                    {s(z.escola)}
-                  </Text>
-                  <Text style={{ width: 44, textAlign: 'right', fontSize: 10, fontFamily: 'Helvetica-Bold', color: VERMELHO }}>{num(z.gente)}</Text>
-                  <View style={{ flex: 1, paddingLeft: 10 }}>
-                    <TextoDosLideres lideres={z.lideres} max={4} />
-                  </View>
-                </View>
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {relatorio.escolas.length ? (
-          <Parte
-            numero={relatorio.alarmes.length ? 2 : 1}
-            titulo="Escola por escola, seção por seção"
-            texto="Da escola com mais gente do time nas seções zeradas para a com menos. Em cada uma, os votos da escola inteira, os líderes e cada seção zerada com quem do time vota ali."
-            quebra={relatorio.alarmes.length > 0}
-          />
-        ) : null}
         {relatorio.escolas.map((e, i) => (
           <CartaoDaEscola key={e.chave} e={e} posicao={i + 1} candidatos={candidatos} />
         ))}
-
-        {relatorio.lideres.length ? (
-          <>
-            <Parte
-              numero={relatorio.alarmes.length ? 3 : 2}
-              titulo="Os líderes nas seções zeradas"
-              texto="Quantas pessoas cada líder cadastrou em seções onde veio zero, em quantas seções e em quantas escolas."
-              quebra
-            />
-            <View style={{ borderWidth: 0.7, borderColor: C.line, borderRadius: 5, overflow: 'hidden' }}>
-              <View style={{ flexDirection: 'row', backgroundColor: '#f6f8fb', paddingVertical: 4, paddingHorizontal: 8, borderBottomWidth: 0.6, borderBottomColor: C.line }}>
-                <Text style={[rotuloDaColuna, { width: 18 }]}>#</Text>
-                <Text style={[rotuloDaColuna, { flex: 1 }]}>{s('LÍDER')}</Text>
-                <Text style={[rotuloDaColuna, { width: 56, textAlign: 'right' }]}>NAS ZERADAS</Text>
-                <Text style={[rotuloDaColuna, { width: 46, textAlign: 'right' }]}>{s('SEÇÕES')}</Text>
-                <Text style={[rotuloDaColuna, { width: 46, textAlign: 'right' }]}>ESCOLAS</Text>
-                <View style={{ width: 130, paddingLeft: 12 }} />
-              </View>
-              {relatorio.lideres.map((l, i) => (
-                <View
-                  key={l.id}
-                  wrap={false}
-                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, borderBottomWidth: i === relatorio.lideres.length - 1 ? 0 : 0.5, borderBottomColor: C.line }}
-                >
-                  <Text style={{ width: 18, fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.faint }}>{i + 1}</Text>
-                  <Text hyphenationCallback={semHifen} style={{ flex: 1, fontSize: 8.2, fontFamily: 'Helvetica-Bold', color: C.ink, maxLines: 1, textOverflow: 'ellipsis' }}>
-                    {s(nomeProprio(l.nome))}
-                  </Text>
-                  <Text style={{ width: 56, textAlign: 'right', fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: VERMELHO }}>{num(l.nasZeradas)}</Text>
-                  <Text style={{ width: 46, textAlign: 'right', fontSize: 8.5, color: C.ink2 }}>{num(l.secoes)}</Text>
-                  <Text style={{ width: 46, textAlign: 'right', fontSize: 8.5, color: C.ink2 }}>{num(l.escolas)}</Text>
-                  <View style={{ width: 130, paddingLeft: 12 }}>
-                    <View style={{ height: 6, backgroundColor: '#edf1f5', borderRadius: 2 }}>
-                      <View style={{ width: `${Math.max(4, (l.nasZeradas / maiorLider) * 100)}%`, height: 6, backgroundColor: VERMELHO, borderRadius: 2 }} />
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </>
-        ) : null}
       </Page>
     </Document>
   );

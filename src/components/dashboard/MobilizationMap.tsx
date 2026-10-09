@@ -62,7 +62,6 @@ import { CarregandoVotacao } from './votacao/CarregandoVotacao';
 import { EscolaPorEscola } from './votacao/EscolaPorEscola';
 import { MenuDoPdf, type OpcaoDoPdf } from './votacao/MenuDoPdf';
 import { BotaoDasZeradas } from './votacao/BotaoDasZeradas';
-import type { ModoDasZeradas } from '@/lib/domain/secoes-zeradas';
 import { corDoCandidato } from './votacao/cores';
 import { textoDoAndamento, useVotacaoAoVivo } from './votacao/use-votacao-ao-vivo';
 import { api } from '@/lib/repositories/http/api';
@@ -1123,7 +1122,7 @@ export function MobilizationMap({
   const menuDoPdf = <MenuDoPdf opcoes={opcoesDoPdf} rotulo="Estimativa × apuração (PDF)" titulo="Todas as escolas do time, escola, zona e seção" />;
   /** As secoes zeradas do municipio: a gente do time vem do recorte de Lider e referencia (sem o filtro de secao). */
   const municipiosDasZeradas = query.cities.length ? query.cities : query.city ? [query.city] : [];
-  const baixarZeradas = (modo: ModoDasZeradas) =>
+  const baixarZeradas = () =>
     baixarPdfDasZeradas({
       candidatos: candidatos.map((c, i) => ({ candidato: c, cor: corDo(i) })),
       municipios: municipiosDasZeradas,
@@ -1131,7 +1130,7 @@ export function MobilizationMap({
         .map((p) => (lideresDaReferencia ? placeOfLeaders(p, lideresDaReferencia) : p))
         .map((p) => (p && lider ? placeOfLeader(p, lider) : p))
         .filter((p): p is PollingPlacePin => p !== null),
-      modo,
+      referencias: data?.referencias,
       query,
       time,
     });
@@ -1139,7 +1138,7 @@ export function MobilizationMap({
     <>
       {menuDoPdf}
       <BotaoDasZeradas
-        candidatos={candidatos.map((c, i) => ({ id: c.id, nome: c.nome, cor: corDo(i) }))}
+        candidatos={candidatos.length}
         municipios={municipiosDasZeradas}
         onBaixar={baixarZeradas}
       />

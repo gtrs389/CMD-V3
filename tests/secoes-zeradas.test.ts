@@ -86,43 +86,41 @@ describe('secoes zeradas', () => {
       { total: 5, sections: [{ zone: '10', section: '40', total: 5 }], leaders: [] },
     ];
 
-    const todos = relatorioDeZeradas(payload, campanha);
-    expect(todos.escolas.map((e) => e.titulo)).toEqual(['HUMBERTO MENDES']);
-    const h = todos.escolas[0];
-    expect(h.zeradas.map((s) => [s.secao, s.gente])).toEqual([
-      ['97', 9],
-      ['98', 0],
+    const r = relatorioDeZeradas(payload, campanha, { f: 'Roberval' });
+    expect(r.escolas.map((e) => e.titulo)).toEqual(['HUMBERTO MENDES']);
+    const h = r.escolas[0];
+    // Qualquer um com 0: a 96 entra (o segundo zerou), e cada seção diz quem zerou.
+    expect(h.zeradas.map((s) => [s.secao, s.gente, s.zeraram])).toEqual([
+      ['96', 3, [1]],
+      ['97', 9, [0, 1]],
+      ['98', 0, [0, 1]],
     ]);
-    expect(h.zeradas[0].lideres).toEqual([
-      { id: 'f', nome: 'Félix', pessoas: 7 },
-      { id: 'a', nome: 'Ana', pessoas: 2 },
+    expect(h.zeradas[1].lideres).toEqual([
+      { id: 'f', nome: 'Félix', pessoas: 7, referencia: 'Roberval' },
+      { id: 'a', nome: 'Ana', pessoas: 2, referencia: null },
     ]);
     expect(h.genteNaEscola).toBe(14);
-    expect(h.lideres).toEqual([
-      { id: 'f', nome: 'Félix', pessoas: 10, nasZeradas: 7 },
-      { id: 'a', nome: 'Ana', pessoas: 4, nasZeradas: 2 },
+    expect(h.lideres.map((l) => [l.nome, l.pessoas, l.nasZeradas])).toEqual([
+      ['Félix', 10, 10],
+      ['Ana', 4, 2],
     ]);
     expect(h.votosNaEscola).toEqual([12, 0]);
-    expect(todos.totais).toMatchObject({
+    expect(h.escala).toBe(12);
+    expect(r.totais).toMatchObject({
       escolasDoMunicipio: 2,
       secoesDoMunicipio: 4,
-      secoesZeradas: 2,
-      zeradasComGente: 1,
-      genteNasZeradas: 9,
+      secoesZeradas: 3,
+      zeradasComGente: 2,
+      genteNasZeradas: 12,
       zeradasPorCandidato: [2, 3],
     });
-    expect(todos.alarmes.map((s) => [s.escola, s.secao])).toEqual([['HUMBERTO MENDES', '97']]);
-    expect(todos.lideres.map((l) => [l.nome, l.nasZeradas, l.secoes, l.escolas])).toEqual([
-      ['Félix', 7, 1, 1],
-      ['Ana', 2, 1, 1],
+    expect(r.alarmes.map((s) => [s.escola, s.secao])).toEqual([
+      ['HUMBERTO MENDES', '97'],
+      ['HUMBERTO MENDES', '96'],
     ]);
-
-    // ALGUM: a 96 entra (o segundo zerou), e diz quem zerou.
-    const algum = relatorioDeZeradas(payload, campanha, 'ALGUM');
-    expect(algum.escolas[0].zeradas.map((s) => [s.secao, s.zeraram])).toEqual([
-      ['96', [1]],
-      ['97', [0, 1]],
-      ['98', [0, 1]],
+    expect(r.lideres.map((l) => [l.nome, l.nasZeradas, l.secoes, l.escolas])).toEqual([
+      ['Félix', 10, 2, 1],
+      ['Ana', 2, 1, 1],
     ]);
   });
 });

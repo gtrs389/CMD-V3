@@ -1,5 +1,6 @@
 import type { PollingPlacePin } from './map-pin';
 import { chaveDaSecao } from './confronto';
+import { referenciaDoLider } from './map-filters';
 import { PREFIXO_DA_VOTACAO, type LocalDoTse, type SecaoDoLocal, type VotoNaSecao } from './votacao-tse';
 
 /**
@@ -116,13 +117,12 @@ export function escolasDoMunicipio(
    O relatorio
    ------------------------------------------------------------------------- */
 
-/** TODOS: so a secao onde nenhum dos escolhidos teve voto. ALGUM: onde ao menos um zerou. */
-export type ModoDasZeradas = 'TODOS' | 'ALGUM';
-
 export interface LiderNaZerada {
   id: string;
   nome: string;
   pessoas: number;
+  /** A referencia do Lider; ausente quando o mapa nao traz referencias. */
+  referencia?: string | null;
 }
 
 export interface SecaoZerada extends SecaoDoMunicipio {
@@ -151,6 +151,8 @@ export interface EscolaComZeradas {
   lideres: (LiderNaZerada & { nasZeradas: number })[];
   /** Votos de cada candidato na escola inteira (para o contraste: zerou aqui, teve ali). */
   votosNaEscola: number[];
+  /** A maior barra das secoes zeradas (gente ou voto): todas as barras da escola na mesma escala. */
+  escala: number;
 }
 
 export interface LiderNoRelatorio {
@@ -165,7 +167,6 @@ export interface LiderNoRelatorio {
 
 export interface RelatorioDeZeradas {
   municipios: string[];
-  modo: ModoDasZeradas;
   escolas: EscolaComZeradas[];
   totais: {
     escolasDoMunicipio: number;
@@ -175,7 +176,7 @@ export interface RelatorioDeZeradas {
     /** Secoes zeradas onde o time tem gente: o alarme. */
     zeradasComGente: number;
     genteNasZeradas: number;
-    /** Secoes zeradas por candidato (no modo ALGUM, cada um tem a sua conta). */
+    /** Secoes zeradas de cada candidato. */
     zeradasPorCandidato: number[];
   };
   /** As secoes zeradas com mais gente do time, para a primeira pagina. */
@@ -187,20 +188,23 @@ const doMaiorParaOMenor = <T extends { pessoas: number; nome: string }>(a: T, b:
   b.pessoas - a.pessoas || a.nome.localeCompare(b.nome, 'pt-BR');
 
 /**
- * As secoes zeradas das escolas, com a gente do time e os Lideres de cada
- * uma. Os pinos da campanha entram na escola pelas secoes (zona e secao) —
+ * As secoes onde QUALQUER um dos candidatos teve 0 voto, escola por escola,
+ * com a gente do time e os Lideres de cada uma (e quem zerou em cada secao).
+ * Com um candidato so, sao as secoes onde ele zerou. Os pinos da campanha entram na escola pelas secoes (zona e secao) —
  * um pino da campanha "casa" com a escola quando vota numa secao dela —, e a
  * gente sem secao do pino conta na escola, nao numa secao.
  */
 export function relatorioDeZeradas(
   payload: SecoesDoMunicipioPayload,
   campanha: readonly Pick<PollingPlacePin, 'total' | 'sections' | 'leaders'>[],
-  modo: ModoDasZeradas = 'TODOS',
+  /** As referencias dos Lideres do time (`MapOverviewPayload.referencias`). */
+  referencias?: Readonly<Record<string, string>>,
   /** Quantos alarmes vao para a primeira pagina. */
   limiteDeAlarmes = 15,
 ): RelatorioDeZeradas {
   const n = payload.candidatos.length;
-  const zerou = (votos: number[]) => (modo === 'TODOS' ? votos.every((v) => v <= 0) : votos.some((v) => v <= 0));
+  const zerou = (votos: number[]) => votos.some((v) => v <= 0);
+  const comReferencia = (l: { id: string; name: string }) => (referencias ? { referencia: referenciaDoLider(referencias, l) } : {});
 
   // Secao -> pinos da campanha que votam nela.
   const pinosDaSecao = new Map<string, Set<number>>();
@@ -252,7 +256,7 @@ export function relatorioDeZeradas(
             const k = chaveDaSecao(s.zone, s.section);
             if (daEscola.has(k)) {
               const m2 = lideresDaSecao.get(k) ?? new Map<string, LiderNaZerada>();
-              const atual = m2.get(l.id) ?? { id: l.id, nome: l.name, pessoas: 0 };
+              const atual = m2.get(l.id) ?? { id: l.id, nome: l.name, pessoas: 0, ...comReferencia(l) };
               atual.pessoas += s.total;
               m2.set(l.id, atual);
               lideresDaSecao.set(k, m2);
@@ -262,7 +266,7 @@ export function relatorioDeZeradas(
             }
           }
           if (naEscola <= 0) continue;
-          const atual = lideresDaEscola.get(l.id) ?? { id: l.id, nome: l.name, pessoas: 0, nasZeradas: 0 };
+          const atual = lideresDaEscola.get(l.id) ?? { id: l.id, nome: l.name, pessoas: 0, nasZeradas: 0, ...comReferencia(l) };
           atual.pessoas += naEscola;
           lideresDaEscola.set(l.id, atual);
         }
@@ -304,6 +308,7 @@ export function relatorioDeZeradas(
         genteNasZeradas: zeradas.reduce((t, s) => t + s.gente, 0),
         lideres: [...lideresDaEscola.values()].sort(doMaiorParaOMenor),
         votosNaEscola: Array.from({ length: n }, (_, i) => e.secoes.reduce((t, s) => t + (s.votos[i] ?? 0), 0)),
+        escala: Math.max(1, ...zeradas.map((s) => Math.max(s.gente, ...s.votos))),
       });
     }
   }
@@ -319,7 +324,6 @@ export function relatorioDeZeradas(
   const todasAsZeradas = escolas.flatMap((e) => e.zeradas.map((s) => ({ ...s, escola: e.titulo })));
   return {
     municipios: payload.municipios.map((m) => m.municipio),
-    modo,
     escolas,
     totais: {
       escolasDoMunicipio,
